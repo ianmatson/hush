@@ -1,0 +1,112 @@
+import type { Poller } from './poller';
+import type { Enrichment, ThreadDTO } from '../src/lib/shared/types';
+export { parseSettings } from '../src/lib/shared/settings';
+import { decryptSecret } from './crypto';
+
+export interface Env {
+	DB: D1Database;
+	POLLER: DurableObjectNamespace<Poller>;
+	ASSETS: Fetcher;
+	TOKEN_ENC_KEY: string;
+	VAPID_PUBLIC_KEY: string;
+	VAPID_PRIVATE_KEY: string;
+	/** Optional push contact (mailto: or https:). Defaults to the app's own URL. */
+	VAPID_SUBJECT?: string;
+}
+
+export interface UserRow {
+	id: number;
+	login: string;
+	name: string | null;
+	avatar_url: string | null;
+	token_ct: string;
+	token_iv: string;
+	scopes: string;
+	settings: string;
+	last_poll_at: number | null;
+	last_poll_error: string | null;
+}
+
+export interface ThreadRow {
+	user_id: number;
+	id: string;
+	repo: string;
+	subject_type: string;
+	title: string;
+	html_url: string;
+	reason: string;
+	unread: number;
+	gh_updated_at: string;
+	enrichment: string | null;
+	category: string;
+	kind: string;
+	summary: string;
+	why: string;
+	action_label: string;
+	action_url: string;
+	rule: string | null;
+	triage: string;
+	snoozed_until: number | null;
+	pushed_updated_at: string | null;
+	first_seen_at: number;
+}
+
+export function getUser(env: Env, id: number) {
+	return env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>();
+}
+
+export function userToken(env: Env, u: UserRow): Promise<string> {
+	return decryptSecret(u.token_ct, u.token_iv, env.TOKEN_ENC_KEY);
+}
+
+export function toDTO(r: ThreadRow): ThreadDTO {
+	const e = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : null;
+	return {
+		id: r.id,
+		repo: r.repo,
+		subjectType: r.subject_type,
+		title: r.title,
+		reason: r.reason,
+		unread: !!r.unread,
+		updatedAt: r.gh_updated_at,
+		htmlUrl: r.html_url,
+		category: r.category as ThreadDTO['category'],
+		kind: r.kind as ThreadDTO['kind'],
+		summary: r.summary,
+		why: r.why,
+		actionLabel: r.action_label,
+		actionUrl: r.action_url,
+		triage: r.triage as ThreadDTO['triage'],
+		snoozedUntil: r.snoozed_until,
+		number: e?.number ?? null,
+		state: e?.state ?? null,
+		draft: !!e?.draft,
+		ci: e?.ci ?? null,
+		author: e?.author ?? null,
+		rule: r.rule
+	};
+}
+
+/**
+ * SQL for a view. A snoozed thread whose time has passed counts as "inbox" again.
+ * `?1` is the user id and `?2` is "now" in ms.
+ */
+export function viewWhere(view: string): string {
+	const inbox = `(triage = 'inbox' OR (triage = 'snoozed' AND snoozed_until <= ?2))`;
+	// Every view must use both ?1 and ?2: D1 rejects a statement that has more bindings than parameters.
+	const unusedNow = `?2 IS NOT NULL`;
+	switch (view) {
+		case 'action':
+			return `user_id = ?1 AND category = 'action' AND ${inbox}`;
+		case 'fyi':
+			return `user_id = ?1 AND category = 'fyi' AND ${inbox}`;
+		case 'snoozed':
+			return `user_id = ?1 AND triage = 'snoozed' AND snoozed_until > ?2`;
+		case 'done':
+			return `user_id = ?1 AND triage = 'done' AND category != 'muted' AND ${unusedNow}`;
+		case 'muted':
+			return `user_id = ?1 AND category = 'muted' AND ${unusedNow}`;
+		default:
+			return `user_id = ?1 AND ${unusedNow}`;
+	}
+}

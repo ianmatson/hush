@@ -1,0 +1,202 @@
+import { describe, expect, it } from 'vitest';
+import { classify, globToRegExp, shouldPush, validateRules } from './classify';
+import { DEFAULT_SETTINGS } from './settings';
+import type { Enrichment, Settings, ThreadFacts } from './types';
+
+const pr = (e: Partial<Enrichment> = {}): Enrichment => ({
+	kind: 'pr',
+	number: 7,
+	url: 'https://github.com/o/r/pull/7',
+	state: 'open',
+	author: 'alice',
+	...e
+});
+
+const facts = (over: Partial<ThreadFacts> = {}): ThreadFacts => ({
+	repo: 'PostHog/posthog',
+	subjectType: 'PullRequest',
+	title: 'Add thing',
+	reason: 'subscribed',
+	htmlUrl: 'https://github.com/o/r/pull/7',
+	enrichment: pr(),
+	me: 'ian',
+	...over
+});
+
+const run = (f: ThreadFacts, s: Partial<Settings> = {}) =>
+	classify(f, { ...DEFAULT_SETTINGS, ...s });
+
+describe('default classification', () => {
+	it('flags a direct review request as action, linking to the diff', () => {
+		const c = run(
+			facts({ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) })
+		);
+		expect(c).toMatchObject({
+			category: 'action',
+			kind: 'review',
+			actionUrl: 'https://github.com/o/r/pull/7/files'
+		});
+	});
+
+	it('treats a team-only review request as FYI', () => {
+		const c = run(
+			facts({ reason: 'review_requested', enrichment: pr({ requestedTeams: ['web'] }) })
+		);
+		expect(c.category).toBe('fyi');
+	});
+
+	it('flags CI failure on my PR before anything else', () => {
+		const c = run(
+			facts({
+				reason: 'author',
+				enrichment: pr({ author: 'ian', ci: 'FAILURE', reviewDecision: 'APPROVED' })
+			})
+		);
+		expect(c).toMatchObject({ category: 'action', kind: 'fix_ci' });
+	});
+
+	it('says my approved, green PR is ready to merge', () => {
+		const c = run(
+			facts({
+				reason: 'author',
+				enrichment: pr({ author: 'ian', ci: 'SUCCESS', reviewDecision: 'APPROVED' })
+			})
+		);
+		expect(c.kind).toBe('merge');
+	});
+
+	it('does not say "ready to merge" while CI is pending', () => {
+		const c = run(
+			facts({
+				reason: 'author',
+				enrichment: pr({ author: 'ian', ci: 'PENDING', reviewDecision: 'APPROVED' })
+			})
+		);
+		expect(c.kind).not.toBe('merge');
+	});
+
+	it('ignores my own last comment', () => {
+		const lastComment = {
+			author: 'ian',
+			authorIsBot: false,
+			body: 'done',
+			url: 'u',
+			createdAt: ''
+		};
+		const c = run(facts({ reason: 'comment', enrichment: pr({ lastComment }) }));
+		expect(c.category).toBe('fyi');
+	});
+
+	it('treats a bot comment on my PR as FYI when botsAreFyi is on', () => {
+		const lastComment = {
+			author: 'codecov[bot]',
+			authorIsBot: true,
+			body: 'coverage',
+			url: 'u',
+			createdAt: ''
+		};
+		const f = facts({ reason: 'author', enrichment: pr({ author: 'ian', lastComment }) });
+		expect(run(f).category).toBe('fyi');
+		expect(run(f, { botsAreFyi: false }).kind).toBe('reply');
+	});
+
+	it('treats a bot mention as FYI, a human mention as action', () => {
+		const bot = {
+			author: 'github-actions',
+			authorIsBot: true,
+			body: '@ian preview ready',
+			url: 'u',
+			createdAt: ''
+		};
+		expect(run(facts({ reason: 'mention', enrichment: pr({ lastComment: bot }) })).category).toBe(
+			'fyi'
+		);
+		const human = { ...bot, author: 'bob', authorIsBot: false };
+		expect(run(facts({ reason: 'mention', enrichment: pr({ lastComment: human }) })).kind).toBe(
+			'reply'
+		);
+		expect(run(facts({ reason: 'mention', enrichment: pr({ lastComment: null }) })).kind).toBe(
+			'reply'
+		);
+	});
+
+	it('flags a PR assigned to me', () => {
+		expect(run(facts({ reason: 'assign', enrichment: pr({ assignedToMe: true }) })).kind).toBe(
+			'triage'
+		);
+	});
+
+	it('treats merged PRs as FYI', () => {
+		expect(run(facts({ reason: 'mention', enrichment: pr({ state: 'merged' }) })).category).toBe(
+			'fyi'
+		);
+	});
+
+	it('flags failed workflow runs', () => {
+		const c = run(
+			facts({
+				subjectType: 'CheckSuite',
+				title: 'CI workflow run failed for main branch',
+				enrichment: null,
+				reason: 'ci_activity'
+			})
+		);
+		expect(c.kind).toBe('fix_ci');
+	});
+});
+
+describe('rules', () => {
+	it('first matching rule wins and can mute', () => {
+		const c = run(
+			facts({ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) }),
+			{
+				rules: [
+					{ name: 'mute docs', when: { repo: 'PostHog/posthog.com' }, then: { category: 'muted' } },
+					{
+						name: 'quiet posthog',
+						when: { repo: 'PostHog/*', kind: ['review'] },
+						then: { push: false }
+					},
+					{ name: 'never reached', when: {}, then: { category: 'muted' } }
+				]
+			}
+		);
+		expect(c).toMatchObject({ category: 'action', rule: 'quiet posthog', push: false });
+		expect(shouldPush(c, DEFAULT_SETTINGS)).toBe(false);
+	});
+
+	it('skips disabled rules', () => {
+		const c = run(facts(), { rules: [{ enabled: false, when: {}, then: { category: 'muted' } }] });
+		expect(c.category).toBe('fyi');
+	});
+
+	it('validates rule shape', () => {
+		expect(validateRules([{ when: {}, then: { category: 'action' } }])).toBeNull();
+		expect(validateRules({})).toMatch(/array/);
+		expect(validateRules([{ when: { nope: 1 }, then: { push: true } }])).toMatch(
+			/unknown condition/
+		);
+		expect(validateRules([{ when: {}, then: {} }])).toMatch(/needs category or push/);
+	});
+
+	it('globs match owner/repo case-insensitively', () => {
+		expect(globToRegExp('posthog/*').test('PostHog/posthog')).toBe(true);
+		expect(globToRegExp('PostHog/posthog').test('PostHog/posthog.com')).toBe(false);
+	});
+});
+
+describe('team review requests', () => {
+	const f = facts({
+		repo: 'PostHog/posthog',
+		reason: 'review_requested',
+		enrichment: pr({ requestedTeams: ['web'] }),
+		myTeams: ['PostHog/web']
+	});
+	it('are FYI by default and "Needs you" when the setting is on', () => {
+		expect(run(f).category).toBe('fyi');
+		expect(run(f, { teamReviewsAreAction: true })).toMatchObject({
+			category: 'action',
+			kind: 'review'
+		});
+	});
+});

@@ -1,0 +1,53 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "hush",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-07-01",
+	// The SvelteKit SPA build. The Worker runs first only for the API and feeds.
+	"assets": {
+		"directory": "./build",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/feeds/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "hush",
+			"database_id": "d6645c6a-01b1-440c-9b29-b6633bab4baa",
+			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "hush",
+			"database_name": "hush",
+			"database_id": "d6645c6a-01b1-440c-9b29-b6633bab4baa",
+			"remote": true
+		}
+	],
+	// One Poller per user, SQLite-backed (available on the Workers Free plan).
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "POLLER",
+				"class_name": "Poller"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"Poller"
+			]
+		}
+	],
+	// Secrets (wrangler secret put …; locally in .dev.vars):
+	//   TOKEN_ENC_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY — generate with `pnpm keys`.
+	//   VAPID_SUBJECT (optional) — push contact; defaults to the app's own URL.
+	"observability": {
+		"enabled": true
+	}
+}
