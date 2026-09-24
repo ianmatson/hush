@@ -5,12 +5,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
-	import {
-		dragHandleZone,
-		SHADOW_ITEM_MARKER_PROPERTY_NAME,
-		TRIGGERS,
-		type DndEvent
-	} from 'svelte-dnd-action';
+	import { ListDrag } from '$lib/drag.svelte';
 	import { api } from '$lib/api';
 	import { dashQuery, keys, queryClient } from '$lib/queries';
 	import { Selection } from '$lib/selection.svelte';
@@ -43,12 +38,9 @@
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
 
-	type Item = DashItem & { [SHADOW_ITEM_MARKER_PROPERTY_NAME]?: boolean };
-
 	let { kind }: { kind: DashKind } = $props();
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
-	const FLIP_MS = 220;
-	const SHADOW = SHADOW_ITEM_MARKER_PROPERTY_NAME;
+	const FLIP = { duration: 260, easing: cubicOut };
 
 	const dashQ = createQuery(() => dashQuery(kind));
 	const data = $derived(dashQ.data ?? null);
@@ -101,18 +93,33 @@
 	const baseGroups = $derived(
 		GROUPS.map((g) => ({
 			...g,
-			items: arrangeGroup(filtered.filter((i) => i.turn === g.turn)) as Item[]
+			items: arrangeGroup(filtered.filter((i) => i.turn === g.turn))
 		}))
 	);
 
 	// --- Drag and drop ----------------------------------------------------------------
-	// While a drag runs, each zone shows the library's working copy of its items.
-	let drag = $state<Record<Turn, Item[]> | null>(null);
-	let draggedId = $state<string | null>(null);
-	let clearDrag: ReturnType<typeof setTimeout> | undefined;
-	const groups = $derived(baseGroups.map((g) => ({ ...g, items: drag ? drag[g.turn] : g.items })));
+	const drag = new ListDrag({
+		enabled: () => !showHidden,
+		// Dragging a selected row moves the whole selection, in list order.
+		pick: (id) => (sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id]),
+		isCollapsed: (zone) => collapsed[zone as Turn],
+		drop: (ids, zone, index) => dropAt(ids, zone as Turn, index)
+	});
+	const dragging = $derived(new Set(drag.ids));
+
+	/** Rows to render: dragged rows leave their lists; the placeholder opens where they land. */
+	const groups = $derived(
+		baseGroups.map((g) => {
+			const rows: { key: string; item: DashItem | null }[] = g.items
+				.filter((i) => !dragging.has(i.id))
+				.map((i) => ({ key: i.id, item: i }));
+			if (drag.active && drag.zone === g.turn && !collapsed[g.turn])
+				rows.splice(Math.min(drag.index, rows.length), 0, { key: '__placeholder', item: null });
+			return { ...g, rows };
+		})
+	);
 	/** Every group is a drop target while dragging, even an empty or closed one. */
-	const shownGroups = $derived(groups.filter((g) => g.items.length || drag));
+	const shownGroups = $derived(groups.filter((g) => g.rows.length || drag.active));
 
 	/** Keyboard order: only rows in open groups. */
 	const navigable = $derived(baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.items)));
@@ -120,31 +127,36 @@
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
 	const byId = (id: string) => data?.items.find((i) => i.id === id);
 
-	function onConsider(turn: Turn, e: CustomEvent<DndEvent<Item>>) {
-		clearTimeout(clearDrag);
-		drag ??= Object.fromEntries(
-			baseGroups.map((g) => [g.turn, collapsed[g.turn] ? [] : g.items])
-		) as Record<Turn, Item[]>;
-		drag[turn] = e.detail.items;
-		if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) draggedId = e.detail.info.id;
+	/** `index` counts the visible rows left in the group once the dragged rows are out. */
+	function dropAt(ids: string[], turn: Turn, index: number) {
+		const left = (baseGroups.find((g) => g.turn === turn)?.items ?? [])
+			.map((i) => i.id)
+			.filter((id) => !ids.includes(id));
+		const visible = [...left.slice(0, index), ...ids, ...left.slice(index)];
+		return arrange(ids, turn, orderAfterDrop(fullGroup(turn), visible, ids));
 	}
 
-	function onFinalize(turn: Turn, e: CustomEvent<DndEvent<Item>>) {
-		if (!drag) return;
-		drag[turn] = e.detail.items;
-		const id = e.detail.info.id;
-		// Both the source and the target zone finalize; the target is the one holding the item.
-		if (e.detail.items.some((i) => i.id === id))
-			dropped(
-				id,
-				turn,
-				e.detail.items.filter((i) => !i[SHADOW]).map((i) => i.id)
-			);
-		clearTimeout(clearDrag);
-		clearDrag = setTimeout(() => {
-			drag = null;
-			draggedId = null;
-		});
+	// Enter and leave animations that know about dragging.
+	type Row = { key: string; item: DashItem | null };
+	function enter(node: Element, r: Row) {
+		if (!r.item)
+			return drag.fresh ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
+		if (drag.settling) {
+			// The dropped stack unfolds: the first card is already in place, the rest slide out of it.
+			const k = drag.unfold.indexOf(r.item.id);
+			return k < 0
+				? { duration: 0 }
+				: fly(node, { y: -28, opacity: 0, duration: 320, delay: 35 * k, easing: cubicOut });
+		}
+		if (drag.active) return { duration: 0 };
+		return fly(node, { y: -8, duration: 200 });
+	}
+	function leave(node: Element, r: Row) {
+		if (!r.item)
+			return drag.settling ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
+		// Rows lifted by a drag vanish at once: the floating card stands in for them.
+		if (drag.active || drag.settling) return { duration: 0 };
+		return slide(node, { duration: 200, easing: cubicOut });
 	}
 
 	/** Full order of a group, including rows hidden by the current filter. */
@@ -194,6 +206,18 @@
 					: x
 		);
 		sel.clear();
+		// Save in the background: a drop must finish its one visual update without waiting.
+		void persistArrange(items, target, groupOrder, prev, turn, set);
+	}
+
+	async function persistArrange(
+		items: DashItem[],
+		target: (i: DashItem) => Turn,
+		groupOrder: string[] | undefined,
+		prev: Map<string, DashItem>,
+		turn: Turn | null,
+		set: (fn: (x: DashItem) => DashItem) => void
+	) {
 		try {
 			await api.arrange(
 				items.map((i) => ({
@@ -229,24 +253,6 @@
 			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
 		}
 	}
-
-	/** "+N" on the dragged row when it carries a selection. */
-	function transformDragged(el?: HTMLElement, item?: Record<string, unknown>) {
-		if (!el || !item) return;
-		const id = String(item.id);
-		const count = sel.has(id) && sel.size > 1 ? sel.size : 0;
-		if (count && !el.querySelector('.drag-count')) {
-			const badge = document.createElement('span');
-			badge.className = 'drag-count';
-			badge.textContent = String(count);
-			el.appendChild(badge);
-		}
-	}
-
-	// No enter/leave transitions while dragging: the library animates those moves itself.
-	const leave = (node: Element) =>
-		drag ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
-	const enter = (node: Element) => (drag ? { duration: 0 } : fly(node, { y: -8, duration: 200 }));
 
 	// --- Everything else --------------------------------------------------------------
 	$effect(() => {
@@ -588,7 +594,7 @@
 		<ContextMenu.Root>
 			<ContextMenu.Trigger>
 				{#snippet child({ props })}
-					<div {...props} class="grid gap-5" oncontextmenucapture={onContextMenu}>
+					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
 						{#each shownGroups as g (g.turn)}
 							<section>
 								<button
@@ -611,84 +617,56 @@
 										>{g.hint}</span
 									>
 								</button>
-								{#if !collapsed[g.turn] || drag}
+								{#if !collapsed[g.turn] || drag.active}
 									<ul
+										data-drag-zone={g.turn}
+										data-target={(drag.active && drag.zone === g.turn) || undefined}
 										class={cn(
-											'relative grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-xl',
-											drag && 'min-h-14',
-											drag && !g.items.length && 'drop-empty'
+											'drag-zone relative grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-xl',
+											drag.active && 'min-h-14',
+											drag.active && (collapsed[g.turn] || !g.rows.length) && 'drop-empty'
 										)}
 										role="listbox"
 										aria-multiselectable="true"
 										aria-label={g.label}
 										data-hint={collapsed[g.turn] ? `Drop to move to “${g.label}”` : 'Drop here'}
-										use:dragHandleZone={{
-											items: g.items,
-											flipDurationMs: FLIP_MS,
-											type: `dash-${kind}`,
-											dragDisabled: showHidden,
-											dropTargetStyle: {},
-											dropTargetClasses: ['dnd-target'],
-											transformDraggedElement: transformDragged,
-											delayTouchStart: 200
-										}}
-										onconsider={(e) => onConsider(g.turn, e)}
-										onfinalize={(e) => onFinalize(g.turn, e)}
 									>
-										{#each g.items as i (i.id + (i[SHADOW] ? ':shadow' : ''))}
-											<li
-												animate:flip={{ duration: FLIP_MS, easing: cubicOut }}
-												in:enter
-												out:leave
-												data-is-dnd-shadow-item-hint={i[SHADOW]}
-												class={cn(
-													'transition-opacity duration-200',
-													drag &&
-														draggedId !== i.id &&
-														sel.size > 1 &&
-														sel.has(draggedId ?? '') &&
-														sel.has(i.id) &&
-														'opacity-35'
-												)}
-											>
-												{#if i[SHADOW]}
-													<!-- Where the dragged row will land. Same height as a real row. -->
-													<div
-														class="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5"
-													>
-														<div class="invisible">
-															<DashRow
-																item={i}
-																{sectionNames}
-																draggable={false}
-																onopen={open}
-																onhide={() => {}}
-																oncopy={() => {}}
-																onrowclick={() => {}}
-																ontoggle={() => {}}
-																onundomove={() => {}}
-															/>
-														</div>
-													</div>
-												{:else}
-													<DashRow
-														item={i}
-														selected={i.id === selectedId}
-														checked={sel.has(i.id)}
-														selecting={sel.size > 0}
-														draggable={!showHidden}
-														showSections={!section}
-														{sectionNames}
-														onopen={open}
-														onhide={(x) => toggleHide([x.id])}
-														oncopy={(x) => copyLinks([x.id])}
-														onrowclick={(e) => onRowClick(e, i)}
-														ontoggle={(e) => onToggle(e, i)}
-														onundomove={(x) => arrange([x.id], null)}
-													/>
-												{/if}
-											</li>
-										{/each}
+										{#if !collapsed[g.turn]}
+											{#each g.rows as r (r.key)}
+												<li
+													animate:flip={FLIP}
+													in:enter={r}
+													out:leave={r}
+													data-drag-id={r.item?.id}
+													data-drag-placeholder={!r.item || undefined}
+													style={r.item ? undefined : `height: ${drag.gap}px`}
+													class={r.item
+														? 'drag-row'
+														: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
+													onpointerdown={(e) =>
+														r.item && drag.pointerdown(e, r.item.id, e.currentTarget)}
+												>
+													{#if r.item}
+														{@const i = r.item}
+														<DashRow
+															item={i}
+															selected={i.id === selectedId}
+															checked={sel.has(i.id)}
+															selecting={sel.size > 0}
+															draggable={!showHidden}
+															showSections={!section}
+															{sectionNames}
+															onopen={open}
+															onhide={(x) => toggleHide([x.id])}
+															oncopy={(x) => copyLinks([x.id])}
+															onrowclick={(e) => onRowClick(e, i)}
+															ontoggle={(e) => onToggle(e, i)}
+															onundomove={(x) => arrange([x.id], null)}
+														/>
+													{/if}
+												</li>
+											{/each}
+										{/if}
 									</ul>
 								{/if}
 							</section>
@@ -748,6 +726,50 @@
 		</ContextMenu.Root>
 	{/if}
 </main>
+
+{#if drag.active}
+	{@const first = byId(drag.ids[0])}
+	{@const lift = drag.lift.current}
+	<!-- The card under the pointer. With a selection, the others stack behind it. -->
+	<div
+		class="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
+		style="width: {drag.width}px; transform-origin: {drag.grab.x}px {drag.grab
+			.y}px; transform: translate3d({drag.pos.current.x}px, {drag.pos.current.y}px, 0) scale({1 +
+			0.025 * lift});"
+	>
+		{#each drag.ids.slice(1, 3).reverse() as id, k (id)}
+			{@const depth = drag.ids.slice(1, 3).length - k}
+			<div
+				class="absolute inset-0 rounded-xl border bg-background"
+				style="transform: translateY({depth * 10 * lift}px) scale({1 - depth * 0.03}); opacity: {1 -
+					depth * 0.22}; box-shadow: 0 6px 16px -10px rgb(0 0 0 / 0.3);"
+			></div>
+		{/each}
+		<div
+			class="relative overflow-hidden rounded-xl border bg-background"
+			style="box-shadow: 0 {6 + 16 * lift}px {18 + 30 * lift}px -{10 -
+				2 * lift}px rgb(0 0 0 / {0.12 + 0.22 * lift});"
+		>
+			{#if first}
+				<DashRow
+					item={first}
+					checked={sel.has(first.id)}
+					{sectionNames}
+					draggable={false}
+					onopen={() => {}}
+					onhide={() => {}}
+					oncopy={() => {}}
+					onrowclick={() => {}}
+					ontoggle={() => {}}
+					onundomove={() => {}}
+				/>
+			{/if}
+		</div>
+		{#if drag.ids.length > 1}
+			<span class="drag-count" style="transform: scale({0.6 + 0.4 * lift})">{drag.ids.length}</span>
+		{/if}
+	</div>
+{/if}
 
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
 	<DropdownMenu.Root>

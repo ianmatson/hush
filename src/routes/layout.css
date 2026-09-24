@@ -144,13 +144,34 @@
 	}
 }
 
-/* --- Drag and drop (svelte-dnd-action) ------------------------------------------ */
+/* --- Drag and drop (src/lib/drag.svelte.ts) ------------------------------------ */
 
-/* The group under the dragged row. */
-.dnd-target {
-	outline: 2px dashed color-mix(in oklch, var(--primary) 30%, transparent);
-	outline-offset: 4px;
-	transition: outline-color 150ms;
+.is-dragging,
+.is-dragging * {
+	cursor: grabbing !important;
+	user-select: none !important;
+}
+
+/* Rows drag from anywhere: no text selection, no iOS long-press callout, no native link drag. */
+.drag-row {
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+.drag-row a,
+.drag-row img {
+	-webkit-user-drag: none;
+}
+
+/* The group under the dragged card. */
+.drag-zone[data-target] {
+	outline: 2px dashed color-mix(in oklch, var(--primary) 22%, transparent);
+	outline-offset: 5px;
+}
+.drag-zone {
+	outline: 2px dashed transparent;
+	outline-offset: 5px;
+	transition: outline-color 180ms ease;
 }
 
 /* An empty (or closed) group while dragging: show where to drop. */
@@ -168,22 +189,11 @@
 	pointer-events: none;
 }
 
-/* The row that follows the pointer: lifted, a little tilted. */
-#dnd-action-dragged-el {
-	border-radius: var(--radius-xl);
-	box-shadow:
-		0 10px 30px -10px rgb(0 0 0 / 0.35),
-		0 0 0 1px var(--border);
-	background: var(--background);
-	rotate: 0.6deg;
-	cursor: grabbing;
-}
-
-/* "+N" when a selection moves together. */
+/* "N" on the floating stack. */
 .drag-count {
 	position: absolute;
-	top: -0.5rem;
-	right: -0.5rem;
+	top: -0.55rem;
+	right: -0.55rem;
 	min-width: 1.5rem;
 	height: 1.5rem;
 	padding: 0 0.4rem;

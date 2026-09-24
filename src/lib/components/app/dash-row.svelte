@@ -15,7 +15,6 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import X from '@lucide/svelte/icons/x';
-	import { dragHandle } from 'svelte-dnd-action';
 	import SelectMark from './select-mark.svelte';
 
 	let {
@@ -112,18 +111,17 @@
 	aria-selected={selected || checked}
 >
 	{#if draggable}
-		<!-- Drag handle in the gutter. Always visible on touch screens, which have no hover. -->
+		<!-- A hint only: the whole card drags. Always visible on touch screens, which have no hover. -->
 		<span
-			use:dragHandle
-			aria-label="Drag {i.title}"
-			class="absolute top-1/2 -left-5 flex h-8 w-4 -translate-y-1/2 cursor-grab items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-100"
+			aria-hidden="true"
+			class="pointer-events-none absolute top-1/2 -left-5 flex h-8 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/50 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100"
 		>
 			<GripVertical class="size-4" />
 		</span>
 	{/if}
 	<SelectMark {checked} {selecting} label="Select {i.title}" {ontoggle}>
 		<Avatar.Root class="size-8">
-			<Avatar.Image src={i.authorAvatar} alt="" />
+			<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
 			<Avatar.Fallback class="text-[0.65rem]">{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback>
 		</Avatar.Root>
 	</SelectMark>
@@ -134,7 +132,8 @@
 				href={i.url}
 				target="_blank"
 				rel="noreferrer"
-				class="truncate text-sm font-medium select-text hover:underline"
+				draggable="false"
+				class="truncate text-sm font-medium hover:underline"
 				onclick={(e) => {
 					e.stopPropagation();
 					e.preventDefault();

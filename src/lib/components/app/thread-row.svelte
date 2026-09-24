@@ -70,11 +70,12 @@
 	aria-selected={selected || checked}
 >
 	<SelectMark {checked} {selecting} label="Select {t.title}" {ontoggle}>
-		<span class="relative">
+		<!-- Same box as the round icon, so the dot sits on the circle's top-right edge. -->
+		<span class="relative block size-8">
 			<KindIcon kind={t.kind} category={t.category} subjectType={t.subjectType} />
 			{#if t.unread}
 				<span
-					class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-signal-review ring-2 ring-(--row-bg)"
+					class="absolute top-0 right-0 size-2.5 rounded-full bg-signal-review ring-2 ring-(--row-bg)"
 					aria-label="Unread"
 				></span>
 			{/if}
