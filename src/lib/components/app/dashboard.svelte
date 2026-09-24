@@ -1,10 +1,21 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { flip } from 'svelte/animate';
+	import { fly, slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
+	import {
+		dragHandleZone,
+		SHADOW_ITEM_MARKER_PROPERTY_NAME,
+		TRIGGERS,
+		type DndEvent
+	} from 'svelte-dnd-action';
 	import { api } from '$lib/api';
 	import { dashQuery, keys, queryClient } from '$lib/queries';
+	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
+	import { arrangeGroup, orderAfterDrop } from '$lib/shared/dashboard';
 	import type { DashItem, DashKind, DashResponse, Turn } from '$lib/shared/types';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -13,18 +24,31 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import DashRow from './dash-row.svelte';
+	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import Eye from '@lucide/svelte/icons/eye';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Link from '@lucide/svelte/icons/link';
+	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
+	import Undo from '@lucide/svelte/icons/undo-2';
+	import SquareCheck from '@lucide/svelte/icons/square-check';
+
+	type Item = DashItem & { [SHADOW_ITEM_MARKER_PROPERTY_NAME]?: boolean };
 
 	let { kind }: { kind: DashKind } = $props();
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
+	const FLIP_MS = 220;
+	const SHADOW = SHADOW_ITEM_MARKER_PROPERTY_NAME;
 
 	const dashQ = createQuery(() => dashQuery(kind));
 	const data = $derived(dashQ.data ?? null);
@@ -41,6 +65,7 @@
 		them: false,
 		none: true
 	});
+	const sel = new Selection();
 
 	const GROUPS: { turn: Turn; label: string; hint: string }[] = [
 		{ turn: 'you', label: 'Your turn', hint: 'You are the next person who must act.' },
@@ -52,13 +77,14 @@
 		{ turn: 'them', label: 'Waiting on others', hint: 'You did your part. Someone else must act.' },
 		{ turn: 'none', label: 'Other', hint: 'Drafts, and threads that only mention you.' }
 	];
+	const groupLabel = (t: Turn) => GROUPS.find((g) => g.turn === t)!.label;
 
 	const sectionNames = $derived(
 		Object.fromEntries((data?.sections ?? []).map((s) => [s.id, s.name]))
 	);
 	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed).length ?? 0);
 
-	const visible = $derived.by(() => {
+	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		return (data?.items ?? []).filter(
 			(i) =>
@@ -71,23 +97,161 @@
 		);
 	});
 
-	const groups = $derived(
-		GROUPS.map((g) => ({ ...g, items: visible.filter((i) => i.turn === g.turn) })).filter(
-			(g) => g.items.length
-		)
+	/** Groups in display order: new items on top, then your manual order. */
+	const baseGroups = $derived(
+		GROUPS.map((g) => ({
+			...g,
+			items: arrangeGroup(filtered.filter((i) => i.turn === g.turn)) as Item[]
+		}))
 	);
-	/** Keyboard order: only rows in open groups. */
-	const navigable = $derived(groups.flatMap((g) => (collapsed[g.turn] ? [] : g.items)));
-	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
 
-	function sectionCount(id: string | null) {
-		return (data?.items ?? []).filter((i) => !i.dismissed && (!id || i.sections.includes(id)))
-			.length;
+	// --- Drag and drop ----------------------------------------------------------------
+	// While a drag runs, each zone shows the library's working copy of its items.
+	let drag = $state<Record<Turn, Item[]> | null>(null);
+	let draggedId = $state<string | null>(null);
+	let clearDrag: ReturnType<typeof setTimeout> | undefined;
+	const groups = $derived(baseGroups.map((g) => ({ ...g, items: drag ? drag[g.turn] : g.items })));
+	/** Every group is a drop target while dragging, even an empty or closed one. */
+	const shownGroups = $derived(groups.filter((g) => g.items.length || drag));
+
+	/** Keyboard order: only rows in open groups. */
+	const navigable = $derived(baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.items)));
+	const order = $derived(navigable.map((i) => i.id));
+	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
+	const byId = (id: string) => data?.items.find((i) => i.id === id);
+
+	function onConsider(turn: Turn, e: CustomEvent<DndEvent<Item>>) {
+		clearTimeout(clearDrag);
+		drag ??= Object.fromEntries(
+			baseGroups.map((g) => [g.turn, collapsed[g.turn] ? [] : g.items])
+		) as Record<Turn, Item[]>;
+		drag[turn] = e.detail.items;
+		if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) draggedId = e.detail.info.id;
 	}
 
-	// Keep a valid selection when the list changes.
+	function onFinalize(turn: Turn, e: CustomEvent<DndEvent<Item>>) {
+		if (!drag) return;
+		drag[turn] = e.detail.items;
+		const id = e.detail.info.id;
+		// Both the source and the target zone finalize; the target is the one holding the item.
+		if (e.detail.items.some((i) => i.id === id))
+			dropped(
+				id,
+				turn,
+				e.detail.items.filter((i) => !i[SHADOW]).map((i) => i.id)
+			);
+		clearTimeout(clearDrag);
+		clearDrag = setTimeout(() => {
+			drag = null;
+			draggedId = null;
+		});
+	}
+
+	/** Full order of a group, including rows hidden by the current filter. */
+	const fullGroup = (turn: Turn) =>
+		arrangeGroup(
+			(data?.items ?? []).filter((i) => i.turn === turn && i.dismissed === showHidden)
+		).map((i) => i.id);
+
+	function dropped(id: string, turn: Turn, visible: string[]) {
+		// Dragging a selected row moves the whole selection, in list order.
+		const moved = sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id];
+		const block = new Set(moved);
+		const vis = visible.filter((x) => x === id || !block.has(x));
+		vis.splice(vis.indexOf(id), 1, ...moved);
+		const before = fullGroup(turn);
+		const next = orderAfterDrop(before, vis, moved);
+		const sameGroup = moved.every((m) => byId(m)?.turn === turn);
+		if (sameGroup && next.join() === before.join()) return;
+		arrange(moved, turn, next);
+	}
+
+	/**
+	 * Move items into a group at a given order: update the cache now, then save.
+	 * `turn` null undoes your moves (back to Hush's group).
+	 */
+	async function arrange(ids: string[], turn: Turn | null, groupOrder?: string[]) {
+		const items = ids.map(byId).filter((i): i is DashItem => !!i);
+		if (!items.length) return;
+		const prev = new Map(items.map((i) => [i.id, i]));
+		const target = (i: DashItem) => turn ?? i.autoTurn;
+		const rank = new Map((groupOrder ?? []).map((x, n) => [x, n]));
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
+		const set = (fn: (x: DashItem) => DashItem) =>
+			queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
+				old ? { ...old, items: old.items.map(fn) } : old
+			);
+		set((x) =>
+			prev.has(x.id)
+				? {
+						...x,
+						turn: target(x),
+						movedByYou: target(x) !== x.autoTurn,
+						rank: rank.get(x.id) ?? x.rank
+					}
+				: rank.has(x.id)
+					? { ...x, rank: rank.get(x.id)! }
+					: x
+		);
+		sel.clear();
+		try {
+			await api.arrange(
+				items.map((i) => ({
+					id: i.id,
+					updatedAt: i.updatedAt,
+					// Same group: leave any move as it is. Back to Hush's group: undo the move.
+					turn: target(i) === i.turn ? undefined : target(i) === i.autoTurn ? null : target(i)
+				})),
+				groupOrder ?? []
+			);
+			if (items.some((i) => i.turn !== target(i)))
+				toast(turn ? `Moved to “${groupLabel(turn)}”` : 'Back in its own group', {
+					description: items.length === 1 ? items[0].title : `${items.length} items`,
+					action: {
+						label: 'Undo',
+						onClick: () => {
+							set((x) => prev.get(x.id) ?? x);
+							api
+								.arrange(
+									items.map((i) => ({
+										id: i.id,
+										updatedAt: i.updatedAt,
+										turn: i.movedByYou ? i.turn : null
+									})),
+									[]
+								)
+								.catch((err) => toast.error(err.message));
+						}
+					}
+				});
+		} catch (err) {
+			toast.error((err as Error).message);
+			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
+		}
+	}
+
+	/** "+N" on the dragged row when it carries a selection. */
+	function transformDragged(el?: HTMLElement, item?: Record<string, unknown>) {
+		if (!el || !item) return;
+		const id = String(item.id);
+		const count = sel.has(id) && sel.size > 1 ? sel.size : 0;
+		if (count && !el.querySelector('.drag-count')) {
+			const badge = document.createElement('span');
+			badge.className = 'drag-count';
+			badge.textContent = String(count);
+			el.appendChild(badge);
+		}
+	}
+
+	// No enter/leave transitions while dragging: the library animates those moves itself.
+	const leave = (node: Element) =>
+		drag ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
+	const enter = (node: Element) => (drag ? { duration: 0 } : fly(node, { y: -8, duration: 200 }));
+
+	// --- Everything else --------------------------------------------------------------
 	$effect(() => {
 		if (!navigable.some((i) => i.id === selectedId)) selectedId = navigable[0]?.id ?? null;
+		untrack(() => sel.prune(order));
 	});
 
 	/** Force the server to search GitHub again (skips its 5-minute cache). */
@@ -111,6 +275,7 @@
 		untrack(() => {
 			section = null;
 			selectedId = null;
+			sel.clear();
 			const saved = localStorage.getItem(`hush:collapsed:${k}`);
 			if (saved) collapsed = JSON.parse(saved);
 		});
@@ -120,58 +285,94 @@
 		localStorage.setItem(`hush:collapsed:${kind}`, JSON.stringify(collapsed));
 	});
 
-	function setDismissed(id: string, dismissed: boolean) {
+	function sectionCount(id: string | null) {
+		return (data?.items ?? []).filter((i) => !i.dismissed && (!id || i.sections.includes(id)))
+			.length;
+	}
+
+	function setDismissed(ids: Set<string>, dismissed: boolean) {
 		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
-			old ? { ...old, items: old.items.map((x) => (x.id === id ? { ...x, dismissed } : x)) } : old
+			old ? { ...old, items: old.items.map((x) => (ids.has(x.id) ? { ...x, dismissed } : x)) } : old
 		);
+	}
+
+	async function toggleHide(ids: string[]) {
+		const items = ids.map(byId).filter((i): i is DashItem => !!i);
+		if (!items.length) return;
+		const hide = !items[0].dismissed;
+		const set = new Set(items.map((i) => i.id));
+		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
+		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
+		sel.clear();
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
+		setDismissed(set, hide);
+		try {
+			if (hide) await api.hide(items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })));
+			else await api.unhide([...set]);
+			toast(hide ? 'Hidden until it changes' : 'Shown again', {
+				description: items.length === 1 ? items[0].title : `${items.length} items`,
+				action: hide
+					? {
+							label: 'Undo',
+							onClick: () => {
+								setDismissed(set, false);
+								api.unhide([...set]).catch((e) => toast.error(e.message));
+							}
+						}
+					: undefined
+			});
+		} catch (err) {
+			setDismissed(set, !hide);
+			toast.error((err as Error).message);
+		}
 	}
 
 	function open(i: DashItem, url: string) {
 		window.open(url, '_blank', 'noopener');
 	}
 
-	async function toggleHide(i: DashItem) {
-		const hide = !i.dismissed;
-		const idx = navigable.findIndex((x) => x.id === i.id);
-		const next = navigable[idx + 1] ?? navigable[idx - 1];
-		if (selectedId === i.id) selectedId = next?.id ?? null;
-		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
-		setDismissed(i.id, hide);
-		try {
-			if (hide) await api.hide(i.id, i.updatedAt);
-			else await api.unhide(i.id);
-			toast(hide ? 'Hidden until it changes' : 'Shown again', {
-				description: i.title,
-				action: hide
-					? {
-							label: 'Undo',
-							onClick: () => {
-								setDismissed(i.id, false);
-								api.unhide(i.id).catch((e) => toast.error(e.message));
-							}
-						}
-					: undefined
-			});
-		} catch (err) {
-			setDismissed(i.id, !hide);
-			toast.error((err as Error).message);
-		}
+	async function copyLinks(ids: string[]) {
+		const urls = ids
+			.map(byId)
+			.filter(Boolean)
+			.map((i) => i!.url);
+		await navigator.clipboard.writeText(urls.join('\n'));
+		toast.success(urls.length === 1 ? 'Link copied' : `${urls.length} links copied`);
 	}
 
-	async function copy(i: DashItem) {
-		await navigator.clipboard.writeText(i.url);
-		toast.success('Link copied', { description: `${i.repo}#${i.number}` });
+	/** Move to the top of another group (menu and bulk bar). */
+	function moveTo(ids: string[], turn: Turn) {
+		const block = new Set(ids);
+		arrange(ids, turn, [
+			...order.filter((x) => block.has(x)),
+			...fullGroup(turn).filter((x) => !block.has(x))
+		]);
 	}
 
-	function move(delta: number) {
+	const targets = () => sel.targets(order, selectedId);
+
+	function onRowClick(e: MouseEvent, i: DashItem) {
+		if (sel.click(e, i.id, order, selectedId)) return;
+		sel.clear();
+		selectedId = i.id;
+	}
+
+	function onToggle(e: MouseEvent, i: DashItem) {
+		if (e.shiftKey) sel.range(order, i.id, selectedId);
+		else sel.toggle(i.id);
+		selectedId = i.id;
+	}
+
+	function move(delta: number, extend = false) {
 		if (!navigable.length) return;
+		if (extend && selectedId) sel.ids.add(selectedId);
 		const n =
 			selectedIndex < 0 ? 0 : Math.min(Math.max(selectedIndex + delta, 0), navigable.length - 1);
 		selectedId = navigable[n].id;
+		if (extend) sel.ids.add(selectedId);
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const target = e.target;
 		if (
 			target instanceof Element &&
@@ -180,6 +381,12 @@
 			if (e.key === 'Escape' && target === searchEl) searchEl?.blur();
 			return;
 		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+			e.preventDefault();
+			sel.all(order);
+			return;
+		}
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const i = navigable[selectedIndex];
 		const chips = [null, ...(data?.sections ?? []).map((s) => s.id)];
 		const keys: Record<string, () => void> = {
@@ -187,11 +394,15 @@
 			ArrowDown: () => move(1),
 			k: () => move(-1),
 			ArrowUp: () => move(-1),
+			J: () => move(1, true),
+			K: () => move(-1, true),
+			x: () => i && sel.toggle(i.id),
+			Escape: () => sel.clear(),
 			o: () => i && open(i, i.actionUrl),
 			Enter: () => i && open(i, i.actionUrl),
 			O: () => i && open(i, i.url),
-			e: () => i && toggleHide(i),
-			c: () => i && copy(i),
+			e: () => toggleHide(targets()),
+			c: () => copyLinks(targets()),
 			h: () => (showHidden = !showHidden),
 			r: () => refresh(),
 			'/': () => searchEl?.focus(),
@@ -205,13 +416,39 @@
 		}
 	}
 
+	// --- Right-click menu: one menu for the whole list --------------------------------
+	let menuIds = $state<string[]>([]);
+	function onContextMenu(e: MouseEvent) {
+		const id = (e.target as Element).closest<HTMLElement>('[data-row-id]')?.dataset.rowId;
+		if (!id) {
+			e.preventDefault();
+			return;
+		}
+		// Right-click inside the selection acts on all of it; elsewhere, on that row only.
+		if (!sel.has(id)) {
+			sel.clear();
+			selectedId = id;
+		}
+		menuIds = sel.size ? sel.targets(order, id) : [id];
+	}
+	const menuOne = $derived(menuIds.length === 1 ? byId(menuIds[0]) : undefined);
+	const menuMoved = $derived(menuIds.some((id) => byId(id)?.movedByYou));
+	const n = (label: string) => (menuIds.length > 1 ? `${label} (${menuIds.length})` : label);
+
 	const shortcuts = [
 		['J / K', 'Next / previous'],
+		['Shift + J / K', 'Extend the selection'],
+		['X', 'Select or deselect'],
+		['⌘ / Ctrl + A', 'Select all'],
+		['⌘ / Ctrl + click', 'Add to selection'],
+		['Shift + click', 'Select a range'],
+		['Drag ⋮⋮', 'Move to another group or position'],
 		['Enter / O', 'Main action (review, fix CI…)'],
 		['Shift + O', 'Open on GitHub'],
 		['E', 'Hide until it changes (or show again)'],
 		['C', 'Copy link'],
 		['H', 'Show hidden items'],
+		['Esc', 'Clear the selection'],
 		['0 – 9', 'All, or one section'],
 		['R', 'Refresh from GitHub'],
 		['/', 'Filter'],
@@ -273,7 +510,7 @@
 			aria-label="Sections"
 		>
 			{#each [{ id: null, name: 'All' }, ...data.sections] as s (s.id ?? 'all')}
-				{@const n = sectionCount(s.id)}
+				{@const count = sectionCount(s.id)}
 				<button
 					role="tab"
 					aria-selected={section === s.id}
@@ -282,12 +519,12 @@
 						section === s.id
 							? 'border-foreground/20 bg-foreground text-background'
 							: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-						!n && section !== s.id && 'opacity-50'
+						!count && section !== s.id && 'opacity-50'
 					)}
 					onclick={() => (section = section === s.id ? null : s.id)}
 				>
 					{s.name}
-					<span class="tabular-nums opacity-70">{n}</span>
+					<span class="tabular-nums opacity-70">{count}</span>
 				</button>
 			{/each}
 		</div>
@@ -321,7 +558,7 @@
 
 	{#if dashQ.isPending}
 		<div class="grid gap-2">
-			{#each [0, 1, 2, 3, 4] as n (n)}
+			{#each [0, 1, 2, 3, 4] as k (k)}
 				<div class="flex items-center gap-3 px-3 py-3">
 					<Skeleton class="size-8 rounded-full" />
 					<div class="grid flex-1 gap-2">
@@ -331,7 +568,7 @@
 				</div>
 			{/each}
 		</div>
-	{:else if !visible.length}
+	{:else if !filtered.length}
 		<div
 			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
 		>
@@ -348,48 +585,188 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="grid gap-5">
-			{#each groups as g (g.turn)}
-				<section>
-					<button
-						class="group/h mb-1 flex w-full items-center gap-2 px-1 text-left"
-						onclick={() => (collapsed[g.turn] = !collapsed[g.turn])}
-						aria-expanded={!collapsed[g.turn]}
+		<ContextMenu.Root>
+			<ContextMenu.Trigger>
+				{#snippet child({ props })}
+					<div {...props} class="grid gap-5" oncontextmenucapture={onContextMenu}>
+						{#each shownGroups as g (g.turn)}
+							<section>
+								<button
+									class="group/h mb-1 flex w-full items-center gap-2 px-1 text-left"
+									onclick={() => (collapsed[g.turn] = !collapsed[g.turn])}
+									aria-expanded={!collapsed[g.turn]}
+								>
+									<ChevronDown
+										class={cn(
+											'size-3.5 text-muted-foreground transition-transform',
+											collapsed[g.turn] && '-rotate-90'
+										)}
+									/>
+									<h2 class="text-xs font-semibold tracking-wide uppercase">{g.label}</h2>
+									<span class="text-xs text-muted-foreground tabular-nums">
+										{baseGroups.find((b) => b.turn === g.turn)?.items.length ?? 0}
+									</span>
+									<span
+										class="ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline"
+										>{g.hint}</span
+									>
+								</button>
+								{#if !collapsed[g.turn] || drag}
+									<ul
+										class={cn(
+											'relative grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-xl',
+											drag && 'min-h-14',
+											drag && !g.items.length && 'drop-empty'
+										)}
+										role="listbox"
+										aria-multiselectable="true"
+										aria-label={g.label}
+										data-hint={collapsed[g.turn] ? `Drop to move to “${g.label}”` : 'Drop here'}
+										use:dragHandleZone={{
+											items: g.items,
+											flipDurationMs: FLIP_MS,
+											type: `dash-${kind}`,
+											dragDisabled: showHidden,
+											dropTargetStyle: {},
+											dropTargetClasses: ['dnd-target'],
+											transformDraggedElement: transformDragged,
+											delayTouchStart: 200
+										}}
+										onconsider={(e) => onConsider(g.turn, e)}
+										onfinalize={(e) => onFinalize(g.turn, e)}
+									>
+										{#each g.items as i (i.id + (i[SHADOW] ? ':shadow' : ''))}
+											<li
+												animate:flip={{ duration: FLIP_MS, easing: cubicOut }}
+												in:enter
+												out:leave
+												data-is-dnd-shadow-item-hint={i[SHADOW]}
+												class={cn(
+													'transition-opacity duration-200',
+													drag &&
+														draggedId !== i.id &&
+														sel.size > 1 &&
+														sel.has(draggedId ?? '') &&
+														sel.has(i.id) &&
+														'opacity-35'
+												)}
+											>
+												{#if i[SHADOW]}
+													<!-- Where the dragged row will land. Same height as a real row. -->
+													<div
+														class="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5"
+													>
+														<div class="invisible">
+															<DashRow
+																item={i}
+																{sectionNames}
+																draggable={false}
+																onopen={open}
+																onhide={() => {}}
+																oncopy={() => {}}
+																onrowclick={() => {}}
+																ontoggle={() => {}}
+																onundomove={() => {}}
+															/>
+														</div>
+													</div>
+												{:else}
+													<DashRow
+														item={i}
+														selected={i.id === selectedId}
+														checked={sel.has(i.id)}
+														selecting={sel.size > 0}
+														draggable={!showHidden}
+														showSections={!section}
+														{sectionNames}
+														onopen={open}
+														onhide={(x) => toggleHide([x.id])}
+														oncopy={(x) => copyLinks([x.id])}
+														onrowclick={(e) => onRowClick(e, i)}
+														ontoggle={(e) => onToggle(e, i)}
+														onundomove={(x) => arrange([x.id], null)}
+													/>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							</section>
+						{/each}
+					</div>
+				{/snippet}
+			</ContextMenu.Trigger>
+			<ContextMenu.Content class="w-64">
+				{#if menuOne}
+					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
+						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => open(menuOne, menuOne.url)}>
+						<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Separator />
+				{/if}
+				<ContextMenu.Sub>
+					<ContextMenu.SubTrigger><ArrowRightLeft />{n('Move to')}</ContextMenu.SubTrigger>
+					<ContextMenu.SubContent>
+						{#each GROUPS as g (g.turn)}
+							<ContextMenu.Item
+								disabled={menuIds.every((id) => byId(id)?.turn === g.turn)}
+								onclick={() => moveTo(menuIds, g.turn)}
+							>
+								{g.label}
+							</ContextMenu.Item>
+						{/each}
+					</ContextMenu.SubContent>
+				</ContextMenu.Sub>
+				{#if menuMoved}
+					<ContextMenu.Item onclick={() => arrange(menuIds, null)}
+						><Undo />{n('Undo move')}</ContextMenu.Item
 					>
-						<ChevronDown
-							class={cn(
-								'size-3.5 text-muted-foreground transition-transform',
-								collapsed[g.turn] && '-rotate-90'
-							)}
-						/>
-						<h2 class="text-xs font-semibold tracking-wide uppercase">{g.label}</h2>
-						<span class="text-xs text-muted-foreground tabular-nums">{g.items.length}</span>
-						<span
-							class="ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline"
-							>{g.hint}</span
+				{/if}
+				<ContextMenu.Item onclick={() => toggleHide(menuIds)}>
+					{#if showHidden}<Eye />{n('Show again')}{:else}<EyeOff />{n('Hide until it changes')}{/if}
+					<ContextMenu.Shortcut>E</ContextMenu.Shortcut>
+				</ContextMenu.Item>
+				<ContextMenu.Item onclick={() => copyLinks(menuIds)}>
+					<Link />{n(menuIds.length > 1 ? 'Copy links' : 'Copy link')}<ContextMenu.Shortcut
+						>C</ContextMenu.Shortcut
+					>
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				{#if menuOne}
+					<ContextMenu.Item onclick={() => sel.toggle(menuOne.id)}>
+						<SquareCheck />{sel.has(menuOne.id) ? 'Deselect' : 'Select'}<ContextMenu.Shortcut
+							>X</ContextMenu.Shortcut
 						>
-					</button>
-					{#if !collapsed[g.turn]}
-						<ul class="grid grid-cols-[minmax(0,1fr)] gap-0.5" role="listbox" aria-label={g.label}>
-							{#each g.items as i (i.id)}
-								<DashRow
-									item={i}
-									selected={i.id === selectedId}
-									showSections={!section}
-									{sectionNames}
-									onopen={open}
-									onhide={toggleHide}
-									oncopy={copy}
-									onselect={() => (selectedId = i.id)}
-								/>
-							{/each}
-						</ul>
-					{/if}
-				</section>
-			{/each}
-		</div>
+					</ContextMenu.Item>
+				{/if}
+				<ContextMenu.Item onclick={() => sel.all(order)}>
+					<SquareCheck />Select all<ContextMenu.Shortcut>⌘A</ContextMenu.Shortcut>
+				</ContextMenu.Item>
+			</ContextMenu.Content>
+		</ContextMenu.Root>
 	{/if}
 </main>
+
+<BulkBar count={sel.size} onclear={() => sel.clear()}>
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<Button {...props} variant="ghost" size="sm"><ArrowRightLeft />Move to</Button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<DropdownMenu.Content align="center" side="top">
+			{#each GROUPS as g (g.turn)}
+				<DropdownMenu.Item onclick={() => moveTo(targets(), g.turn)}>{g.label}</DropdownMenu.Item>
+			{/each}
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+	<Button variant="ghost" size="sm" onclick={() => toggleHide(targets())}>
+		{#if showHidden}<Eye />Show{:else}<EyeOff />Hide{/if}
+	</Button>
+	<Button variant="ghost" size="sm" onclick={() => copyLinks(targets())}><Link />Copy links</Button>
+</BulkBar>
 
 <Dialog.Root bind:open={helpOpen}>
 	<Dialog.Content class="sm:max-w-sm">

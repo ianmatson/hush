@@ -143,3 +143,56 @@
 		@apply font-sans;
 	}
 }
+
+/* --- Drag and drop (svelte-dnd-action) ------------------------------------------ */
+
+/* The group under the dragged row. */
+.dnd-target {
+	outline: 2px dashed color-mix(in oklch, var(--primary) 30%, transparent);
+	outline-offset: 4px;
+	transition: outline-color 150ms;
+}
+
+/* An empty (or closed) group while dragging: show where to drop. */
+.drop-empty::before {
+	content: attr(data-hint);
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius-xl);
+	font-size: 0.75rem;
+	color: var(--muted-foreground);
+	pointer-events: none;
+}
+
+/* The row that follows the pointer: lifted, a little tilted. */
+#dnd-action-dragged-el {
+	border-radius: var(--radius-xl);
+	box-shadow:
+		0 10px 30px -10px rgb(0 0 0 / 0.35),
+		0 0 0 1px var(--border);
+	background: var(--background);
+	rotate: 0.6deg;
+	cursor: grabbing;
+}
+
+/* "+N" when a selection moves together. */
+.drag-count {
+	position: absolute;
+	top: -0.5rem;
+	right: -0.5rem;
+	min-width: 1.5rem;
+	height: 1.5rem;
+	padding: 0 0.4rem;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-size: 0.75rem;
+	font-weight: 600;
+	line-height: 1.5rem;
+	text-align: center;
+	box-shadow: 0 0 0 2px var(--background);
+}

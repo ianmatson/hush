@@ -13,25 +13,42 @@
 	import Eye from '@lucide/svelte/icons/eye';
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import X from '@lucide/svelte/icons/x';
+	import { dragHandle } from 'svelte-dnd-action';
+	import SelectMark from './select-mark.svelte';
 
 	let {
 		item: i,
 		selected = false,
+		checked = false,
+		selecting = false,
+		draggable = true,
 		showSections = false,
 		sectionNames,
 		onopen,
 		onhide,
 		oncopy,
-		onselect
+		onrowclick,
+		ontoggle,
+		onundomove
 	}: {
 		item: DashItem;
+		/** The keyboard cursor is on this row. */
 		selected?: boolean;
+		/** Part of the multi-selection. */
+		checked?: boolean;
+		/** Some row is checked: show checkboxes on every row. */
+		selecting?: boolean;
+		draggable?: boolean;
 		showSections?: boolean;
 		sectionNames: Record<string, string>;
 		onopen: (i: DashItem, url: string) => void;
 		onhide: (i: DashItem) => void;
 		oncopy: (i: DashItem) => void;
-		onselect: () => void;
+		onrowclick: (e: MouseEvent) => void;
+		ontoggle: (e: MouseEvent) => void;
+		onundomove: (i: DashItem) => void;
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -78,22 +95,38 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<li
+<div
 	bind:this={row}
+	data-row-id={i.id}
 	data-selected={selected || undefined}
+	data-checked={checked || undefined}
 	class={cn(
-		'group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 transition-colors',
+		'group relative flex items-start gap-3 rounded-xl border border-transparent bg-background px-3 py-3 transition-colors select-none',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
+		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]',
 		i.dismissed && 'opacity-60'
 	)}
-	onclick={onselect}
+	onclick={onrowclick}
 	role="option"
-	aria-selected={selected}
+	tabindex="-1"
+	aria-selected={selected || checked}
 >
-	<Avatar.Root class="mt-0.5 size-8">
-		<Avatar.Image src={i.authorAvatar} alt="" />
-		<Avatar.Fallback class="text-[0.65rem]">{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback>
-	</Avatar.Root>
+	{#if draggable}
+		<!-- Drag handle in the gutter. Always visible on touch screens, which have no hover. -->
+		<span
+			use:dragHandle
+			aria-label="Drag {i.title}"
+			class="absolute top-1/2 -left-5 flex h-8 w-4 -translate-y-1/2 cursor-grab items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100 active:cursor-grabbing [@media(hover:none)]:opacity-100"
+		>
+			<GripVertical class="size-4" />
+		</span>
+	{/if}
+	<SelectMark {checked} {selecting} label="Select {i.title}" {ontoggle}>
+		<Avatar.Root class="size-8">
+			<Avatar.Image src={i.authorAvatar} alt="" />
+			<Avatar.Fallback class="text-[0.65rem]">{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback>
+		</Avatar.Root>
+	</SelectMark>
 
 	<div class="min-w-0 flex-1">
 		<div class="flex items-baseline gap-2">
@@ -101,7 +134,7 @@
 				href={i.url}
 				target="_blank"
 				rel="noreferrer"
-				class="truncate text-sm font-medium hover:underline"
+				class="truncate text-sm font-medium select-text hover:underline"
 				onclick={(e) => {
 					e.stopPropagation();
 					e.preventDefault();
@@ -142,6 +175,21 @@
 			<span class={cn('rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
 				>{i.turnReason}</span
 			>
+			{#if i.movedByYou}
+				<span
+					class="flex items-center gap-0.5 rounded-md border border-dashed py-0.5 pr-0.5 pl-1.5 text-muted-foreground"
+				>
+					Moved by you
+					<button
+						class="rounded p-0.5 hover:bg-muted hover:text-foreground"
+						aria-label="Undo move"
+						onclick={(e) => {
+							e.stopPropagation();
+							onundomove(i);
+						}}><X class="size-3" /></button
+					>
+				</span>
+			{/if}
 			{#if ci}
 				<span class={cn('flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}>
 					<ci.icon class="size-3" />{ci.label}
@@ -229,4 +277,4 @@
 			<ExternalLink class="opacity-60" />
 		</Button>
 	</div>
-</li>
+</div>

@@ -4,6 +4,7 @@ import { classify, validateRules } from '../src/lib/shared/classify';
 import { validateDash } from '../src/lib/shared/dashboard';
 import type {
 	Counts,
+	DashItem,
 	DashKind,
 	Enrichment,
 	FeedDTO,
@@ -11,6 +12,7 @@ import type {
 	MeDTO,
 	Settings,
 	ThreadDTO,
+	Turn,
 	View
 } from '../src/lib/shared/types';
 import { allowedOrgs, checkAccess } from './access';
@@ -235,59 +237,74 @@ app.get('/api/threads', async (c) => {
 });
 
 type ThreadAction = 'done' | 'undone' | 'read' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+const THREAD_ACTIONS = new Set<ThreadAction>(['done', 'undone', 'read', 'snooze', 'unsnooze', 'mute', 'unmute']);
+// Mute makes 2 GitHub calls per thread; 20 × 2 stays under the Free plan's 50 subrequests.
+const BULK_MAX = 20;
 
-app.post('/api/threads/:id/:action', async (c) => {
+/** Apply one triage action to up to BULK_MAX threads: one D1 batch, one version bump. */
+async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 	const u = c.get('user');
-	const id = c.req.param('id');
-	const action = c.req.param('action') as ThreadAction;
 	const db = c.env.DB;
-	const thread = await db
-		.prepare('SELECT * FROM threads WHERE user_id = ? AND id = ?')
-		.bind(u.id, id)
-		.first<ThreadRow>();
-	if (!thread) return c.json({ error: 'Not found' }, 404);
-	const token = await userToken(c.env, u);
-	const set = (sql: string, ...args: unknown[]) =>
-		db.batch([
-			db.prepare(`UPDATE threads SET ${sql} WHERE user_id = ? AND id = ?`).bind(...args, u.id, id),
-			bumpVersion(c.env, u.id)
-		]);
+	if (!THREAD_ACTIONS.has(action)) return c.json({ error: 'Unknown action' }, 400);
+	if (!ids.length || ids.length > BULK_MAX || ids.some((id) => typeof id !== 'string'))
+		return c.json({ error: `Select 1 to ${BULK_MAX} threads.` }, 400);
+	const body = await c.req.json<{ until?: number }>().catch(() => ({}) as { until?: number });
+	if (action === 'snooze' && (!body.until || body.until < Date.now()))
+		return c.json({ error: 'Snooze time must be in the future.' }, 400);
 
-	switch (action) {
-		case 'done':
-			await set(`triage = 'done', snoozed_until = NULL, unread = 0`);
-			c.executionCtx.waitUntil(markThreadDone(token, id));
-			break;
-		case 'undone':
-		case 'unsnooze':
-			await set(`triage = 'inbox', snoozed_until = NULL`);
-			break;
-		case 'read':
-			await set(`unread = 0`);
-			c.executionCtx.waitUntil(markThreadRead(token, id));
-			break;
-		case 'snooze': {
-			const { until } = await c.req.json<{ until?: number }>().catch(() => ({ until: undefined }));
-			if (!until || until < Date.now())
-				return c.json({ error: 'Snooze time must be in the future.' }, 400);
-			await set(`triage = 'snoozed', snoozed_until = ?`, until);
-			break;
+	const { results: threads } = await db
+		.prepare(`SELECT * FROM threads WHERE user_id = ? AND id IN (${ids.map(() => '?').join(',')})`)
+		.bind(u.id, ...ids)
+		.all<ThreadRow>();
+	if (!threads.length) return c.json({ error: 'Not found' }, 404);
+
+	const update = (t: ThreadRow, sql: string, ...args: unknown[]) =>
+		db.prepare(`UPDATE threads SET ${sql} WHERE user_id = ? AND id = ?`).bind(...args, u.id, t.id);
+	const settings = action === 'unmute' ? parseSettings(u.settings) : null;
+	const stmts = threads.map((t) => {
+		switch (action) {
+			case 'done':
+				return update(t, `triage = 'done', snoozed_until = NULL, unread = 0`);
+			case 'undone':
+			case 'unsnooze':
+				return update(t, `triage = 'inbox', snoozed_until = NULL`);
+			case 'read':
+				return update(t, `unread = 0`);
+			case 'snooze':
+				return update(t, `triage = 'snoozed', snoozed_until = ?`, body.until);
+			case 'mute':
+				return update(t, `category = 'muted', rule = ?, triage = 'done'`, MUTED_BY_USER);
+			case 'unmute': {
+				const cls = classify(factsFromRow(t, u.login), settings!);
+				return update(t, `category = ?, rule = ?, triage = 'inbox'`, cls.category, cls.rule ?? null);
+			}
 		}
-		case 'mute':
-			await set(`category = 'muted', rule = ?, triage = 'done'`, MUTED_BY_USER);
-			c.executionCtx.waitUntil(muteThread(token, id).then(() => markThreadDone(token, id)));
-			break;
-		case 'unmute': {
-			const settings = parseSettings(u.settings);
-			const cls = classify(factsFromRow(thread, u.login), settings);
-			await set(`category = ?, rule = ?, triage = 'inbox'`, cls.category, cls.rule ?? null);
-			break;
-		}
-		default:
-			return c.json({ error: 'Unknown action' }, 400);
+	});
+	await db.batch([...stmts, bumpVersion(c.env, u.id)]);
+
+	// Mirror the change on GitHub in the background.
+	if (action === 'done' || action === 'read' || action === 'mute') {
+		const token = await userToken(c.env, u);
+		const mirror = (id: string) =>
+			action === 'done'
+				? markThreadDone(token, id)
+				: action === 'read'
+					? markThreadRead(token, id)
+					: muteThread(token, id).then(() => markThreadDone(token, id));
+		c.executionCtx.waitUntil(Promise.allSettled(threads.map((t) => mirror(t.id))));
 	}
-	return c.json({ ok: true, counts: await counts(c.env, u.id) });
+	return c.json({ ok: true, updated: threads.length, counts: await counts(c.env, u.id) });
+}
+
+// Before the :id route, so "bulk" is not read as a thread id.
+app.post('/api/threads/bulk/:action', async (c) => {
+	const ids = c.req.query('ids')?.split(',').filter(Boolean) ?? [];
+	return applyThreadAction(c, ids, c.req.param('action') as ThreadAction);
 });
+
+app.post('/api/threads/:id/:action', (c) =>
+	applyThreadAction(c, [c.req.param('id')], c.req.param('action') as ThreadAction)
+);
 
 app.post('/api/sync', async (c) => {
 	const u = c.get('user');
@@ -490,39 +507,118 @@ app.get('/api/dashboard/:kind', async (c) => {
 	const u = c.get('user');
 	const kind = c.req.param('kind') as DashKind;
 	if (kind !== 'pr' && kind !== 'issue') return c.json({ error: 'Unknown dashboard' }, 400);
-	const [data, hidden] = await Promise.all([
+	const perUser = <T>(sql: string) => c.env.DB.prepare(sql).bind(u.id).all<T>();
+	const [data, hidden, moves, order] = await Promise.all([
 		poller(c.env, u.id).dashboard(kind, c.req.query('refresh') === '1'),
-		c.env.DB.prepare('SELECT item_id, updated_at FROM dash_hidden WHERE user_id = ?')
-			.bind(u.id)
-			.all<{ item_id: string; updated_at: string }>()
+		perUser<{ item_id: string; updated_at: string }>('SELECT item_id, updated_at FROM dash_hidden WHERE user_id = ?'),
+		perUser<{ item_id: string; turn: Turn; updated_at: string }>(
+			'SELECT item_id, turn, updated_at FROM dash_moves WHERE user_id = ?'
+		),
+		perUser<{ item_id: string; rank: number }>('SELECT item_id, rank FROM dash_order WHERE user_id = ?')
 	]);
-	// Hidden until it changes: a newer updatedAt brings the item back.
-	const until = new Map(hidden.results.map((h) => [h.item_id, h.updated_at]));
+	// Hidden and moved last "until it changes": a newer updatedAt undoes them.
+	const unchanged = (i: DashItem, at: string | undefined) => !!at && Date.parse(i.updatedAt) <= Date.parse(at);
+	const hiddenAt = new Map(hidden.results.map((h) => [h.item_id, h.updated_at]));
+	const moved = new Map(moves.results.map((m) => [m.item_id, m]));
+	const ranks = new Map(order.results.map((o) => [o.item_id, o.rank]));
 	for (const i of data.items) {
-		const at = until.get(i.id);
-		i.dismissed = !!at && Date.parse(i.updatedAt) <= Date.parse(at);
+		i.dismissed = unchanged(i, hiddenAt.get(i.id));
+		const m = moved.get(i.id);
+		i.autoTurn = i.turn;
+		i.movedByYou = !!m && unchanged(i, m.updated_at) && m.turn !== i.turn;
+		if (i.movedByYou) i.turn = m!.turn;
+		i.rank = ranks.get(i.id) ?? null;
 	}
 	return c.json(data);
 });
 
+const TURNS = new Set<Turn>(['you', 'team', 'them', 'none']);
+
+/**
+ * Save a drop: an optional move to another group (`turn`, or null to undo a move) and the new
+ * order of the target group.
+ */
+type ItemRef = { id: string; updatedAt: string };
+const validRefs = (items: unknown): items is ItemRef[] =>
+	Array.isArray(items) &&
+	items.length > 0 &&
+	items.length <= 300 &&
+	items.every(
+		(i) =>
+			typeof i?.id === 'string' &&
+			i.id.length <= 100 &&
+			typeof i.updatedAt === 'string' &&
+			!Number.isNaN(Date.parse(i.updatedAt))
+	);
+
+/**
+ * Save a drop. Each item may carry `turn`: a group to move it to, null to undo your move, or
+ * absent to leave it. `order` is the new order of the target group.
+ */
+app.post('/api/dashboard/arrange', async (c) => {
+	const u = c.get('user');
+	const body = await c.req
+		.json<{ items?: unknown; order?: string[] }>()
+		.catch(() => null);
+	if (!body || !validRefs(body.items)) return c.json({ error: 'Invalid items' }, 400);
+	const items = body.items as (ItemRef & { turn?: Turn | null })[];
+	if (items.some((i) => i.turn != null && !TURNS.has(i.turn))) return c.json({ error: 'Unknown group' }, 400);
+	const order = body.order ?? [];
+	if (!Array.isArray(order) || order.length > 300 || order.some((id) => typeof id !== 'string' || id.length > 100))
+		return c.json({ error: 'Invalid order' }, 400);
+
+	const db = c.env.DB;
+	const stmts: D1PreparedStatement[] = [];
+	for (const item of items) {
+		if (item.turn === null)
+			stmts.push(db.prepare('DELETE FROM dash_moves WHERE user_id = ? AND item_id = ?').bind(u.id, item.id));
+		else if (item.turn)
+			stmts.push(
+				db
+					.prepare(
+						`INSERT INTO dash_moves (user_id, item_id, turn, updated_at, created_at) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (user_id, item_id) DO UPDATE SET turn = excluded.turn, updated_at = excluded.updated_at`
+					)
+					.bind(u.id, item.id, item.turn, item.updatedAt, Date.now())
+			);
+	}
+	order.forEach((id, rank) =>
+		stmts.push(
+			db
+				.prepare(
+					`INSERT INTO dash_order (user_id, item_id, rank) VALUES (?, ?, ?)
+           ON CONFLICT (user_id, item_id) DO UPDATE SET rank = excluded.rank`
+				)
+				.bind(u.id, id, rank)
+		)
+	);
+	if (stmts.length) await db.batch(stmts);
+	return c.json({ ok: true });
+});
+
 app.post('/api/dashboard/hide', async (c) => {
-	const body = await c.req.json<{ id?: string; updatedAt?: string }>().catch(() => null);
-	if (!body?.id || !body.updatedAt || Number.isNaN(Date.parse(body.updatedAt)))
-		return c.json({ error: 'Invalid item' }, 400);
-	await c.env.DB.prepare(
-		`INSERT INTO dash_hidden (user_id, item_id, updated_at, created_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT (user_id, item_id) DO UPDATE SET updated_at = excluded.updated_at`
-	)
-		.bind(c.get('user').id, body.id, body.updatedAt, Date.now())
-		.run();
+	const u = c.get('user');
+	const body = await c.req.json<{ items?: unknown }>().catch(() => null);
+	if (!body || !validRefs(body.items)) return c.json({ error: 'Invalid items' }, 400);
+	await c.env.DB.batch(
+		body.items.map((i) =>
+			c.env.DB.prepare(
+				`INSERT INTO dash_hidden (user_id, item_id, updated_at, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (user_id, item_id) DO UPDATE SET updated_at = excluded.updated_at`
+			).bind(u.id, i.id, i.updatedAt, Date.now())
+		)
+	);
 	return c.json({ ok: true });
 });
 
 app.post('/api/dashboard/unhide', async (c) => {
-	const body = await c.req.json<{ id?: string }>().catch(() => null);
-	await c.env.DB.prepare('DELETE FROM dash_hidden WHERE user_id = ? AND item_id = ?')
-		.bind(c.get('user').id, body?.id ?? '')
-		.run();
+	const u = c.get('user');
+	const body = await c.req.json<{ ids?: unknown }>().catch(() => null);
+	const ids = Array.isArray(body?.ids) ? body.ids.filter((id): id is string => typeof id === 'string').slice(0, 300) : [];
+	if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
+	await c.env.DB.batch(
+		ids.map((id) => c.env.DB.prepare('DELETE FROM dash_hidden WHERE user_id = ? AND item_id = ?').bind(u.id, id))
+	);
 	return c.json({ ok: true });
 });
 

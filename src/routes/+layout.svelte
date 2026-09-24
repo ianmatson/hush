@@ -20,7 +20,8 @@
 </svelte:head>
 
 <ModeWatcher />
-<Toaster position="bottom-center" />
+<!-- 8 s: long enough to read a toast and press Undo. -->
+<Toaster position="bottom-center" duration={8000} />
 <PersistQueryClientProvider client={queryClient} {persistOptions}>
 	<Tooltip.Provider delayDuration={300}>
 		<AppShell>{@render children()}</AppShell>

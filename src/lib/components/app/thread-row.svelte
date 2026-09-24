@@ -7,6 +7,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import KindIcon from './kind-icon.svelte';
+	import SelectMark from './select-mark.svelte';
 	import Check from '@lucide/svelte/icons/check';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
@@ -16,15 +17,24 @@
 	let {
 		thread: t,
 		selected = false,
+		checked = false,
+		selecting = false,
 		onaction,
 		onopen,
-		onselect
+		onrowclick,
+		ontoggle
 	}: {
 		thread: ThreadDTO;
+		/** The keyboard cursor is on this row. */
 		selected?: boolean;
+		/** Part of the multi-selection. */
+		checked?: boolean;
+		/** Some row is checked: show checkboxes on every row. */
+		selecting?: boolean;
 		onaction: (t: ThreadDTO, action: ThreadAction, body?: unknown) => void;
 		onopen: (t: ThreadDTO, url: string) => void;
-		onselect: () => void;
+		onrowclick: (e: MouseEvent) => void;
+		ontoggle: (e: MouseEvent) => void;
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -37,36 +47,50 @@
 	const inInbox = $derived(
 		t.triage === 'inbox' || (t.triage === 'snoozed' && (t.snoozedUntil ?? 0) <= Date.now())
 	);
+	const stop = (fn: () => void) => (e: MouseEvent) => {
+		e.stopPropagation();
+		fn();
+	};
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<li
+<div
 	bind:this={row}
+	data-row-id={t.id}
 	data-selected={selected || undefined}
+	data-checked={checked || undefined}
 	class={cn(
-		'group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 transition-colors',
-		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60'
+		'row group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 transition-colors select-none',
+		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
+		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]'
 	)}
-	onclick={onselect}
+	onclick={onrowclick}
 	role="option"
-	aria-selected={selected}
+	tabindex="-1"
+	aria-selected={selected || checked}
 >
-	{#if t.unread}
-		<span
-			class="absolute top-1/2 left-0.5 size-1.5 -translate-y-1/2 rounded-full bg-signal-review"
-			aria-label="Unread"
-		></span>
-	{/if}
-
-	<KindIcon kind={t.kind} category={t.category} subjectType={t.subjectType} />
+	<SelectMark {checked} {selecting} label="Select {t.title}" {ontoggle}>
+		<span class="relative">
+			<KindIcon kind={t.kind} category={t.category} subjectType={t.subjectType} />
+			{#if t.unread}
+				<span
+					class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-signal-review ring-2 ring-(--row-bg)"
+					aria-label="Unread"
+				></span>
+			{/if}
+		</span>
+	</SelectMark>
 
 	<div class="min-w-0 flex-1">
 		<div class="flex items-baseline gap-2">
 			<p
 				class={cn(
 					'truncate text-sm',
-					isAction ? 'font-medium' : 'text-foreground/80',
-					!t.unread && 'font-normal'
+					t.unread
+						? 'font-semibold text-foreground'
+						: isAction
+							? 'font-medium'
+							: 'text-foreground/80'
 				)}
 			>
 				{t.summary}
@@ -77,7 +101,7 @@
 			href={t.htmlUrl}
 			target="_blank"
 			rel="noreferrer"
-			class="mt-0.5 block truncate text-[0.8rem] text-muted-foreground hover:text-foreground"
+			class="mt-0.5 block truncate text-[0.8rem] text-muted-foreground select-text hover:text-foreground"
 			onclick={(e) => {
 				e.stopPropagation();
 				e.preventDefault();
@@ -109,9 +133,7 @@
 
 	<div class="flex shrink-0 items-center gap-0.5 self-center">
 		<div
-			class={cn(
-				'flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100'
-			)}
+			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>
 			{#if inInbox}
 				<Tooltip.Root>
@@ -122,10 +144,7 @@
 								variant="ghost"
 								size="icon-sm"
 								aria-label="Done"
-								onclick={(e) => {
-									e.stopPropagation();
-									onaction(t, 'done');
-								}}
+								onclick={stop(() => onaction(t, 'done'))}
 							>
 								<Check />
 							</Button>
@@ -164,10 +183,7 @@
 								variant="ghost"
 								size="icon-sm"
 								aria-label="Mute thread"
-								onclick={(e) => {
-									e.stopPropagation();
-									onaction(t, 'mute');
-								}}
+								onclick={stop(() => onaction(t, 'mute'))}
 							>
 								<BellOff />
 							</Button>
@@ -179,13 +195,12 @@
 				<Button
 					variant="ghost"
 					size="sm"
-					onclick={(e) => {
-						e.stopPropagation();
+					onclick={stop(() =>
 						onaction(
 							t,
 							t.category === 'muted' ? 'unmute' : t.triage === 'snoozed' ? 'unsnooze' : 'undone'
-						);
-					}}
+						)
+					)}
 				>
 					<Undo />
 					{t.category === 'muted' ? 'Unmute' : 'Move to inbox'}
@@ -196,13 +211,26 @@
 			variant={isAction ? 'default' : 'outline'}
 			size="sm"
 			class="ml-1 min-w-18"
-			onclick={(e) => {
-				e.stopPropagation();
-				onopen(t, t.actionUrl);
-			}}
+			onclick={stop(() => onopen(t, t.actionUrl))}
 		>
 			{t.actionLabel}
 			<ExternalLink class="opacity-60" />
 		</Button>
 	</div>
-</li>
+</div>
+
+<style>
+	/* The unread dot's ring matches the row background in every state. */
+	.row {
+		--row-bg: var(--background);
+	}
+	.row:hover {
+		--row-bg: color-mix(in oklch, var(--muted) 50%, var(--background));
+	}
+	.row[data-selected] {
+		--row-bg: color-mix(in oklch, var(--muted) 60%, var(--background));
+	}
+	.row[data-checked] {
+		--row-bg: color-mix(in oklch, var(--primary) 6%, var(--background));
+	}
+</style>

@@ -8,6 +8,7 @@ import type {
 	Settings,
 	TeamDTO,
 	ThreadDTO,
+	Turn,
 	View
 } from '$lib/shared/types';
 
@@ -61,6 +62,12 @@ export const api = {
 		if (!res.ok) throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`);
 		return { ...data, etag: res.headers.get('ETag') ?? undefined };
 	},
+	actMany: (ids: string[], action: ThreadAction, body?: unknown) =>
+		request<{ counts: Counts; updated: number }>(
+			'POST',
+			`/api/threads/bulk/${action}?ids=${ids.map(encodeURIComponent).join(',')}`,
+			body ?? {}
+		),
 	act: (id: string, action: ThreadAction, body?: unknown) =>
 		request<{ counts: Counts }>(
 			'POST',
@@ -82,9 +89,11 @@ export const api = {
 	testPush: () => request<{ sent: number }>('POST', '/api/push/test'),
 	dashboard: (kind: DashKind, refresh = false) =>
 		request<DashResponse>('GET', `/api/dashboard/${kind}${refresh ? '?refresh=1' : ''}`),
-	hide: (id: string, updatedAt: string) =>
-		request('POST', '/api/dashboard/hide', { id, updatedAt }),
-	unhide: (id: string) => request('POST', '/api/dashboard/unhide', { id }),
+	hide: (items: { id: string; updatedAt: string }[]) =>
+		request('POST', '/api/dashboard/hide', { items }),
+	unhide: (ids: string[]) => request('POST', '/api/dashboard/unhide', { ids }),
+	arrange: (items: { id: string; updatedAt: string; turn?: Turn | null }[], order: string[]) =>
+		request('POST', '/api/dashboard/arrange', { items, order }),
 	teams: (refresh = false) =>
 		request<{ teams: TeamDTO[]; error?: string }>(
 			'GET',

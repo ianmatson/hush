@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { flip } from 'svelte/animate';
+	import { fly, slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api, type ThreadAction } from '$lib/api';
 	import { keys, meQuery, queryClient, setCounts, threadsQuery } from '$lib/queries';
+	import { Selection } from '$lib/selection.svelte';
 	import type { Counts, ThreadDTO, View } from '$lib/shared/types';
 	import { ago, snoozeOptions } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -14,12 +19,23 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import ThreadRow from '$lib/components/app/thread-row.svelte';
+	import BulkBar from '$lib/components/app/bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import Check from '@lucide/svelte/icons/check';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import Undo from '@lucide/svelte/icons/undo-2';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Link from '@lucide/svelte/icons/link';
+	import MailOpen from '@lucide/svelte/icons/mail-open';
+	import SquareCheck from '@lucide/svelte/icons/square-check';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
 
@@ -30,8 +46,11 @@
 		{ id: 'done', label: 'Done' },
 		{ id: 'muted', label: 'Muted' }
 	];
+	const BULK_MAX = 20;
+	const FLIP = { duration: 220, easing: cubicOut };
 
 	const view = $derived((page.url.searchParams.get('view') as View) || 'action');
+	const inInbox = $derived(view === 'action' || view === 'fyi');
 	const me = createQuery(meQuery);
 	const threadsQ = createQuery(() => threadsQuery(view));
 	const counts = $derived(threadsQ.data?.counts ?? { action: 0, fyi: 0, snoozed: 0 });
@@ -43,6 +62,7 @@
 	let searchEl = $state<HTMLInputElement | null>(null);
 	// Threads with a triage request in flight. A refetch must not bring them back.
 	const pending = new SvelteSet<string>();
+	const sel = new Selection();
 
 	const visible = $derived.by(() => {
 		const q = query.trim().toLowerCase();
@@ -52,11 +72,19 @@
 			`${t.summary} ${t.title} ${t.repo} ${t.why} ${t.author ?? ''}`.toLowerCase().includes(q)
 		);
 	});
+	const order = $derived(visible.map((t) => t.id));
 	const selectedIndex = $derived(visible.findIndex((t) => t.id === selectedId));
+	const byId = (id: string) => visible.find((t) => t.id === id);
 
-	// Keep a valid selection when the list changes.
+	// Keep a valid cursor and selection when the list changes.
 	$effect(() => {
 		if (!visible.some((t) => t.id === selectedId)) selectedId = visible[0]?.id ?? null;
+		untrack(() => sel.prune(order));
+	});
+	// A new view starts with nothing selected.
+	$effect(() => {
+		void view;
+		untrack(() => sel.clear());
 	});
 
 	async function sync() {
@@ -83,72 +111,108 @@
 	const LABEL: Partial<Record<ThreadAction, string>> = {
 		done: 'Marked as done',
 		snooze: 'Snoozed',
-		mute: 'Muted. GitHub stops notifying you about this thread.',
+		mute: 'Muted. GitHub stops notifying you about these threads.',
 		undone: 'Moved to inbox',
 		unsnooze: 'Moved to inbox',
-		unmute: 'Unmuted'
+		unmute: 'Unmuted',
+		read: 'Marked as read'
 	};
 
-	async function run(id: string, action: ThreadAction, body?: unknown) {
-		const res = await api.act(id, action, body);
-		setCounts(res.counts);
+	/** Send an action for many threads, 20 per request. */
+	async function run(ids: string[], action: ThreadAction, body?: unknown) {
+		for (let i = 0; i < ids.length; i += BULK_MAX) {
+			const res = await api.actMany(ids.slice(i, i + BULK_MAX), action, body);
+			setCounts(res.counts);
+		}
 		// Other views changed too; refetch them when they are next used.
 		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
 	}
 
-	async function act(t: ThreadDTO, action: ThreadAction, body?: unknown) {
+	async function act(ids: string[], action: ThreadAction, body?: unknown) {
+		if (!ids.length) return;
+		const threads = ids.map(byId).filter((t): t is ThreadDTO => !!t);
 		if (action === 'read') {
-			api.act(t.id, 'read').catch(() => {});
 			queryClient.setQueryData<ThreadsData>(keys.threads(view), (old) =>
 				old
 					? {
 							...old,
-							threads: old.threads.map((x) => (x.id === t.id ? { ...x, unread: false } : x))
+							threads: old.threads.map((x) => (ids.includes(x.id) ? { ...x, unread: false } : x))
 						}
 					: old
 			);
+			run(ids, 'read').catch((e) => toast.error(e.message));
+			if (ids.length > 1) toast(LABEL.read!, { description: `${ids.length} threads` });
 			return;
 		}
-		// Optimistic: the row leaves this view now. Stop any refetch that could bring it back.
-		const idx = visible.findIndex((x) => x.id === t.id);
-		const next = visible[idx + 1] ?? visible[idx - 1];
-		if (selectedId === t.id) selectedId = next?.id ?? null;
-		pending.add(t.id);
+		// Optimistic: the rows leave this view now. Stop any refetch that could bring them back.
+		const gone = new Set(ids);
+		const after = visible.slice(Math.max(0, selectedIndex)).find((t) => !gone.has(t.id));
+		const before = [...visible.slice(0, Math.max(0, selectedIndex))]
+			.reverse()
+			.find((t) => !gone.has(t.id));
+		if (selectedId && gone.has(selectedId)) selectedId = (after ?? before)?.id ?? null;
+		for (const id of ids) pending.add(id);
+		sel.clear();
 		await queryClient.cancelQueries({ queryKey: keys.threads(view) });
 		queryClient.setQueryData<ThreadsData>(keys.threads(view), (old) =>
-			old ? { ...old, threads: old.threads.filter((x) => x.id !== t.id) } : old
+			old ? { ...old, threads: old.threads.filter((x) => !gone.has(x.id)) } : old
 		);
 		try {
-			await run(t.id, action, body);
+			await run(ids, action, body);
 			const undo = UNDO[action];
 			toast(LABEL[action] ?? 'Done', {
-				description: t.title,
+				description: threads.length === 1 ? threads[0].title : `${threads.length} threads`,
 				action: undo
-					? { label: 'Undo', onClick: () => run(t.id, undo).catch((e) => toast.error(e.message)) }
+					? { label: 'Undo', onClick: () => run(ids, undo).catch((e) => toast.error(e.message)) }
 					: undefined
 			});
 		} catch (err) {
 			toast.error((err as Error).message);
 			queryClient.invalidateQueries({ queryKey: keys.threads(view) });
 		} finally {
-			pending.delete(t.id);
+			for (const id of ids) pending.delete(id);
 		}
 	}
 
+	/** Rows an action applies to: the selection, or else the cursor row. */
+	const targets = () => sel.targets(order, selectedId);
+
 	function open(t: ThreadDTO, url: string) {
 		window.open(url, '_blank', 'noopener');
-		if (t.unread) act(t, 'read');
+		if (t.unread) act([t.id], 'read');
 	}
 
-	function move(delta: number) {
+	async function copyLinks(ids: string[]) {
+		const urls = ids
+			.map(byId)
+			.filter(Boolean)
+			.map((t) => t!.htmlUrl);
+		await navigator.clipboard.writeText(urls.join('\n'));
+		toast.success(urls.length === 1 ? 'Link copied' : `${urls.length} links copied`);
+	}
+
+	function onRowClick(e: MouseEvent, t: ThreadDTO) {
+		if (sel.click(e, t.id, order, selectedId)) return;
+		sel.clear();
+		selectedId = t.id;
+	}
+
+	function onToggle(e: MouseEvent, t: ThreadDTO) {
+		if (e.shiftKey) sel.range(order, t.id, selectedId);
+		else sel.toggle(t.id);
+		selectedId = t.id;
+	}
+
+	function move(delta: number, extend = false) {
 		if (!visible.length) return;
+		if (extend && selectedId) sel.ids.add(selectedId);
 		const i =
 			selectedIndex < 0 ? 0 : Math.min(Math.max(selectedIndex + delta, 0), visible.length - 1);
 		selectedId = visible[i].id;
+		if (extend) sel.ids.add(selectedId);
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const target = e.target;
 		if (
 			target instanceof Element &&
@@ -157,19 +221,29 @@
 			if (e.key === 'Escape' && target === searchEl) searchEl?.blur();
 			return;
 		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+			e.preventDefault();
+			sel.all(order);
+			return;
+		}
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		const t = visible[selectedIndex];
-		const inInbox = view === 'action' || view === 'fyi';
 		const keys: Record<string, () => void> = {
 			j: () => move(1),
 			ArrowDown: () => move(1),
 			k: () => move(-1),
 			ArrowUp: () => move(-1),
+			J: () => move(1, true),
+			K: () => move(-1, true),
+			x: () => t && sel.toggle(t.id),
+			Escape: () => sel.clear(),
 			o: () => t && open(t, t.actionUrl),
 			Enter: () => t && open(t, t.actionUrl),
 			O: () => t && open(t, t.htmlUrl),
-			e: () => t && inInbox && act(t, 'done'),
-			s: () => t && inInbox && act(t, 'snooze', { until: snoozeOptions()[2].until }),
-			m: () => t && inInbox && act(t, 'mute'),
+			e: () => inInbox && act(targets(), 'done'),
+			s: () => inInbox && act(targets(), 'snooze', { until: snoozeOptions()[2].until }),
+			m: () => inInbox && act(targets(), 'mute'),
+			c: () => copyLinks(targets()),
 			r: () => sync(),
 			'/': () => searchEl?.focus(),
 			'?': () => (helpOpen = true)
@@ -182,15 +256,46 @@
 		}
 	}
 
+	// --- Right-click menu: one menu for the whole list --------------------------------
+	let menuIds = $state<string[]>([]);
+	function onContextMenu(e: MouseEvent) {
+		const id = (e.target as Element).closest<HTMLElement>('[data-row-id]')?.dataset.rowId;
+		if (!id) {
+			e.preventDefault();
+			return;
+		}
+		// Right-click inside the selection acts on all of it; elsewhere, on that row only.
+		if (!sel.has(id)) {
+			sel.clear();
+			selectedId = id;
+		}
+		menuIds = sel.size ? sel.targets(order, id) : [id];
+	}
+	const menuOne = $derived(menuIds.length === 1 ? byId(menuIds[0]) : undefined);
+	const n = (label: string) => (menuIds.length > 1 ? `${label} (${menuIds.length})` : label);
+	const restoreAction = (t: ThreadDTO | undefined): ThreadAction =>
+		view === 'muted' || t?.category === 'muted'
+			? 'unmute'
+			: view === 'snoozed'
+				? 'unsnooze'
+				: 'undone';
+
 	const count = (v: View) => (v === 'action' || v === 'fyi' || v === 'snoozed' ? counts[v] : null);
 
 	const shortcuts = [
 		['J / K', 'Next / previous'],
+		['Shift + J / K', 'Extend the selection'],
+		['X', 'Select or deselect'],
+		['⌘ / Ctrl + A', 'Select all'],
+		['⌘ / Ctrl + click', 'Add to selection'],
+		['Shift + click', 'Select a range'],
 		['Enter / O', 'Main action (review, fix CI, reply…)'],
 		['Shift + O', 'Open the thread on GitHub'],
 		['E', 'Done'],
 		['S', 'Snooze until tomorrow 9:00'],
 		['M', 'Mute the thread'],
+		['C', 'Copy link'],
+		['Esc', 'Clear the selection'],
 		['R', 'Sync with GitHub now'],
 		['/', 'Search'],
 		['1 – 5', 'Change view'],
@@ -315,19 +420,122 @@
 			{/if}
 		</div>
 	{:else}
-		<ul class="grid grid-cols-[minmax(0,1fr)] gap-0.5" role="listbox" aria-label="Threads">
-			{#each visible as t (t.id)}
-				<ThreadRow
-					thread={t}
-					selected={t.id === selectedId}
-					onaction={act}
-					onopen={open}
-					onselect={() => (selectedId = t.id)}
-				/>
-			{/each}
-		</ul>
+		<ContextMenu.Root>
+			<ContextMenu.Trigger>
+				{#snippet child({ props })}
+					<ul
+						{...props}
+						class="grid grid-cols-[minmax(0,1fr)] gap-0.5"
+						role="listbox"
+						aria-multiselectable="true"
+						aria-label="Threads"
+						oncontextmenucapture={onContextMenu}
+					>
+						{#each visible as t (t.id)}
+							<li
+								animate:flip={FLIP}
+								out:slide={{ duration: 200, easing: cubicOut }}
+								in:fly={{ y: -8, duration: 200 }}
+							>
+								<ThreadRow
+									thread={t}
+									selected={t.id === selectedId}
+									checked={sel.has(t.id)}
+									selecting={sel.size > 0}
+									onaction={(x, action, body) => act([x.id], action, body)}
+									onopen={open}
+									onrowclick={(e) => onRowClick(e, t)}
+									ontoggle={(e) => onToggle(e, t)}
+								/>
+							</li>
+						{/each}
+					</ul>
+				{/snippet}
+			</ContextMenu.Trigger>
+			<ContextMenu.Content class="w-60">
+				{#if menuOne}
+					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
+						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => open(menuOne, menuOne.htmlUrl)}>
+						<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Separator />
+				{/if}
+				{#if inInbox}
+					<ContextMenu.Item onclick={() => act(menuIds, 'done')}>
+						<Check />{n('Done')}<ContextMenu.Shortcut>E</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Sub>
+						<ContextMenu.SubTrigger><AlarmClock />{n('Snooze')}</ContextMenu.SubTrigger>
+						<ContextMenu.SubContent>
+							{#each snoozeOptions() as opt (opt.label)}
+								<ContextMenu.Item onclick={() => act(menuIds, 'snooze', { until: opt.until })}
+									>{opt.label}</ContextMenu.Item
+								>
+							{/each}
+						</ContextMenu.SubContent>
+					</ContextMenu.Sub>
+					<ContextMenu.Item onclick={() => act(menuIds, 'mute')}>
+						<BellOff />{n('Mute')}<ContextMenu.Shortcut>M</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => act(menuIds, 'read')}
+						><MailOpen />{n('Mark as read')}</ContextMenu.Item
+					>
+				{:else}
+					<ContextMenu.Item onclick={() => act(menuIds, restoreAction(menuOne))}>
+						<Undo />{n(view === 'muted' ? 'Unmute' : 'Move to inbox')}
+					</ContextMenu.Item>
+				{/if}
+				<ContextMenu.Item onclick={() => copyLinks(menuIds)}>
+					<Link />{n(menuIds.length > 1 ? 'Copy links' : 'Copy link')}<ContextMenu.Shortcut
+						>C</ContextMenu.Shortcut
+					>
+				</ContextMenu.Item>
+				<ContextMenu.Separator />
+				{#if menuOne}
+					<ContextMenu.Item onclick={() => sel.toggle(menuOne.id)}>
+						<SquareCheck />{sel.has(menuOne.id) ? 'Deselect' : 'Select'}<ContextMenu.Shortcut
+							>X</ContextMenu.Shortcut
+						>
+					</ContextMenu.Item>
+				{/if}
+				<ContextMenu.Item onclick={() => sel.all(order)}>
+					<SquareCheck />Select all<ContextMenu.Shortcut>⌘A</ContextMenu.Shortcut>
+				</ContextMenu.Item>
+			</ContextMenu.Content>
+		</ContextMenu.Root>
 	{/if}
 </main>
+
+<BulkBar count={sel.size} onclear={() => sel.clear()}>
+	{#if inInbox}
+		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'done')}><Check />Done</Button>
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant="ghost" size="sm"><AlarmClock />Snooze</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="center" side="top">
+				{#each snoozeOptions() as opt (opt.label)}
+					<DropdownMenu.Item onclick={() => act(targets(), 'snooze', { until: opt.until })}
+						>{opt.label}</DropdownMenu.Item
+					>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'mute')}><BellOff />Mute</Button
+		>
+		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'read')}
+			><MailOpen />Read</Button
+		>
+	{:else}
+		<Button variant="ghost" size="sm" onclick={() => act(targets(), restoreAction(undefined))}>
+			<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
+		</Button>
+	{/if}
+</BulkBar>
 
 <Dialog.Root bind:open={helpOpen}>
 	<Dialog.Content class="sm:max-w-sm">

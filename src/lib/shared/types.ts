@@ -215,6 +215,12 @@ export interface DashItem {
 	/** Lower sorts first inside a turn group. */
 	priority: number;
 	dismissed: boolean;
+	/** The turn Hush computed, before any move by you. */
+	autoTurn: Turn;
+	/** You dragged this into its group; lasts until the item changes. */
+	movedByYou: boolean;
+	/** Your manual position inside the group, or null (new items go on top). */
+	rank: number | null;
 }
 
 export interface DashResponse {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+	arrangeGroup,
+	orderAfterDrop,
 	computeTurn,
 	DEFAULT_DASH,
 	expandSections,
@@ -159,5 +161,49 @@ describe('filters, sorting, validation', () => {
 		expect(validateDash({ ...DEFAULT_DASH, pr: [DEFAULT_DASH.pr[0], DEFAULT_DASH.pr[0]] })).toMatch(
 			/Two sections/
 		);
+	});
+});
+
+describe('arrangeGroup and orderAfterDrop', () => {
+	it('puts new (unranked) items first, then the manual order', () => {
+		const items = [
+			{ id: 'a', rank: 2 },
+			{ id: 'b', rank: null },
+			{ id: 'c', rank: 0 },
+			{ id: 'd', rank: null }
+		];
+		expect(arrangeGroup(items).map((i) => i.id)).toEqual(['b', 'd', 'c', 'a']);
+	});
+
+	it('places one moved item next to its visible neighbours', () => {
+		// Full group a b c d e; filter shows only a c e; user drags e between a and c.
+		expect(orderAfterDrop(['a', 'b', 'c', 'd', 'e'], ['a', 'e', 'c'], ['e'])).toEqual([
+			'a',
+			'e',
+			'b',
+			'c',
+			'd'
+		]);
+	});
+
+	it('moves a block of selected items together', () => {
+		expect(orderAfterDrop(['a', 'b', 'c', 'd'], ['x', 'y', 'a', 'b'], ['x', 'y'])).toEqual([
+			'x',
+			'y',
+			'a',
+			'b',
+			'c',
+			'd'
+		]);
+		expect(orderAfterDrop(['a', 'b'], ['a', 'b', 'x', 'y'], ['x', 'y'])).toEqual([
+			'a',
+			'b',
+			'x',
+			'y'
+		]);
+	});
+
+	it('drops into an empty group', () => {
+		expect(orderAfterDrop([], ['x'], ['x'])).toEqual(['x']);
 	});
 });
