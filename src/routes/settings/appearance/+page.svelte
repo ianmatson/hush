@@ -5,6 +5,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Select from '$lib/components/ui/select';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import TabStatusSettings from '$lib/components/app/tab-status-settings.svelte';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
 	import Monitor from '@lucide/svelte/icons/monitor';
@@ -64,4 +65,6 @@
 			</SettingRow>
 		</Card.Content>
 	</Card.Root>
+
+	<TabStatusSettings />
 </div>

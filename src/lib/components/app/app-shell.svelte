@@ -6,6 +6,7 @@
 	import { ApiError } from '$lib/api';
 	import { keys, leaveTo, meQuery, queryClient } from '$lib/queries';
 	import AppHeader from './app-header.svelte';
+	import TabStatus from './tab-status.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -47,6 +48,7 @@
 	{#if ready}
 		{#if me.data && !signedOut && !onLogin}
 			<AppHeader />
+			<TabStatus />
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
 			<p class="mx-auto max-w-4xl px-4 pt-6 text-sm text-destructive">
