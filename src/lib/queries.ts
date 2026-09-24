@@ -61,9 +61,32 @@ export const meQuery = () => queryOptions({ queryKey: keys.me, queryFn: api.me, 
 export const threadsQuery = (view: View) =>
 	queryOptions({
 		queryKey: keys.threads(view),
-		queryFn: () => api.threads(view),
+		queryFn: async () => {
+			const res = await api.threads(view);
+			reconcileViews(view, res.counts);
+			return res;
+		},
 		refetchInterval: MIN
 	});
+
+/** The API returns at most this many threads per view. */
+const LIST_LIMIT = 300;
+
+/**
+ * Every threads response carries fresh counts for all views. Use them to find other cached lists
+ * that are out of date (e.g. the poller added items after that list was fetched) and refetch only
+ * those. Also copy the counts into every cached view, so all tabs agree.
+ */
+export function reconcileViews(fetched: View, counts: Counts) {
+	// Copy counts first: writing data into a query clears its "invalidated" flag.
+	setCounts(counts);
+	for (const v of ['action', 'fyi', 'snoozed'] as const) {
+		if (v === fetched) continue;
+		const cached = queryClient.getQueryData<{ threads: ThreadDTO[] }>(keys.threads(v));
+		if (cached && cached.threads.length !== Math.min(counts[v], LIST_LIMIT))
+			queryClient.invalidateQueries({ queryKey: keys.threads(v), exact: true });
+	}
+}
 
 // The server caches dashboards for 5 minutes, so asking more often gains nothing.
 export const dashQuery = (kind: DashKind) =>
