@@ -1,7 +1,7 @@
 import { QueryCache, QueryClient, queryOptions } from '@tanstack/svelte-query';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { browser } from '$app/environment';
-import { api, ApiError } from '$lib/api';
+import { api, ApiError, type ThreadsResponse } from '$lib/api';
 import type {
 	Counts,
 	DashKind,
@@ -62,7 +62,11 @@ export const threadsQuery = (view: View) =>
 	queryOptions({
 		queryKey: keys.threads(view),
 		queryFn: async () => {
-			const res = await api.threads(view);
+			const cached = queryClient.getQueryData<ThreadsResponse>(keys.threads(view));
+			const res = await api.threads(view, cached?.etag);
+			// 304 (only possible when we sent a cached etag): the server read no threads,
+			// and our copy is still correct.
+			if (!res) return cached!;
 			reconcileViews(view, res.counts);
 			return res;
 		},

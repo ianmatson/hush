@@ -12,6 +12,12 @@ export interface Env {
 	VAPID_PRIVATE_KEY: string;
 	/** Optional push contact (mailto: or https:). Defaults to the app's own URL. */
 	VAPID_SUBJECT?: string;
+	/** Comma-separated GitHub orgs whose members may use Hush. Empty = anyone with a token. */
+	ALLOWED_ORGS?: string;
+	// Rate limiters (optional, so tests and old configs still work).
+	AUTH_LIMIT?: RateLimit;
+	FEED_LIMIT?: RateLimit;
+	API_LIMIT?: RateLimit;
 }
 
 export interface UserRow {
@@ -25,7 +31,16 @@ export interface UserRow {
 	settings: string;
 	last_poll_at: number | null;
 	last_poll_error: string | null;
+	threads_version: number;
+	last_seen_at: number | null;
+	access_checked_at: number | null;
 }
+
+/** Mark the user's threads as changed, so the next inbox request gets fresh data. */
+export const bumpVersion = (env: Env, userId: number) =>
+	env.DB.prepare('UPDATE users SET threads_version = threads_version + 1 WHERE id = ?').bind(
+		userId
+	);
 
 export interface ThreadRow {
 	user_id: number;

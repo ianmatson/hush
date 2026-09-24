@@ -13,8 +13,10 @@ import type {
 	ThreadDTO,
 	View
 } from '../src/lib/shared/types';
+import { allowedOrgs, checkAccess } from './access';
 import { encryptSecret, randomToken, sha256 } from './crypto';
 import {
+	bumpVersion,
 	parseSettings,
 	toDTO,
 	userToken,
@@ -32,6 +34,7 @@ export { Poller } from './poller';
 
 const SESSION_COOKIE = 'hush_sid';
 const SESSION_DAYS = 30;
+const MAX_DEVICES = 10;
 const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all']);
 
 type Vars = { user: UserRow };
@@ -40,6 +43,28 @@ type Ctx = Context<{ Bindings: Env; Variables: Vars }>;
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 const poller = (env: Env, userId: number) => env.POLLER.get(env.POLLER.idFromName(String(userId)));
+
+/** Approximate, per-location limits against floods. Missing bindings (tests, old config) skip. */
+async function overLimit(limiter: RateLimit | undefined, key: string): Promise<boolean> {
+	if (!limiter) return false;
+	const { success } = await limiter.limit({ key });
+	return !success;
+}
+const clientIp = (c: Context) => c.req.header('CF-Connecting-IP') ?? 'unknown';
+const tooMany = (c: Context) =>
+	c.json({ error: 'Too many requests. Wait a minute and try again.' }, 429, {
+		'Retry-After': '60'
+	});
+
+app.use('/api/auth/login', async (c, next) => {
+	if (await overLimit(c.env.AUTH_LIMIT, `login:${clientIp(c)}`)) return tooMany(c);
+	await next();
+});
+
+app.use('/feeds/*', async (c, next) => {
+	if (await overLimit(c.env.FEED_LIMIT, `feed:${clientIp(c)}`)) return tooMany(c);
+	await next();
+});
 
 // Cookies are SameSite=Lax; also reject cross-origin writes.
 app.use('/api/*', async (c, next) => {
@@ -55,13 +80,17 @@ app.use('/api/*', async (c, next) => {
 	const open = ['/api/auth/login', '/api/push/vapid-key', '/api/health'];
 	if (open.includes(c.req.path)) return next();
 	const sid = getCookie(c, SESSION_COOKIE);
-	if (!sid) return c.json({ error: 'Not signed in' }, 401);
+	if (!sid) {
+		if (await overLimit(c.env.API_LIMIT, `ip:${clientIp(c)}`)) return tooMany(c);
+		return c.json({ error: 'Not signed in' }, 401);
+	}
 	const row = await c.env.DB.prepare(
 		'SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ? AND s.expires_at > ?'
 	)
 		.bind(await sha256(sid), Date.now())
 		.first<UserRow>();
 	if (!row) return c.json({ error: 'Not signed in' }, 401);
+	if (await overLimit(c.env.API_LIMIT, `user:${row.id}`)) return tooMany(c);
 	c.set('user', row);
 	await next();
 });
@@ -81,6 +110,8 @@ app.post('/api/auth/login', async (c) => {
 		return c.json({ error: (err as Error).message }, 400);
 	}
 	const { user, scopes } = viewer;
+	const access = await checkAccess(token.trim(), allowedOrgs(c.env));
+	if (!access.ok) return c.json({ error: access.message }, 403);
 	// Classic tokens report scopes; fine-grained tokens report none and cannot read notifications.
 	if (scopes.length && !scopes.includes('notifications') && !scopes.includes('repo'))
 		return c.json(
@@ -94,7 +125,8 @@ app.post('/api/auth/login', async (c) => {
 		`INSERT INTO users (id, login, name, avatar_url, token_ct, token_iv, scopes, created_at, updated_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
      ON CONFLICT (id) DO UPDATE SET login = excluded.login, name = excluded.name, avatar_url = excluded.avatar_url,
-       token_ct = excluded.token_ct, token_iv = excluded.token_iv, scopes = excluded.scopes, updated_at = excluded.updated_at`
+       token_ct = excluded.token_ct, token_iv = excluded.token_iv, scopes = excluded.scopes, updated_at = excluded.updated_at,
+       access_checked_at = excluded.updated_at, last_seen_at = excluded.updated_at`
 	)
 		.bind(user.id, user.login, user.name, user.avatar_url, ct, iv, scopes.join(','), now)
 		.run();
@@ -166,20 +198,40 @@ async function counts(env: Env, userId: number): Promise<Counts> {
 	return { action: row?.action ?? 0, fyi: row?.fyi ?? 0, snoozed: row?.snoozed ?? 0 };
 }
 
+const SEEN_EVERY = 5 * 60_000;
+
+/**
+ * Opening the UI means the user is active: record it and let the poller poll soon. At most once
+ * every 5 minutes, so an open tab does not cost a D1 write and a DO request each minute.
+ */
+function markSeen(c: Ctx, u: UserRow) {
+	const now = Date.now();
+	if (u.last_seen_at && now - u.last_seen_at < SEEN_EVERY) return;
+	c.executionCtx.waitUntil(
+		Promise.all([
+			c.env.DB.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').bind(now, u.id).run(),
+			poller(c.env, u.id).touch()
+		])
+	);
+}
+
 app.get('/api/threads', async (c) => {
 	const u = c.get('user');
 	const view = (c.req.query('view') ?? 'action') as View;
 	if (!VIEWS.has(view)) return c.json({ error: 'Unknown view' }, 400);
+	markSeen(c, u);
+	// Nothing changed since the client's copy: answer 304 without reading any threads.
+	const etag = `W/"${u.id}.${u.threads_version}.${view}"`;
+	const noStore = { 'Cache-Control': 'private, no-cache', ETag: etag };
+	if (c.req.header('If-None-Match') === etag) return c.body(null, 304, noStore);
 	const order = view === 'snoozed' ? 'snoozed_until ASC' : 'gh_updated_at DESC';
 	const { results } = await c.env.DB.prepare(
 		`SELECT * FROM threads WHERE ${viewWhere(view)} ORDER BY ${order} LIMIT 300`
 	)
 		.bind(u.id, Date.now())
 		.all<ThreadRow>();
-	// Opening the UI means the user is active: poll soon. Do not wait for it.
-	c.executionCtx.waitUntil(poller(c.env, u.id).touch());
 	const threads: ThreadDTO[] = results.map(toDTO);
-	return c.json({ threads, counts: await counts(c.env, u.id) });
+	return c.json({ threads, counts: await counts(c.env, u.id) }, 200, noStore);
 });
 
 type ThreadAction = 'done' | 'undone' | 'read' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
@@ -196,10 +248,10 @@ app.post('/api/threads/:id/:action', async (c) => {
 	if (!thread) return c.json({ error: 'Not found' }, 404);
 	const token = await userToken(c.env, u);
 	const set = (sql: string, ...args: unknown[]) =>
-		db
-			.prepare(`UPDATE threads SET ${sql} WHERE user_id = ? AND id = ?`)
-			.bind(...args, u.id, id)
-			.run();
+		db.batch([
+			db.prepare(`UPDATE threads SET ${sql} WHERE user_id = ? AND id = ?`).bind(...args, u.id, id),
+			bumpVersion(c.env, u.id)
+		]);
 
 	switch (action) {
 		case 'done':
@@ -293,8 +345,10 @@ async function reclassify(env: Env, u: UserRow, settings: Settings) {
 			)
 		);
 	}
+	const changed = stmts.length;
+	if (changed) stmts.push(bumpVersion(env, u.id));
 	for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
-	return stmts.length;
+	return changed;
 }
 
 app.put('/api/settings', async (c) => {
@@ -350,6 +404,17 @@ app.post('/api/push/subscribe', async (c) => {
 	const endpoint = body?.endpoint;
 	if (!endpoint?.startsWith('https://') || !body?.keys?.p256dh || !body.keys.auth)
 		return c.json({ error: 'Invalid push subscription' }, 400);
+	// Each device costs a request per push; keep a poll well inside the subrequest limit.
+	const devices = await c.env.DB.prepare(
+		'SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ? AND endpoint != ?'
+	)
+		.bind(u.id, endpoint)
+		.first<{ n: number }>();
+	if ((devices?.n ?? 0) >= MAX_DEVICES)
+		return c.json(
+			{ error: `Up to ${MAX_DEVICES} devices can get push. Remove one in Settings first.` },
+			400
+		);
 	await c.env.DB.prepare(
 		`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, label, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)

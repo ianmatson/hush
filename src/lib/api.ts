@@ -36,6 +36,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 	return data as T;
 }
 
+export interface ThreadsResponse {
+	threads: ThreadDTO[];
+	counts: Counts;
+	/** Send back as If-None-Match; the server answers 304 while nothing changes. */
+	etag?: string;
+}
+
 export type ThreadAction = 'done' | 'undone' | 'read' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
 
 export const api = {
@@ -43,8 +50,17 @@ export const api = {
 	login: (token: string) => request<{ login: string }>('POST', '/api/auth/login', { token }),
 	logout: () => request('POST', '/api/auth/logout'),
 	deleteAccount: () => request('DELETE', '/api/account'),
-	threads: (view: View) =>
-		request<{ threads: ThreadDTO[]; counts: Counts }>('GET', `/api/threads?view=${view}`),
+	/** Returns null when the server says nothing changed since `etag` (304). */
+	threads: async (view: View, etag?: string): Promise<ThreadsResponse | null> => {
+		const res = await fetch(`/api/threads?view=${view}`, {
+			headers: etag ? { 'If-None-Match': etag } : {},
+			credentials: 'same-origin'
+		});
+		if (res.status === 304) return null;
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`);
+		return { ...data, etag: res.headers.get('ETag') ?? undefined };
+	},
 	act: (id: string, action: ThreadAction, body?: unknown) =>
 		request<{ counts: Counts }>(
 			'POST',

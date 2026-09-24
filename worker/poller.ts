@@ -11,7 +11,8 @@ import type {
 	ThreadFacts
 } from '../src/lib/shared/types';
 import type { DashFacts } from '../src/lib/shared/dashboard';
-import { getUser, parseSettings, userToken, type Env, type ThreadRow } from './db';
+import { bumpVersion, getUser, parseSettings, userToken, type Env, type ThreadRow } from './db';
+import { allowedOrgs, checkAccess } from './access';
 import {
 	enrichSubjects,
 	fetchTeams,
@@ -29,6 +30,11 @@ const ACTIVE_WINDOW = 15 * MIN;
 const FIRST_SYNC_DAYS = 14;
 const MAX_INDIVIDUAL_PUSHES = 3;
 const TEAMS_TTL = 6 * 60 * MIN;
+const DAY = 24 * 60 * MIN;
+// Stop polling for accounts nobody uses. Opening Hush (or signing in) starts it again.
+const PAUSE_AFTER_NO_PUSH = 14 * DAY;
+const PAUSE_AFTER_WITH_PUSH = 90 * DAY;
+const ACCESS_RECHECK = DAY;
 const DASH_TTL = 5 * MIN;
 export const MUTED_BY_USER = 'Muted by you';
 
@@ -88,6 +94,7 @@ export class Poller extends DurableObject<Env> {
 			this.ctx.storage.get<boolean>('stopped')
 		]);
 		if (stopped) return;
+		await this.ctx.storage.delete('paused');
 		const due = (lastPollAt ?? 0) + MIN;
 		if (alarm === null || alarm > due) await this.ctx.storage.setAlarm(Math.max(due, now + 500));
 	}
@@ -204,7 +211,14 @@ export class Poller extends DurableObject<Env> {
 
 	private runOnce(): Promise<void> {
 		// Alarms and manual syncs can overlap while we wait on fetch(); run one poll at a time.
-		this.running ??= this.poll().finally(() => (this.running = null));
+		// A failed poll must not throw: an alarm that keeps throwing is dropped after its retries,
+		// and polling would stop for this user with no visible error.
+		this.running ??= this.poll()
+			.catch((err) => {
+				console.error('poll failed', err);
+				return this.fail(`Sync failed: ${(err as Error).message}`);
+			})
+			.finally(() => (this.running = null));
 		return this.running;
 	}
 
@@ -223,6 +237,10 @@ export class Poller extends DurableObject<Env> {
 		const base = Math.max(Number(s.get('pollInterval') ?? 60), 60) * 1000;
 		const errors = Number(s.get('errorCount') ?? 0);
 		const idleFor = now - Number(s.get('lastActive') ?? 0);
+		if (idleFor > (s.get('hasPush') ? PAUSE_AFTER_WITH_PUSH : PAUSE_AFTER_NO_PUSH)) {
+			await this.ctx.storage.put('paused', true);
+			return;
+		}
 		let delay: number;
 		if (errors > 0) delay = Math.min(base * 2 ** errors, 30 * MIN);
 		else if (s.get('hasPush') || idleFor < ACTIVE_WINDOW) delay = base;
@@ -254,6 +272,7 @@ export class Poller extends DurableObject<Env> {
 		} catch {
 			return this.fail('Could not decrypt the stored token. Sign in again.', { stop: true });
 		}
+		if (!(await this.recheckAccess(user.id, token, user.access_checked_at))) return;
 		const settings = parseSettings(user.settings);
 		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
 		const lastModified = await this.ctx.storage.get<string>('lastModified');
@@ -292,15 +311,20 @@ export class Poller extends DurableObject<Env> {
 			errorCount: 0,
 			retryAt: 0
 		});
-		if (page.status === 304) return;
+		if (page.status === 304) return this.wakeSnoozed(userId);
 		await this.ctx.storage.put('ssoHiddenOrgs', page.ssoHiddenOrgs);
-		if (page.lastModified) await this.ctx.storage.put('lastModified', page.lastModified);
 
 		const myTeams = settings.teamReviewsAreAction
 			? (await this.teams()).teams.map((t) => t.slug)
 			: [];
 		await this.ingest(userId, user.login, token, settings, page.items, initialized, myTeams);
-		await this.ctx.storage.put('initialized', true);
+		// Save Last-Modified only after the threads are stored. If ingest fails, the next poll
+		// asks GitHub again instead of getting a 304 and losing those notifications.
+		await this.ctx.storage.put({
+			initialized: true,
+			...(page.lastModified ? { lastModified: page.lastModified } : {})
+		});
+		await this.wakeSnoozed(userId);
 		await this.cleanup(userId);
 	}
 
@@ -422,6 +446,7 @@ export class Poller extends DurableObject<Env> {
 					)
 			);
 		}
+		stmts.push(bumpVersion(this.env, userId));
 		await db.batch(stmts);
 		if (toPush.length) await this.push(userId, toPush);
 	}
@@ -479,16 +504,53 @@ export class Poller extends DurableObject<Env> {
 				.run();
 	}
 
+	/** Snoozes that are due go back to the inbox, and clients see a new version. */
+	private async wakeSnoozed(userId: number) {
+		const res = await this.env.DB.prepare(
+			`UPDATE threads SET triage = 'inbox', snoozed_until = NULL
+       WHERE user_id = ? AND triage = 'snoozed' AND snoozed_until <= ?`
+		)
+			.bind(userId, Date.now())
+			.run();
+		if (res.meta.changes) await bumpVersion(this.env, userId).run();
+	}
+
+	/**
+	 * Once a day, check the user is still in an allowed org. If GitHub says no, delete the account
+	 * (and with it the stored token). A GitHub error is not proof, so it changes nothing.
+	 */
+	private async recheckAccess(
+		userId: number,
+		token: string,
+		checkedAt: number | null
+	): Promise<boolean> {
+		const orgs = allowedOrgs(this.env);
+		if (!orgs.length || (checkedAt && Date.now() - checkedAt < ACCESS_RECHECK)) return true;
+		const access = await checkAccess(token, orgs);
+		if (access.ok) {
+			await this.env.DB.prepare('UPDATE users SET access_checked_at = ? WHERE id = ?')
+				.bind(Date.now(), userId)
+				.run();
+			return true;
+		}
+		if (access.reason === 'error') return true;
+		console.log(`access revoked for user ${userId}: ${access.message}`);
+		await this.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+		await this.stop();
+		return false;
+	}
+
 	/** Once a day, forget done threads with no activity for 30 days. */
 	private async cleanup(userId: number) {
 		const last = (await this.ctx.storage.get<number>('lastCleanup')) ?? 0;
 		if (Date.now() - last < 24 * 60 * MIN) return;
 		const cutoff = new Date(Date.now() - 30 * 24 * 60 * MIN).toISOString();
-		await this.env.DB.prepare(
+		const res = await this.env.DB.prepare(
 			`DELETE FROM threads WHERE user_id = ? AND triage = 'done' AND gh_updated_at < ?`
 		)
 			.bind(userId, cutoff)
 			.run();
+		if (res.meta.changes) await bumpVersion(this.env, userId).run();
 		await this.ctx.storage.put('lastCleanup', Date.now());
 	}
 }

@@ -18,8 +18,11 @@ Static assets  → the SPA (build/)
 - **FYI**: everything else (team mentions, watched repos, bots, merged/closed, passing CI).
 - **Rules** (Settings → Rules, JSON): first match wins; set `category` (`action`/`fyi`/`muted`) and/or `push`. Saving re-classifies stored threads.
 - **Triage**: Done (also marks done on GitHub), Snooze, Mute (unsubscribes on GitHub). New activity brings a done thread back.
-- **Pull requests / Issues tabs**: live GitHub searches ("sections"), grouped by whose turn it is: *Your turn*, *Your team's turn*, *Waiting on others*, *Other*. `@me` is you; `@team` runs a section once per tracked team. Edit sections, teams, scope, and filters in Settings → PRs & issues. "Hide until it changes" (`E`) hides an item until its `updatedAt` moves. The Poller caches each dashboard for 5 minutes and your teams for 6 hours.
+- **Pull requests / Issues tabs**: live GitHub searches ("sections"), grouped by whose turn it is: _Your turn_, _Your team's turn_, _Waiting on others_, _Other_. `@me` is you; `@team` runs a section once per tracked team. Edit sections, teams, scope, and filters in Settings → PRs & issues. "Hide until it changes" (`E`) hides an item until its `updatedAt` moves. The Poller caches each dashboard for 5 minutes and your teams for 6 hours.
 - **Data fetching**: TanStack Query, with the cache persisted to `localStorage` (cleared on sign-out). Tab changes use the cache; reloads show cached data at once and revalidate in the background.
+- **Access**: `ALLOWED_ORGS` in `wrangler.jsonc` (now `PostHog`). Sign-in checks active org membership, and the poller checks again once a day; if GitHub says the user left, Hush deletes the account and its token. A GitHub error never counts as "left".
+- **Limits**: Workers rate-limit bindings (approximate, per location): sign-in 10/min per IP, feeds 30/min per IP, API 300/min per user. Max 10 push devices per user. The poller pauses accounts with no visits for 14 days (90 with push devices); opening Hush resumes it.
+- **Cheap refresh**: every change bumps `users.threads_version`; `/api/threads` answers `304 Not Modified` for a matching ETag without reading threads.
 - Shared logic lives in `src/lib/shared/` and runs in both the Worker and the browser.
 
 ## Local development
@@ -63,7 +66,7 @@ Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users m
 | D1 rows written         | 100k/day   | only on change        |
 | KV / Queues             | not used   | —                     |
 
-The poller backs off to 3–5 min when you are idle and have no push devices.
+The poller backs off to 3–5 min when you are idle and have no push devices. With an open tab, the inbox refresh is a 304 (no thread reads) unless something changed.
 
 ## Known limits (MVP)
 
