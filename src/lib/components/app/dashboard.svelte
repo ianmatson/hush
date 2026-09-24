@@ -464,7 +464,7 @@
 
 <main class="mx-auto max-w-4xl px-4 pt-4 pb-24">
 	<div class="flex flex-wrap items-center gap-2">
-		<div class="relative w-full sm:w-56">
+		<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
 			<Search
 				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
 			/>
@@ -483,7 +483,7 @@
 				onclick={() => (showHidden = !showHidden)}
 				disabled={!hiddenCount && !showHidden}
 			>
-				<EyeOff />{showHidden ? 'Showing hidden' : 'Hidden'}
+				<EyeOff /><span class="hidden sm:inline">{showHidden ? 'Showing hidden' : 'Hidden'}</span>
 				{#if hiddenCount}<span class="tabular-nums opacity-70">{hiddenCount}</span>{/if}
 			</Button>
 			<Button
@@ -498,6 +498,7 @@
 			<Button
 				variant="ghost"
 				size="icon-sm"
+				class="hidden sm:inline-flex"
 				aria-label="Keyboard shortcuts"
 				onclick={() => (helpOpen = true)}><Keyboard /></Button
 			>
@@ -668,6 +669,8 @@
 														onrowclick={(e) => onRowClick(e, i)}
 														ontoggle={(e) => onToggle(e, i)}
 														onundomove={(x) => arrange([x.id], null)}
+														groups={GROUPS}
+														onmove={(x, turn) => moveTo([x.id], turn)}
 													/>
 												{/if}
 											</li>
@@ -780,7 +783,9 @@
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="sm"><ArrowRightLeft />Move to</Button>
+				<Button {...props} variant="ghost" size="sm" aria-label="Move to"
+					><ArrowRightLeft /><span class="hidden sm:inline">Move to</span></Button
+				>
 			{/snippet}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="center" side="top">
@@ -789,10 +794,19 @@
 			{/each}
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
-	<Button variant="ghost" size="sm" onclick={() => toggleHide(targets())}>
-		{#if showHidden}<Eye />Show{:else}<EyeOff />Hide{/if}
+	<Button
+		variant="ghost"
+		size="sm"
+		aria-label={showHidden ? 'Show again' : 'Hide until it changes'}
+		onclick={() => toggleHide(targets())}
+	>
+		{#if showHidden}<Eye /><span class="hidden sm:inline">Show</span>{:else}<EyeOff /><span
+				class="hidden sm:inline">Hide</span
+			>{/if}
 	</Button>
-	<Button variant="ghost" size="sm" onclick={() => copyLinks(targets())}><Link />Copy links</Button>
+	<Button variant="ghost" size="sm" aria-label="Copy links" onclick={() => copyLinks(targets())}
+		><Link /><span class="hidden sm:inline">Copy links</span></Button
+	>
 </BulkBar>
 
 <Dialog.Root bind:open={helpOpen}>

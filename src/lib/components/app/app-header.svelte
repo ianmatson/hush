@@ -20,8 +20,8 @@
 	const issueTurns = createQuery(() => ({ ...dashQuery('issue'), select: turnCount }));
 
 	const links = $derived([
-		{ href: '/', label: 'Inbox', badge: inboxCount.data },
-		{ href: '/pulls', label: 'Pull requests', badge: prTurns.data },
+		{ href: '/', label: 'Inbox', short: undefined as string | undefined, badge: inboxCount.data },
+		{ href: '/pulls', label: 'Pull requests', short: 'PRs', badge: prTurns.data },
 		{ href: '/issues', label: 'Issues', badge: issueTurns.data }
 	]);
 	const active = (href: string) =>
@@ -39,7 +39,7 @@
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
-		<nav class="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm">
+		<nav class="flex min-w-0 items-center gap-0.5 overflow-x-auto pr-1 text-sm">
 			{#each links as l (l.href)}
 				<a
 					href={l.href}
@@ -48,7 +48,9 @@
 						active(l.href) && 'bg-muted text-foreground'
 					)}
 				>
-					{l.label}
+					{#if l.short}<span class="hidden sm:inline">{l.label}</span><span class="sm:hidden"
+							>{l.short}</span
+						>{:else}{l.label}{/if}
 					{#if l.badge}
 						<span
 							class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
@@ -67,7 +69,8 @@
 					active('/settings') && 'bg-muted text-foreground'
 				)}><Settings class="size-4" /></a
 			>
-			<ThemeToggle />
+			<!-- On phones the theme lives in Settings → Appearance, to leave room for the tabs. -->
+			<span class="hidden sm:contents"><ThemeToggle /></span>
 			{#if me.data}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger

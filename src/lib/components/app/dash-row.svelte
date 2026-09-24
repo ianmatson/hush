@@ -13,6 +13,10 @@
 	import Eye from '@lucide/svelte/icons/eye';
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
+	import Undo from '@lucide/svelte/icons/undo-2';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import X from '@lucide/svelte/icons/x';
 	import SelectMark from './select-mark.svelte';
@@ -30,7 +34,9 @@
 		oncopy,
 		onrowclick,
 		ontoggle,
-		onundomove
+		onundomove,
+		groups = [],
+		onmove = () => {}
 	}: {
 		item: DashItem;
 		/** The keyboard cursor is on this row. */
@@ -48,6 +54,9 @@
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
 		onundomove: (i: DashItem) => void;
+		/** Groups for "Move to" (the row menu on small screens, which have no drag). */
+		groups?: { turn: DashItem['turn']; label: string }[];
+		onmove?: (i: DashItem, turn: DashItem['turn']) => void;
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -111,10 +120,10 @@
 	aria-selected={selected || checked}
 >
 	{#if draggable}
-		<!-- A hint only: the whole card drags. Always visible on touch screens, which have no hover. -->
+		<!-- A hint only: the whole card drags. Mouse hover on wide screens; touch has no drag. -->
 		<span
 			aria-hidden="true"
-			class="pointer-events-none absolute top-1/2 -left-5 flex h-8 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/50 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+			class="sm:[@media(hover:hover)]:flex\ pointer-events-none absolute top-1/2 -left-5 hidden h-8 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/50 opacity-0 transition-opacity group-hover:opacity-100"
 		>
 			<GripVertical class="size-4" />
 		</span>
@@ -133,7 +142,7 @@
 				target="_blank"
 				rel="noreferrer"
 				draggable="false"
-				class="truncate text-sm font-medium hover:underline"
+				class="line-clamp-2 text-sm font-medium hover:underline sm:truncate"
 				onclick={(e) => {
 					e.stopPropagation();
 					e.preventDefault();
@@ -152,11 +161,11 @@
 		<div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.8rem] text-muted-foreground">
 			<span class="truncate font-mono text-[0.75rem]">{i.repo}#{i.number}</span>
 			<span class="opacity-50">·</span>
-			<span class="truncate">@{i.author}</span>
+			<span class="max-w-[45%] shrink-0 truncate">@{i.author}</span>
 			{#if i.kind === 'pr'}
-				<span class="opacity-50">·</span>
+				<span class="hidden opacity-50 sm:inline">·</span>
 				<Tooltip.Root>
-					<Tooltip.Trigger class="shrink-0 font-mono text-[0.72rem]">
+					<Tooltip.Trigger class="hidden shrink-0 font-mono text-[0.72rem] sm:inline">
 						<span class="text-signal-merge">+{i.additions}</span>
 						<span class="text-signal-fail">−{i.deletions}</span>
 					</Tooltip.Trigger>
@@ -211,7 +220,8 @@
 			{/each}
 			{#if showSections}
 				{#each i.sections.filter((s) => sectionNames[s] !== i.turnReason) as s (s)}
-					<span class="rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground"
+					<span
+						class="hidden rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground sm:inline"
 						>{sectionNames[s] ?? s}</span
 					>
 				{/each}
@@ -219,7 +229,57 @@
 		</div>
 	</div>
 
-	<div class="flex shrink-0 items-center gap-0.5 self-center">
+	<!-- Small screens: every action in one menu. -->
+	{#if groups.length}
+		<div class="shrink-0 self-center sm:hidden">
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon"
+							aria-label="Actions"
+							onclick={(e: MouseEvent) => e.stopPropagation()}><Ellipsis /></Button
+						>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end" class="w-56">
+					<DropdownMenu.Item onclick={() => onopen(i, i.actionUrl)}
+						><ExternalLink />{i.actionLabel}</DropdownMenu.Item
+					>
+					<DropdownMenu.Item onclick={() => onopen(i, i.url)}
+						><ExternalLink />Open on GitHub</DropdownMenu.Item
+					>
+					<DropdownMenu.Separator />
+					<DropdownMenu.Sub>
+						<DropdownMenu.SubTrigger><ArrowRightLeft />Move to</DropdownMenu.SubTrigger>
+						<DropdownMenu.SubContent>
+							{#each groups as g (g.turn)}
+								<DropdownMenu.Item disabled={g.turn === i.turn} onclick={() => onmove(i, g.turn)}
+									>{g.label}</DropdownMenu.Item
+								>
+							{/each}
+						</DropdownMenu.SubContent>
+					</DropdownMenu.Sub>
+					{#if i.movedByYou}
+						<DropdownMenu.Item onclick={() => onundomove(i)}><Undo />Undo move</DropdownMenu.Item>
+					{/if}
+					<DropdownMenu.Item onclick={() => onhide(i)}>
+						{#if i.dismissed}<Eye />Show again{:else}<EyeOff />Hide until it changes{/if}
+					</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => oncopy(i)}><Link />Copy link</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+		</div>
+	{/if}
+
+	<div
+		class={cn(
+			'shrink-0 items-center gap-0.5 self-center',
+			groups.length ? 'hidden sm:flex' : 'flex'
+		)}
+	>
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>

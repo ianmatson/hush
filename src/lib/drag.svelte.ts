@@ -8,6 +8,9 @@ import { Spring } from 'svelte/motion';
  *   where they will land (other rows animate out of the way with `animate:flip`);
  * - on drop, the card springs into the placeholder and the list takes over.
  *
+ * Mouse and pen only. On touch screens a press must scroll the page; the row menus ("Move to")
+ * do the same job there.
+ *
  * Markup contract: each zone element (a whole group: header and list) has `data-drag-zone="<key>"`;
  * each row wrapper inside it has `data-drag-id="<id>"` and calls `pointerdown`, and its list is
  * `position: relative`. The placeholder has `data-drag-placeholder`. Nothing may change size when a
@@ -24,8 +27,6 @@ export interface DragConfig {
 }
 
 const MOUSE_SLOP = 4; // px before a press becomes a drag
-const TOUCH_SLOP = 8; // px of finger movement that means "scroll", not "drag"
-const LONG_PRESS = 260; // ms before a touch becomes a drag
 const EDGE = 72; // px from the viewport edge where auto-scroll starts
 const MAX_SCROLL = 18; // px per frame at the very edge
 
@@ -69,25 +70,17 @@ export class ListDrag {
 		return this.ids.length > 0;
 	}
 
-	/** Call from each row's `onpointerdown`. */
+	/** Call from each row's `onpointerdown`. Mouse and pen only: touch must scroll the page. */
 	pointerdown(e: PointerEvent, id: string, row: HTMLElement) {
-		if (this.active || e.button !== 0 || !this.#cfg.enabled()) return;
+		if (this.active || e.button !== 0 || e.pointerType === 'touch' || !this.#cfg.enabled()) return;
 		if ((e.target as Element).closest('[data-no-drag]')) return;
-		const start = {
-			x: e.clientX,
-			y: e.clientY,
-			pointerId: e.pointerId,
-			touch: e.pointerType === 'touch'
-		};
-		let timer: ReturnType<typeof setTimeout> | undefined;
+		const start = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
 
 		const onMove = (ev: PointerEvent) => {
 			if (ev.pointerId !== start.pointerId) return;
 			if (this.active) return this.#move(ev.clientX, ev.clientY);
-			const moved = Math.hypot(ev.clientX - start.x, ev.clientY - start.y);
-			if (start.touch) {
-				if (moved > TOUCH_SLOP) cleanup(); // the user scrolls
-			} else if (moved > MOUSE_SLOP) this.#begin(id, row, start.x, start.y, ev.clientX, ev.clientY);
+			if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > MOUSE_SLOP)
+				this.#begin(id, row, start.x, start.y, ev.clientX, ev.clientY);
 		};
 		const onUp = (ev: PointerEvent) => {
 			if (ev.pointerId !== start.pointerId) return;
@@ -97,25 +90,15 @@ export class ListDrag {
 			suppressNextClick();
 			this.#end(ev.type === 'pointercancel');
 		};
-		// Once a touch drag runs, stop the page from scrolling under the finger.
-		const onTouchMove = (ev: TouchEvent) => this.active && ev.preventDefault();
 		const cleanup = () => {
-			clearTimeout(timer);
 			window.removeEventListener('pointermove', onMove);
 			window.removeEventListener('pointerup', onUp);
 			window.removeEventListener('pointercancel', onUp);
-			window.removeEventListener('touchmove', onTouchMove);
 		};
 		this.#release = cleanup;
 		window.addEventListener('pointermove', onMove);
 		window.addEventListener('pointerup', onUp);
 		window.addEventListener('pointercancel', onUp);
-		window.addEventListener('touchmove', onTouchMove, { passive: false });
-		if (start.touch)
-			timer = setTimeout(() => {
-				navigator.vibrate?.(8);
-				this.#begin(id, row, start.x, start.y, start.x, start.y);
-			}, LONG_PRESS);
 	}
 
 	#begin(id: string, row: HTMLElement, sx: number, sy: number, x: number, y: number) {

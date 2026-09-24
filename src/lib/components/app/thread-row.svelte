@@ -13,6 +13,10 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import Link from '@lucide/svelte/icons/link';
+	import Mail from '@lucide/svelte/icons/mail';
+	import MailOpen from '@lucide/svelte/icons/mail-open';
 
 	let {
 		thread: t,
@@ -22,7 +26,8 @@
 		onaction,
 		onopen,
 		onrowclick,
-		ontoggle
+		ontoggle,
+		oncopy
 	}: {
 		thread: ThreadDTO;
 		/** The keyboard cursor is on this row. */
@@ -35,6 +40,7 @@
 		onopen: (t: ThreadDTO, url: string) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
+		oncopy: (t: ThreadDTO) => void;
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -132,7 +138,59 @@
 		</div>
 	</div>
 
-	<div class="flex shrink-0 items-center gap-0.5 self-center">
+	<!-- Small screens: every action in one menu. -->
+	<div class="shrink-0 self-center sm:hidden">
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon"
+						aria-label="Actions"
+						onclick={(e: MouseEvent) => e.stopPropagation()}><Ellipsis /></Button
+					>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end" class="w-56">
+				<DropdownMenu.Item onclick={() => onopen(t, t.actionUrl)}
+					><ExternalLink />{t.actionLabel}</DropdownMenu.Item
+				>
+				<DropdownMenu.Item onclick={() => onopen(t, t.htmlUrl)}
+					><ExternalLink />Open on GitHub</DropdownMenu.Item
+				>
+				<DropdownMenu.Separator />
+				{#if inInbox}
+					<DropdownMenu.Item onclick={() => onaction(t, 'done')}><Check />Done</DropdownMenu.Item>
+					<DropdownMenu.Sub>
+						<DropdownMenu.SubTrigger><AlarmClock />Snooze</DropdownMenu.SubTrigger>
+						<DropdownMenu.SubContent>
+							{#each snoozeOptions() as opt (opt.label)}
+								<DropdownMenu.Item onclick={() => onaction(t, 'snooze', { until: opt.until })}
+									>{opt.label}</DropdownMenu.Item
+								>
+							{/each}
+						</DropdownMenu.SubContent>
+					</DropdownMenu.Sub>
+					<DropdownMenu.Item onclick={() => onaction(t, 'mute')}><BellOff />Mute</DropdownMenu.Item>
+				{:else}
+					<DropdownMenu.Item
+						onclick={() =>
+							onaction(
+								t,
+								t.category === 'muted' ? 'unmute' : t.triage === 'snoozed' ? 'unsnooze' : 'undone'
+							)}><Undo />{t.category === 'muted' ? 'Unmute' : 'Move to inbox'}</DropdownMenu.Item
+					>
+				{/if}
+				<DropdownMenu.Item onclick={() => onaction(t, t.unread ? 'read' : 'unread')}>
+					{#if t.unread}<MailOpen />Mark as read{:else}<Mail />Mark as unread{/if}
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={() => oncopy(t)}><Link />Copy link</DropdownMenu.Item>
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+	</div>
+
+	<div class="hidden shrink-0 items-center gap-0.5 self-center sm:flex">
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>

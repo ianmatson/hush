@@ -152,11 +152,10 @@
 	user-select: none !important;
 }
 
-/* Rows drag from anywhere: no text selection, no iOS long-press callout, no native link drag. */
+/* Rows drag from anywhere (mouse): no text selection, no native link drag. */
 .drag-row {
 	user-select: none;
 	-webkit-user-select: none;
-	-webkit-touch-callout: none;
 }
 .drag-row a,
 .drag-row img {

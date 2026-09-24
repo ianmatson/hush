@@ -44,18 +44,23 @@
 
 <ul class="grid gap-2">
 	{#each sections as s, i (s.id)}
+		<!-- Phones: toggle, name, and buttons on one line; the query on its own line below. -->
 		<li
-			class="grid gap-2 rounded-lg border p-2.5 sm:grid-cols-[auto_12rem_1fr_auto] sm:items-center"
+			class="flex flex-wrap items-center gap-2 rounded-lg border p-2.5 sm:grid sm:grid-cols-[auto_12rem_1fr_auto]"
 		>
 			<Switch bind:checked={s.enabled} aria-label="Show {s.name}" />
-			<Input bind:value={s.name} aria-label="Section name" class="h-8" />
+			<Input
+				bind:value={s.name}
+				aria-label="Section name"
+				class="h-8 min-w-0 flex-1 sm:flex-none"
+			/>
 			<Input
 				bind:value={s.query}
 				aria-label="GitHub search query"
-				class="h-8 font-mono text-xs"
+				class="order-last h-8 w-full font-mono text-xs sm:order-none sm:w-auto"
 				spellcheck={false}
 			/>
-			<div class="flex items-center justify-end gap-0.5">
+			<div class="flex shrink-0 items-center justify-end gap-0.5">
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						{#snippet child({ props })}

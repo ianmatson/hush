@@ -349,13 +349,16 @@
 	{/if}
 
 	<div class="flex flex-wrap items-center gap-2">
-		<nav class="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-sm" aria-label="Views">
+		<nav
+			class="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5 text-sm sm:w-auto"
+			aria-label="Views"
+		>
 			{#each VIEWS as v (v.id)}
 				{@const n = count(v.id)}
 				<a
 					href="/?view={v.id}"
 					class={cn(
-						'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground',
+						'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
 						view === v.id && 'bg-background text-foreground shadow-xs'
 					)}
 				>
@@ -372,7 +375,7 @@
 			{/each}
 		</nav>
 
-		<div class="relative ml-auto w-full sm:w-56">
+		<div class="relative min-w-0 flex-1 sm:ml-auto sm:w-56 sm:flex-none">
 			<Search
 				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
 			/>
@@ -390,6 +393,7 @@
 		<Button
 			variant="ghost"
 			size="icon-sm"
+			class="hidden sm:inline-flex"
 			aria-label="Keyboard shortcuts"
 			onclick={() => (helpOpen = true)}
 		>
@@ -460,6 +464,7 @@
 									onopen={open}
 									onrowclick={(e) => onRowClick(e, t)}
 									ontoggle={(e) => onToggle(e, t)}
+									oncopy={(x) => copyLinks([x.id])}
 								/>
 							</li>
 						{/each}
@@ -527,11 +532,15 @@
 
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
 	{#if inInbox}
-		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'done')}><Check />Done</Button>
+		<Button variant="ghost" size="sm" aria-label="Done" onclick={() => act(targets(), 'done')}
+			><Check /><span class="hidden sm:inline">Done</span></Button
+		>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
-					<Button {...props} variant="ghost" size="sm"><AlarmClock />Snooze</Button>
+					<Button {...props} variant="ghost" size="sm" aria-label="Snooze"
+						><AlarmClock /><span class="hidden sm:inline">Snooze</span></Button
+					>
 				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="center" side="top">
@@ -542,7 +551,8 @@
 				{/each}
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
-		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'mute')}><BellOff />Mute</Button
+		<Button variant="ghost" size="sm" aria-label="Mute" onclick={() => act(targets(), 'mute')}
+			><BellOff /><span class="hidden sm:inline">Mute</span></Button
 		>
 	{:else}
 		<Button variant="ghost" size="sm" onclick={() => act(targets(), restoreAction(undefined))}>
@@ -550,8 +560,14 @@
 		</Button>
 	{/if}
 	{@const bulkRead = readAction(targets())}
-	<Button variant="ghost" size="sm" onclick={() => toggleRead(targets())}>
-		{#if bulkRead === 'read'}<MailOpen />Read{:else}<Mail />Unread{/if}
+	<Button
+		variant="ghost"
+		size="sm"
+		aria-label={bulkRead === 'read' ? 'Mark as read' : 'Mark as unread'}
+		onclick={() => toggleRead(targets())}
+	>
+		{#if bulkRead === 'read'}<MailOpen /><span class="hidden sm:inline">Read</span>{:else}<Mail
+			/><span class="hidden sm:inline">Unread</span>{/if}
 	</Button>
 </BulkBar>
 

@@ -45,14 +45,7 @@ export interface ThreadsResponse {
 }
 
 export type ThreadAction =
-	| 'done'
-	| 'undone'
-	| 'read'
-	| 'unread'
-	| 'snooze'
-	| 'unsnooze'
-	| 'mute'
-	| 'unmute';
+	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
 
 export const api = {
 	me: () => request<MeDTO>('GET', '/api/me'),
