@@ -8,9 +8,10 @@ import { Spring } from 'svelte/motion';
  *   where they will land (other rows animate out of the way with `animate:flip`);
  * - on drop, the card springs into the placeholder and the list takes over.
  *
- * Markup contract: each zone element has `data-drag-zone="<key>"` and `position: relative`; each
- * row wrapper (a direct child) has `data-drag-id="<id>"` and calls `pointerdown`. The placeholder
- * has `data-drag-placeholder`.
+ * Markup contract: each zone element (a whole group: header and list) has `data-drag-zone="<key>"`;
+ * each row wrapper inside it has `data-drag-id="<id>"` and calls `pointerdown`, and its list is
+ * `position: relative`. The placeholder has `data-drag-placeholder`. Nothing may change size when a
+ * drag starts: zones are always in the layout, so picking up a card never shifts the page.
  */
 export interface DragConfig {
 	enabled: () => boolean;
@@ -123,11 +124,11 @@ export class ListDrag {
 		this.#root = zoneEl.parentElement?.closest('[data-drag-root]') ?? document.body;
 		const ids = this.#cfg.pick(id);
 		const set = new Set(ids);
-		const rows = [...zoneEl.querySelectorAll<HTMLElement>(':scope > [data-drag-id]')];
+		const rows = [...zoneEl.querySelectorAll<HTMLElement>('[data-drag-id]')];
 		const heights = ids
 			.map((x) => this.#row(x)?.offsetHeight ?? row.offsetHeight)
 			.reduce((sum, h) => sum + h, 0);
-		const gapPx = parseFloat(getComputedStyle(zoneEl).rowGap) || 0;
+		const gapPx = parseFloat(getComputedStyle(row.parentElement!).rowGap) || 0;
 		const rect = row.getBoundingClientRect();
 
 		this.#startY = sy;
@@ -179,8 +180,12 @@ export class ListDrag {
 		const zone = best.el.dataset.dragZone!;
 		let index = 0;
 		if (!this.#cfg.isCollapsed(zone))
-			for (const li of best.el.querySelectorAll<HTMLElement>(':scope > [data-drag-id]'))
-				if (y > best.rect.top + li.offsetTop + li.offsetHeight / 2) index++;
+			for (const li of best.el.querySelectorAll<HTMLElement>('[data-drag-id]')) {
+				// Resting position: the list's box plus offsetTop, which ignores flip transforms.
+				const list = li.offsetParent as HTMLElement | null;
+				const top = (list?.getBoundingClientRect().top ?? best.rect.top) + li.offsetTop;
+				if (y > top + li.offsetHeight / 2) index++;
+			}
 		if (zone !== this.zone || index !== this.index) {
 			this.fresh = false;
 			this.zone = zone;

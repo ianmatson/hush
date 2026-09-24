@@ -118,8 +118,6 @@
 			return { ...g, rows };
 		})
 	);
-	/** Every group is a drop target while dragging, even an empty or closed one. */
-	const shownGroups = $derived(groups.filter((g) => g.rows.length || drag.active));
 
 	/** Keyboard order: only rows in open groups. */
 	const navigable = $derived(baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.items)));
@@ -595,10 +593,18 @@
 			<ContextMenu.Trigger>
 				{#snippet child({ props })}
 					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
-						{#each shownGroups as g (g.turn)}
-							<section>
+						{#each groups as g (g.turn)}
+							{@const count = baseGroups.find((b) => b.turn === g.turn)?.items.length ?? 0}
+							{@const target = drag.active && drag.zone === g.turn}
+							{@const headerDrop = target && (collapsed[g.turn] || !count)}
+							<!-- The whole group (header and rows) is one drop zone. Always in the layout, so
+							     picking up a card never shifts the page. -->
+							<section data-drag-zone={g.turn}>
 								<button
-									class="group/h mb-1 flex w-full items-center gap-2 px-1 text-left"
+									class={cn(
+										'group/h mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors duration-150',
+										headerDrop && 'bg-primary/[0.07] text-primary'
+									)}
 									onclick={() => (collapsed[g.turn] = !collapsed[g.turn])}
 									aria-expanded={!collapsed[g.turn]}
 								>
@@ -608,65 +614,64 @@
 											collapsed[g.turn] && '-rotate-90'
 										)}
 									/>
-									<h2 class="text-xs font-semibold tracking-wide uppercase">{g.label}</h2>
-									<span class="text-xs text-muted-foreground tabular-nums">
-										{baseGroups.find((b) => b.turn === g.turn)?.items.length ?? 0}
-									</span>
+									<h2
+										class={cn(
+											'text-xs font-semibold tracking-wide uppercase',
+											!count && !headerDrop && 'text-muted-foreground/70'
+										)}
+									>
+										{g.label}
+									</h2>
+									<span class="text-xs text-muted-foreground tabular-nums">{count}</span>
 									<span
-										class="ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline"
-										>{g.hint}</span
+										class={cn(
+											'ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline',
+											headerDrop && 'text-primary opacity-100'
+										)}>{headerDrop ? 'Drop to move here' : g.hint}</span
 									>
 								</button>
-								{#if !collapsed[g.turn] || drag.active}
+								{#if !collapsed[g.turn]}
+									<!-- An empty list is 0 px tall; the placeholder opens it when you drag over. -->
 									<ul
-										data-drag-zone={g.turn}
-										data-target={(drag.active && drag.zone === g.turn) || undefined}
-										class={cn(
-											'drag-zone relative grid grid-cols-[minmax(0,1fr)] gap-0.5 rounded-xl',
-											drag.active && 'min-h-14',
-											drag.active && (collapsed[g.turn] || !g.rows.length) && 'drop-empty'
-										)}
+										class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
 										role="listbox"
 										aria-multiselectable="true"
 										aria-label={g.label}
-										data-hint={collapsed[g.turn] ? `Drop to move to “${g.label}”` : 'Drop here'}
 									>
-										{#if !collapsed[g.turn]}
-											{#each g.rows as r (r.key)}
-												<li
-													animate:flip={FLIP}
-													in:enter={r}
-													out:leave={r}
-													data-drag-id={r.item?.id}
-													data-drag-placeholder={!r.item || undefined}
-													style={r.item ? undefined : `height: ${drag.gap}px`}
-													class={r.item
-														? 'drag-row'
-														: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
-													onpointerdown={(e) =>
-														r.item && drag.pointerdown(e, r.item.id, e.currentTarget)}
-												>
-													{#if r.item}
-														{@const i = r.item}
-														<DashRow
-															item={i}
-															selected={i.id === selectedId}
-															checked={sel.has(i.id)}
-															selecting={sel.size > 0}
-															draggable={!showHidden}
-															showSections={!section}
-															{sectionNames}
-															onopen={open}
-															onhide={(x) => toggleHide([x.id])}
-															oncopy={(x) => copyLinks([x.id])}
-															onrowclick={(e) => onRowClick(e, i)}
-															ontoggle={(e) => onToggle(e, i)}
-															onundomove={(x) => arrange([x.id], null)}
-														/>
-													{/if}
-												</li>
-											{/each}
-										{/if}
+										{#each g.rows as r (r.key)}
+											<li
+												animate:flip={FLIP}
+												in:enter={r}
+												out:leave={r}
+												data-drag-id={r.item?.id}
+												data-drag-placeholder={!r.item || undefined}
+												style={r.item ? undefined : `height: ${drag.gap}px`}
+												class={r.item
+													? 'drag-row'
+													: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
+												onpointerdown={(e) =>
+													r.item && drag.pointerdown(e, r.item.id, e.currentTarget)}
+											>
+												{#if r.item}
+													{@const i = r.item}
+													<DashRow
+														item={i}
+														selected={i.id === selectedId}
+														checked={sel.has(i.id)}
+														selecting={sel.size > 0}
+														draggable={!showHidden}
+														showSections={!section}
+														{sectionNames}
+														onopen={open}
+														onhide={(x) => toggleHide([x.id])}
+														oncopy={(x) => copyLinks([x.id])}
+														onrowclick={(e) => onRowClick(e, i)}
+														ontoggle={(e) => onToggle(e, i)}
+														onundomove={(x) => arrange([x.id], null)}
+													/>
+												{/if}
+											</li>
+										{/each}
 									</ul>
 								{/if}
 							</section>
@@ -734,8 +739,8 @@
 	<div
 		class="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
 		style="width: {drag.width}px; transform-origin: {drag.grab.x}px {drag.grab
-			.y}px; transform: translate3d({drag.pos.current.x}px, {drag.pos.current.y}px, 0) scale({1 +
-			0.025 * lift});"
+			.y}px; transform: translate3d({drag.pos.current.x}px, {drag.pos.current.y}px, 0) scale({1 -
+			0.08 * lift});"
 	>
 		{#each drag.ids.slice(1, 3).reverse() as id, k (id)}
 			{@const depth = drag.ids.slice(1, 3).length - k}

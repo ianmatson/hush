@@ -163,32 +163,6 @@
 	-webkit-user-drag: none;
 }
 
-/* The group under the dragged card. */
-.drag-zone[data-target] {
-	outline: 2px dashed color-mix(in oklch, var(--primary) 22%, transparent);
-	outline-offset: 5px;
-}
-.drag-zone {
-	outline: 2px dashed transparent;
-	outline-offset: 5px;
-	transition: outline-color 180ms ease;
-}
-
-/* An empty (or closed) group while dragging: show where to drop. */
-.drop-empty::before {
-	content: attr(data-hint);
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border: 1px dashed var(--border);
-	border-radius: var(--radius-xl);
-	font-size: 0.75rem;
-	color: var(--muted-foreground);
-	pointer-events: none;
-}
-
 /* "N" on the floating stack. */
 .drag-count {
 	position: absolute;
