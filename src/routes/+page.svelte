@@ -35,6 +35,7 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Link from '@lucide/svelte/icons/link';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
+	import Mail from '@lucide/svelte/icons/mail';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
@@ -115,7 +116,8 @@
 		undone: 'Moved to inbox',
 		unsnooze: 'Moved to inbox',
 		unmute: 'Unmuted',
-		read: 'Marked as read'
+		read: 'Marked as read',
+		unread: 'Marked as unread'
 	};
 
 	/** Send an action for many threads, 20 per request. */
@@ -131,17 +133,19 @@
 	async function act(ids: string[], action: ThreadAction, body?: unknown) {
 		if (!ids.length) return;
 		const threads = ids.map(byId).filter((t): t is ThreadDTO => !!t);
-		if (action === 'read') {
+		if (action === 'read' || action === 'unread') {
+			// Stays in the list; only the marker changes.
+			const unread = action === 'unread';
 			queryClient.setQueryData<ThreadsData>(keys.threads(view), (old) =>
 				old
 					? {
 							...old,
-							threads: old.threads.map((x) => (ids.includes(x.id) ? { ...x, unread: false } : x))
+							threads: old.threads.map((x) => (ids.includes(x.id) ? { ...x, unread } : x))
 						}
 					: old
 			);
-			run(ids, 'read').catch((e) => toast.error(e.message));
-			if (ids.length > 1) toast(LABEL.read!, { description: `${ids.length} threads` });
+			run(ids, action).catch((e) => toast.error(e.message));
+			if (ids.length > 1) toast(LABEL[action]!, { description: `${ids.length} threads` });
 			return;
 		}
 		// Optimistic: the rows leave this view now. Stop any refetch that could bring them back.
@@ -176,6 +180,14 @@
 
 	/** Rows an action applies to: the selection, or else the cursor row. */
 	const targets = () => sel.targets(order, selectedId);
+
+	/**
+	 * Read/unread toggle (like Gmail): if any of the threads is unread, mark them all read;
+	 * otherwise mark them all unread.
+	 */
+	const readAction = (ids: string[]): 'read' | 'unread' =>
+		ids.some((id) => byId(id)?.unread) ? 'read' : 'unread';
+	const toggleRead = (ids: string[]) => ids.length && act(ids, readAction(ids));
 
 	function open(t: ThreadDTO, url: string) {
 		window.open(url, '_blank', 'noopener');
@@ -244,6 +256,7 @@
 			s: () => inInbox && act(targets(), 'snooze', { until: snoozeOptions()[2].until }),
 			m: () => inInbox && act(targets(), 'mute'),
 			c: () => copyLinks(targets()),
+			u: () => toggleRead(targets()),
 			r: () => sync(),
 			'/': () => searchEl?.focus(),
 			'?': () => (helpOpen = true)
@@ -294,6 +307,7 @@
 		['E', 'Done'],
 		['S', 'Snooze until tomorrow 9:00'],
 		['M', 'Mute the thread'],
+		['U', 'Mark as read / unread'],
 		['C', 'Copy link'],
 		['Esc', 'Clear the selection'],
 		['R', 'Sync with GitHub now'],
@@ -479,14 +493,17 @@
 					<ContextMenu.Item onclick={() => act(menuIds, 'mute')}>
 						<BellOff />{n('Mute')}<ContextMenu.Shortcut>M</ContextMenu.Shortcut>
 					</ContextMenu.Item>
-					<ContextMenu.Item onclick={() => act(menuIds, 'read')}
-						><MailOpen />{n('Mark as read')}</ContextMenu.Item
-					>
 				{:else}
 					<ContextMenu.Item onclick={() => act(menuIds, restoreAction(menuOne))}>
 						<Undo />{n(view === 'muted' ? 'Unmute' : 'Move to inbox')}
 					</ContextMenu.Item>
 				{/if}
+				<ContextMenu.Item onclick={() => toggleRead(menuIds)}>
+					{#if readAction(menuIds) === 'read'}<MailOpen />{n('Mark as read')}{:else}<Mail />{n(
+							'Mark as unread'
+						)}{/if}
+					<ContextMenu.Shortcut>U</ContextMenu.Shortcut>
+				</ContextMenu.Item>
 				<ContextMenu.Item onclick={() => copyLinks(menuIds)}>
 					<Link />{n(menuIds.length > 1 ? 'Copy links' : 'Copy link')}<ContextMenu.Shortcut
 						>C</ContextMenu.Shortcut
@@ -527,14 +544,15 @@
 		</DropdownMenu.Root>
 		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'mute')}><BellOff />Mute</Button
 		>
-		<Button variant="ghost" size="sm" onclick={() => act(targets(), 'read')}
-			><MailOpen />Read</Button
-		>
 	{:else}
 		<Button variant="ghost" size="sm" onclick={() => act(targets(), restoreAction(undefined))}>
 			<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
 		</Button>
 	{/if}
+	{@const bulkRead = readAction(targets())}
+	<Button variant="ghost" size="sm" onclick={() => toggleRead(targets())}>
+		{#if bulkRead === 'read'}<MailOpen />Read{:else}<Mail />Unread{/if}
+	</Button>
 </BulkBar>
 
 <Dialog.Root bind:open={helpOpen}>

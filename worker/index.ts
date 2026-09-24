@@ -236,8 +236,17 @@ app.get('/api/threads', async (c) => {
 	return c.json({ threads, counts: await counts(c.env, u.id) }, 200, noStore);
 });
 
-type ThreadAction = 'done' | 'undone' | 'read' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
-const THREAD_ACTIONS = new Set<ThreadAction>(['done', 'undone', 'read', 'snooze', 'unsnooze', 'mute', 'unmute']);
+type ThreadAction = 'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+const THREAD_ACTIONS = new Set<ThreadAction>([
+	'done',
+	'undone',
+	'read',
+	'unread',
+	'snooze',
+	'unsnooze',
+	'mute',
+	'unmute'
+]);
 // Mute makes 2 GitHub calls per thread; 20 × 2 stays under the Free plan's 50 subrequests.
 const BULK_MAX = 20;
 
@@ -270,6 +279,9 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 				return update(t, `triage = 'inbox', snoozed_until = NULL`);
 			case 'read':
 				return update(t, `unread = 0`);
+			// GitHub has no "mark as unread" API, so this one stays in Hush.
+			case 'unread':
+				return update(t, `unread = 1`);
 			case 'snooze':
 				return update(t, `triage = 'snoozed', snoozed_until = ?`, body.until);
 			case 'mute':
