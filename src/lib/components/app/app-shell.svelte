@@ -4,19 +4,29 @@
 	import { page } from '$app/state';
 	import { createQuery, useIsRestoring } from '@tanstack/svelte-query';
 	import { ApiError } from '$lib/api';
-	import { meQuery } from '$lib/queries';
+	import { keys, leaveTo, meQuery, queryClient } from '$lib/queries';
 	import AppHeader from './app-header.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
 	const isRestoring = useIsRestoring();
 	const me = createQuery(meQuery);
+
+	// Check the session once per page load, even when the cached profile is fresh.
+	// Cached data shows at once; a 401 sends you to sign-in (see the QueryCache handler).
+	let checked = false;
+	$effect(() => {
+		if (!isRestoring.current && !checked) {
+			checked = true;
+			queryClient.invalidateQueries({ queryKey: keys.me });
+		}
+	});
 	const signedOut = $derived(me.error instanceof ApiError && me.error.status === 401);
 	const onLogin = $derived(page.url.pathname === '/login');
 	let startChecked = false;
 
 	$effect(() => {
-		if (signedOut && !onLogin) goto('/login', { replaceState: true });
+		if (signedOut && !onLogin) leaveTo('/login');
 		else if (me.isSuccess && onLogin) goto('/', { replaceState: true });
 		else if (me.isSuccess && !startChecked) {
 			startChecked = true;

@@ -1,4 +1,4 @@
-import { QueryClient, queryOptions } from '@tanstack/svelte-query';
+import { QueryCache, QueryClient, queryOptions } from '@tanstack/svelte-query';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { browser } from '$app/environment';
 import { api, ApiError } from '$lib/api';
@@ -15,6 +15,12 @@ import type {
 const MIN = 60_000;
 
 export const queryClient = new QueryClient({
+	// Any "not signed in" answer ends the session in this tab, once.
+	queryCache: new QueryCache({
+		onError: (err) => {
+			if (err instanceof ApiError && err.status === 401) leaveTo('/login');
+		}
+	}),
 	defaultOptions: {
 		queries: {
 			staleTime: 30_000,
@@ -95,4 +101,18 @@ export function setSettings(settings: Settings) {
 export function clearCache() {
 	queryClient.clear();
 	if (browser) localStorage.removeItem('hush:query-cache');
+}
+
+let leaving = false;
+
+/**
+ * Clear the cache and do a full page load. Open components keep their last query results after
+ * `clear()`, so a client-side navigation would still see the old account.
+ */
+export function leaveTo(path: '/login' | '/') {
+	if (!browser || leaving) return;
+	if (path === '/login' && location.pathname === '/login') return;
+	leaving = true;
+	clearCache();
+	location.replace(path);
 }

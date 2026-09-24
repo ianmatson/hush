@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { clearCache, dashQuery, meQuery, threadsQuery, turnCount } from '$lib/queries';
+	import { dashQuery, leaveTo, meQuery, threadsQuery, turnCount } from '$lib/queries';
 	import { cn } from '$lib/utils';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -28,9 +28,8 @@
 		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
 
 	async function signOut() {
-		await api.logout();
-		clearCache();
-		await goto('/login');
+		await api.logout().catch(() => {});
+		leaveTo('/login');
 	}
 </script>
 

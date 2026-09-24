@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { clearCache, meQuery } from '$lib/queries';
+	import { leaveTo, meQuery } from '$lib/queries';
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -11,9 +10,8 @@
 	const me = createQuery(meQuery);
 
 	async function signOut() {
-		await api.logout();
-		clearCache();
-		await goto('/login');
+		await api.logout().catch(() => {});
+		leaveTo('/login');
 	}
 
 	async function deleteAccount() {
@@ -22,8 +20,7 @@
 		)
 			return;
 		await api.deleteAccount();
-		clearCache();
-		await goto('/login');
+		leaveTo('/login');
 	}
 </script>
 

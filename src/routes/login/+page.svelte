@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
-	import { clearCache, keys, queryClient } from '$lib/queries';
+	import { leaveTo } from '$lib/queries';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -24,10 +23,8 @@
 		busy = true;
 		try {
 			await api.login(token.trim());
-			// A new account must never see the old account's cached data.
-			clearCache();
-			await queryClient.fetchQuery({ queryKey: keys.me, queryFn: api.me });
-			await goto('/', { replaceState: true });
+			// Full page load: nothing from a previous account may stay in memory or in the cache.
+			leaveTo('/');
 		} catch (err) {
 			error = (err as Error).message;
 		} finally {
