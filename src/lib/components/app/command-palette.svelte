@@ -8,6 +8,8 @@
 	import { dashQuery, keys, leaveTo, queryClient, threadsQuery } from '$lib/queries';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
+	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
+	import Palette from '@lucide/svelte/icons/palette';
 	import type { View } from '$lib/shared/types';
 	import * as Command from '$lib/components/ui/command';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -193,6 +195,13 @@
 			keywords: ['theme', 'appearance', 'dark', 'light'],
 			run: () => setMode(mode.current === 'dark' ? 'light' : 'dark')
 		},
+		...ALL_THEMES.filter((t) => t.id !== theme.current).map((t) => ({
+			id: `cmd:theme:${t.id}`,
+			label: `Theme: ${t.label}`,
+			icon: Palette,
+			keywords: ['theme', 'colors', 'appearance'],
+			run: () => setTheme(t.id)
+		})),
 		{
 			id: 'cmd:signout',
 			label: 'Sign out',
@@ -288,7 +297,13 @@
 		{ heading: 'Inbox', items: search.trim() ? threadEntries : [] },
 		{ heading: 'Pull requests and issues', items: search.trim() ? dashEntries : [] },
 		{ heading: 'Go to', items: goEntries },
-		{ heading: 'Commands', items: globalCommands }
+		{
+			heading: 'Commands',
+			// Themes only once you type ("theme", "gruvbox"…): 15 rows are noise otherwise.
+			items: search.trim()
+				? globalCommands
+				: globalCommands.filter((c) => !c.id.startsWith('cmd:theme:'))
+		}
 	]);
 </script>
 

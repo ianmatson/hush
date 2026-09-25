@@ -2,6 +2,8 @@
 @import 'tw-animate-css';
 @import 'shadcn-svelte/tailwind.css';
 @import '@fontsource-variable/geist';
+/* Color themes: html[data-theme] and html.dark[data-theme] override the defaults below. */
+@import '../lib/themes/themes.css';
 
 @custom-variant dark (&:is(.dark *));
 
