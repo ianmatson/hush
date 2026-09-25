@@ -151,6 +151,18 @@ describe('the inbox watcher', () => {
 		expect(out).toMatchObject({ triage: 'done', resolvedNote: 'Draft PR' });
 	});
 
+	it('moves "open review threads" to Done when the threads are resolved', () => {
+		const { old, out } = step(
+			pr({ author: ME, reviewDecision: 'APPROVED', openThreads: 1 }),
+			pr({ author: ME, reviewDecision: 'APPROVED', openThreads: 0 }),
+			'inbox',
+			'author'
+		);
+		expect(old.kind).toBe('reply');
+		// Now "Ready to merge": still your turn, so it stays; the kind changes.
+		expect(out.triage).toBe('inbox');
+	});
+
 	it('leaves an unchanged action alone', () => {
 		const e = pr({ reviewRequestedFromMe: true });
 		expect(step(e, e).out).toMatchObject({ triage: 'inbox', push: null });

@@ -200,6 +200,11 @@
 			{#if review}
 				<span class={cn('rounded-md bg-muted px-1.5 py-0.5', review.tone)}>{review.label}</span>
 			{/if}
+			{#if i.openThreads}
+				<span class="rounded-md bg-muted px-1.5 py-0.5 text-signal-reply"
+					>{i.openThreads} open {i.openThreads === 1 ? 'thread' : 'threads'}</span
+				>
+			{/if}
 			{#if i.mergeable === 'CONFLICTING'}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-signal-warn">Conflicts</span>
 			{/if}

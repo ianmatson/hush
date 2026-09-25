@@ -222,6 +222,8 @@ __typename
   comments(last: 1) { nodes { author { login __typename } bodyText url createdAt } }
   reviews(last: 1) { nodes { author { login } submittedAt state } }
   myReviews: reviews(author: $me, last: 1) { nodes { submittedAt state } }
+  verdicts: latestOpinionatedReviews(first: 10) { nodes { author { login } submittedAt state } }
+  reviewThreads(first: 50) { nodes { isResolved } }
 }
 ... on Issue {
   number url state
@@ -239,6 +241,27 @@ export interface SubjectRef {
 }
 
 type Node = Record<string, any>;
+
+/** Review threads nobody resolved (GraphQL `reviewThreads`, up to 50). */
+function openThreadsOf(n: Node): number {
+	return (n.reviewThreads?.nodes ?? []).filter((t: Node) => t && t.isResolved === false).length;
+}
+
+/**
+ * The newest approval or change request by someone who is neither you nor the author, from
+ * `latestOpinionatedReviews` (each reviewer's latest verdict).
+ */
+function lastVerdictOf(n: Node, me: string): { by: string; at: string } | null {
+	const skip = new Set([me.toLowerCase(), String(n.author?.login ?? '').toLowerCase()]);
+	let best: { by: string; at: string } | null = null;
+	for (const r of n.verdicts?.nodes ?? []) {
+		const by = r?.author?.login;
+		if (!by || skip.has(by.toLowerCase()) || !r.submittedAt) continue;
+		if (r.state !== 'APPROVED' && r.state !== 'CHANGES_REQUESTED') continue;
+		if (!best || Date.parse(r.submittedAt) > Date.parse(best.at)) best = { by, at: r.submittedAt };
+	}
+	return best;
+}
 
 function toEnrichment(n: Node, me: string): Enrichment {
 	const meL = me.toLowerCase();
@@ -275,6 +298,8 @@ function toEnrichment(n: Node, me: string): Enrichment {
 		mergeable: n.mergeable,
 		ci: (n.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state as CiState | undefined) ?? null,
 		lastCommitAt: n.commits?.nodes?.[0]?.commit?.committedDate ?? null,
+		openThreads: openThreadsOf(n),
+		lastVerdict: lastVerdictOf(n, me),
 		myReview: n.myReviews?.nodes?.[0]?.submittedAt
 			? { at: n.myReviews.nodes[0].submittedAt, state: n.myReviews.nodes[0].state }
 			: null,
@@ -369,6 +394,8 @@ fragment P on PullRequest {
   commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   myReviews: reviews(author: $me, last: 1) { nodes { submittedAt state } }
+  verdicts: latestOpinionatedReviews(first: 10) { nodes { author { login } submittedAt state } }
+  reviewThreads(first: 50) { nodes { isResolved } }
   timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
     nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   }
@@ -438,6 +465,9 @@ function toFacts(n: Node, me: string, myTeams: Set<string>): DashFacts {
 		requestedAt: requestedMe || requestedTeams.length ? (ev?.createdAt ?? null) : null,
 		myLastReviewAt: review?.submittedAt ?? null,
 		myLastReviewState: review?.state ?? null,
+		openThreads: pr ? openThreadsOf(n) : 0,
+		lastVerdictBy: pr ? (lastVerdictOf(n, me)?.by ?? null) : null,
+		lastVerdictAt: pr ? (lastVerdictOf(n, me)?.at ?? null) : null,
 		lastCommitAt: commit?.committedDate ?? null
 	};
 }
@@ -574,6 +604,7 @@ const PEEK_QUERY = `query($o: String!, $r: String!, $n: Int!) {
       labels(first: 10) { nodes { name color } }
       assignees(first: 10) { nodes { login } }
       latestOpinionatedReviews(first: 20) { nodes { state author { ${PERSON} } } }
+      reviewThreads(first: 50) { nodes { isResolved } }
       reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
         totalCount
@@ -714,6 +745,7 @@ export async function fetchPeek(
 			additions: n.additions ?? 0,
 			deletions: n.deletions ?? 0,
 			files: n.changedFiles ?? 0,
+			openThreads: openThreadsOf(n),
 			reviewDecision: n.reviewDecision ?? null,
 			mergeable: n.mergeable ?? null,
 			reviews: (n.latestOpinionatedReviews?.nodes ?? []).map((r: Node) => ({

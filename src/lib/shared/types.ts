@@ -83,6 +83,10 @@ export interface Enrichment {
 	latestReview?: { author: string; at: string; state: string } | null;
 	/** PRs: your own newest review. */
 	myReview?: { at: string; state: string } | null;
+	/** PRs: review threads nobody resolved yet (up to 50). */
+	openThreads?: number;
+	/** PRs: the newest approval or change request by someone who is not you or the author. */
+	lastVerdict?: { by: string; at: string } | null;
 }
 
 /** Everything the classifier needs to know about one notification thread. */
@@ -144,8 +148,15 @@ export interface Settings {
 	pushFyi: boolean;
 	/** Push when a thread becomes your turn with no new notification (the inbox watcher). */
 	pushTurnChanges: boolean;
+	/** Replace an alert already shown with a quiet "✓ resolved" one when its thread is resolved. */
+	pushResolved: boolean;
 	/** A thread open in the peek for a moment is marked as read. */
 	peekMarksRead: boolean;
+	/**
+	 * When a review request stops being your turn. "strict": when GitHub no longer asks you.
+	 * "any_review": also when someone else approves or asks for changes after the last push.
+	 */
+	reviewResolution: 'strict' | 'any_review';
 	/** Treat activity by bots (dependabot, renovate…) as FYI. */
 	botsAreFyi: boolean;
 	/** A review request to one of your teams is "Needs you", not FYI. */
@@ -229,6 +240,11 @@ export interface DashItem {
 	requestedTeams: string[];
 	requestedAt: string | null;
 	myLastReviewAt: string | null;
+	/** Review threads nobody resolved yet (up to 50). */
+	openThreads: number;
+	/** Newest approval or change request by someone else (not you, not the author). */
+	lastVerdictBy: string | null;
+	lastVerdictAt: string | null;
 	myLastReviewState: string | null;
 	lastCommitAt: string | null;
 	// Computed.
@@ -367,6 +383,8 @@ export interface PeekDTO {
 		additions: number;
 		deletions: number;
 		files: number;
+		/** Review threads nobody resolved (up to 50). */
+		openThreads: number;
 		reviewDecision: string | null;
 		mergeable: string | null;
 		/** The latest review from each person who approved or asked for changes. */

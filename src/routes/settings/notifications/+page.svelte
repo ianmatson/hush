@@ -12,6 +12,7 @@
 		type PushSupport
 	} from '$lib/push';
 	import { saveSettings } from '$lib/save-settings';
+
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
@@ -186,6 +187,17 @@
 						id="push-turn"
 						checked={settings.pushTurnChanges}
 						onCheckedChange={(v) => saveSettings({ pushTurnChanges: v })}
+					/>
+				</SettingRow>
+				<SettingRow
+					id="push-resolved"
+					label="Update alerts when they are resolved"
+					description="An alert from the last day changes to a quiet “✓ You approved” (or “Done”, “CI passes now”…) and then closes, on every device."
+				>
+					<Switch
+						id="push-resolved"
+						checked={settings.pushResolved}
+						onCheckedChange={(v) => saveSettings({ pushResolved: v })}
 					/>
 				</SettingRow>
 				<SettingRow

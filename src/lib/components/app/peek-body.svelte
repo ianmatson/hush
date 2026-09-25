@@ -167,6 +167,13 @@
 					{/each}
 				</div>
 
+				{#if pr.openThreads && p.state === 'open'}
+					<p class="flex items-center gap-2 border-t pt-3 text-signal-reply">
+						<MessageSquare class="size-4" />{pr.openThreads} review {pr.openThreads === 1
+							? 'thread is'
+							: 'threads are'} not resolved.
+					</p>
+				{/if}
 				{#if pr.mergeable === 'CONFLICTING' && p.state === 'open'}
 					<p class="flex items-center gap-2 border-t pt-3 text-signal-warn">
 						<TriangleAlert class="size-4" />This branch has merge conflicts.

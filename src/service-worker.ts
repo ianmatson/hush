@@ -10,7 +10,12 @@ interface PushPayload {
 	body: string;
 	url: string;
 	tag?: string;
+	/** The thread was resolved: replace its alert quietly, then close it. */
+	resolve?: boolean;
 }
+
+/** How long a "✓ resolved" alert stays before it closes itself. */
+const RESOLVED_VISIBLE_MS = 5000;
 
 sw.addEventListener('install', () => sw.skipWaiting());
 sw.addEventListener('activate', (event) => event.waitUntil(sw.clients.claim()));
@@ -22,14 +27,26 @@ sw.addEventListener('push', (event) => {
 	} catch {
 		// Keep the default text.
 	}
+	const options: NotificationOptions = {
+		body: data.body,
+		tag: data.tag,
+		data: { url: data.url },
+		icon: '/icon-192.png',
+		badge: '/badge-72.png'
+	};
+	if (!data.resolve) {
+		event.waitUntil(sw.registration.showNotification(data.title, options));
+		return;
+	}
+	// A push must always show something (iOS takes the permission away otherwise), so the
+	// update is a quiet alert with the same tag. It replaces the old one, then goes away.
 	event.waitUntil(
-		sw.registration.showNotification(data.title, {
-			body: data.body,
-			tag: data.tag,
-			data: { url: data.url },
-			icon: '/icon-192.png',
-			badge: '/badge-72.png'
-		})
+		(async () => {
+			await sw.registration.showNotification(data.title, { ...options, silent: true });
+			await new Promise((r) => setTimeout(r, RESOLVED_VISIBLE_MS));
+			for (const n of await sw.registration.getNotifications({ tag: data.tag }))
+				if (n.title === data.title) n.close();
+		})()
 	);
 });
 

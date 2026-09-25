@@ -46,6 +46,11 @@ const WATCH_EVERY = 15 * MIN;
 const WATCH_BATCH = 80;
 // Read and done states come from GitHub for threads updated in this window.
 const SYNC_DAYS = 14;
+/** Alerts pushed within this time are updated when their thread is resolved. */
+const RESOLVE_WINDOW = DAY;
+
+/** Push tags that are not a thread id. */
+const NON_THREAD_TAGS = new Set(['digest', 'test']);
 // Poll every 5 minutes while someone can see the result (push on, or Hush open lately), else
 // every 15. Push arrives a few minutes late, but each user costs a fifth of the Cloudflare budget.
 const POLL_ACTIVE = 5 * MIN;
@@ -224,9 +229,10 @@ export class Poller extends DurableObject<Env> {
 		const userId = await this.ctx.storage.get<number>('userId');
 		const user = userId ? await getUser(this.env, userId) : null;
 		if (!user) throw new Error('Not signed in.');
-		const { dash, botsAreFyi } = parseSettings(user.settings);
+		const { dash, botsAreFyi, reviewResolution } = parseSettings(user.settings);
 		const sig = JSON.stringify([
 			botsAreFyi,
+			reviewResolution,
 			dash[kind],
 			dash.scope,
 			dash.excludedTeams,
@@ -272,7 +278,7 @@ export class Poller extends DurableObject<Env> {
 						user.login,
 						dash.staleDays,
 						Date.now(),
-						{ botsAreFyi }
+						{ botsAreFyi, reviewResolution }
 					);
 				})
 		);
@@ -614,6 +620,43 @@ export class Poller extends DurableObject<Env> {
 		await this.send(userId, messages);
 	}
 
+	/**
+	 * Update alerts that were pushed in the last day and are now resolved: each is replaced by a
+	 * quiet "✓ You approved"-style alert that closes itself (see the service worker). Browsers
+	 * require every push to show something, so this is never an invisible push. Also called by the
+	 * API for Done, Mute, and Snooze, so the alert goes away on your other devices too.
+	 */
+	async notifyResolved(items: { id: string; note: string }[]): Promise<void> {
+		const userId = await this.ctx.storage.get<number>('userId');
+		const user = userId ? await getUser(this.env, userId) : null;
+		if (!user || !items.length || !parseSettings(user.settings).pushResolved) return;
+		const ids = items.map((i) => i.id);
+		const { results } = await this.env.DB.prepare(
+			`SELECT id, title, repo, action_url FROM threads
+       WHERE user_id = ? AND pushed_at > ? AND id IN (${ids.map(() => '?').join(',')})`
+		)
+			.bind(user.id, Date.now() - RESOLVE_WINDOW, ...ids)
+			.all<Pick<ThreadRow, 'id' | 'title' | 'repo' | 'action_url'>>();
+		if (!results.length) return;
+		const note = new Map(items.map((i) => [i.id, i.note]));
+		await this.send(
+			user.id,
+			results.map((r) => ({
+				title: `✓ ${note.get(r.id)}`,
+				body: `${r.title}\n${r.repo}`,
+				url: r.action_url,
+				tag: r.id,
+				resolve: true
+			}))
+		);
+		// Once is enough: a second change to the same thread must not bring the alert back.
+		await this.env.DB.prepare(
+			`UPDATE threads SET pushed_at = NULL WHERE user_id = ? AND id IN (${results.map(() => '?').join(',')})`
+		)
+			.bind(user.id, ...results.map((r) => r.id))
+			.run();
+	}
+
 	/** Send push messages to every device of the user; forget devices the push service dropped. */
 	private async send(userId: number, messages: PushMessage[]) {
 		const { results: subs } = await this.env.DB.prepare(
@@ -644,6 +687,16 @@ export class Poller extends DurableObject<Env> {
 				`DELETE FROM push_subscriptions WHERE id IN (${gone.map(() => '?').join(',')})`
 			)
 				.bind(...gone)
+				.run();
+		// Remember which threads have an alert on screen, so a resolution can update it.
+		const threadIds = messages
+			.filter((m) => !m.resolve && m.tag && !NON_THREAD_TAGS.has(m.tag))
+			.map((m) => m.tag!);
+		if (threadIds.length)
+			await this.env.DB.prepare(
+				`UPDATE threads SET pushed_at = ? WHERE user_id = ? AND id IN (${threadIds.map(() => '?').join(',')})`
+			)
+				.bind(Date.now(), userId, ...threadIds)
 				.run();
 	}
 
@@ -732,6 +785,9 @@ export class Poller extends DurableObject<Env> {
 					.bind(Date.now(), userId, r.id)
 			);
 		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
+		await this.notifyResolved(
+			results.filter((_, k) => passed[k]).map((r) => ({ id: r.id, note: 'A later run passed' }))
+		);
 	}
 
 	/**
@@ -846,6 +902,7 @@ export class Poller extends DurableObject<Env> {
 		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
 		if (messages.length && !opts.quiet)
 			await this.send(userId, messages.slice(0, MAX_INDIVIDUAL_PUSHES));
+		if (resolved.length && !opts.quiet) await this.notifyResolved(resolved);
 		return resolved;
 	}
 
@@ -898,6 +955,7 @@ export class Poller extends DurableObject<Env> {
 			.bind(userId, since)
 			.all<Pick<ThreadRow, 'id' | 'unread' | 'marked_unread_at'>>();
 		const stmts: D1PreparedStatement[] = [];
+		const doneOnGitHub: { id: string; note: string }[] = [];
 		for (const r of results) {
 			const n = listed.get(r.id);
 			if (n) {
@@ -922,9 +980,11 @@ export class Poller extends DurableObject<Env> {
 						)
 						.bind(userId, r.id)
 				);
+				doneOnGitHub.push({ id: r.id, note: 'Done on GitHub' });
 			}
 		}
 		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
+		await this.notifyResolved(doneOnGitHub);
 		return ingested;
 	}
 
@@ -994,7 +1054,7 @@ export class Poller extends DurableObject<Env> {
 							me,
 							settings.dash.staleDays,
 							Date.now(),
-							{ botsAreFyi: settings.botsAreFyi }
+							{ botsAreFyi: settings.botsAreFyi, reviewResolution: settings.reviewResolution }
 						)
 					])
 				: rest;

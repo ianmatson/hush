@@ -69,6 +69,7 @@ export interface ThreadRow {
 	resolved_at: number | null;
 	resolved_note: string | null;
 	marked_unread_at: number | null;
+	pushed_at: number | null;
 }
 
 export function getUser(env: Env, id: number) {

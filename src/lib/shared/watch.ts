@@ -108,6 +108,9 @@ export function resolvedNote(
 					: e.myReview!.state === 'CHANGES_REQUESTED'
 						? 'You requested changes'
 						: 'You reviewed';
+			// "Any review": someone else's verdict settled it.
+			if (e.lastVerdict && e.lastVerdict.at !== before?.lastVerdict?.at)
+				return `@${e.lastVerdict.by} reviewed`;
 			return e.reviewRequestedFromMe ? other : 'Review no longer requested';
 		case 'fix_ci':
 			if (e.ci === 'SUCCESS') return 'CI passes now';
@@ -121,6 +124,7 @@ export function resolvedNote(
 		case 'merge':
 			return other;
 		case 'reply':
+			if ((before?.openThreads ?? 0) > 0 && !e.openThreads) return 'Threads resolved';
 			return lastByMe ? 'You replied' : newCommits ? 'You pushed changes' : other;
 		case 'triage':
 			if (before?.assignedToMe && e.assignedToMe === false) return 'No longer assigned to you';

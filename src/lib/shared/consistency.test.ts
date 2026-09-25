@@ -27,6 +27,8 @@ interface Subject {
 	lastCommitAt?: string | null;
 	requestedMe?: boolean;
 	myReview?: { at: string; state: string } | null;
+	openThreads?: number;
+	lastVerdict?: { by: string; at: string } | null;
 }
 
 function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Settings> = {}) {
@@ -56,7 +58,9 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		lastCommitAt: s.lastCommitAt ?? T0,
 		reviewRequestedFromMe: s.requestedMe ?? false,
 		requestedTeams: [],
-		myReview: s.myReview ?? null
+		myReview: s.myReview ?? null,
+		openThreads: s.openThreads ?? 0,
+		lastVerdict: s.lastVerdict ?? null
 	};
 	const d: DashFacts = {
 		id: 'x',
@@ -88,6 +92,9 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		requestedAt: null,
 		myLastReviewAt: s.myReview?.at ?? null,
 		myLastReviewState: s.myReview?.state ?? null,
+		openThreads: s.openThreads ?? 0,
+		lastVerdictBy: s.lastVerdict?.by ?? null,
+		lastVerdictAt: s.lastVerdict?.at ?? null,
 		lastCommitAt: e.lastCommitAt!
 	};
 	const all = { ...DEFAULT_SETTINGS, ...settings };
@@ -103,7 +110,10 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		},
 		all
 	);
-	const dash = computeTurn(d, ME, [], { botsAreFyi: all.botsAreFyi });
+	const dash = computeTurn(d, ME, [], {
+		botsAreFyi: all.botsAreFyi,
+		reviewResolution: all.reviewResolution
+	});
 	return { inbox, dash };
 }
 
@@ -151,6 +161,32 @@ describe('inbox and dashboards agree (the audit cases)', () => {
 	});
 });
 
+describe('inbox and dashboards agree (open threads, any review)', () => {
+	it('your approved PR with open review threads is your turn: reply first', () => {
+		const r = both({ author: ME, reviewDecision: 'APPROVED', openThreads: 2 }, 'author');
+		expect(r.dash).toMatchObject({ turn: 'you', turnReason: 'Open review threads' });
+		expect(r.inbox).toMatchObject({ category: 'action', kind: 'reply' });
+		expect(r.inbox.summary).toBe('Approved, but 2 review threads are open');
+	});
+
+	it('someone else’s verdict after the last push settles a request under "any review"', () => {
+		const s: Subject = { requestedMe: true, lastCommitAt: T0, lastVerdict: { by: 'bob', at: T1 } };
+		const strict = both(s, 'review_requested');
+		expect(strict.dash.turn).toBe('you');
+		expect(strict.inbox.category).toBe('action');
+		const any = both(s, 'review_requested', { reviewResolution: 'any_review' });
+		expect(any.dash).toMatchObject({ turn: 'them', turnReason: '@bob reviewed' });
+		expect(any.inbox.category).toBe('fyi');
+	});
+
+	it('a verdict from before the last push does not settle it', () => {
+		const s: Subject = { requestedMe: true, lastCommitAt: T2, lastVerdict: { by: 'bob', at: T1 } };
+		const any = both(s, 'review_requested', { reviewResolution: 'any_review' });
+		expect(any.dash.turn).toBe('you');
+		expect(any.inbox.category).toBe('action');
+	});
+});
+
 describe('inbox and dashboards agree (every state)', () => {
 	const people = [
 		{ author: ME },
@@ -159,7 +195,8 @@ describe('inbox and dashboards agree (every state)', () => {
 		{ author: 'alice', requestedMe: true, myReview: { at: T0, state: 'APPROVED' } },
 		{ author: 'alice', myReview: { at: T0, state: 'APPROVED' }, lastCommitAt: T1 },
 		{ author: 'alice', myReview: { at: T2, state: 'APPROVED' }, lastCommitAt: T1 },
-		{ author: 'alice', assignedToMe: true }
+		{ author: 'alice', assignedToMe: true },
+		{ author: 'alice', requestedMe: true, lastVerdict: { by: 'bob', at: T2 } }
 	];
 	const states: Subject[] = [
 		{},
@@ -167,6 +204,7 @@ describe('inbox and dashboards agree (every state)', () => {
 		{ ci: 'PENDING' },
 		{ reviewDecision: 'CHANGES_REQUESTED' },
 		{ reviewDecision: 'APPROVED' },
+		{ reviewDecision: 'APPROVED', openThreads: 1 },
 		{ mergeable: 'CONFLICTING' },
 		{ draft: true },
 		{ state: 'merged' },
@@ -179,11 +217,13 @@ describe('inbox and dashboards agree (every state)', () => {
 	// commented in need a reply, which the dashboards cannot know.
 	const reasons: Reason[] = ['author', 'review_requested', 'assign', 'subscribed', 'state_change'];
 
-	for (const kind of ['pr', 'issue'] as const)
-		for (const p of people)
-			for (const st of states)
-				for (const reason of reasons) {
-					const s = { kind, ...p, ...st };
-					it(`${kind} ${JSON.stringify(s)} (${reason})`, () => agree(both(s, reason)));
-				}
+	for (const reviewResolution of ['strict', 'any_review'] as const)
+		for (const kind of ['pr', 'issue'] as const)
+			for (const p of people)
+				for (const st of states)
+					for (const reason of reasons) {
+						const s = { kind, ...p, ...st };
+						it(`${reviewResolution} ${kind} ${JSON.stringify(s)} (${reason})`, () =>
+							agree(both(s, reason, { reviewResolution })));
+					}
 });

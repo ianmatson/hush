@@ -34,7 +34,8 @@ export { isBot };
 /** The default, opinionated classification: only things you can act on are "action". */
 export function classifyDefault(
 	t: ThreadFacts,
-	settings: Pick<Settings, 'botsAreFyi' | 'teamReviewsAreAction'>
+	settings: Pick<Settings, 'botsAreFyi' | 'teamReviewsAreAction'> &
+		Partial<Pick<Settings, 'reviewResolution'>>
 ): Classification {
 	const e = t.enrichment;
 	const me = t.me.toLowerCase();
@@ -95,7 +96,8 @@ export function classifyDefault(
 
 		// Whose turn: the same rules as the PR and issue dashboards.
 		const turn = computeTurn(turnFactsFromEnrichment(e, t.repo, t.me, t.myTeams), t.me, [], {
-			botsAreFyi: settings.botsAreFyi
+			botsAreFyi: settings.botsAreFyi,
+			reviewResolution: settings.reviewResolution
 		});
 		if (turn.turn === 'you') return act(turn.kind, turn.summary, turn.actionLabel, turn.actionUrl);
 		if (turn.turn === 'team' && settings.teamReviewsAreAction)

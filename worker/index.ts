@@ -391,6 +391,17 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 					: muteThread(token, id).then(() => markThreadDone(token, id));
 		c.executionCtx.waitUntil(Promise.allSettled(threads.map((t) => mirror(t.id))));
 	}
+	// Alerts for these threads on your other devices: replace them with a quiet note.
+	const RESOLVED_NOTE: Partial<Record<ThreadAction, string>> = {
+		done: 'Done',
+		mute: 'Muted',
+		snooze: 'Snoozed'
+	};
+	const note = RESOLVED_NOTE[action];
+	if (note)
+		c.executionCtx.waitUntil(
+			poller(c.env, u.id).notifyResolved(threads.map((t) => ({ id: t.id, note })))
+		);
 	return c.json({ ok: true, updated: threads.length, counts: await counts(c.env, u.id) });
 }
 
@@ -533,6 +544,7 @@ app.put('/api/settings', async (c) => {
 		'pushAction',
 		'pushFyi',
 		'pushTurnChanges',
+		'pushResolved',
 		'peekMarksRead',
 		'botsAreFyi',
 		'teamReviewsAreAction'
@@ -543,6 +555,11 @@ app.put('/api/settings', async (c) => {
 		const err = validateDash(dash);
 		if (err) return c.json({ error: err }, 400);
 		next.dash = dash;
+	}
+	if (body.reviewResolution !== undefined) {
+		if (body.reviewResolution !== 'strict' && body.reviewResolution !== 'any_review')
+			return c.json({ error: 'reviewResolution must be "strict" or "any_review".' }, 400);
+		next.reviewResolution = body.reviewResolution;
 	}
 	if (body.views !== undefined) {
 		// A view's conditions are checked like a rule's (a rule with a no-op result).
@@ -571,6 +588,7 @@ app.put('/api/settings', async (c) => {
 	const affects =
 		body.rules !== undefined ||
 		typeof body.botsAreFyi === 'boolean' ||
+		body.reviewResolution !== undefined ||
 		typeof body.teamReviewsAreAction === 'boolean';
 	const changed = affects ? await reclassify(c.env, u, next) : 0;
 	return c.json({ settings: next, reclassified: changed });

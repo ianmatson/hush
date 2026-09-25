@@ -222,6 +222,17 @@
 					/>
 				</SettingRow>
 				<SettingRow
+					id="any-review"
+					label="Someone else’s review settles a request"
+					description="A review request to you or your team stops being your turn when someone else approves or asks for changes after the last push, even while GitHub still lists you. Off: only when GitHub stops asking you."
+				>
+					<Switch
+						id="any-review"
+						checked={settings.reviewResolution === 'any_review'}
+						onCheckedChange={(v) => saveSettings({ reviewResolution: v ? 'any_review' : 'strict' })}
+					/>
+				</SettingRow>
+				<SettingRow
 					id="peek-read"
 					label="Peek marks a thread as read"
 					description="After it is open in the peek for a moment, as if you opened it on GitHub."

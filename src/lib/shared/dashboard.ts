@@ -171,6 +171,9 @@ export type TurnFacts = Pick<
 	| 'requestedAt'
 	| 'myLastReviewAt'
 	| 'myLastReviewState'
+	| 'openThreads'
+	| 'lastVerdictBy'
+	| 'lastVerdictAt'
 	| 'createdAt'
 	| 'updatedAt'
 >;
@@ -178,6 +181,8 @@ export type TurnFacts = Pick<
 export interface TurnOptions {
 	/** Bots' PRs and comments never make it your turn (Settings → Inbox). */
 	botsAreFyi?: boolean;
+	/** "any_review": someone else's verdict after the last push settles a review request. */
+	reviewResolution?: 'strict' | 'any_review';
 }
 
 const after = (a: string | null, b: string | null) => !!a && (!b || Date.parse(a) > Date.parse(b));
@@ -300,6 +305,17 @@ export function computeTurn(
 				'resolve_conflict',
 				'Your PR has merge conflicts'
 			);
+		// Approved, but a question is still open: someone waits for an answer, so this comes before
+		// "Ready to merge".
+		if (i.reviewDecision === 'APPROVED' && i.openThreads > 0)
+			return you(
+				'Open review threads',
+				2,
+				i.updatedAt,
+				'Reply',
+				'reply',
+				`Approved, but ${i.openThreads} review ${i.openThreads === 1 ? 'thread is' : 'threads are'} open`
+			);
 		if (i.reviewDecision === 'APPROVED' && i.ci !== 'PENDING' && i.ci !== 'EXPECTED')
 			return you(
 				'Ready to merge',
@@ -324,6 +340,16 @@ export function computeTurn(
 	}
 
 	if (botPr) return r('none', 'Bot PR', 0, i.updatedAt);
+	// "Any review": someone else's verdict on the latest push settles the request (yours or your
+	// team's) even while GitHub still lists you.
+	const settledBy =
+		opts.reviewResolution === 'any_review' &&
+		(i.requestedMe || i.requestedTeams.length) &&
+		i.lastVerdictBy &&
+		after(i.lastVerdictAt, i.lastCommitAt)
+			? i.lastVerdictBy
+			: null;
+	if (settledBy) return r('them', `@${settledBy} reviewed`, 0, i.lastVerdictAt);
 	if (i.requestedMe)
 		return i.myLastReviewAt
 			? you(
@@ -412,6 +438,9 @@ export function turnFactsFromEnrichment(
 		requestedAt: null,
 		myLastReviewAt: e.myReview?.at ?? null,
 		myLastReviewState: e.myReview?.state ?? null,
+		openThreads: e.openThreads ?? 0,
+		lastVerdictBy: e.lastVerdict?.by ?? null,
+		lastVerdictAt: e.lastVerdict?.at ?? null,
 		createdAt: '',
 		updatedAt: ''
 	};
