@@ -470,49 +470,90 @@ export interface SearchHit {
 	facts: DashFacts;
 }
 
-/** Run many searches in few GraphQL requests. */
+/** The most results one dashboard search asks for, and the fewest. */
+export const SEARCH_MAX = 25;
+const SEARCH_MIN = 5;
+/** Room above a section's last count, so a few new items still fit in one request. */
+const SEARCH_HEADROOM = 5;
+
+/**
+ * How many results to ask for. GitHub prices what a search asks for, not what it returns, so ask
+ * for the last count plus headroom (SEARCH_MAX when the count is unknown).
+ */
+export function searchSize(lastCount: number | undefined): number {
+	if (lastCount === undefined) return SEARCH_MAX;
+	return Math.min(SEARCH_MAX, Math.max(SEARCH_MIN, lastCount + SEARCH_HEADROOM));
+}
+
+/**
+ * Run many searches in few GraphQL requests. `lastCounts` (by query) sizes each search; a search
+ * whose total grew past its size runs again at SEARCH_MAX in the same call, so no result is lost.
+ * Returns the totals to pass back next time.
+ */
 export async function searchDashboard(
 	token: string,
 	me: string,
 	myTeams: Set<string>,
-	queries: ExpandedQuery[]
-): Promise<{ hits: SearchHit[]; errors: string[] }> {
-	const hits: SearchHit[] = [];
+	queries: ExpandedQuery[],
+	lastCounts: Record<string, number> = {}
+): Promise<{ hits: SearchHit[]; errors: string[]; counts: Record<string, number> }> {
 	const errors: string[] = [];
-	const chunks: ExpandedQuery[][] = [];
-	for (let i = 0; i < queries.length; i += SEARCH_CHUNK)
-		chunks.push(queries.slice(i, i + SEARCH_CHUNK));
-	await Promise.all(
-		chunks.map(async (chunk) => {
-			const vars: Record<string, string> = { me };
-			const decl = ['$me: String!'];
-			const body = chunk.map((q, j) => {
-				vars[`q${j}`] = q.q;
-				decl.push(`$q${j}: String!`);
-				return `s${j}: search(type: ISSUE, query: $q${j}, first: 25) { nodes { __typename ...P ...I } }`;
-			});
-			const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SEARCH_FIELDS}`;
-			const res = await gh(token, '/graphql', {
-				method: 'POST',
-				body: JSON.stringify({ query, variables: vars })
-			});
-			if (!res.ok) {
-				errors.push(`GitHub search returned ${res.status}.`);
-				return;
-			}
-			const json = (await res.json()) as {
-				data?: Record<string, Node | null>;
-				errors?: { message: string }[];
-			};
-			for (const e of json.errors ?? []) errors.push(e.message);
-			chunk.forEach((q, j) => {
-				for (const n of json.data?.[`s${j}`]?.nodes ?? []) {
-					if (n?.id) hits.push({ section: q.section, facts: toFacts(n, me, myTeams) });
+	const counts: Record<string, number> = {};
+	const byQuery = new Map<ExpandedQuery, SearchHit[]>();
+
+	async function run(batch: { q: ExpandedQuery; first: number }[]) {
+		const chunks: (typeof batch)[] = [];
+		for (let i = 0; i < batch.length; i += SEARCH_CHUNK)
+			chunks.push(batch.slice(i, i + SEARCH_CHUNK));
+		await Promise.all(
+			chunks.map(async (chunk) => {
+				const vars: Record<string, string> = { me };
+				const decl = ['$me: String!'];
+				const body = chunk.map(({ q, first }, j) => {
+					vars[`q${j}`] = q.q;
+					decl.push(`$q${j}: String!`);
+					return `s${j}: search(type: ISSUE, query: $q${j}, first: ${first}) { issueCount nodes { __typename ...P ...I } }`;
+				});
+				const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SEARCH_FIELDS}`;
+				const res = await gh(token, '/graphql', {
+					method: 'POST',
+					body: JSON.stringify({ query, variables: vars })
+				});
+				if (!res.ok) {
+					errors.push(`GitHub search returned ${res.status}.`);
+					return;
 				}
-			});
-		})
-	);
-	return { hits, errors: [...new Set(errors)].slice(0, 3) };
+				const json = (await res.json()) as {
+					data?: Record<string, Node | null>;
+					errors?: { message: string }[];
+				};
+				for (const e of json.errors ?? []) errors.push(e.message);
+				chunk.forEach(({ q }, j) => {
+					const result = json.data?.[`s${j}`];
+					if (!result) return;
+					counts[q.q] = result.issueCount ?? 0;
+					byQuery.set(
+						q,
+						(result.nodes ?? [])
+							.filter((n: Node) => n?.id)
+							.map((n: Node) => ({ section: q.section, facts: toFacts(n, me, myTeams) }))
+					);
+				});
+			})
+		);
+	}
+
+	const sized = queries.map((q) => ({ q, first: searchSize(lastCounts[q.q]) }));
+	await run(sized);
+	// Grew past its size since last time: ask again for the full page.
+	const short = sized.filter(({ q, first }) => first < SEARCH_MAX && (counts[q.q] ?? 0) > first);
+	if (short.length) await run(short.map(({ q }) => ({ q, first: SEARCH_MAX })));
+
+	return {
+		hits: queries.flatMap((q) => byQuery.get(q) ?? []),
+		errors: [...new Set(errors)].slice(0, 3),
+		counts
+	};
 }
 
 // ---------------------------------------------------------------------------

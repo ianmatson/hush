@@ -239,12 +239,17 @@ export class Poller extends DurableObject<Env> {
 
 		const { teams, error: teamError } = await this.teams();
 		const { queries, skipped } = expandSections(dash[kind], dash, teams);
-		const { hits, errors } = await searchDashboard(
+		// Each search asks for about its last count (GitHub prices what a search asks for).
+		const countsKey = `dash:counts:${kind}`;
+		const lastCounts = (await this.ctx.storage.get<Record<string, number>>(countsKey)) ?? {};
+		const { hits, errors, counts } = await searchDashboard(
 			await userToken(this.env, user),
 			user.login,
 			new Set(teams.map((t) => t.slug)),
-			queries
+			queries,
+			lastCounts
 		);
+		await this.putChanged({ [countsKey]: counts });
 
 		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
 		for (const h of hits) {
@@ -825,7 +830,10 @@ export class Poller extends DurableObject<Env> {
 			);
 			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
 			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
-			if (out.push && (snoozeOver ? settings.pushAction : shouldPush(c, settings)))
+			const wanted = snoozeOver
+				? settings.pushAction
+				: settings.pushTurnChanges && shouldPush(c, settings);
+			if (out.push && wanted)
 				messages.push({
 					title: out.push,
 					body: `${r.title}\n${r.repo}`,

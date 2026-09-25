@@ -7,7 +7,11 @@
 	import { api } from '$lib/api';
 	import { saveSettings } from '$lib/save-settings';
 	import { validateRules } from '$lib/shared/classify';
-	import type { Rule, ThreadDTO } from '$lib/shared/types';
+	import type { Rule, SavedView, ThreadDTO } from '$lib/shared/types';
+	import { VIEW_BASES } from '$lib/shared/views';
+	import SortableList from '$lib/components/app/sortable-list.svelte';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import Trash from '@lucide/svelte/icons/trash-2';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
@@ -152,6 +156,19 @@
 			: 'If you save: no thread changes place.';
 	});
 
+	// Saved views, for reordering here (they are made and edited on the inbox).
+	const viewRows = $derived((settings?.views ?? []).map((view) => ({ key: view.id, view })));
+	function describeView(v: SavedView) {
+		const n = Object.keys(v.when ?? {}).length;
+		return [
+			VIEW_BASES.find((b) => b.id === v.base)?.label,
+			v.query ? `“${v.query}”` : null,
+			n ? `${n} ${n === 1 ? 'condition' : 'conditions'}` : null
+		]
+			.filter(Boolean)
+			.join(', ');
+	}
+
 	// Suggestions for repository and author conditions: what your notifications come from.
 	const suggest = $derived.by(() => {
 		const threads = queryClient
@@ -204,6 +221,62 @@
 						onCheckedChange={(v) => saveSettings({ teamReviewsAreAction: v })}
 					/>
 				</SettingRow>
+				<SettingRow
+					id="peek-read"
+					label="Peek marks a thread as read"
+					description="After it is open in the peek for a moment, as if you opened it on GitHub."
+				>
+					<Switch
+						id="peek-read"
+						checked={settings.peekMarksRead}
+						onCheckedChange={(v) => saveSettings({ peekMarksRead: v })}
+					/>
+				</SettingRow>
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Saved views</Card.Title>
+				<Card.Description
+					>Extra inbox tabs, in this order. Make one with “+” after the tabs, or “Save as view” next
+					to the filter.</Card.Description
+				>
+			</Card.Header>
+			<Card.Content class="grid grid-cols-[minmax(0,1fr)]">
+				<SortableList
+					items={viewRows}
+					onchange={(rows) => saveSettings({ views: rows.map((r) => r.view) }, 'Views saved')}
+					label="Saved views in order"
+					empty="No saved views yet."
+				>
+					{#snippet row(r)}
+						<span class="min-w-0 flex-1">
+							<span class="block truncate">{r.view.name}</span>
+							<span class="block truncate text-xs text-muted-foreground"
+								>{describeView(r.view)}</span
+							>
+						</span>
+					{/snippet}
+					{#snippet actions(r)}
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Edit {r.view.name}"
+							href="/?view=v:{r.view.id}&edit=1"><Pencil /></Button
+						>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Delete {r.view.name}"
+							onclick={() =>
+								saveSettings(
+									{ views: settings.views.filter((v) => v.id !== r.view.id) },
+									`View “${r.view.name}” deleted`
+								)}><Trash /></Button
+						>
+					{/snippet}
+				</SortableList>
 			</Card.Content>
 		</Card.Root>
 

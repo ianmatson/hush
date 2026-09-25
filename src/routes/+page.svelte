@@ -145,7 +145,7 @@
 	// Reading it in the peek counts as reading it, once it stays open for a moment.
 	$effect(() => {
 		const t = peekThread;
-		if (!t?.unread || !t.number) return;
+		if (!t?.unread || !t.number || me.data?.settings.peekMarksRead === false) return;
 		const timer = setTimeout(() => act([t.id], 'read'), 1500);
 		return () => clearTimeout(timer);
 	});
@@ -589,6 +589,15 @@
 	);
 
 	// --- Saved views ------------------------------------------------------------------------
+	// Settings → Inbox links here with &edit=1 to edit a view.
+	$effect(() => {
+		if (!saved || page.url.searchParams.get('edit') !== '1') return;
+		const v = saved;
+		untrack(() => {
+			editView(v);
+			goto(`/?view=v:${v.id}`, { replaceState: true, noScroll: true });
+		});
+	});
 	const tabs = $derived<ViewTab[]>([
 		...VIEWS.map((v) => ({
 			key: v.id,

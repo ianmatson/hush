@@ -529,7 +529,14 @@ app.put('/api/settings', async (c) => {
 	const body = await c.req.json<Partial<Settings>>().catch(() => null);
 	if (!body) return c.json({ error: 'Invalid JSON' }, 400);
 	const next: Settings = { ...parseSettings(u.settings) };
-	for (const k of ['pushAction', 'pushFyi', 'botsAreFyi', 'teamReviewsAreAction'] as const)
+	for (const k of [
+		'pushAction',
+		'pushFyi',
+		'pushTurnChanges',
+		'peekMarksRead',
+		'botsAreFyi',
+		'teamReviewsAreAction'
+	] as const)
 		if (typeof body[k] === 'boolean') next[k] = body[k];
 	if (body.dash !== undefined) {
 		const dash = { ...next.dash, ...body.dash };

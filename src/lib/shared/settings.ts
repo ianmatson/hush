@@ -5,6 +5,8 @@ import type { Settings } from './types';
 export const DEFAULT_SETTINGS: Settings = {
 	pushAction: true,
 	pushFyi: false,
+	pushTurnChanges: true,
+	peekMarksRead: true,
 	botsAreFyi: true,
 	teamReviewsAreAction: false,
 	rules: [],

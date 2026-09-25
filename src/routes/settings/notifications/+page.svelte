@@ -178,6 +178,17 @@
 					/>
 				</SettingRow>
 				<SettingRow
+					id="push-turn"
+					label="When a thread becomes your turn"
+					description="With no new notification from GitHub, for example new commits after your review, or CI failing again after your fix."
+				>
+					<Switch
+						id="push-turn"
+						checked={settings.pushTurnChanges}
+						onCheckedChange={(v) => saveSettings({ pushTurnChanges: v })}
+					/>
+				</SettingRow>
+				<SettingRow
 					id="push-fyi"
 					label="FYI items"
 					description="Usually noisy. Use a rule for the repos you care about instead."

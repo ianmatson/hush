@@ -142,6 +142,10 @@ export interface Settings {
 	pushAction: boolean;
 	/** Send Web Push for FYI items too. */
 	pushFyi: boolean;
+	/** Push when a thread becomes your turn with no new notification (the inbox watcher). */
+	pushTurnChanges: boolean;
+	/** A thread open in the peek for a moment is marked as read. */
+	peekMarksRead: boolean;
 	/** Treat activity by bots (dependabot, renovate…) as FYI. */
 	botsAreFyi: boolean;
 	/** A review request to one of your teams is "Needs you", not FYI. */
