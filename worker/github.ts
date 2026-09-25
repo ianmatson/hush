@@ -167,8 +167,9 @@ __typename
   labels(first: 10) { nodes { name } }
   assignees(first: 10) { nodes { login } }
   reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug } } } }
-  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+  commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
   comments(last: 1) { nodes { author { login __typename } bodyText url createdAt } }
+  reviews(last: 1) { nodes { author { login } submittedAt state } }
 }
 ... on Issue {
   number url state
@@ -221,6 +222,14 @@ function toEnrichment(n: Node, me: string): Enrichment {
 		reviewDecision: n.reviewDecision ?? null,
 		mergeable: n.mergeable,
 		ci: (n.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state as CiState | undefined) ?? null,
+		lastCommitAt: n.commits?.nodes?.[0]?.commit?.committedDate ?? null,
+		latestReview: n.reviews?.nodes?.[0]
+			? {
+					author: n.reviews.nodes[0].author?.login ?? 'ghost',
+					at: n.reviews.nodes[0].submittedAt,
+					state: n.reviews.nodes[0].state
+				}
+			: null,
 		reviewRequestedFromMe: reviewers.some(
 			(r) => r.__typename === 'User' && r.login?.toLowerCase() === meL
 		),

@@ -62,6 +62,8 @@ export interface ThreadRow {
 	rule: string | null;
 	triage: string;
 	snoozed_until: number | null;
+	snooze_event: string | null;
+	snoozed_at: number | null;
 	pushed_updated_at: string | null;
 	first_seen_at: number;
 }
@@ -93,6 +95,7 @@ export function toDTO(r: ThreadRow): ThreadDTO {
 		actionUrl: r.action_url,
 		triage: r.triage as ThreadDTO['triage'],
 		snoozedUntil: r.snoozed_until,
+		snoozeEvent: r.snooze_event,
 		number: e?.number ?? null,
 		state: e?.state ?? null,
 		draft: !!e?.draft,

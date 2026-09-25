@@ -2,6 +2,12 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { classify, validateRules } from '../src/lib/shared/classify';
 import { validateDash } from '../src/lib/shared/dashboard';
+import {
+	SNOOZE_EVENT_MAX_MS,
+	snoozeEvent,
+	snoozeOutcome,
+	type SnoozeEvent
+} from '../src/lib/shared/snooze';
 import type {
 	Counts,
 	DashItem,
@@ -257,7 +263,13 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 	if (!THREAD_ACTIONS.has(action)) return c.json({ error: 'Unknown action' }, 400);
 	if (!ids.length || ids.length > BULK_MAX || ids.some((id) => typeof id !== 'string'))
 		return c.json({ error: `Select 1 to ${BULK_MAX} threads.` }, 400);
-	const body = await c.req.json<{ until?: number }>().catch(() => ({}) as { until?: number });
+	const body = await c.req
+		.json<{ until?: number; event?: SnoozeEvent }>()
+		.catch(() => ({}) as { until?: number; event?: SnoozeEvent });
+	// "Until something happens": the time is only a deadline (default 7 days).
+	const event = action === 'snooze' ? (body.event ?? null) : null;
+	if (event && !snoozeEvent(event)) return c.json({ error: 'Unknown snooze condition.' }, 400);
+	if (event) body.until ??= Date.now() + SNOOZE_EVENT_MAX_MS;
 	if (action === 'snooze' && (!body.until || body.until < Date.now()))
 		return c.json({ error: 'Snooze time must be in the future.' }, 400);
 
@@ -266,6 +278,25 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 		.bind(u.id, ...ids)
 		.all<ThreadRow>();
 	if (!threads.length) return c.json({ error: 'Not found' }, 404);
+	// A state that is already true would wake the thread at once: refuse it with a clear reason.
+	if (event) {
+		const ev = snoozeEvent(event)!;
+		const now = Date.now();
+		// Only PRs and issues have the data these conditions read.
+		const kindOf = (t: ThreadRow) =>
+			t.enrichment ? (JSON.parse(t.enrichment) as Enrichment).kind : 'other';
+		if (threads.some((t) => !ev.kinds.includes(kindOf(t) as 'pr' | 'issue')))
+			return c.json({ error: `"${ev.label}" works only for ${ev.kinds.map((k) => (k === 'pr' ? 'pull requests' : 'issues')).join(' and ')}.` }, 400);
+		// Refuse what would end at once: the event already happened, or the PR is already closed.
+		const endsNow = (t: ThreadRow) =>
+			snoozeOutcome(ev.id, t.enrichment ? (JSON.parse(t.enrichment) as Enrichment) : null, now, u.login);
+		const already = threads.filter((t) => endsNow(t).wake);
+		if (already.length === threads.length) {
+			const o = endsNow(already[0]);
+			return c.json({ error: `${o.wake ? o.reason : 'Done'} already. Pick another condition.` }, 400);
+		}
+		if (already.length) threads.splice(0, threads.length, ...threads.filter((t) => !already.includes(t)));
+	}
 
 	const update = (t: ThreadRow, sql: string, ...args: unknown[]) =>
 		db.prepare(`UPDATE threads SET ${sql} WHERE user_id = ? AND id = ?`).bind(...args, u.id, t.id);
@@ -273,19 +304,29 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 	const stmts = threads.map((t) => {
 		switch (action) {
 			case 'done':
-				return update(t, `triage = 'done', snoozed_until = NULL, unread = 0`);
+				return update(t, `triage = 'done', snoozed_until = NULL, snooze_event = NULL, unread = 0`);
 			case 'undone':
 			case 'unsnooze':
-				return update(t, `triage = 'inbox', snoozed_until = NULL`);
+				return update(t, `triage = 'inbox', snoozed_until = NULL, snooze_event = NULL`);
 			case 'read':
 				return update(t, `unread = 0`);
 			// GitHub has no "mark as unread" API, so this one stays in Hush.
 			case 'unread':
 				return update(t, `unread = 1`);
 			case 'snooze':
-				return update(t, `triage = 'snoozed', snoozed_until = ?`, body.until);
+				return update(
+					t,
+					`triage = 'snoozed', snoozed_until = ?, snooze_event = ?, snoozed_at = ?`,
+					body.until,
+					event,
+					Date.now()
+				);
 			case 'mute':
-				return update(t, `category = 'muted', rule = ?, triage = 'done'`, MUTED_BY_USER);
+				return update(
+					t,
+					`category = 'muted', rule = ?, triage = 'done', snoozed_until = NULL, snooze_event = NULL`,
+					MUTED_BY_USER
+				);
 			case 'unmute': {
 				const cls = classify(factsFromRow(t, u.login), settings!);
 				return update(t, `category = ?, rule = ?, triage = 'inbox'`, cls.category, cls.rule ?? null);

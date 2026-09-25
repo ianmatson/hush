@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { classify, shouldPush } from '../src/lib/shared/classify';
 import { expandSections, finishItem, keepItem, sortItems } from '../src/lib/shared/dashboard';
+import { snoozeEvent, snoozeOutcome } from '../src/lib/shared/snooze';
 import type {
 	Classification,
 	DashKind,
@@ -35,7 +36,12 @@ const DAY = 24 * 60 * MIN;
 const PAUSE_AFTER_NO_PUSH = 14 * DAY;
 const PAUSE_AFTER_WITH_PUSH = 90 * DAY;
 const ACCESS_RECHECK = DAY;
-const DASH_TTL = 5 * MIN;
+const SNOOZE_CHECK = 15 * MIN;
+// Poll every 5 minutes while someone can see the result (push on, or Hush open lately), else
+// every 15. Push arrives a few minutes late, but each user costs a fifth of the Cloudflare budget.
+const POLL_ACTIVE = 5 * MIN;
+const POLL_IDLE = 15 * MIN;
+const DASH_TTL = 15 * MIN;
 export const MUTED_BY_USER = 'Muted by you';
 
 export interface PollStatus {
@@ -48,8 +54,21 @@ export interface PollStatus {
 
 type Existing = Pick<
 	ThreadRow,
-	'id' | 'gh_updated_at' | 'triage' | 'pushed_updated_at' | 'enrichment' | 'category' | 'rule'
+	| 'id'
+	| 'gh_updated_at'
+	| 'triage'
+	| 'pushed_updated_at'
+	| 'enrichment'
+	| 'category'
+	| 'rule'
+	| 'snooze_event'
+	| 'snoozed_at'
 >;
+
+const clearSnooze = (db: D1Database, userId: number, id: string) =>
+	db
+		.prepare(`UPDATE threads SET snoozed_until = NULL, snooze_event = NULL WHERE user_id = ? AND id = ?`)
+		.bind(userId, id);
 
 /**
  * One Durable Object per user. An alarm polls the GitHub Notifications API, enriches changed
@@ -58,11 +77,13 @@ type Existing = Pick<
 export class Poller extends DurableObject<Env> {
 	private running: Promise<void> | null = null;
 	private dashInflight = new Map<DashKind, Promise<DashResponse>>();
+	/** Time of the last good poll by this instance. Covers the moment between alarms (no alarm set). */
+	private lastGoodPoll = 0;
 
 	async start(userId: number, origin: string): Promise<void> {
 		// Signing in redoes the first sync (the last 14 days). A new token can see threads the old one
 		// could not, and D1 may have been reset. Existing threads keep their triage state.
-		await this.ctx.storage.delete(['initialized', 'lastModified']);
+		await this.ctx.storage.delete(['initialized', 'lastModified', 'pollGap']);
 		await this.ctx.storage.put({
 			userId,
 			origin,
@@ -84,19 +105,24 @@ export class Poller extends DurableObject<Env> {
 		await this.ctx.storage.put('hasPush', hasPush);
 	}
 
-	/** The UI calls this when it is open. It makes the next poll happen soon. */
+	/** The UI calls this when it is open. An idle account (15-minute polls) polls again within 5. */
 	async touch(): Promise<void> {
 		const now = Date.now();
 		await this.ctx.storage.put('lastActive', now);
 		const [alarm, lastPollAt, stopped] = await Promise.all([
 			this.ctx.storage.getAlarm(),
-			this.ctx.storage.get<number>('lastPollAt'),
+			this.lastPollAt(),
 			this.ctx.storage.get<boolean>('stopped')
 		]);
 		if (stopped) return;
 		await this.ctx.storage.delete('paused');
-		const due = (lastPollAt ?? 0) + MIN;
-		if (alarm === null || alarm > due) await this.ctx.storage.setAlarm(Math.max(due, now + 500));
+		const due = (lastPollAt ?? 0) + POLL_ACTIVE;
+		if (alarm === null || alarm > due) {
+			const at = Math.max(due, now + 500);
+			await this.ctx.storage.setAlarm(at);
+			// Keep "alarm minus gap" equal to the time of the last poll.
+			if (lastPollAt) await this.putChanged({ pollGap: at - lastPollAt });
+		}
 	}
 
 	async pollNow(): Promise<PollStatus> {
@@ -107,13 +133,39 @@ export class Poller extends DurableObject<Env> {
 	}
 
 	async status(): Promise<PollStatus> {
-		const s = await this.ctx.storage.get(['lastPollAt', 'lastError', 'ssoHiddenOrgs']);
+		const s = await this.ctx.storage.get(['lastError', 'ssoHiddenOrgs']);
 		return {
-			lastPollAt: (s.get('lastPollAt') as number) ?? null,
+			lastPollAt: await this.lastPollAt(),
 			lastError: (s.get('lastError') as string) ?? null,
 			ssoHiddenOrgs: ((s.get('ssoHiddenOrgs') as string[] | undefined) ?? []).length,
 			nextPollAt: await this.ctx.storage.getAlarm()
 		};
+	}
+
+	/**
+	 * A good poll does not store its time: that would be a storage write every few minutes for each
+	 * user, and writes are the first free-plan limit we hit. schedule() stores the gap to the next
+	 * alarm (it seldom changes), so the time is the alarm minus that gap. Failed polls and pauses
+	 * store `lastPollAt` directly.
+	 */
+	private async lastPollAt(): Promise<number | null> {
+		const [alarm, s] = await Promise.all([
+			this.ctx.storage.getAlarm(),
+			this.ctx.storage.get(['lastPollAt', 'pollGap'])
+		]);
+		const stored = (s.get('lastPollAt') as number | undefined) ?? 0;
+		const gap = s.get('pollGap') as number | undefined;
+		const fromAlarm = alarm !== null && gap !== undefined ? alarm - gap : 0;
+		return Math.max(stored, fromAlarm, this.lastGoodPoll) || null;
+	}
+
+	/** Write only the values that changed. Each written key counts against the daily row budget. */
+	private async putChanged(values: Record<string, unknown>): Promise<void> {
+		const old = await this.ctx.storage.get(Object.keys(values));
+		const changed = Object.fromEntries(
+			Object.entries(values).filter(([k, v]) => JSON.stringify(old.get(k)) !== JSON.stringify(v))
+		);
+		if (Object.keys(changed).length) await this.ctx.storage.put(changed);
 	}
 
 	/** Your GitHub teams, cached for 6 hours. */
@@ -129,7 +181,7 @@ export class Poller extends DurableObject<Env> {
 		return res;
 	}
 
-	/** Live PR or issue dashboard from saved searches, cached for 5 minutes. */
+	/** Live PR or issue dashboard from saved searches, cached for 15 minutes. */
 	dashboard(kind: DashKind, force = false): Promise<DashResponse> {
 		let p = this.dashInflight.get(kind);
 		if (!p) {
@@ -234,19 +286,22 @@ export class Poller extends DurableObject<Env> {
 		]);
 		if (!s.get('userId') || s.get('stopped')) return;
 		const now = Date.now();
-		const base = Math.max(Number(s.get('pollInterval') ?? 60), 60) * 1000;
+		const base = Math.max(Number(s.get('pollInterval') ?? 60) * 1000, POLL_ACTIVE);
 		const errors = Number(s.get('errorCount') ?? 0);
 		const idleFor = now - Number(s.get('lastActive') ?? 0);
 		if (idleFor > (s.get('hasPush') ? PAUSE_AFTER_WITH_PUSH : PAUSE_AFTER_NO_PUSH)) {
-			await this.ctx.storage.put('paused', true);
+			// No alarm from now on, so store the poll time itself.
+			await this.ctx.storage.put({ paused: true, lastPollAt: now });
 			return;
 		}
 		let delay: number;
-		if (errors > 0) delay = Math.min(base * 2 ** errors, 30 * MIN);
+		if (errors > 0) delay = Math.min(base * 2 ** (errors - 1), 30 * MIN);
 		else if (s.get('hasPush') || idleFor < ACTIVE_WINDOW) delay = base;
-		else delay = idleFor < 2 * 60 * MIN ? 3 * base : 5 * base;
+		else delay = Math.max(base, POLL_IDLE);
 		const retryAt = Number(s.get('retryAt') ?? 0);
-		await this.ctx.storage.setAlarm(Math.max(now + delay, retryAt));
+		const at = Math.max(now + delay, retryAt);
+		await this.ctx.storage.setAlarm(at);
+		await this.putChanged({ pollGap: at - now });
 	}
 
 	private async fail(message: string, opts: { stop?: boolean; retryAt?: number } = {}) {
@@ -304,15 +359,18 @@ export class Poller extends DurableObject<Env> {
 		if (page.status !== 200 && page.status !== 304)
 			return this.fail(`GitHub returned ${page.status}.`);
 
-		await this.ctx.storage.put({
+		this.lastGoodPoll = Date.now();
+		await this.putChanged({
 			pollInterval: page.pollInterval,
-			lastPollAt: Date.now(),
 			lastError: null,
 			errorCount: 0,
 			retryAt: 0
 		});
-		if (page.status === 304) return this.wakeSnoozed(userId);
-		await this.ctx.storage.put('ssoHiddenOrgs', page.ssoHiddenOrgs);
+		if (page.status === 304) {
+			await this.wakeSnoozed(userId);
+			return this.checkSnoozeEvents(userId, user.login, token, settings);
+		}
+		await this.putChanged({ ssoHiddenOrgs: page.ssoHiddenOrgs });
 
 		const myTeams = settings.teamReviewsAreAction
 			? (await this.teams()).teams.map((t) => t.slug)
@@ -325,6 +383,7 @@ export class Poller extends DurableObject<Env> {
 			...(page.lastModified ? { lastModified: page.lastModified } : {})
 		});
 		await this.wakeSnoozed(userId);
+		await this.checkSnoozeEvents(userId, user.login, token, settings);
 		await this.cleanup(userId);
 	}
 
@@ -346,7 +405,7 @@ export class Poller extends DurableObject<Env> {
 			const ids = items.slice(i, i + 90).map((n) => n.id);
 			const { results } = await db
 				.prepare(
-					`SELECT id, gh_updated_at, triage, pushed_updated_at, enrichment, category, rule FROM threads
+					`SELECT id, gh_updated_at, triage, pushed_updated_at, enrichment, category, rule, snooze_event, snoozed_at FROM threads
            WHERE user_id = ? AND id IN (${ids.map(() => '?').join(',')})`
 				)
 				.bind(userId, ...ids)
@@ -371,6 +430,7 @@ export class Poller extends DurableObject<Env> {
 		const enriched = await enrichSubjects(token, refs, me);
 
 		const toPush: { n: GhNotification; c: Classification }[] = [];
+		const woken: PushMessage[] = [];
 		const stmts: D1PreparedStatement[] = [];
 		for (const n of changed) {
 			const ex = existing.get(n.id);
@@ -395,8 +455,25 @@ export class Poller extends DurableObject<Env> {
 			else triage = ex.triage === 'done' ? 'inbox' : ex.triage; // New activity brings a done thread back.
 			if (c.category === 'muted') triage = 'done';
 
+			// Snoozed until something happens: this new activity may be it.
+			let wokeBy: string | null = null;
+			if (ex?.triage === 'snoozed' && ex.snooze_event && triage === 'snoozed') {
+				const ev = snoozeEvent(ex.snooze_event);
+				const outcome = ev ? snoozeOutcome(ev.id, enrichment, ex.snoozed_at ?? 0, me) : null;
+				if (outcome?.wake) {
+					triage = 'inbox';
+					wokeBy = outcome.reason;
+					stmts.push(clearSnooze(db, userId, n.id));
+				}
+			}
+
+			if (ex?.snooze_event && !wokeBy && triage !== 'snoozed') stmts.push(clearSnooze(db, userId, n.id));
+
 			let pushed = ex?.pushed_updated_at ?? null;
-			if (
+			if (wokeBy && settings.pushAction) {
+				woken.push({ title: `Snooze over: ${wokeBy}`, body: `${n.subject.title}\n${n.repository.full_name}`, url: c.actionUrl, tag: n.id });
+				pushed = n.updated_at;
+			} else if (
 				initialized &&
 				n.unread &&
 				triage === 'inbox' &&
@@ -449,17 +526,10 @@ export class Poller extends DurableObject<Env> {
 		stmts.push(bumpVersion(this.env, userId));
 		await db.batch(stmts);
 		if (toPush.length) await this.push(userId, toPush);
+		if (woken.length) await this.send(userId, woken);
 	}
 
 	private async push(userId: number, items: { n: GhNotification; c: Classification }[]) {
-		const { results: subs } = await this.env.DB.prepare(
-			'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?'
-		)
-			.bind(userId)
-			.all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
-		await this.ctx.storage.put('hasPush', subs.length > 0);
-		if (!subs.length || !this.env.VAPID_PRIVATE_KEY) return;
-
 		const origin = (await this.ctx.storage.get<string>('origin')) ?? '';
 		const messages: PushMessage[] =
 			items.length <= MAX_INDIVIDUAL_PUSHES
@@ -481,6 +551,19 @@ export class Poller extends DurableObject<Env> {
 						}
 					];
 
+		await this.send(userId, messages);
+	}
+
+	/** Send push messages to every device of the user; forget devices the push service dropped. */
+	private async send(userId: number, messages: PushMessage[]) {
+		const { results: subs } = await this.env.DB.prepare(
+			'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?'
+		)
+			.bind(userId)
+			.all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
+		await this.putChanged({ hasPush: subs.length > 0 });
+		if (!subs.length || !this.env.VAPID_PRIVATE_KEY) return;
+		const origin = (await this.ctx.storage.get<string>('origin')) ?? '';
 		const vapid = vapidFromEnv(this.env, origin);
 		const gone: string[] = [];
 		for (const sub of subs) {
@@ -504,10 +587,61 @@ export class Poller extends DurableObject<Env> {
 				.run();
 	}
 
+	/**
+	 * Every 15 minutes, and only while some thread is snoozed until something happens: fetch those
+	 * threads in one GraphQL request (about 1 point) and wake the ones whose event happened. This
+	 * catches what GitHub sends no notification for, like CI passing on someone else's PR.
+	 */
+	private async checkSnoozeEvents(userId: number, me: string, token: string, settings: Settings) {
+		const last = (await this.ctx.storage.get<number>('lastSnoozeCheck')) ?? 0;
+		if (Date.now() - last < SNOOZE_CHECK) return;
+		await this.ctx.storage.put('lastSnoozeCheck', Date.now());
+		const { results } = await this.env.DB.prepare(
+			`SELECT id, repo, title, enrichment, action_url, snooze_event, snoozed_at FROM threads
+       WHERE user_id = ? AND triage = 'snoozed' AND snooze_event IS NOT NULL
+       ORDER BY snoozed_at ASC LIMIT 40`
+		)
+			.bind(userId)
+			.all<Pick<ThreadRow, 'id' | 'repo' | 'title' | 'enrichment' | 'action_url' | 'snooze_event' | 'snoozed_at'>>();
+		const refs: SubjectRef[] = [];
+		for (const r of results) {
+			const num = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment).number : undefined;
+			const [owner, repo] = r.repo.split('/');
+			if (num && owner && repo) refs.push({ key: r.id, owner, repo, number: num });
+		}
+		if (!refs.length) return;
+		const fresh = await enrichSubjects(token, refs, me);
+
+		const stmts: D1PreparedStatement[] = [];
+		const messages: PushMessage[] = [];
+		for (const r of results) {
+			const e = fresh.get(r.id);
+			const ev = snoozeEvent(r.snooze_event);
+			// No data (PR deleted, access lost): keep waiting; the deadline still ends it.
+			const outcome = e && ev ? snoozeOutcome(ev.id, e, r.snoozed_at ?? 0, me) : null;
+			if (!e || !outcome?.wake) continue;
+			stmts.push(
+				this.env.DB.prepare(
+					`UPDATE threads SET enrichment = ?, triage = 'inbox', snoozed_until = NULL, snooze_event = NULL
+           WHERE user_id = ? AND id = ?`
+				).bind(JSON.stringify(e), userId, r.id)
+			);
+			messages.push({
+				title: `Snooze over: ${outcome.reason}`,
+				body: `${r.title}\n${r.repo}`,
+				url: r.action_url,
+				tag: r.id
+			});
+		}
+		if (!stmts.length) return;
+		await this.env.DB.batch([...stmts, bumpVersion(this.env, userId)]);
+		if (settings.pushAction) await this.send(userId, messages.slice(0, MAX_INDIVIDUAL_PUSHES));
+	}
+
 	/** Snoozes that are due go back to the inbox, and clients see a new version. */
 	private async wakeSnoozed(userId: number) {
 		const res = await this.env.DB.prepare(
-			`UPDATE threads SET triage = 'inbox', snoozed_until = NULL
+			`UPDATE threads SET triage = 'inbox', snoozed_until = NULL, snooze_event = NULL
        WHERE user_id = ? AND triage = 'snoozed' AND snoozed_until <= ?`
 		)
 			.bind(userId, Date.now())

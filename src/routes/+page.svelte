@@ -24,6 +24,9 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import ThreadRow from '$lib/components/app/thread-row.svelte';
 	import BulkBar from '$lib/components/app/bulk-bar.svelte';
+	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
+	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
+	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
@@ -60,6 +63,7 @@
 	let query = $state('');
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
+	let bulkSnoozeOpen = $state(false);
 	let searchEl = $state<HTMLInputElement | null>(null);
 	// Threads with a triage request in flight. A refetch must not bring them back.
 	const pending = new SvelteSet<string>();
@@ -285,6 +289,7 @@
 		menuIds = sel.size ? sel.targets(order, id) : [id];
 	}
 	const menuOne = $derived(menuIds.length === 1 ? byId(menuIds[0]) : undefined);
+	const menuKinds = $derived(menuIds.map((id) => subjectKind(byId(id)?.subjectType ?? '')));
 	const n = (label: string) => (menuIds.length > 1 ? `${label} (${menuIds.length})` : label);
 	const restoreAction = (t: ThreadDTO | undefined): ThreadAction =>
 		view === 'muted' || t?.category === 'muted'
@@ -487,12 +492,12 @@
 					</ContextMenu.Item>
 					<ContextMenu.Sub>
 						<ContextMenu.SubTrigger><AlarmClock />{n('Snooze')}</ContextMenu.SubTrigger>
-						<ContextMenu.SubContent>
-							{#each snoozeOptions() as opt (opt.label)}
-								<ContextMenu.Item onclick={() => act(menuIds, 'snooze', { until: opt.until })}
-									>{opt.label}</ContextMenu.Item
-								>
-							{/each}
+						<ContextMenu.SubContent class="w-56">
+							<SnoozeItems
+								menu="context"
+								subjects={menuKinds}
+								onpick={(b) => act(menuIds, 'snooze', b)}
+							/>
 						</ContextMenu.SubContent>
 					</ContextMenu.Sub>
 					<ContextMenu.Item onclick={() => act(menuIds, 'mute')}>
@@ -535,22 +540,30 @@
 		<Button variant="ghost" size="sm" aria-label="Done" onclick={() => act(targets(), 'done')}
 			><Check /><span class="hidden sm:inline">Done</span></Button
 		>
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				{#snippet child({ props })}
-					<Button {...props} variant="ghost" size="sm" aria-label="Snooze"
-						><AlarmClock /><span class="hidden sm:inline">Snooze</span></Button
-					>
-				{/snippet}
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="center" side="top">
-				{#each snoozeOptions() as opt (opt.label)}
-					<DropdownMenu.Item onclick={() => act(targets(), 'snooze', { until: opt.until })}
-						>{opt.label}</DropdownMenu.Item
-					>
-				{/each}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
+		<Button
+			variant="ghost"
+			size="sm"
+			class="sm:hidden"
+			aria-label="Snooze"
+			onclick={() => (bulkSnoozeOpen = true)}><AlarmClock /></Button
+		>
+		<span class="hidden sm:contents">
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" size="sm" aria-label="Snooze"
+							><AlarmClock /><span class="hidden sm:inline">Snooze</span></Button
+						>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="center" side="top" class="w-56">
+					<SnoozeItems
+						subjects={targets().map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
+						onpick={(b) => act(targets(), 'snooze', b)}
+					/>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+		</span>
 		<Button variant="ghost" size="sm" aria-label="Mute" onclick={() => act(targets(), 'mute')}
 			><BellOff /><span class="hidden sm:inline">Mute</span></Button
 		>
@@ -570,6 +583,12 @@
 			/><span class="hidden sm:inline">Unread</span>{/if}
 	</Button>
 </BulkBar>
+
+<SnoozeSheet
+	bind:open={bulkSnoozeOpen}
+	subjects={targets().map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
+	onpick={(b) => act(targets(), 'snooze', b)}
+/>
 
 <Dialog.Root bind:open={helpOpen}>
 	<Dialog.Content class="sm:max-w-sm">

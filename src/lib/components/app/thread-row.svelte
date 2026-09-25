@@ -1,13 +1,16 @@
 <script lang="ts">
 	import type { ThreadDTO } from '$lib/shared/types';
 	import type { ThreadAction } from '$lib/api';
-	import { ago, snoozeOptions } from '$lib/time';
+	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import KindIcon from './kind-icon.svelte';
 	import SelectMark from './select-mark.svelte';
+	import SnoozeItems from './snooze-items.svelte';
+	import SnoozeSheet from './snooze-sheet.svelte';
+	import { SNOOZE_EVENTS, alreadyTrue, subjectKind } from '$lib/shared/snooze';
 	import Check from '@lucide/svelte/icons/check';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
@@ -44,6 +47,7 @@
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
+	let snoozeOpen = $state(false);
 	$effect(() => {
 		if (selected) row?.scrollIntoView({ block: 'nearest' });
 	});
@@ -127,12 +131,14 @@
 				<span class="rounded-md bg-muted px-1.5 py-0.5">draft</span>
 			{/if}
 			{#if t.triage === 'snoozed' && t.snoozedUntil && t.snoozedUntil > Date.now()}
+				{@const ev = SNOOZE_EVENTS.find((e) => e.id === t.snoozeEvent)}
+				{@const at = new Date(t.snoozedUntil).toLocaleString(undefined, {
+					weekday: 'short',
+					hour: 'numeric',
+					minute: '2-digit'
+				})}
 				<span class="rounded-md bg-muted px-1.5 py-0.5"
-					>until {new Date(t.snoozedUntil).toLocaleString(undefined, {
-						weekday: 'short',
-						hour: 'numeric',
-						minute: '2-digit'
-					})}</span
+					>{ev ? `until ${ev.label.toLowerCase()} (or ${at})` : `until ${at}`}</span
 				>
 			{/if}
 		</div>
@@ -162,16 +168,9 @@
 				<DropdownMenu.Separator />
 				{#if inInbox}
 					<DropdownMenu.Item onclick={() => onaction(t, 'done')}><Check />Done</DropdownMenu.Item>
-					<DropdownMenu.Sub>
-						<DropdownMenu.SubTrigger><AlarmClock />Snooze</DropdownMenu.SubTrigger>
-						<DropdownMenu.SubContent>
-							{#each snoozeOptions() as opt (opt.label)}
-								<DropdownMenu.Item onclick={() => onaction(t, 'snooze', { until: opt.until })}
-									>{opt.label}</DropdownMenu.Item
-								>
-							{/each}
-						</DropdownMenu.SubContent>
-					</DropdownMenu.Sub>
+					<DropdownMenu.Item onclick={() => (snoozeOpen = true)}
+						><AlarmClock />Snooze…</DropdownMenu.Item
+					>
 					<DropdownMenu.Item onclick={() => onaction(t, 'mute')}><BellOff />Mute</DropdownMenu.Item>
 				{:else}
 					<DropdownMenu.Item
@@ -225,13 +224,12 @@
 							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end">
-						<DropdownMenu.Label>Snooze until</DropdownMenu.Label>
-						{#each snoozeOptions() as opt (opt.label)}
-							<DropdownMenu.Item onclick={() => onaction(t, 'snooze', { until: opt.until })}
-								>{opt.label}</DropdownMenu.Item
-							>
-						{/each}
+					<DropdownMenu.Content align="end" class="w-56">
+						<SnoozeItems
+							subjects={[subjectKind(t.subjectType)]}
+							disabled={alreadyTrue(t)}
+							onpick={(b) => onaction(t, 'snooze', b)}
+						/>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 				<Tooltip.Root>
@@ -276,6 +274,12 @@
 			<ExternalLink class="opacity-60" />
 		</Button>
 	</div>
+	<SnoozeSheet
+		bind:open={snoozeOpen}
+		subjects={[subjectKind(t.subjectType)]}
+		disabled={alreadyTrue(t)}
+		onpick={(b) => onaction(t, 'snooze', b)}
+	/>
 </div>
 
 <style>

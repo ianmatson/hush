@@ -63,6 +63,10 @@ export interface Enrichment {
 	additions?: number;
 	deletions?: number;
 	lastComment?: LastComment | null;
+	/** PRs: when the newest commit was made. */
+	lastCommitAt?: string | null;
+	/** PRs: the newest review. */
+	latestReview?: { author: string; at: string; state: string } | null;
 }
 
 /** Everything the classifier needs to know about one notification thread. */
@@ -250,6 +254,8 @@ export interface ThreadDTO {
 	actionUrl: string;
 	triage: Triage;
 	snoozedUntil: number | null;
+	/** Snoozed until something happens (e.g. "ci_pass"); `snoozedUntil` is then the deadline. */
+	snoozeEvent: string | null;
 	number: number | null;
 	state: Enrichment['state'] | null;
 	draft: boolean;

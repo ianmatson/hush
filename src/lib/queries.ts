@@ -92,13 +92,13 @@ export function reconcileViews(fetched: View, counts: Counts) {
 	}
 }
 
-// The server caches dashboards for 5 minutes, so asking more often gains nothing.
+// The server caches dashboards for 15 minutes, so asking more often gains nothing.
 export const dashQuery = (kind: DashKind) =>
 	queryOptions({
 		queryKey: keys.dash(kind),
 		queryFn: () => api.dashboard(kind),
-		staleTime: 5 * MIN,
-		refetchInterval: 5 * MIN
+		staleTime: 15 * MIN,
+		refetchInterval: 15 * MIN
 	});
 
 export const feedsQuery = () =>
