@@ -6,7 +6,14 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import { DEFAULT_MENUS, MENU_ITEMS, SEP, tidySeparators, type MenuKind } from '$lib/shared/menus';
+	import {
+		DEFAULT_MENUS,
+		MENU_ITEMS,
+		MENUS_VERSION,
+		SEP,
+		tidySeparators,
+		type MenuKind
+	} from '$lib/shared/menus';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -23,6 +30,7 @@
 	import Zap from '@lucide/svelte/icons/zap';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import ListFilter from '@lucide/svelte/icons/list-filter';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -60,7 +68,8 @@
 		selectAll: SquareCheck,
 		move: ArrowRightLeft,
 		undoMove: Undo,
-		hide: EyeOff
+		hide: EyeOff,
+		rule: ListFilter
 	};
 	const iconOf = (id: string) =>
 		ICONS[id] ??
@@ -115,7 +124,8 @@
 		// Separators at the ends or next to each other do nothing; save the tidy list.
 		const menus = {
 			inbox: tidySeparators(draft.inbox, (id) => id === SEP),
-			dash: tidySeparators(draft.dash, (id) => id === SEP)
+			dash: tidySeparators(draft.dash, (id) => id === SEP),
+			v: MENUS_VERSION
 		};
 		if (await saveSettings({ menus }, 'Menus saved')) dirty = false;
 		saving = false;

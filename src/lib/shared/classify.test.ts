@@ -173,6 +173,14 @@ describe('rules', () => {
 	it('validates rule shape', () => {
 		expect(validateRules([{ when: {}, then: { category: 'action' } }])).toBeNull();
 		expect(validateRules({})).toMatch(/array/);
+		// Empty values never match, so the rule would do nothing.
+		expect(validateRules([{ when: { repo: [] }, then: { category: 'fyi' } }])).toMatch(
+			/needs a value/
+		);
+		expect(validateRules([{ when: { titleContains: ' ' }, then: { category: 'fyi' } }])).toMatch(
+			/needs a value/
+		);
+		expect(validateRules([{ when: { bot: false }, then: { category: 'fyi' } }])).toBeNull();
 		expect(validateRules([{ when: { nope: 1 }, then: { push: true } }])).toMatch(
 			/unknown condition/
 		);

@@ -1,16 +1,24 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { meQuery } from '$lib/queries';
+	import { keys, meQuery, queryClient } from '$lib/queries';
+	import { api } from '$lib/api';
 	import { saveSettings } from '$lib/save-settings';
 	import { validateRules } from '$lib/shared/classify';
-	import type { Rule } from '$lib/shared/types';
+	import type { Rule, ThreadDTO } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Card from '$lib/components/ui/card';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import RuleCard, { type RulePreview } from '$lib/components/app/rule-card.svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import Braces from '@lucide/svelte/icons/braces';
 
 	const me = createQuery(meQuery);
 	const settings = $derived(me.data?.settings);
@@ -30,29 +38,133 @@
 		}
 	];
 
-	let rulesText = $state('');
+	// --- Rules: a visual editor, with JSON as an advanced mode -----------------------------
+	let draft = $state<Rule[]>([]);
 	let dirty = $state(false);
-	// Fill the editor once the settings arrive (from the cache, usually at once).
+	let jsonMode = $state(false);
+	let jsonText = $state('');
+	let saving = $state(false);
+	// Fill the editor once the settings arrive (from the cache, usually at once), and after saves.
 	$effect(() => {
 		const rules = settings?.rules;
 		untrack(() => {
-			if (rules && !dirty) rulesText = JSON.stringify(rules, null, 2);
+			if (rules && !dirty) draft = structuredClone($state.snapshot(rules) as Rule[]);
 		});
 	});
 
-	const rulesError = $derived.by(() => {
-		if (!dirty) return null;
+	/** A rule from a thread's right-click menu ("Make a rule…"): /settings/inbox?rule={when}. */
+	$effect(() => {
+		const raw = page.url.searchParams.get('rule');
+		if (!raw || !settings) return;
+		untrack(() => {
+			try {
+				const when = JSON.parse(raw) as Rule['when'];
+				draft = [...draft, { name: '', when, then: { category: 'fyi' } }];
+				dirty = true;
+				jsonMode = false;
+			} catch {
+				/* A bad link adds nothing. */
+			}
+			goto('/settings/inbox', { replaceState: true, noScroll: true });
+			tick().then(() =>
+				document
+					.querySelector('[aria-label^="Rule "]:last-of-type')
+					?.scrollIntoView({ block: 'center' })
+			);
+		});
+	});
+
+	const jsonError = $derived.by(() => {
+		if (!jsonMode) return null;
 		try {
-			return validateRules(JSON.parse(rulesText));
+			return validateRules(JSON.parse(jsonText));
 		} catch (err) {
 			return `Invalid JSON: ${(err as Error).message}`;
 		}
 	});
+	const rulesError = $derived(jsonMode ? jsonError : validateRules(draft));
+
+	function change(next: Rule[]) {
+		draft = next;
+		dirty = true;
+	}
+	function moveRule(from: number, to: number) {
+		if (to < 0 || to >= draft.length) return;
+		const next = [...draft];
+		const [r] = next.splice(from, 1);
+		next.splice(to, 0, r);
+		change(next);
+	}
+	function toggleJson() {
+		if (jsonMode) {
+			if (jsonError) return;
+			draft = JSON.parse(jsonText);
+		} else jsonText = JSON.stringify(draft, null, 2);
+		jsonMode = !jsonMode;
+	}
 
 	async function saveRules() {
 		if (rulesError) return;
-		if (await saveSettings({ rules: JSON.parse(rulesText) }, 'Rules saved')) dirty = false;
+		saving = true;
+		const rules = jsonMode ? (JSON.parse(jsonText) as Rule[]) : draft;
+		if (await saveSettings({ rules }, 'Rules saved')) {
+			dirty = false;
+			if (jsonMode) draft = rules;
+		}
+		saving = false;
 	}
+	function cancel() {
+		dirty = false;
+		jsonMode = false;
+		if (settings) draft = structuredClone($state.snapshot(settings.rules) as Rule[]);
+	}
+
+	// Preview: what the unsaved rules would catch, from the server (your stored threads, D1 only).
+	let preview = $state<{
+		perRule: RulePreview[];
+		moves: { action: number; fyi: number; muted: number };
+	} | null>(null);
+	$effect(() => {
+		const rules = jsonMode ? null : $state.snapshot(draft);
+		if (!rules || validateRules(rules)) return;
+		const t = setTimeout(async () => {
+			try {
+				preview = await api.previewRules(rules as Rule[]);
+			} catch {
+				preview = null;
+			}
+		}, 400);
+		return () => clearTimeout(t);
+	});
+	const moveText = $derived.by(() => {
+		if (!dirty || !preview) return null;
+		const parts = (
+			[
+				['action', 'Needs you'],
+				['fyi', 'FYI'],
+				['muted', 'Muted']
+			] as const
+		)
+			.filter(([k]) => preview!.moves[k])
+			.map(([k, label]) => `${preview!.moves[k]} to ${label}`);
+		return parts.length
+			? `If you save: ${parts.join(', ')}.`
+			: 'If you save: no thread changes place.';
+	});
+
+	// Suggestions for repository and author conditions: what your notifications come from.
+	const suggest = $derived.by(() => {
+		const threads = queryClient
+			.getQueriesData<{ threads: ThreadDTO[] }>({ queryKey: keys.threadsAll })
+			.flatMap(([, d]) => d?.threads ?? []);
+		const uniq = (xs: (string | null | undefined)[]) =>
+			[...new Set(xs.filter((x): x is string => !!x))].sort();
+		const repos = uniq(threads.map((t) => t.repo));
+		return {
+			repo: [...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos],
+			author: uniq(threads.map((t) => t.author))
+		};
+	});
 </script>
 
 <svelte:head><title>Inbox · Settings · Hush</title></svelte:head>
@@ -99,78 +211,83 @@
 			<Card.Header>
 				<Card.Title>Rules</Card.Title>
 				<Card.Description
-					>JSON. Hush checks rules from top to bottom after the defaults. The first rule that
-					matches wins.</Card.Description
+					>Hush checks your rules from top to bottom, after its defaults. The first rule that
+					matches a thread wins. Tip: right-click a thread and choose “Make a rule…”.</Card.Description
 				>
 			</Card.Header>
-			<Card.Content class="grid gap-2">
-				<div class="flex justify-between gap-2">
-					<Label for="rules">Rules</Label>
-					<Button
-						variant="ghost"
-						size="xs"
-						onclick={() => {
-							rulesText = JSON.stringify(EXAMPLE, null, 2);
-							dirty = true;
-						}}>Insert examples</Button
-					>
-				</div>
-				<Textarea
-					id="rules"
-					class="min-h-56 font-mono text-xs"
-					spellcheck={false}
-					bind:value={rulesText}
-					oninput={() => (dirty = true)}
-				/>
-				{#if rulesError}<p class="text-xs text-destructive">{rulesError}</p>{/if}
-				<details class="text-xs text-muted-foreground">
-					<summary class="cursor-pointer select-none">Rule reference</summary>
-					<div class="mt-2 grid gap-1 leading-relaxed">
-						<p><code>when</code> (all conditions must match):</p>
-						<ul class="ml-4 list-disc">
-							<li>
-								<code>repo</code>, <code>author</code>: glob or list of globs, e.g.
-								<code>"PostHog/*"</code>
-							</li>
-							<li>
-								<code>reason</code>: <code>mention</code>, <code>review_requested</code>,
-								<code>team_mention</code>,
-								<code>comment</code>, <code>author</code>, <code>assign</code>,
-								<code>subscribed</code>,
-								<code>ci_activity</code>, <code>state_change</code>…
-							</li>
-							<li>
-								<code>type</code>: <code>PullRequest</code>, <code>Issue</code>,
-								<code>Release</code>, <code>Discussion</code>, <code>CheckSuite</code>,
-								<code>Commit</code>
-							</li>
-							<li>
-								<code>kind</code>: <code>review</code>, <code>fix_ci</code>,
-								<code>address_review</code>,
-								<code>resolve_conflict</code>, <code>merge</code>, <code>reply</code>,
-								<code>triage</code>,
-								<code>security</code>, <code>none</code>
-							</li>
-							<li>
-								<code>category</code> (the default result): <code>action</code>, <code>fyi</code>
-							</li>
-							<li>
-								<code>label</code>: list of label names · <code>titleContains</code>: text ·
-								<code>bot</code>, <code>draft</code>: true or false
-							</li>
-						</ul>
-						<p>
-							<code>then</code>: <code>category</code> (<code>action</code>, <code>fyi</code>,
-							<code>muted</code>) and/or
-							<code>push</code> (true or false). Add <code>"enabled": false</code> to turn a rule off.
+			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
+				{#if jsonMode}
+					<Textarea
+						id="rules"
+						class="min-h-72 font-mono text-xs"
+						spellcheck={false}
+						aria-label="Rules as JSON"
+						bind:value={jsonText}
+						oninput={() => (dirty = true)}
+					/>
+					{#if jsonError}<p class="text-xs text-destructive">{jsonError}</p>{/if}
+				{:else}
+					{#each draft as _, k (k)}
+						<RuleCard
+							bind:rule={draft[k]}
+							index={k}
+							count={draft.length}
+							preview={preview?.perRule[k]}
+							{suggest}
+							onmove={(to) => moveRule(k, to)}
+							onduplicate={() =>
+								change([
+									...draft.slice(0, k + 1),
+									structuredClone($state.snapshot(draft[k]) as Rule),
+									...draft.slice(k + 1)
+								])}
+							onremove={() => change(draft.filter((_, i) => i !== k))}
+						/>
+					{:else}
+						<p
+							class="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground"
+						>
+							No rules yet. Hush uses its defaults for every thread.
 						</p>
+					{/each}
+					<div class="flex flex-wrap gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={() => change([...draft, { name: '', when: {}, then: { category: 'fyi' } }])}
+							><Plus />New rule</Button
+						>
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<Button {...props} variant="outline" size="sm"><Sparkles />From a template</Button
+									>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="start" class="w-64">
+								{#each EXAMPLE as ex (ex.name)}
+									<DropdownMenu.Item onclick={() => change([...draft, structuredClone(ex)])}
+										>{ex.name}</DropdownMenu.Item
+									>
+								{/each}
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
 					</div>
-				</details>
-				<div class="flex justify-end">
-					<Button size="sm" disabled={!dirty || !!rulesError} onclick={saveRules}>Save rules</Button
+					{#if rulesError && dirty}<p class="text-xs text-destructive">{rulesError}</p>{/if}
+				{/if}
+			</Card.Content>
+			<Card.Footer class="flex flex-wrap items-center justify-between gap-2 border-t">
+				<Button variant="ghost" size="sm" onclick={toggleJson} disabled={jsonMode && !!jsonError}
+					><Braces />{jsonMode ? 'Back to the editor' : 'Edit as JSON'}</Button
+				>
+				<div class="flex flex-wrap items-center gap-2">
+					{#if moveText}<span class="text-xs text-muted-foreground">{moveText}</span>{/if}
+					{#if dirty}<Button variant="ghost" size="sm" onclick={cancel}>Cancel</Button>{/if}
+					<Button size="sm" disabled={!dirty || !!rulesError || saving} onclick={saveRules}
+						>Save rules</Button
 					>
 				</div>
-			</Card.Content>
+			</Card.Footer>
 		</Card.Root>
 	{/if}
 </div>

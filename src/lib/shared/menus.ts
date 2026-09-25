@@ -45,6 +45,12 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 		},
 		{ id: 'read', label: 'Mark as read / unread', group: 'main' },
 		{ id: 'copy', label: 'Copy link', group: 'main' },
+		{
+			id: 'rule',
+			label: 'Make a rule…',
+			note: 'Opens the rule editor with this repo and type',
+			group: 'main'
+		},
 		{ id: 'select', label: 'Select / Deselect', group: 'main' },
 		{ id: 'selectAll', label: 'Select all', group: 'main' },
 		...SNOOZE_TIMES.map(([id, label]) => ({
@@ -93,6 +99,7 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'restore',
 		'read',
 		'copy',
+		'rule',
 		SEP,
 		'select',
 		'selectAll'
@@ -111,6 +118,33 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'selectAll'
 	]
 };
+
+/**
+ * Items added after a menu may have been saved. A saved menu older than an item's version gets
+ * that item once (after `after`, or at the end); later choices are yours.
+ */
+export const MENUS_VERSION = 2;
+const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
+	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 }
+];
+
+/** Saved menus, upgraded to the current version. */
+export function upgradeMenus(
+	saved: Partial<Record<MenuKind, string[]>> & { v?: number }
+): Record<MenuKind, string[]> & { v: number } {
+	const out = {
+		inbox: [...(saved.inbox ?? DEFAULT_MENUS.inbox)],
+		dash: [...(saved.dash ?? DEFAULT_MENUS.dash)],
+		v: MENUS_VERSION
+	};
+	for (const a of ADDED) {
+		const list = out[a.kind];
+		if ((saved.v ?? 1) >= a.version || list.includes(a.id)) continue;
+		const at = list.indexOf(a.after);
+		list.splice(at < 0 ? list.length : at + 1, 0, a.id);
+	}
+	return out;
+}
 
 /** No separator first, last, or next to another. */
 export function tidySeparators<T>(list: T[], isSep: (x: T) => boolean): T[] {

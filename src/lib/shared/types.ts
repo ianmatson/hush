@@ -136,7 +136,7 @@ export interface Settings {
 	rules: Rule[];
 	dash: DashSettings;
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
-	menus: { inbox: string[]; dash: string[] };
+	menus: { inbox: string[]; dash: string[]; v?: number };
 }
 
 // --- Pull request and issue dashboards ------------------------------------------

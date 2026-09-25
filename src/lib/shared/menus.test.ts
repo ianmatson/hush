@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MENUS, MENU_ITEMS, SEP, tidySeparators, validateMenus } from './menus';
+import {
+	DEFAULT_MENUS,
+	MENU_ITEMS,
+	SEP,
+	tidySeparators,
+	upgradeMenus,
+	validateMenus
+} from './menus';
 
 const isSep = (x: string) => x === SEP;
 
@@ -32,5 +39,13 @@ describe('menus', () => {
 		for (const kind of ['inbox', 'dash'] as const)
 			for (const id of DEFAULT_MENUS[kind])
 				if (id !== SEP) expect(MENU_ITEMS[kind].some((i) => i.id === id)).toBe(true);
+	});
+
+	it('adds a new item once to menus saved before it, and keeps later choices', () => {
+		const old = { inbox: ['peek', 'copy', 'done'], dash: ['peek'] };
+		expect(upgradeMenus(old).inbox).toEqual(['peek', 'copy', 'rule', 'done']);
+		// Saved after the item existed and without it: you removed it, so it stays out.
+		expect(upgradeMenus({ ...old, v: 2 }).inbox).toEqual(['peek', 'copy', 'done']);
+		expect(upgradeMenus({ inbox: ['done'] }).inbox).toEqual(['done', 'rule']);
 	});
 });

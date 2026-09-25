@@ -10,7 +10,8 @@ import type {
 import { isBot } from './bots';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 
-const WHY: Record<string, string> = {
+/** Notification reasons, as Hush shows them. */
+export const WHY: Record<string, string> = {
 	approval_requested: 'Deployment approval requested',
 	assign: 'Assigned to you',
 	author: 'You opened this',
@@ -171,20 +172,18 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	return true;
 }
 
+/** Index of the first enabled rule that matches (the one that wins), or -1. */
+export function firstMatchingRule(t: ThreadFacts, rules: Rule[], base: Classification): number {
+	return rules.findIndex((r) => r.enabled !== false && ruleMatches(r.when ?? {}, t, base));
+}
+
 export function classify(t: ThreadFacts, settings: Settings): Classification {
 	const base = classifyDefault(t, settings);
-	for (const [i, rule] of settings.rules.entries()) {
-		if (rule.enabled === false) continue;
-		if (!ruleMatches(rule.when ?? {}, t, base)) continue;
-		const category: Category = rule.then.category ?? base.category;
-		return {
-			...base,
-			category,
-			push: rule.then.push,
-			rule: rule.name || `Rule ${i + 1}`
-		};
-	}
-	return base;
+	const i = firstMatchingRule(t, settings.rules, base);
+	if (i < 0) return base;
+	const rule = settings.rules[i];
+	const category: Category = rule.then.category ?? base.category;
+	return { ...base, category, push: rule.then.push, rule: rule.name || `Rule ${i + 1}` };
 }
 
 export function shouldPush(c: Classification, settings: Settings): boolean {
@@ -217,8 +216,12 @@ export function validateRules(rules: unknown): string | null {
 		const { when, then } = r as Rule;
 		if (typeof when !== 'object' || when === null) return `${at}: "when" must be an object.`;
 		if (typeof then !== 'object' || then === null) return `${at}: "then" must be an object.`;
-		for (const k of Object.keys(when))
+		for (const [k, v] of Object.entries(when)) {
 			if (!MATCH_KEYS.has(k)) return `${at}: unknown condition "${k}".`;
+			// An empty list or text never matches, so the rule would do nothing.
+			if ((Array.isArray(v) && !v.length) || (typeof v === 'string' && !v.trim()))
+				return `${at}: "${k}" needs a value.`;
+		}
 		if (then.category !== undefined && !CATEGORIES.has(then.category))
 			return `${at}: "then.category" must be action, fyi, or muted.`;
 		if (then.push !== undefined && typeof then.push !== 'boolean')

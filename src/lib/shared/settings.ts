@@ -1,5 +1,5 @@
 import { DEFAULT_DASH } from './dashboard';
-import { DEFAULT_MENUS } from './menus';
+import { DEFAULT_MENUS, upgradeMenus } from './menus';
 import type { Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -20,7 +20,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 			...DEFAULT_SETTINGS,
 			...raw,
 			dash: { ...DEFAULT_DASH, ...(raw.dash ?? {}) },
-			menus: { ...DEFAULT_MENUS, ...(raw.menus ?? {}) }
+			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS
 		};
 	} catch {
 		return structuredClone(DEFAULT_SETTINGS);

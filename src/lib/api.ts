@@ -6,6 +6,7 @@ import type {
 	FeedFilter,
 	MeDTO,
 	PeekDTO,
+	Rule,
 	Settings,
 	TeamDTO,
 	ThreadDTO,
@@ -77,6 +78,16 @@ export const api = {
 			body ?? {}
 		),
 	sync: () => request<{ lastPollAt: number | null; lastError: string | null }>('POST', '/api/sync'),
+	previewRules: (rules: Rule[]) =>
+		request<{
+			perRule: {
+				matches: number;
+				inInbox: number;
+				examples: { title: string; repo: string; category: string }[];
+			}[];
+			moves: { action: number; fyi: number; muted: number };
+			total: number;
+		}>('POST', '/api/rules/preview', { rules }),
 	saveSettings: (s: Partial<Settings>) =>
 		request<{ settings: Settings; reclassified: number }>('PUT', '/api/settings', s),
 	vapidKey: () => request<{ publicKey: string | null }>('GET', '/api/push/vapid-key'),

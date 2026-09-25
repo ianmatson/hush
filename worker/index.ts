@@ -1,8 +1,13 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { classify, validateRules } from '../src/lib/shared/classify';
+import {
+	classify,
+	classifyDefault,
+	firstMatchingRule,
+	validateRules
+} from '../src/lib/shared/classify';
 import { validateDash } from '../src/lib/shared/dashboard';
-import { validateMenus } from '../src/lib/shared/menus';
+import { MENUS_VERSION, validateMenus } from '../src/lib/shared/menus';
 import {
 	SNOOZE_EVENT_MAX_MS,
 	snoozeEvent,
@@ -17,6 +22,7 @@ import type {
 	FeedDTO,
 	FeedFilter,
 	MeDTO,
+	Rule,
 	Settings,
 	ThreadDTO,
 	Turn,
@@ -459,6 +465,64 @@ async function reclassify(env: Env, u: UserRow, settings: Settings) {
 	return changed;
 }
 
+/**
+ * Try rules on your stored threads without saving them: how many threads each rule would catch
+ * (first match wins), a few examples, and how many threads would change category compared with
+ * the saved rules. D1 only.
+ */
+app.post('/api/rules/preview', async (c) => {
+	const u = c.get('user');
+	const body = await c.req.json<{ rules?: unknown }>().catch(() => null);
+	const err = validateRules(body?.rules);
+	if (err) return c.json({ error: err }, 400);
+	const rules = body!.rules as Rule[];
+	const saved = parseSettings(u.settings);
+	const settings: Settings = { ...saved, rules };
+	const myTeams = settings.teamReviewsAreAction
+		? (await poller(c.env, u.id).teams()).teams.map((t) => t.slug)
+		: [];
+	const { results } = await c.env.DB.prepare('SELECT * FROM threads WHERE user_id = ?')
+		.bind(u.id)
+		.all<ThreadRow>();
+	type Example = { title: string; repo: string; category: string };
+	const perRule = rules.map(() => ({
+		matches: 0,
+		inInbox: 0,
+		open: [] as Example[],
+		other: [] as Example[]
+	}));
+	const moves = { action: 0, fyi: 0, muted: 0 };
+	for (const r of results) {
+		if (r.rule === MUTED_BY_USER) continue;
+		const facts = factsFromRow(r, u.login, myTeams);
+		const base = classifyDefault(facts, settings);
+		const i = firstMatchingRule(facts, rules, base);
+		const categoryWith = (list: Rule[], k: number) =>
+			k < 0 ? base.category : (list[k].then.category ?? base.category);
+		const category = categoryWith(rules, i);
+		if (i >= 0) {
+			const p = perRule[i];
+			p.matches++;
+			const open = r.triage === 'inbox' || r.triage === 'snoozed';
+			if (open) p.inInbox++;
+			const list = open ? p.open : p.other;
+			if (list.length < 3) list.push({ title: r.title, repo: r.repo, category });
+		}
+		// The effect of your edits: compare with the rules you have saved now.
+		const before = categoryWith(saved.rules, firstMatchingRule(facts, saved.rules, base));
+		if (category !== before) moves[category as keyof typeof moves]++;
+	}
+	return c.json({
+		// Examples: threads in the inbox first.
+		perRule: perRule.map(({ open, other, ...p }) => ({
+			...p,
+			examples: [...open, ...other].slice(0, 3)
+		})),
+		moves,
+		total: results.length
+	});
+});
+
 app.put('/api/settings', async (c) => {
 	const u = c.get('user');
 	const body = await c.req.json<Partial<Settings>>().catch(() => null);
@@ -473,7 +537,7 @@ app.put('/api/settings', async (c) => {
 		next.dash = dash;
 	}
 	if (body.menus !== undefined) {
-		const menus = { ...next.menus, ...body.menus };
+		const menus = { ...next.menus, ...body.menus, v: MENUS_VERSION };
 		const err = validateMenus(menus);
 		if (err) return c.json({ error: err }, 400);
 		next.menus = menus;

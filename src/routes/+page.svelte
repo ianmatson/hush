@@ -49,6 +49,7 @@
 	import SquareCheck from '@lucide/svelte/icons/square-check';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import Zap from '@lucide/svelte/icons/zap';
+	import ListFilter from '@lucide/svelte/icons/list-filter';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
 
@@ -428,6 +429,14 @@
 						() => copyLinks(ids),
 						'C'
 					);
+				case 'rule':
+					return one
+						? item(id, 'Make a rule…', ListFilter, () =>
+								goto(
+									`/settings/inbox?rule=${encodeURIComponent(JSON.stringify({ repo: one.repo, type: [one.subjectType] }))}`
+								)
+							)
+						: null;
 				case 'select':
 					return one
 						? item(
