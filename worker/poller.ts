@@ -67,7 +67,9 @@ type Existing = Pick<
 
 const clearSnooze = (db: D1Database, userId: number, id: string) =>
 	db
-		.prepare(`UPDATE threads SET snoozed_until = NULL, snooze_event = NULL WHERE user_id = ? AND id = ?`)
+		.prepare(
+			`UPDATE threads SET snoozed_until = NULL, snooze_event = NULL WHERE user_id = ? AND id = ?`
+		)
 		.bind(userId, id);
 
 /**
@@ -467,11 +469,17 @@ export class Poller extends DurableObject<Env> {
 				}
 			}
 
-			if (ex?.snooze_event && !wokeBy && triage !== 'snoozed') stmts.push(clearSnooze(db, userId, n.id));
+			if (ex?.snooze_event && !wokeBy && triage !== 'snoozed')
+				stmts.push(clearSnooze(db, userId, n.id));
 
 			let pushed = ex?.pushed_updated_at ?? null;
 			if (wokeBy && settings.pushAction) {
-				woken.push({ title: `Snooze over: ${wokeBy}`, body: `${n.subject.title}\n${n.repository.full_name}`, url: c.actionUrl, tag: n.id });
+				woken.push({
+					title: `Snooze over: ${wokeBy}`,
+					body: `${n.subject.title}\n${n.repository.full_name}`,
+					url: c.actionUrl,
+					tag: n.id
+				});
 				pushed = n.updated_at;
 			} else if (
 				initialized &&
@@ -602,7 +610,12 @@ export class Poller extends DurableObject<Env> {
        ORDER BY snoozed_at ASC LIMIT 40`
 		)
 			.bind(userId)
-			.all<Pick<ThreadRow, 'id' | 'repo' | 'title' | 'enrichment' | 'action_url' | 'snooze_event' | 'snoozed_at'>>();
+			.all<
+				Pick<
+					ThreadRow,
+					'id' | 'repo' | 'title' | 'enrichment' | 'action_url' | 'snooze_event' | 'snoozed_at'
+				>
+			>();
 		const refs: SubjectRef[] = [];
 		for (const r of results) {
 			const num = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment).number : undefined;

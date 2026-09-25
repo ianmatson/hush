@@ -294,3 +294,57 @@ export interface MeDTO {
 	ssoHiddenOrgs: number;
 	scopes: string[];
 }
+
+// --- Peek: a read-only view of one PR or issue --------------------------------------
+
+export type CheckState = 'failure' | 'pending' | 'success' | 'neutral';
+
+export interface PeekPerson {
+	login: string;
+	avatar: string | null;
+	bot: boolean;
+}
+
+export interface PeekEntry {
+	type: 'comment' | 'review';
+	author: PeekPerson;
+	at: string;
+	url: string;
+	/** GitHub's rendered HTML. The client must sanitize it before it shows it. */
+	html: string;
+	/** Reviews only. */
+	state?: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+	/** Reviews only: inline comments on the diff (not shown in the peek). */
+	inline?: number;
+}
+
+export interface PeekDTO {
+	kind: 'pr' | 'issue';
+	number: number;
+	title: string;
+	url: string;
+	repo: string;
+	state: 'open' | 'closed' | 'merged';
+	draft: boolean;
+	author: PeekPerson;
+	createdAt: string;
+	html: string;
+	labels: { name: string; color: string }[];
+	assignees: string[];
+	pr?: {
+		base: string;
+		head: string;
+		additions: number;
+		deletions: number;
+		files: number;
+		reviewDecision: string | null;
+		mergeable: string | null;
+		/** The latest review from each person who approved or asked for changes. */
+		reviews: { who: PeekPerson; state: string }[];
+		requested: { name: string; team: boolean }[];
+		ci: CiState | null;
+		checks: { name: string; state: CheckState; url: string | null }[];
+		checksTotal: number;
+	};
+	timeline: { total: number; items: PeekEntry[] };
+}

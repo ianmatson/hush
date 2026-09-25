@@ -104,7 +104,8 @@ export function snoozeOutcome(
 	since: number,
 	me: string
 ): { wake: false } | { wake: true; reason: string } {
-	if (eventHappened(event, e, since, me)) return { wake: true, reason: snoozeEvent(event)!.happened };
+	if (eventHappened(event, e, since, me))
+		return { wake: true, reason: snoozeEvent(event)!.happened };
 	if (e && (e.state === 'merged' || e.state === 'closed'))
 		return { wake: true, reason: e.state === 'merged' ? 'Merged' : 'Closed' };
 	return { wake: false };

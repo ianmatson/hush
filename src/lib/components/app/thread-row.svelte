@@ -20,6 +20,7 @@
 	import Link from '@lucide/svelte/icons/link';
 	import Mail from '@lucide/svelte/icons/mail';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
+	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 
 	let {
 		thread: t,
@@ -30,7 +31,8 @@
 		onopen,
 		onrowclick,
 		ontoggle,
-		oncopy
+		oncopy,
+		onpeek
 	}: {
 		thread: ThreadDTO;
 		/** The keyboard cursor is on this row. */
@@ -44,6 +46,8 @@
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
 		oncopy: (t: ThreadDTO) => void;
+		/** Only for PRs and issues. */
+		onpeek?: (t: ThreadDTO) => void;
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -159,6 +163,9 @@
 				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end" class="w-56">
+				{#if onpeek && t.number}
+					<DropdownMenu.Item onclick={() => onpeek(t)}><PanelRightOpen />Peek</DropdownMenu.Item>
+				{/if}
 				<DropdownMenu.Item onclick={() => onopen(t, t.actionUrl)}
 					><ExternalLink />{t.actionLabel}</DropdownMenu.Item
 				>
@@ -193,6 +200,25 @@
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>
+			{#if onpeek && t.number}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Peek"
+								onclick={(e: MouseEvent) => {
+									e.stopPropagation();
+									onpeek(t);
+								}}><PanelRightOpen /></Button
+							>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content>Peek <kbd class="ml-1 opacity-60">Space</kbd></Tooltip.Content>
+				</Tooltip.Root>
+			{/if}
 			{#if inInbox}
 				<Tooltip.Root>
 					<Tooltip.Trigger>

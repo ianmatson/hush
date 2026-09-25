@@ -1,4 +1,12 @@
-import type { CiState, Enrichment, TeamDTO } from '../src/lib/shared/types';
+import type {
+	CheckState,
+	CiState,
+	Enrichment,
+	PeekDTO,
+	PeekEntry,
+	PeekPerson,
+	TeamDTO
+} from '../src/lib/shared/types';
 import { isBot } from '../src/lib/shared/classify';
 import type { DashFacts, ExpandedQuery } from '../src/lib/shared/dashboard';
 
@@ -435,4 +443,179 @@ export async function searchDashboard(
 		})
 	);
 	return { hits, errors: [...new Set(errors)].slice(0, 3) };
+}
+
+// ---------------------------------------------------------------------------
+// Peek: one PR or issue with its description, checks, and latest comments. About 1 point.
+
+const PEEK_TIMELINE = 10;
+
+const PERSON = `login avatarUrl(size: 48) __typename`;
+
+const PEEK_QUERY = `query($o: String!, $r: String!, $n: Int!) {
+  repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) {
+    __typename
+    ... on PullRequest {
+      number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
+      baseRefName headRefName reviewDecision mergeable
+      repository { nameWithOwner }
+      author { ${PERSON} }
+      labels(first: 10) { nodes { name color } }
+      assignees(first: 10) { nodes { login } }
+      latestOpinionatedReviews(first: 20) { nodes { state author { ${PERSON} } } }
+      reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }
+      commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
+        totalCount
+        nodes {
+          __typename
+          ... on CheckRun { name status conclusion detailsUrl }
+          ... on StatusContext { context state targetUrl }
+        }
+      } } } } }
+      timelineItems(last: ${PEEK_TIMELINE}, itemTypes: [ISSUE_COMMENT, PULL_REQUEST_REVIEW]) {
+        totalCount
+        nodes {
+          __typename
+          ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url }
+          ... on PullRequestReview { author { ${PERSON} } bodyHTML state submittedAt createdAt url comments { totalCount } }
+        }
+      }
+    }
+    ... on Issue {
+      number title url state createdAt bodyHTML
+      repository { nameWithOwner }
+      author { ${PERSON} }
+      labels(first: 10) { nodes { name color } }
+      assignees(first: 10) { nodes { login } }
+      timelineItems(last: ${PEEK_TIMELINE}, itemTypes: [ISSUE_COMMENT]) {
+        totalCount
+        nodes { __typename ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url } }
+      }
+    }
+  } }
+}`;
+
+const person = (a: Node | null | undefined): PeekPerson => ({
+	login: a?.login ?? 'ghost',
+	avatar: a?.avatarUrl ?? null,
+	bot: a?.__typename === 'Bot' || isBot(a?.login)
+});
+
+function checkState(n: Node): CheckState {
+	if (n.__typename === 'StatusContext') {
+		const s = String(n.state);
+		return s === 'SUCCESS'
+			? 'success'
+			: s === 'PENDING' || s === 'EXPECTED'
+				? 'pending'
+				: 'failure';
+	}
+	if (n.status !== 'COMPLETED') return 'pending';
+	switch (n.conclusion) {
+		case 'SUCCESS':
+			return 'success';
+		case 'NEUTRAL':
+		case 'SKIPPED':
+		case 'STALE':
+			return 'neutral';
+		default:
+			return 'failure';
+	}
+}
+
+const CHECK_ORDER: Record<CheckState, number> = { failure: 0, pending: 1, neutral: 2, success: 3 };
+
+/** Fetch one PR or issue for the peek panel. Returns null when it does not exist or is hidden. */
+export async function fetchPeek(
+	token: string,
+	owner: string,
+	repo: string,
+	number: number
+): Promise<PeekDTO | null> {
+	const res = await gh(token, '/graphql', {
+		method: 'POST',
+		body: JSON.stringify({ query: PEEK_QUERY, variables: { o: owner, r: repo, n: number } })
+	});
+	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
+	const json = (await res.json()) as { data?: Node; errors?: { message: string }[] };
+	const n: Node | null | undefined = json.data?.repository?.issueOrPullRequest;
+	if (!n) {
+		if (json.errors?.length && json.data?.repository !== null)
+			throw new GitHubError(502, json.errors[0].message);
+		return null;
+	}
+	const pr = n.__typename === 'PullRequest';
+	const items: PeekEntry[] = (n.timelineItems?.nodes ?? [])
+		.filter((t: Node) => t?.__typename)
+		.map((t: Node) =>
+			t.__typename === 'PullRequestReview'
+				? {
+						type: 'review',
+						author: person(t.author),
+						at: t.submittedAt ?? t.createdAt,
+						url: t.url,
+						html: t.bodyHTML ?? '',
+						state: t.state,
+						inline: t.comments?.totalCount ?? 0
+					}
+				: {
+						type: 'comment',
+						author: person(t.author),
+						at: t.createdAt,
+						url: t.url,
+						html: t.bodyHTML ?? ''
+					}
+		);
+	const base: PeekDTO = {
+		kind: pr ? 'pr' : 'issue',
+		number: n.number,
+		title: n.title,
+		url: n.url,
+		repo: n.repository?.nameWithOwner ?? `${owner}/${repo}`,
+		state: n.merged ? 'merged' : n.state === 'CLOSED' ? 'closed' : 'open',
+		draft: !!n.isDraft,
+		author: person(n.author),
+		createdAt: n.createdAt,
+		html: n.bodyHTML ?? '',
+		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
+		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
+		timeline: { total: n.timelineItems?.totalCount ?? items.length, items }
+	};
+	if (!pr) return base;
+
+	const rollup = n.commits?.nodes?.[0]?.commit?.statusCheckRollup;
+	const checks = (rollup?.contexts?.nodes ?? [])
+		.filter((c: Node) => c?.__typename)
+		.map((c: Node) => ({
+			name: c.__typename === 'CheckRun' ? c.name : c.context,
+			state: checkState(c),
+			url: (c.__typename === 'CheckRun' ? c.detailsUrl : c.targetUrl) ?? null
+		}))
+		.sort(
+			(a: { state: CheckState }, b: { state: CheckState }) =>
+				CHECK_ORDER[a.state] - CHECK_ORDER[b.state]
+		);
+	return {
+		...base,
+		pr: {
+			base: n.baseRefName,
+			head: n.headRefName,
+			additions: n.additions ?? 0,
+			deletions: n.deletions ?? 0,
+			files: n.changedFiles ?? 0,
+			reviewDecision: n.reviewDecision ?? null,
+			mergeable: n.mergeable ?? null,
+			reviews: (n.latestOpinionatedReviews?.nodes ?? []).map((r: Node) => ({
+				who: person(r.author),
+				state: r.state
+			})),
+			requested: (n.reviewRequests?.nodes ?? [])
+				.map((r: Node) => r.requestedReviewer)
+				.filter(Boolean)
+				.map((r: Node) => ({ name: r.login ?? r.name, team: r.__typename === 'Team' })),
+			ci: (rollup?.state as CiState | undefined) ?? null,
+			checks,
+			checksTotal: rollup?.contexts?.totalCount ?? checks.length
+		}
+	};
 }

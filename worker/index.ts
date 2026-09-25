@@ -34,7 +34,14 @@ import {
 	type UserRow
 } from './db';
 import { renderFeed } from './feeds';
-import { getViewer, markThreadDone, markThreadRead, muteThread } from './github';
+import {
+	fetchPeek,
+	getViewer,
+	GitHubError,
+	markThreadDone,
+	markThreadRead,
+	muteThread
+} from './github';
 import { MUTED_BY_USER } from './poller';
 import { sendPush, vapidFromEnv } from './webpush';
 
@@ -242,7 +249,8 @@ app.get('/api/threads', async (c) => {
 	return c.json({ threads, counts: await counts(c.env, u.id) }, 200, noStore);
 });
 
-type ThreadAction = 'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+type ThreadAction =
+	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
 const THREAD_ACTIONS = new Set<ThreadAction>([
 	'done',
 	'undone',
@@ -286,16 +294,30 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 		const kindOf = (t: ThreadRow) =>
 			t.enrichment ? (JSON.parse(t.enrichment) as Enrichment).kind : 'other';
 		if (threads.some((t) => !ev.kinds.includes(kindOf(t) as 'pr' | 'issue')))
-			return c.json({ error: `"${ev.label}" works only for ${ev.kinds.map((k) => (k === 'pr' ? 'pull requests' : 'issues')).join(' and ')}.` }, 400);
+			return c.json(
+				{
+					error: `"${ev.label}" works only for ${ev.kinds.map((k) => (k === 'pr' ? 'pull requests' : 'issues')).join(' and ')}.`
+				},
+				400
+			);
 		// Refuse what would end at once: the event already happened, or the PR is already closed.
 		const endsNow = (t: ThreadRow) =>
-			snoozeOutcome(ev.id, t.enrichment ? (JSON.parse(t.enrichment) as Enrichment) : null, now, u.login);
+			snoozeOutcome(
+				ev.id,
+				t.enrichment ? (JSON.parse(t.enrichment) as Enrichment) : null,
+				now,
+				u.login
+			);
 		const already = threads.filter((t) => endsNow(t).wake);
 		if (already.length === threads.length) {
 			const o = endsNow(already[0]);
-			return c.json({ error: `${o.wake ? o.reason : 'Done'} already. Pick another condition.` }, 400);
+			return c.json(
+				{ error: `${o.wake ? o.reason : 'Done'} already. Pick another condition.` },
+				400
+			);
 		}
-		if (already.length) threads.splice(0, threads.length, ...threads.filter((t) => !already.includes(t)));
+		if (already.length)
+			threads.splice(0, threads.length, ...threads.filter((t) => !already.includes(t)));
 	}
 
 	const update = (t: ThreadRow, sql: string, ...args: unknown[]) =>
@@ -329,7 +351,12 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 				);
 			case 'unmute': {
 				const cls = classify(factsFromRow(t, u.login), settings!);
-				return update(t, `category = ?, rule = ?, triage = 'inbox'`, cls.category, cls.rule ?? null);
+				return update(
+					t,
+					`category = ?, rule = ?, triage = 'inbox'`,
+					cls.category,
+					cls.rule ?? null
+				);
 			}
 		}
 	});
@@ -549,6 +576,30 @@ app.post('/api/push/test', async (c) => {
 	return c.json({ sent: statuses.filter((s) => s >= 200 && s < 300).length, statuses });
 });
 
+// --- Peek ------------------------------------------------------------------
+
+const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
+
+app.get('/api/peek/:owner/:repo/:number', async (c) => {
+	const u = c.get('user');
+	const { owner, repo } = c.req.param();
+	const number = Number(c.req.param('number'));
+	if (!NAME.test(owner) || !NAME.test(repo) || !Number.isInteger(number) || number < 1)
+		return c.json({ error: 'Not a PR or issue.' }, 400);
+	try {
+		const peek = await fetchPeek(await userToken(c.env, u), owner, repo, number);
+		if (!peek)
+			return c.json(
+				{ error: 'GitHub did not find this PR or issue. Maybe you have no access.' },
+				404
+			);
+		return c.json(peek, 200, { 'Cache-Control': 'private, no-store' });
+	} catch (err) {
+		const status = err instanceof GitHubError && err.status === 401 ? 401 : 502;
+		return c.json({ error: (err as Error).message }, status);
+	}
+});
+
 // --- PR and issue dashboards -----------------------------------------------
 
 app.get('/api/teams', async (c) => {
@@ -563,14 +614,19 @@ app.get('/api/dashboard/:kind', async (c) => {
 	const perUser = <T>(sql: string) => c.env.DB.prepare(sql).bind(u.id).all<T>();
 	const [data, hidden, moves, order] = await Promise.all([
 		poller(c.env, u.id).dashboard(kind, c.req.query('refresh') === '1'),
-		perUser<{ item_id: string; updated_at: string }>('SELECT item_id, updated_at FROM dash_hidden WHERE user_id = ?'),
+		perUser<{ item_id: string; updated_at: string }>(
+			'SELECT item_id, updated_at FROM dash_hidden WHERE user_id = ?'
+		),
 		perUser<{ item_id: string; turn: Turn; updated_at: string }>(
 			'SELECT item_id, turn, updated_at FROM dash_moves WHERE user_id = ?'
 		),
-		perUser<{ item_id: string; rank: number }>('SELECT item_id, rank FROM dash_order WHERE user_id = ?')
+		perUser<{ item_id: string; rank: number }>(
+			'SELECT item_id, rank FROM dash_order WHERE user_id = ?'
+		)
 	]);
 	// Hidden and moved last "until it changes": a newer updatedAt undoes them.
-	const unchanged = (i: DashItem, at: string | undefined) => !!at && Date.parse(i.updatedAt) <= Date.parse(at);
+	const unchanged = (i: DashItem, at: string | undefined) =>
+		!!at && Date.parse(i.updatedAt) <= Date.parse(at);
 	const hiddenAt = new Map(hidden.results.map((h) => [h.item_id, h.updated_at]));
 	const moved = new Map(moves.results.map((m) => [m.item_id, m]));
 	const ranks = new Map(order.results.map((o) => [o.item_id, o.rank]));
@@ -610,21 +666,26 @@ const validRefs = (items: unknown): items is ItemRef[] =>
  */
 app.post('/api/dashboard/arrange', async (c) => {
 	const u = c.get('user');
-	const body = await c.req
-		.json<{ items?: unknown; order?: string[] }>()
-		.catch(() => null);
+	const body = await c.req.json<{ items?: unknown; order?: string[] }>().catch(() => null);
 	if (!body || !validRefs(body.items)) return c.json({ error: 'Invalid items' }, 400);
 	const items = body.items as (ItemRef & { turn?: Turn | null })[];
-	if (items.some((i) => i.turn != null && !TURNS.has(i.turn))) return c.json({ error: 'Unknown group' }, 400);
+	if (items.some((i) => i.turn != null && !TURNS.has(i.turn)))
+		return c.json({ error: 'Unknown group' }, 400);
 	const order = body.order ?? [];
-	if (!Array.isArray(order) || order.length > 300 || order.some((id) => typeof id !== 'string' || id.length > 100))
+	if (
+		!Array.isArray(order) ||
+		order.length > 300 ||
+		order.some((id) => typeof id !== 'string' || id.length > 100)
+	)
 		return c.json({ error: 'Invalid order' }, 400);
 
 	const db = c.env.DB;
 	const stmts: D1PreparedStatement[] = [];
 	for (const item of items) {
 		if (item.turn === null)
-			stmts.push(db.prepare('DELETE FROM dash_moves WHERE user_id = ? AND item_id = ?').bind(u.id, item.id));
+			stmts.push(
+				db.prepare('DELETE FROM dash_moves WHERE user_id = ? AND item_id = ?').bind(u.id, item.id)
+			);
 		else if (item.turn)
 			stmts.push(
 				db
@@ -667,10 +728,14 @@ app.post('/api/dashboard/hide', async (c) => {
 app.post('/api/dashboard/unhide', async (c) => {
 	const u = c.get('user');
 	const body = await c.req.json<{ ids?: unknown }>().catch(() => null);
-	const ids = Array.isArray(body?.ids) ? body.ids.filter((id): id is string => typeof id === 'string').slice(0, 300) : [];
+	const ids = Array.isArray(body?.ids)
+		? body.ids.filter((id): id is string => typeof id === 'string').slice(0, 300)
+		: [];
 	if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
 	await c.env.DB.batch(
-		ids.map((id) => c.env.DB.prepare('DELETE FROM dash_hidden WHERE user_id = ? AND item_id = ?').bind(u.id, id))
+		ids.map((id) =>
+			c.env.DB.prepare('DELETE FROM dash_hidden WHERE user_id = ? AND item_id = ?').bind(u.id, id)
+		)
 	);
 	return c.json({ ok: true });
 });

@@ -7,6 +7,7 @@ import type {
 	DashKind,
 	DashResponse,
 	MeDTO,
+	PeekDTO,
 	Settings,
 	ThreadDTO,
 	View
@@ -41,6 +42,11 @@ export const persistOptions = {
 		throttleTime: 1000
 	}),
 	maxAge: 24 * 60 * MIN,
+	// Peeks are large and cheap to fetch again: keep them in memory only.
+	dehydrateOptions: {
+		shouldDehydrateQuery: (q: { state: { status: string }; queryKey: readonly unknown[] }) =>
+			q.state.status === 'success' && q.queryKey[0] !== 'peek'
+	},
 	// Change this when a cached shape changes, to drop old caches.
 	buster: 'v2'
 };
@@ -53,7 +59,8 @@ export const keys = {
 	dash: (kind: DashKind) => ['dash', kind] as const,
 	feeds: ['feeds'] as const,
 	pushDevices: ['push-devices'] as const,
-	teams: ['teams'] as const
+	teams: ['teams'] as const,
+	peek: (repo: string, number: number) => ['peek', repo, number] as const
 };
 
 export const meQuery = () => queryOptions({ queryKey: keys.me, queryFn: api.me, staleTime: MIN });
@@ -143,3 +150,13 @@ export function leaveTo(path: '/login' | '/') {
 	clearCache();
 	location.replace(path);
 }
+
+/** One PR or issue for the peek panel. Fetched when opened (about 1 GraphQL point), never polled. */
+export const peekQuery = (repo: string, number: number) =>
+	queryOptions({
+		queryKey: keys.peek(repo, number),
+		queryFn: () => api.peek(repo, number),
+		staleTime: 2 * MIN,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});

@@ -5,6 +5,7 @@ import type {
 	FeedDTO,
 	FeedFilter,
 	MeDTO,
+	PeekDTO,
 	Settings,
 	TeamDTO,
 	ThreadDTO,
@@ -99,6 +100,11 @@ export const api = {
 		request<{ teams: TeamDTO[]; error?: string }>(
 			'GET',
 			`/api/teams${refresh ? '?refresh=1' : ''}`
+		),
+	peek: (repo: string, number: number) =>
+		request<PeekDTO>(
+			'GET',
+			`/api/peek/${repo.split('/').map(encodeURIComponent).join('/')}/${number}`
 		),
 	feeds: () => request<FeedDTO[]>('GET', '/api/feeds'),
 	createFeed: (name: string, filter: FeedFilter) =>

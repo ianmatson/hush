@@ -23,6 +23,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import DashRow from './dash-row.svelte';
+	import Peek from './peek.svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
@@ -37,6 +39,7 @@
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
+	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 
 	let { kind }: { kind: DashKind } = $props();
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
@@ -124,6 +127,31 @@
 	const order = $derived(navigable.map((i) => i.id));
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
 	const byId = (id: string) => data?.items.find((i) => i.id === id);
+
+	// --- Peek: follows the cursor while open ----------------------------------------------
+	let peekOpen = $state(false);
+	const phone = new MediaQuery('max-width: 639px');
+	// Read the cursor row even while closed: a derived whose dependencies change between runs
+	// (only `peekOpen` while closed) missed later cursor moves.
+	const peekItem = $derived.by(() => {
+		const row = navigable[selectedIndex] ?? null;
+		return peekOpen ? row : null;
+	});
+	const peekTarget = $derived(
+		peekItem && {
+			repo: peekItem.repo,
+			number: peekItem.number,
+			title: peekItem.title,
+			url: peekItem.url
+		}
+	);
+	$effect(() => {
+		if (peekOpen && !peekItem) peekOpen = false;
+	});
+	function peek(i: DashItem) {
+		selectedId = i.id;
+		peekOpen = true;
+	}
 
 	/** `index` counts the visible rows left in the group once the dragged rows are out. */
 	function dropAt(ids: string[], turn: Turn, index: number) {
@@ -357,8 +385,11 @@
 
 	function onRowClick(e: MouseEvent, i: DashItem) {
 		if (sel.click(e, i.id, order, selectedId)) return;
+		// Phones: a tap reads the item (desktop keeps click for the cursor, Space to peek).
+		const read = phone.current && !sel.size;
 		sel.clear();
 		selectedId = i.id;
+		if (read) peekOpen = true;
 	}
 
 	function onToggle(e: MouseEvent, i: DashItem) {
@@ -401,7 +432,8 @@
 			J: () => move(1, true),
 			K: () => move(-1, true),
 			x: () => i && sel.toggle(i.id),
-			Escape: () => sel.clear(),
+			' ': () => i && (peekOpen = !peekOpen),
+			Escape: () => (peekOpen ? (peekOpen = false) : sel.clear()),
 			o: () => i && open(i, i.actionUrl),
 			Enter: () => i && open(i, i.actionUrl),
 			O: () => i && open(i, i.url),
@@ -442,6 +474,7 @@
 	const shortcuts = [
 		['J / K', 'Next / previous'],
 		['Shift + J / K', 'Extend the selection'],
+		['Space', 'Peek (J / K move while it is open)'],
 		['X', 'Select or deselect'],
 		['⌘ / Ctrl + A', 'Select all'],
 		['⌘ / Ctrl + click', 'Add to selection'],
@@ -671,6 +704,7 @@
 														onundomove={(x) => arrange([x.id], null)}
 														groups={GROUPS}
 														onmove={(x, turn) => moveTo([x.id], turn)}
+														onpeek={peek}
 													/>
 												{/if}
 											</li>
@@ -684,6 +718,9 @@
 			</ContextMenu.Trigger>
 			<ContextMenu.Content class="w-64">
 				{#if menuOne}
+					<ContextMenu.Item onclick={() => peek(menuOne)}>
+						<PanelRightOpen />Peek<ContextMenu.Shortcut>Space</ContextMenu.Shortcut>
+					</ContextMenu.Item>
 					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
 						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
 					</ContextMenu.Item>
@@ -808,6 +845,34 @@
 		><Link /><span class="hidden sm:inline">Copy links</span></Button
 	>
 </BulkBar>
+
+{#snippet peekFooter()}
+	{#if peekItem}
+		{@const i = peekItem}
+		<Button
+			variant="ghost"
+			size="sm"
+			aria-label={i.dismissed ? 'Show again' : 'Hide until it changes'}
+			onclick={() => toggleHide([i.id])}
+		>
+			{#if i.dismissed}<Eye /><span class="max-sm:sr-only">Show again</span>{:else}<EyeOff /><span
+					class="max-sm:sr-only">Hide</span
+				>{/if}
+		</Button>
+		<Button variant="ghost" size="sm" aria-label="Copy link" onclick={() => copyLinks([i.id])}
+			><Link /><span class="max-sm:sr-only">Copy link</span></Button
+		>
+		<Button
+			variant={i.turn === 'you' ? 'default' : 'outline'}
+			size="sm"
+			class="ml-auto"
+			onclick={() => open(i, i.actionUrl)}
+			>{i.actionLabel}<ExternalLink class="opacity-60" /></Button
+		>
+	{/if}
+{/snippet}
+
+<Peek target={peekTarget} onclose={() => (peekOpen = false)} footer={peekFooter} />
 
 <Dialog.Root bind:open={helpOpen}>
 	<Dialog.Content class="sm:max-w-sm">

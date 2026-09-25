@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -26,6 +26,7 @@
 	import BulkBar from '$lib/components/app/bulk-bar.svelte';
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
+	import Peek from '$lib/components/app/peek.svelte';
 	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
@@ -40,6 +41,7 @@
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import Mail from '@lucide/svelte/icons/mail';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
+	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
 
@@ -86,10 +88,48 @@
 		if (!visible.some((t) => t.id === selectedId)) selectedId = visible[0]?.id ?? null;
 		untrack(() => sel.prune(order));
 	});
+	// --- Peek: follows the cursor while open ----------------------------------------------
+	let peekOpen = $state(false);
+	let peekSnoozeOpen = $state(false);
+	const phone = new MediaQuery('max-width: 639px');
+	const wide = new MediaQuery('min-width: 1024px');
+	// Read the cursor row even while closed: a derived whose dependencies change between runs
+	// (only `peekOpen` while closed) missed later cursor moves.
+	const peekThread = $derived.by(() => {
+		const row = visible[selectedIndex] ?? null;
+		return peekOpen ? row : null;
+	});
+	const peekTarget = $derived(
+		peekThread && {
+			repo: peekThread.repo,
+			number: peekThread.number,
+			title: peekThread.title,
+			url: peekThread.htmlUrl
+		}
+	);
+	// The list became empty (or changed view) while peeking.
+	$effect(() => {
+		if (peekOpen && !peekThread) peekOpen = false;
+	});
+	// Reading it in the peek counts as reading it, once it stays open for a moment.
+	$effect(() => {
+		const t = peekThread;
+		if (!t?.unread || !t.number) return;
+		const timer = setTimeout(() => act([t.id], 'read'), 1500);
+		return () => clearTimeout(timer);
+	});
+	function peek(t: ThreadDTO) {
+		selectedId = t.id;
+		peekOpen = true;
+	}
+
 	// A new view starts with nothing selected.
 	$effect(() => {
 		void view;
-		untrack(() => sel.clear());
+		untrack(() => {
+			sel.clear();
+			peekOpen = false;
+		});
 	});
 
 	async function sync() {
@@ -209,8 +249,11 @@
 
 	function onRowClick(e: MouseEvent, t: ThreadDTO) {
 		if (sel.click(e, t.id, order, selectedId)) return;
+		// Phones: a tap reads the thread (desktop keeps click for the cursor, Space to peek).
+		const read = phone.current && !sel.size && !!t.number;
 		sel.clear();
 		selectedId = t.id;
+		if (read) peekOpen = true;
 	}
 
 	function onToggle(e: MouseEvent, t: ThreadDTO) {
@@ -252,7 +295,8 @@
 			J: () => move(1, true),
 			K: () => move(-1, true),
 			x: () => t && sel.toggle(t.id),
-			Escape: () => sel.clear(),
+			' ': () => t && (peekOpen = !peekOpen),
+			Escape: () => (peekOpen ? (peekOpen = false) : sel.clear()),
 			o: () => t && open(t, t.actionUrl),
 			Enter: () => t && open(t, t.actionUrl),
 			O: () => t && open(t, t.htmlUrl),
@@ -303,6 +347,7 @@
 	const shortcuts = [
 		['J / K', 'Next / previous'],
 		['Shift + J / K', 'Extend the selection'],
+		['Space', 'Peek (J / K move while it is open)'],
 		['X', 'Select or deselect'],
 		['⌘ / Ctrl + A', 'Select all'],
 		['⌘ / Ctrl + click', 'Add to selection'],
@@ -470,6 +515,7 @@
 									onrowclick={(e) => onRowClick(e, t)}
 									ontoggle={(e) => onToggle(e, t)}
 									oncopy={(x) => copyLinks([x.id])}
+									onpeek={peek}
 								/>
 							</li>
 						{/each}
@@ -478,6 +524,11 @@
 			</ContextMenu.Trigger>
 			<ContextMenu.Content class="w-60">
 				{#if menuOne}
+					{#if menuOne.number}
+						<ContextMenu.Item onclick={() => peek(menuOne)}>
+							<PanelRightOpen />Peek<ContextMenu.Shortcut>Space</ContextMenu.Shortcut>
+						</ContextMenu.Item>
+					{/if}
 					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
 						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
 					</ContextMenu.Item>
@@ -589,6 +640,76 @@
 	subjects={targets().map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
 	onpick={(b) => act(targets(), 'snooze', b)}
 />
+
+{#snippet peekFooter()}
+	{#if peekThread}
+		{@const t = peekThread}
+		{#if inInbox}
+			<Button variant="ghost" size="sm" aria-label="Done" onclick={() => act([t.id], 'done')}
+				><Check /><span class="max-sm:sr-only">Done</span></Button
+			>
+			{#if wide.current}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="sm"><AlarmClock />Snooze</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="start" side="top" class="w-56">
+						<SnoozeItems
+							subjects={[subjectKind(t.subjectType)]}
+							disabled={alreadyTrue(t)}
+							onpick={(b) => act([t.id], 'snooze', b)}
+						/>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{:else}
+				<Button
+					variant="ghost"
+					size="sm"
+					aria-label="Snooze"
+					onclick={() => (peekSnoozeOpen = true)}
+					><AlarmClock /><span class="max-sm:sr-only">Snooze</span></Button
+				>
+			{/if}
+			<Button variant="ghost" size="sm" aria-label="Mute" onclick={() => act([t.id], 'mute')}
+				><BellOff /><span class="max-sm:sr-only">Mute</span></Button
+			>
+		{:else}
+			<Button variant="ghost" size="sm" onclick={() => act([t.id], restoreAction(t))}>
+				<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
+			</Button>
+		{/if}
+		<Button
+			variant="ghost"
+			size="sm"
+			aria-label={t.unread ? 'Mark as read' : 'Mark as unread'}
+			onclick={() => toggleRead([t.id])}
+		>
+			{#if t.unread}<MailOpen /><span class="max-sm:sr-only">Read</span>{:else}<Mail /><span
+					class="max-sm:sr-only">Unread</span
+				>{/if}
+		</Button>
+		<Button
+			variant={t.category === 'action' ? 'default' : 'outline'}
+			size="sm"
+			class="ml-auto"
+			onclick={() => open(t, t.actionUrl)}
+			>{t.actionLabel}<ExternalLink class="opacity-60" /></Button
+		>
+	{/if}
+{/snippet}
+
+<Peek target={peekTarget} onclose={() => (peekOpen = false)} footer={peekFooter} />
+
+{#if peekThread}
+	<SnoozeSheet
+		bind:open={peekSnoozeOpen}
+		subjects={[subjectKind(peekThread.subjectType)]}
+		disabled={alreadyTrue(peekThread)}
+		onpick={(b) => peekThread && act([peekThread.id], 'snooze', b)}
+	/>
+{/if}
 
 <Dialog.Root bind:open={helpOpen}>
 	<Dialog.Content class="sm:max-w-sm">

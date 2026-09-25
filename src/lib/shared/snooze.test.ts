@@ -59,11 +59,20 @@ describe('eventsFor', () => {
 
 describe('snoozeOutcome', () => {
 	it('wakes on the event', () => {
-		expect(snoozeOutcome('ci_pass', pr({ ci: 'SUCCESS' }), since, 'ian')).toEqual({ wake: true, reason: 'CI passed' });
+		expect(snoozeOutcome('ci_pass', pr({ ci: 'SUCCESS' }), since, 'ian')).toEqual({
+			wake: true,
+			reason: 'CI passed'
+		});
 	});
 	it('wakes when the PR is merged or closed, whatever the condition', () => {
-		expect(snoozeOutcome('ci_pass', pr({ state: 'merged', ci: 'FAILURE' }), since, 'ian')).toEqual({ wake: true, reason: 'Merged' });
-		expect(snoozeOutcome('reply', { kind: 'issue', state: 'closed' }, since, 'ian')).toEqual({ wake: true, reason: 'Closed' });
+		expect(snoozeOutcome('ci_pass', pr({ state: 'merged', ci: 'FAILURE' }), since, 'ian')).toEqual({
+			wake: true,
+			reason: 'Merged'
+		});
+		expect(snoozeOutcome('reply', { kind: 'issue', state: 'closed' }, since, 'ian')).toEqual({
+			wake: true,
+			reason: 'Closed'
+		});
 	});
 	it('keeps waiting otherwise, and when the PR cannot be read', () => {
 		expect(snoozeOutcome('ci_pass', pr({ ci: 'PENDING' }), since, 'ian')).toEqual({ wake: false });

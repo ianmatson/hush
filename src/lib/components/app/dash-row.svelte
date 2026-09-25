@@ -19,6 +19,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import X from '@lucide/svelte/icons/x';
+	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import SelectMark from './select-mark.svelte';
 
 	let {
@@ -36,7 +37,8 @@
 		ontoggle,
 		onundomove,
 		groups = [],
-		onmove = () => {}
+		onmove = () => {},
+		onpeek
 	}: {
 		item: DashItem;
 		/** The keyboard cursor is on this row. */
@@ -57,6 +59,7 @@
 		/** Groups for "Move to" (the row menu on small screens, which have no drag). */
 		groups?: { turn: DashItem['turn']; label: string }[];
 		onmove?: (i: DashItem, turn: DashItem['turn']) => void;
+		onpeek?: (i: DashItem) => void;
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -245,6 +248,9 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" class="w-56">
+					{#if onpeek}
+						<DropdownMenu.Item onclick={() => onpeek(i)}><PanelRightOpen />Peek</DropdownMenu.Item>
+					{/if}
 					<DropdownMenu.Item onclick={() => onopen(i, i.actionUrl)}
 						><ExternalLink />{i.actionLabel}</DropdownMenu.Item
 					>
@@ -283,6 +289,25 @@
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>
+			{#if onpeek}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Peek"
+								onclick={(e: MouseEvent) => {
+									e.stopPropagation();
+									onpeek(i);
+								}}><PanelRightOpen /></Button
+							>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content>Peek <kbd class="ml-1 opacity-60">Space</kbd></Tooltip.Content>
+				</Tooltip.Root>
+			{/if}
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					{#snippet child({ props })}

@@ -17,6 +17,7 @@
 
 {#if count > 0}
 	<div
+		data-bulk-bar
 		class="fixed inset-x-0 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-30 flex justify-center px-4"
 		transition:fly={{ y: 24, duration: 220, easing: cubicOut }}
 	>
