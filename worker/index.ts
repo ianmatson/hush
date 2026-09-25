@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { classify, validateRules } from '../src/lib/shared/classify';
 import { validateDash } from '../src/lib/shared/dashboard';
+import { validateMenus } from '../src/lib/shared/menus';
 import {
 	SNOOZE_EVENT_MAX_MS,
 	snoozeEvent,
@@ -471,6 +472,12 @@ app.put('/api/settings', async (c) => {
 		if (err) return c.json({ error: err }, 400);
 		next.dash = dash;
 	}
+	if (body.menus !== undefined) {
+		const menus = { ...next.menus, ...body.menus };
+		const err = validateMenus(menus);
+		if (err) return c.json({ error: err }, 400);
+		next.menus = menus;
+	}
 	if (body.rules !== undefined) {
 		const err = validateRules(body.rules);
 		if (err) return c.json({ error: err }, 400);
@@ -479,7 +486,13 @@ app.put('/api/settings', async (c) => {
 	await c.env.DB.prepare('UPDATE users SET settings = ?, updated_at = ? WHERE id = ?')
 		.bind(JSON.stringify(next), Date.now(), u.id)
 		.run();
-	const changed = await reclassify(c.env, u, next);
+	// Only these settings change how threads are classified; the rest (menus, dashboards, push)
+	// must not rewrite every thread.
+	const affects =
+		body.rules !== undefined ||
+		typeof body.botsAreFyi === 'boolean' ||
+		typeof body.teamReviewsAreAction === 'boolean';
+	const changed = affects ? await reclassify(c.env, u, next) : 0;
 	return c.json({ settings: next, reclassified: changed });
 });
 

@@ -151,6 +151,7 @@
 				['notifications', 'Notifications'],
 				['inbox', 'Inbox and rules'],
 				['dashboards', 'PR and issue dashboards'],
+				['menus', 'Menus'],
 				['feeds', 'Feeds'],
 				['appearance', 'Appearance'],
 				['account', 'Account']

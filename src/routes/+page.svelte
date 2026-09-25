@@ -27,6 +27,10 @@
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
 	import Peek from '$lib/components/app/peek.svelte';
+	import AppMenu from '$lib/components/app/app-menu.svelte';
+	import { buildMenu, type MenuEntry } from '$lib/menu';
+	import { DEFAULT_MENUS, MENU_ITEMS } from '$lib/shared/menus';
+	import type { Component } from 'svelte';
 	import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
 	import { palette, type PaletteCommand } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
@@ -348,9 +352,108 @@
 		}
 		menuIds = sel.size ? sel.targets(order, id) : [id];
 	}
-	const menuOne = $derived(menuIds.length === 1 ? byId(menuIds[0]) : undefined);
-	const menuKinds = $derived(menuIds.map((id) => subjectKind(byId(id)?.subjectType ?? '')));
-	const n = (label: string) => (menuIds.length > 1 ? `${label} (${menuIds.length})` : label);
+
+	// --- Menus (Settings → Menus): one list for the right-click and the phone "⋯" menus ---
+	let menuSnoozeIds = $state<string[]>([]);
+	let menuSnoozeOpen = $state(false);
+	const itemLabel = (id: string) => MENU_ITEMS.inbox.find((i) => i.id === id)?.label ?? id;
+
+	/** The menu for these threads, in your saved order, with only the items that apply. */
+	function menuFor(ids: string[]): MenuEntry[] {
+		const one = ids.length === 1 ? byId(ids[0]) : undefined;
+		const n = (label: string) => (ids.length > 1 ? `${label} (${ids.length})` : label);
+		const kinds = ids.map((id) => subjectKind(byId(id)?.subjectType ?? ''));
+		const already = one ? alreadyTrue(one) : [];
+		const events = eventsFor(kinds);
+		const item = (
+			key: string,
+			label: string,
+			icon: Component,
+			run: () => void,
+			shortcut?: string
+		): MenuEntry => ({ type: 'item', key, label, icon, run, shortcut });
+		const make = (id: string): MenuEntry | null => {
+			switch (id) {
+				case 'peek':
+					return one?.number ? item(id, 'Peek', PanelRightOpen, () => peek(one), 'Space') : null;
+				case 'main':
+					return one
+						? item(id, one.actionLabel, ExternalLink, () => open(one, one.actionUrl), '↵')
+						: null;
+				case 'github':
+					return one && one.htmlUrl !== one.actionUrl
+						? item(id, 'Open on GitHub', ExternalLink, () => open(one, one.htmlUrl), '⇧O')
+						: null;
+				case 'done':
+					return inInbox ? item(id, n('Done'), Check, () => act(ids, 'done'), 'E') : null;
+				case 'snooze':
+					return inInbox
+						? {
+								type: 'snooze',
+								key: id,
+								label: n('Snooze'),
+								icon: AlarmClock,
+								subjects: kinds,
+								disabled: already,
+								onpick: (b) => act(ids, 'snooze', b),
+								sheet: () => {
+									menuSnoozeIds = ids;
+									menuSnoozeOpen = true;
+								}
+							}
+						: null;
+				case 'mute':
+					return inInbox ? item(id, n('Mute'), BellOff, () => act(ids, 'mute'), 'M') : null;
+				case 'restore':
+					return inInbox
+						? null
+						: item(id, n(view === 'muted' ? 'Unmute' : 'Move to inbox'), Undo, () =>
+								act(ids, restoreAction(one))
+							);
+				case 'read': {
+					const r = readAction(ids);
+					return item(
+						id,
+						n(r === 'read' ? 'Mark as read' : 'Mark as unread'),
+						r === 'read' ? MailOpen : Mail,
+						() => act(ids, r),
+						'U'
+					);
+				}
+				case 'copy':
+					return item(
+						id,
+						n(ids.length > 1 ? 'Copy links' : 'Copy link'),
+						Link,
+						() => copyLinks(ids),
+						'C'
+					);
+				case 'select':
+					return one
+						? item(
+								id,
+								sel.has(one.id) ? 'Deselect' : 'Select',
+								SquareCheck,
+								() => sel.toggle(one.id),
+								'X'
+							)
+						: null;
+				case 'selectAll':
+					return item(id, 'Select all', SquareCheck, () => sel.all(order), '⌘A');
+			}
+			if (!inInbox) return null;
+			const time = snoozeOptions().find((o) => `snooze:${o.id}` === id);
+			if (time)
+				return item(id, n(itemLabel(id)), AlarmClock, () =>
+					act(ids, 'snooze', { until: time.until })
+				);
+			const ev = events.find((e) => `until:${e.id}` === id);
+			if (ev && !already.includes(ev.id))
+				return item(id, n(itemLabel(id)), Zap, () => act(ids, 'snooze', { event: ev.id }));
+			return null;
+		};
+		return buildMenu(me.data?.settings.menus.inbox ?? DEFAULT_MENUS.inbox, make);
+	}
 	const restoreAction = (t: ThreadDTO | undefined): ThreadAction =>
 		view === 'muted' || t?.category === 'muted'
 			? 'unmute'
@@ -622,8 +725,7 @@
 									onopen={open}
 									onrowclick={(e) => onRowClick(e, t)}
 									ontoggle={(e) => onToggle(e, t)}
-									oncopy={(x) => copyLinks([x.id])}
-									onpeek={peek}
+									menu={() => menuFor([t.id])}
 								/>
 							</li>
 						{/each}
@@ -631,66 +733,7 @@
 				{/snippet}
 			</ContextMenu.Trigger>
 			<ContextMenu.Content class="w-60">
-				{#if menuOne}
-					{#if menuOne.number}
-						<ContextMenu.Item onclick={() => peek(menuOne)}>
-							<PanelRightOpen />Peek<ContextMenu.Shortcut>Space</ContextMenu.Shortcut>
-						</ContextMenu.Item>
-					{/if}
-					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
-						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
-					</ContextMenu.Item>
-					{#if menuOne.htmlUrl !== menuOne.actionUrl}
-						<ContextMenu.Item onclick={() => open(menuOne, menuOne.htmlUrl)}>
-							<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
-						</ContextMenu.Item>
-					{/if}
-					<ContextMenu.Separator />
-				{/if}
-				{#if inInbox}
-					<ContextMenu.Item onclick={() => act(menuIds, 'done')}>
-						<Check />{n('Done')}<ContextMenu.Shortcut>E</ContextMenu.Shortcut>
-					</ContextMenu.Item>
-					<ContextMenu.Sub>
-						<ContextMenu.SubTrigger><AlarmClock />{n('Snooze')}</ContextMenu.SubTrigger>
-						<ContextMenu.SubContent class="w-56">
-							<SnoozeItems
-								menu="context"
-								subjects={menuKinds}
-								onpick={(b) => act(menuIds, 'snooze', b)}
-							/>
-						</ContextMenu.SubContent>
-					</ContextMenu.Sub>
-					<ContextMenu.Item onclick={() => act(menuIds, 'mute')}>
-						<BellOff />{n('Mute')}<ContextMenu.Shortcut>M</ContextMenu.Shortcut>
-					</ContextMenu.Item>
-				{:else}
-					<ContextMenu.Item onclick={() => act(menuIds, restoreAction(menuOne))}>
-						<Undo />{n(view === 'muted' ? 'Unmute' : 'Move to inbox')}
-					</ContextMenu.Item>
-				{/if}
-				<ContextMenu.Item onclick={() => toggleRead(menuIds)}>
-					{#if readAction(menuIds) === 'read'}<MailOpen />{n('Mark as read')}{:else}<Mail />{n(
-							'Mark as unread'
-						)}{/if}
-					<ContextMenu.Shortcut>U</ContextMenu.Shortcut>
-				</ContextMenu.Item>
-				<ContextMenu.Item onclick={() => copyLinks(menuIds)}>
-					<Link />{n(menuIds.length > 1 ? 'Copy links' : 'Copy link')}<ContextMenu.Shortcut
-						>C</ContextMenu.Shortcut
-					>
-				</ContextMenu.Item>
-				<ContextMenu.Separator />
-				{#if menuOne}
-					<ContextMenu.Item onclick={() => sel.toggle(menuOne.id)}>
-						<SquareCheck />{sel.has(menuOne.id) ? 'Deselect' : 'Select'}<ContextMenu.Shortcut
-							>X</ContextMenu.Shortcut
-						>
-					</ContextMenu.Item>
-				{/if}
-				<ContextMenu.Item onclick={() => sel.all(order)}>
-					<SquareCheck />Select all<ContextMenu.Shortcut>⌘A</ContextMenu.Shortcut>
-				</ContextMenu.Item>
+				<AppMenu entries={menuFor(menuIds)} kind="context" />
 			</ContextMenu.Content>
 		</ContextMenu.Root>
 	{/if}
@@ -811,6 +854,15 @@
 {/snippet}
 
 <Peek target={peekTarget} onclose={() => (peekOpen = false)} footer={peekFooter} />
+
+<SnoozeSheet
+	bind:open={menuSnoozeOpen}
+	subjects={menuSnoozeIds.map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
+	disabled={menuSnoozeIds.length === 1 && byId(menuSnoozeIds[0])
+		? alreadyTrue(byId(menuSnoozeIds[0])!)
+		: []}
+	onpick={(b) => act(menuSnoozeIds, 'snooze', b)}
+/>
 
 {#if peekThread}
 	<SnoozeSheet

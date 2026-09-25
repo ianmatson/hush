@@ -24,6 +24,11 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import DashRow from './dash-row.svelte';
 	import { palette, type PaletteCommand } from '$lib/palette.svelte';
+	import AppMenu from './app-menu.svelte';
+	import { buildMenu, type MenuEntry } from '$lib/menu';
+	import { DEFAULT_MENUS } from '$lib/shared/menus';
+	import { meQuery } from '$lib/queries';
+	import type { Component } from 'svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import Peek from './peek.svelte';
 	import BulkBar from './bulk-bar.svelte';
@@ -47,6 +52,7 @@
 	const FLIP = { duration: 260, easing: cubicOut };
 
 	const dashQ = createQuery(() => dashQuery(kind));
+	const me = createQuery(meQuery);
 	const data = $derived(dashQ.data ?? null);
 	let refreshing = $state(false);
 	let section = $state<string | null>(null);
@@ -555,9 +561,83 @@
 		}
 		menuIds = sel.size ? sel.targets(order, id) : [id];
 	}
-	const menuOne = $derived(menuIds.length === 1 ? byId(menuIds[0]) : undefined);
-	const menuMoved = $derived(menuIds.some((id) => byId(id)?.movedByYou));
-	const n = (label: string) => (menuIds.length > 1 ? `${label} (${menuIds.length})` : label);
+
+	// --- Menus (Settings → Menus): one list for the right-click and the phone "⋯" menus ---
+	/** The menu for these items, in your saved order, with only the items that apply. */
+	function menuFor(ids: string[]): MenuEntry[] {
+		const one = ids.length === 1 ? byId(ids[0]) : undefined;
+		const n = (label: string) => (ids.length > 1 ? `${label} (${ids.length})` : label);
+		const item = (
+			key: string,
+			label: string,
+			icon: Component,
+			run: () => void,
+			shortcut?: string,
+			disabled = false
+		): MenuEntry => ({ type: 'item', key, label, icon, run, shortcut, disabled });
+		const moveItem = (g: (typeof GROUPS)[number], key: string, label: string) =>
+			item(
+				key,
+				label,
+				ArrowRightLeft,
+				() => moveTo(ids, g.turn),
+				undefined,
+				ids.every((id) => byId(id)?.turn === g.turn)
+			);
+		const make = (id: string): MenuEntry | null => {
+			switch (id) {
+				case 'peek':
+					return one ? item(id, 'Peek', PanelRightOpen, () => peek(one), 'Space') : null;
+				case 'main':
+					return one
+						? item(id, one.actionLabel, ExternalLink, () => open(one, one.actionUrl), '↵')
+						: null;
+				case 'github':
+					return one && one.url !== one.actionUrl
+						? item(id, 'Open on GitHub', ExternalLink, () => open(one, one.url), '⇧O')
+						: null;
+				case 'move':
+					return {
+						type: 'sub',
+						key: id,
+						label: n('Move to'),
+						icon: ArrowRightLeft,
+						items: GROUPS.map((g) => moveItem(g, `move-${g.turn}`, g.label))
+					};
+				case 'undoMove':
+					return ids.some((x) => byId(x)?.movedByYou)
+						? item(id, n('Undo move'), Undo, () => arrange(ids, null))
+						: null;
+				case 'hide':
+					return showHidden
+						? item(id, n('Show again'), Eye, () => toggleHide(ids), 'E')
+						: item(id, n('Hide until it changes'), EyeOff, () => toggleHide(ids), 'E');
+				case 'copy':
+					return item(
+						id,
+						n(ids.length > 1 ? 'Copy links' : 'Copy link'),
+						Link,
+						() => copyLinks(ids),
+						'C'
+					);
+				case 'select':
+					return one
+						? item(
+								id,
+								sel.has(one.id) ? 'Deselect' : 'Select',
+								SquareCheck,
+								() => sel.toggle(one.id),
+								'X'
+							)
+						: null;
+				case 'selectAll':
+					return item(id, 'Select all', SquareCheck, () => sel.all(order), '⌘A');
+			}
+			const g = GROUPS.find((x) => `move:${x.turn}` === id);
+			return g ? moveItem(g, id, n(`Move to ${g.label}`)) : null;
+		};
+		return buildMenu(me.data?.settings.menus.dash ?? DEFAULT_MENUS.dash, make);
+	}
 
 	const shortcuts = [
 		['J / K', 'Next / previous'],
@@ -791,9 +871,7 @@
 														onrowclick={(e) => onRowClick(e, i)}
 														ontoggle={(e) => onToggle(e, i)}
 														onundomove={(x) => arrange([x.id], null)}
-														groups={GROUPS}
-														onmove={(x, turn) => moveTo([x.id], turn)}
-														onpeek={peek}
+														menu={() => menuFor([i.id])}
 													/>
 												{/if}
 											</li>
@@ -806,58 +884,7 @@
 				{/snippet}
 			</ContextMenu.Trigger>
 			<ContextMenu.Content class="w-64">
-				{#if menuOne}
-					<ContextMenu.Item onclick={() => peek(menuOne)}>
-						<PanelRightOpen />Peek<ContextMenu.Shortcut>Space</ContextMenu.Shortcut>
-					</ContextMenu.Item>
-					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
-						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
-					</ContextMenu.Item>
-					{#if menuOne.url !== menuOne.actionUrl}
-						<ContextMenu.Item onclick={() => open(menuOne, menuOne.url)}>
-							<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
-						</ContextMenu.Item>
-					{/if}
-					<ContextMenu.Separator />
-				{/if}
-				<ContextMenu.Sub>
-					<ContextMenu.SubTrigger><ArrowRightLeft />{n('Move to')}</ContextMenu.SubTrigger>
-					<ContextMenu.SubContent>
-						{#each GROUPS as g (g.turn)}
-							<ContextMenu.Item
-								disabled={menuIds.every((id) => byId(id)?.turn === g.turn)}
-								onclick={() => moveTo(menuIds, g.turn)}
-							>
-								{g.label}
-							</ContextMenu.Item>
-						{/each}
-					</ContextMenu.SubContent>
-				</ContextMenu.Sub>
-				{#if menuMoved}
-					<ContextMenu.Item onclick={() => arrange(menuIds, null)}
-						><Undo />{n('Undo move')}</ContextMenu.Item
-					>
-				{/if}
-				<ContextMenu.Item onclick={() => toggleHide(menuIds)}>
-					{#if showHidden}<Eye />{n('Show again')}{:else}<EyeOff />{n('Hide until it changes')}{/if}
-					<ContextMenu.Shortcut>E</ContextMenu.Shortcut>
-				</ContextMenu.Item>
-				<ContextMenu.Item onclick={() => copyLinks(menuIds)}>
-					<Link />{n(menuIds.length > 1 ? 'Copy links' : 'Copy link')}<ContextMenu.Shortcut
-						>C</ContextMenu.Shortcut
-					>
-				</ContextMenu.Item>
-				<ContextMenu.Separator />
-				{#if menuOne}
-					<ContextMenu.Item onclick={() => sel.toggle(menuOne.id)}>
-						<SquareCheck />{sel.has(menuOne.id) ? 'Deselect' : 'Select'}<ContextMenu.Shortcut
-							>X</ContextMenu.Shortcut
-						>
-					</ContextMenu.Item>
-				{/if}
-				<ContextMenu.Item onclick={() => sel.all(order)}>
-					<SquareCheck />Select all<ContextMenu.Shortcut>⌘A</ContextMenu.Shortcut>
-				</ContextMenu.Item>
+				<AppMenu entries={menuFor(menuIds)} kind="context" />
 			</ContextMenu.Content>
 		</ContextMenu.Root>
 	{/if}

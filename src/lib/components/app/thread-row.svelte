@@ -9,7 +9,8 @@
 	import KindIcon from './kind-icon.svelte';
 	import SelectMark from './select-mark.svelte';
 	import SnoozeItems from './snooze-items.svelte';
-	import SnoozeSheet from './snooze-sheet.svelte';
+	import AppMenu from './app-menu.svelte';
+	import type { MenuEntry } from '$lib/menu';
 	import { SNOOZE_EVENTS, alreadyTrue, subjectKind } from '$lib/shared/snooze';
 	import Check from '@lucide/svelte/icons/check';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
@@ -17,10 +18,6 @@
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import Link from '@lucide/svelte/icons/link';
-	import Mail from '@lucide/svelte/icons/mail';
-	import MailOpen from '@lucide/svelte/icons/mail-open';
-	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 
 	let {
 		thread: t,
@@ -31,8 +28,7 @@
 		onopen,
 		onrowclick,
 		ontoggle,
-		oncopy,
-		onpeek
+		menu
 	}: {
 		thread: ThreadDTO;
 		/** The keyboard cursor is on this row. */
@@ -45,13 +41,11 @@
 		onopen: (t: ThreadDTO, url: string) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
-		oncopy: (t: ThreadDTO) => void;
-		/** Only for PRs and issues. */
-		onpeek?: (t: ThreadDTO) => void;
+		/** The "⋯" menu on phones (the same list as the right-click menu). */
+		menu: () => MenuEntry[];
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
-	let snoozeOpen = $state(false);
 	$effect(() => {
 		if (selected) row?.scrollIntoView({ block: 'nearest' });
 	});
@@ -165,37 +159,7 @@
 				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end" class="w-56">
-				{#if onpeek && t.number}
-					<DropdownMenu.Item onclick={() => onpeek(t)}><PanelRightOpen />Peek</DropdownMenu.Item>
-				{/if}
-				<DropdownMenu.Item onclick={() => onopen(t, t.actionUrl)}
-					><ExternalLink />{t.actionLabel}</DropdownMenu.Item
-				>
-				{#if t.htmlUrl !== t.actionUrl}
-					<DropdownMenu.Item onclick={() => onopen(t, t.htmlUrl)}
-						><ExternalLink />Open on GitHub</DropdownMenu.Item
-					>
-				{/if}
-				<DropdownMenu.Separator />
-				{#if inInbox}
-					<DropdownMenu.Item onclick={() => onaction(t, 'done')}><Check />Done</DropdownMenu.Item>
-					<DropdownMenu.Item onclick={() => (snoozeOpen = true)}
-						><AlarmClock />Snooze…</DropdownMenu.Item
-					>
-					<DropdownMenu.Item onclick={() => onaction(t, 'mute')}><BellOff />Mute</DropdownMenu.Item>
-				{:else}
-					<DropdownMenu.Item
-						onclick={() =>
-							onaction(
-								t,
-								t.category === 'muted' ? 'unmute' : t.triage === 'snoozed' ? 'unsnooze' : 'undone'
-							)}><Undo />{t.category === 'muted' ? 'Unmute' : 'Move to inbox'}</DropdownMenu.Item
-					>
-				{/if}
-				<DropdownMenu.Item onclick={() => onaction(t, t.unread ? 'read' : 'unread')}>
-					{#if t.unread}<MailOpen />Mark as read{:else}<Mail />Mark as unread{/if}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => oncopy(t)}><Link />Copy link</DropdownMenu.Item>
+				<AppMenu entries={menu()} kind="dropdown" />
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	</div>
@@ -285,12 +249,6 @@
 			<ExternalLink class="opacity-60" />
 		</Button>
 	</div>
-	<SnoozeSheet
-		bind:open={snoozeOpen}
-		subjects={[subjectKind(t.subjectType)]}
-		disabled={alreadyTrue(t)}
-		onpick={(b) => onaction(t, 'snooze', b)}
-	/>
 </div>
 
 <style>

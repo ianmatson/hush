@@ -12,7 +12,7 @@ export function ago(iso: string | number): string {
 }
 
 /** Snooze presets, as absolute timestamps. */
-export function snoozeOptions(now = new Date()): { label: string; until: number }[] {
+export function snoozeOptions(now = new Date()): { id: string; label: string; until: number }[] {
 	const at = (days: number, hour: number) => {
 		const d = new Date(now);
 		d.setDate(d.getDate() + days);
@@ -24,10 +24,10 @@ export function snoozeOptions(now = new Date()): { label: string; until: number 
 		return at(offset, 9);
 	})();
 	return [
-		{ label: '1 hour', until: now.getTime() + 3600_000 },
-		{ label: '3 hours', until: now.getTime() + 3 * 3600_000 },
-		{ label: 'Tomorrow 9:00', until: at(1, 9) },
-		{ label: 'Next Monday 9:00', until: nextMonday }
+		{ id: '1h', label: '1 hour', until: now.getTime() + 3600_000 },
+		{ id: '3h', label: '3 hours', until: now.getTime() + 3 * 3600_000 },
+		{ id: 'tomorrow', label: 'Tomorrow 9:00', until: at(1, 9) },
+		{ id: 'monday', label: 'Next Monday 9:00', until: nextMonday }
 	];
 }
 

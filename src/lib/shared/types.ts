@@ -135,6 +135,8 @@ export interface Settings {
 	/** Evaluated top to bottom after the defaults; the first match wins. */
 	rules: Rule[];
 	dash: DashSettings;
+	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
+	menus: { inbox: string[]; dash: string[] };
 }
 
 // --- Pull request and issue dashboards ------------------------------------------

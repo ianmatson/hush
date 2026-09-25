@@ -1,4 +1,5 @@
 import { DEFAULT_DASH } from './dashboard';
+import { DEFAULT_MENUS } from './menus';
 import type { Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -7,14 +8,20 @@ export const DEFAULT_SETTINGS: Settings = {
 	botsAreFyi: true,
 	teamReviewsAreAction: false,
 	rules: [],
-	dash: DEFAULT_DASH
+	dash: DEFAULT_DASH,
+	menus: DEFAULT_MENUS
 };
 
 /** Merge stored settings over the defaults. New fields get their default value. */
 export function parseSettings(json: string | null | undefined): Settings {
 	try {
 		const raw = JSON.parse(json || '{}') as Partial<Settings>;
-		return { ...DEFAULT_SETTINGS, ...raw, dash: { ...DEFAULT_DASH, ...(raw.dash ?? {}) } };
+		return {
+			...DEFAULT_SETTINGS,
+			...raw,
+			dash: { ...DEFAULT_DASH, ...(raw.dash ?? {}) },
+			menus: { ...DEFAULT_MENUS, ...(raw.menus ?? {}) }
+		};
 	} catch {
 		return structuredClone(DEFAULT_SETTINGS);
 	}

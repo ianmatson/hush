@@ -14,13 +14,12 @@
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
-	import Undo from '@lucide/svelte/icons/undo-2';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import X from '@lucide/svelte/icons/x';
-	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import SelectMark from './select-mark.svelte';
+	import AppMenu from './app-menu.svelte';
+	import type { MenuEntry } from '$lib/menu';
 
 	let {
 		item: i,
@@ -36,9 +35,7 @@
 		onrowclick,
 		ontoggle,
 		onundomove,
-		groups = [],
-		onmove = () => {},
-		onpeek
+		menu
 	}: {
 		item: DashItem;
 		/** The keyboard cursor is on this row. */
@@ -56,10 +53,8 @@
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
 		onundomove: (i: DashItem) => void;
-		/** Groups for "Move to" (the row menu on small screens, which have no drag). */
-		groups?: { turn: DashItem['turn']; label: string }[];
-		onmove?: (i: DashItem, turn: DashItem['turn']) => void;
-		onpeek?: (i: DashItem) => void;
+		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
+		menu?: () => MenuEntry[];
 	} = $props();
 
 	let row = $state<HTMLElement | null>(null);
@@ -229,7 +224,7 @@
 	</div>
 
 	<!-- Small screens: every action in one menu. -->
-	{#if groups.length}
+	{#if menu}
 		<div class="shrink-0 self-center sm:hidden">
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
@@ -244,46 +239,13 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" class="w-56">
-					{#if onpeek}
-						<DropdownMenu.Item onclick={() => onpeek(i)}><PanelRightOpen />Peek</DropdownMenu.Item>
-					{/if}
-					<DropdownMenu.Item onclick={() => onopen(i, i.actionUrl)}
-						><ExternalLink />{i.actionLabel}</DropdownMenu.Item
-					>
-					{#if i.url !== i.actionUrl}
-						<DropdownMenu.Item onclick={() => onopen(i, i.url)}
-							><ExternalLink />Open on GitHub</DropdownMenu.Item
-						>
-					{/if}
-					<DropdownMenu.Separator />
-					<DropdownMenu.Sub>
-						<DropdownMenu.SubTrigger><ArrowRightLeft />Move to</DropdownMenu.SubTrigger>
-						<DropdownMenu.SubContent>
-							{#each groups as g (g.turn)}
-								<DropdownMenu.Item disabled={g.turn === i.turn} onclick={() => onmove(i, g.turn)}
-									>{g.label}</DropdownMenu.Item
-								>
-							{/each}
-						</DropdownMenu.SubContent>
-					</DropdownMenu.Sub>
-					{#if i.movedByYou}
-						<DropdownMenu.Item onclick={() => onundomove(i)}><Undo />Undo move</DropdownMenu.Item>
-					{/if}
-					<DropdownMenu.Item onclick={() => onhide(i)}>
-						{#if i.dismissed}<Eye />Show again{:else}<EyeOff />Hide until it changes{/if}
-					</DropdownMenu.Item>
-					<DropdownMenu.Item onclick={() => oncopy(i)}><Link />Copy link</DropdownMenu.Item>
+					<AppMenu entries={menu()} kind="dropdown" />
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		</div>
 	{/if}
 
-	<div
-		class={cn(
-			'shrink-0 items-center gap-0.5 self-center',
-			groups.length ? 'hidden sm:flex' : 'flex'
-		)}
-	>
+	<div class={cn('shrink-0 items-center gap-0.5 self-center', menu ? 'hidden sm:flex' : 'flex')}>
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>

@@ -7,6 +7,7 @@
 	import Rss from '@lucide/svelte/icons/rss';
 	import Palette from '@lucide/svelte/icons/palette';
 	import UserRound from '@lucide/svelte/icons/user-round';
+	import MousePointerClick from '@lucide/svelte/icons/mouse-pointer-click';
 
 	let { children } = $props();
 
@@ -14,6 +15,7 @@
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
 		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
 		{ href: '/settings/dashboards', label: 'PRs & issues', icon: GitPullRequest },
+		{ href: '/settings/menus', label: 'Menus', icon: MousePointerClick },
 		{ href: '/settings/feeds', label: 'Feeds', icon: Rss },
 		{ href: '/settings/appearance', label: 'Appearance', icon: Palette },
 		{ href: '/settings/account', label: 'Account', icon: UserRound }
