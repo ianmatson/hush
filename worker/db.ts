@@ -66,6 +66,9 @@ export interface ThreadRow {
 	snoozed_at: number | null;
 	pushed_updated_at: string | null;
 	first_seen_at: number;
+	resolved_at: number | null;
+	resolved_note: string | null;
+	marked_unread_at: number | null;
 }
 
 export function getUser(env: Env, id: number) {
@@ -96,6 +99,7 @@ export function toDTO(r: ThreadRow): ThreadDTO {
 		triage: r.triage as ThreadDTO['triage'],
 		snoozedUntil: r.snoozed_until,
 		snoozeEvent: r.snooze_event,
+		resolvedNote: r.triage === 'done' ? r.resolved_note : null,
 		number: e?.number ?? null,
 		state: e?.state ?? null,
 		draft: !!e?.draft,

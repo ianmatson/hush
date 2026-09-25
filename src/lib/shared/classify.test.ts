@@ -93,7 +93,7 @@ describe('default classification', () => {
 			authorIsBot: true,
 			body: 'coverage',
 			url: 'u',
-			createdAt: ''
+			createdAt: '2026-09-20T00:00:00Z'
 		};
 		const f = facts({ reason: 'author', enrichment: pr({ author: 'ian', lastComment }) });
 		expect(run(f).category).toBe('fyi');

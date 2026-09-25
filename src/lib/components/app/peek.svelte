@@ -17,6 +17,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ui } from '$lib/ui.svelte';
 	import PeekBody from './peek-body.svelte';
+	import { noteOpened } from '$lib/recheck';
 	import X from '@lucide/svelte/icons/x';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 
@@ -79,6 +80,7 @@
 				size="icon-sm"
 				class="ml-auto"
 				href={target.url}
+				onclick={() => target && noteOpened(target.url)}
 				target="_blank"
 				rel="noreferrer"
 				aria-label="Open on GitHub"><ExternalLink /></Button
@@ -113,6 +115,7 @@
 							variant="ghost"
 							size="icon"
 							href={target.url}
+							onclick={() => target && noteOpened(target.url)}
 							target="_blank"
 							rel="noreferrer"
 							aria-label="Open on GitHub"><ExternalLink /></Button

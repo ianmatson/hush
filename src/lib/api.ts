@@ -101,6 +101,11 @@ export const api = {
 			'GET',
 			`/api/teams${refresh ? '?refresh=1' : ''}`
 		),
+	recheck: (repo: string, number: number) =>
+		request<{ resolved: { title: string; note: string }[] }>('POST', '/api/recheck', {
+			repo,
+			number
+		}),
 	peek: (repo: string, number: number) =>
 		request<PeekDTO>(
 			'GET',

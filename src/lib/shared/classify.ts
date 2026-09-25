@@ -7,6 +7,8 @@ import type {
 	Settings,
 	ThreadFacts
 } from './types';
+import { isBot } from './bots';
+import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 
 const WHY: Record<string, string> = {
 	approval_requested: 'Deployment approval requested',
@@ -26,10 +28,7 @@ const WHY: Record<string, string> = {
 	team_mention: 'Team mentioned'
 };
 
-export function isBot(login: string | undefined | null): boolean {
-	if (!login) return false;
-	return /\[bot\]$/i.test(login) || /^(dependabot|renovate|github-actions|codecov)/i.test(login);
-}
+export { isBot };
 
 /** The default, opinionated classification: only things you can act on are "action". */
 export function classifyDefault(
@@ -86,60 +85,35 @@ export function classifyDefault(
 	if (t.reason === 'approval_requested')
 		return act('review', 'A deployment waits for your approval', 'Approve');
 
-	if (e?.kind === 'pr') {
+	if (e?.kind === 'pr' || e?.kind === 'issue') {
+		const pr = e.kind === 'pr';
 		const mine = e.author?.toLowerCase() === me;
 		if (e.state === 'merged') return fyi(mine ? 'Your PR was merged' : 'PR merged');
-		if (e.state === 'closed') return fyi(mine ? 'Your PR was closed' : 'PR closed');
+		if (e.state === 'closed')
+			return fyi(pr ? (mine ? 'Your PR was closed' : 'PR closed') : 'Issue closed');
 
-		if (mine) {
-			if (e.ci === 'FAILURE' || e.ci === 'ERROR')
-				return act('fix_ci', 'CI failed on your PR', 'Fix CI', `${url}/checks`);
-			if (e.reviewDecision === 'CHANGES_REQUESTED')
-				return act('address_review', 'Changes requested on your PR', 'Address');
-			if (e.mergeable === 'CONFLICTING')
-				return act('resolve_conflict', 'Your PR has merge conflicts', 'Resolve');
-			if (e.reviewDecision === 'APPROVED' && !e.draft && e.ci !== 'PENDING' && e.ci !== 'EXPECTED')
-				return act('merge', 'Your PR is approved and ready to merge', 'Merge');
-			if (
-				(t.reason === 'comment' || t.reason === 'mention' || t.reason === 'author') &&
-				lastByHuman
-			)
-				return act('reply', `@${lastBy} commented on your PR`, 'Reply', e.lastComment?.url || url);
-			return fyi(e.draft ? 'Activity on your draft PR' : 'Activity on your PR');
-		}
+		// Whose turn: the same rules as the PR and issue dashboards.
+		const turn = computeTurn(turnFactsFromEnrichment(e, t.repo, t.me, t.myTeams), t.me, [], {
+			botsAreFyi: settings.botsAreFyi
+		});
+		if (turn.turn === 'you') return act(turn.kind, turn.summary, turn.actionLabel, turn.actionUrl);
+		if (turn.turn === 'team' && settings.teamReviewsAreAction)
+			return act('review', turn.summary, turn.actionLabel, turn.actionUrl);
 
-		if (e.reviewRequestedFromMe) {
-			if (settings.botsAreFyi && e.authorIsBot) return fyi(`@${e.author} requests review`);
-			return act('review', `@${e.author} requests your review`, 'Review', `${url}/files`);
-		}
-		const org = t.repo.split('/')[0];
-		const myTeamAsked = e.requestedTeams?.find((slug) => t.myTeams?.includes(`${org}/${slug}`));
-		if (settings.teamReviewsAreAction && myTeamAsked && !(settings.botsAreFyi && e.authorIsBot))
+		// Conversations you are in, which the dashboards do not track.
+		if (t.reason === 'mention') return mention(pr ? 'PR' : 'issue');
+		if (t.reason === 'comment' && !mine && lastByHuman)
 			return act(
-				'review',
-				`@${e.author} requests review from ${myTeamAsked}`,
-				'Review',
-				`${url}/files`
+				'reply',
+				`@${lastBy} replied in ${pr ? 'a PR' : 'an issue'} thread`,
+				'Reply',
+				e.lastComment?.url || url
 			);
-		if (t.reason === 'mention') return mention('PR');
-		if (t.reason === 'assign' && e.assignedToMe)
-			return act('triage', 'A PR was assigned to you', 'Open');
-		if (t.reason === 'comment' && lastByHuman)
-			return act('reply', `@${lastBy} replied in a PR thread`, 'Reply', e.lastComment?.url || url);
+		if (t.reason === 'team_mention') return fyi('Your team was mentioned');
+		if (!pr) return fyi('Issue activity');
+		if (mine) return fyi(e.draft ? 'Activity on your draft PR' : 'Activity on your PR');
 		if (t.reason === 'review_requested') return fyi('Review request no longer pending');
-		if (t.reason === 'team_mention') return fyi('Your team was mentioned');
 		return fyi('PR activity');
-	}
-
-	if (e?.kind === 'issue') {
-		if (e.state === 'closed') return fyi('Issue closed');
-		if (t.reason === 'assign' && e.assignedToMe)
-			return act('triage', 'An issue was assigned to you', 'Triage');
-		if (t.reason === 'mention') return mention('issue');
-		if ((t.reason === 'comment' || t.reason === 'author') && lastByHuman)
-			return act('reply', `@${lastBy} replied on an issue`, 'Reply', e.lastComment?.url || url);
-		if (t.reason === 'team_mention') return fyi('Your team was mentioned');
-		return fyi('Issue activity');
 	}
 
 	// Subjects without enrichment.

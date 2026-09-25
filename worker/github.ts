@@ -101,6 +101,8 @@ export interface NotificationsPage {
 	resetAt?: number;
 	/** Org ids that GitHub left out because the token is not SAML-authorized for them. */
 	ssoHiddenOrgs: string[];
+	/** Every page was read (no "next" page was left). */
+	complete: boolean;
 }
 
 /** Parse `X-GitHub-SSO: partial-results; organizations=1,2`. */
@@ -146,8 +148,49 @@ export async function listNotifications(
 		lastModified: res.headers.get('Last-Modified'),
 		pollInterval: Number(res.headers.get('X-Poll-Interval') ?? 60) || 60,
 		resetAt: reset ? Number(reset) * 1000 : undefined,
-		ssoHiddenOrgs: parseSsoHeader(res.headers.get('X-GitHub-SSO'))
+		ssoHiddenOrgs: parseSsoHeader(res.headers.get('X-GitHub-SSO')),
+		complete: res.status === 200 && url === null
 	};
+}
+
+/** "HogFM workflow run failed for master branch" → workflow name and branch. */
+export function parseWorkflowTitle(title: string): { workflow: string; branch: string } | null {
+	const m = title.match(/^(.+?) workflow run .+? for (.+) branch$/i);
+	return m ? { workflow: m[1], branch: m[2] } : null;
+}
+
+/**
+ * Did a run of this workflow on this branch pass after `since`? The newest completed run decides.
+ * null when GitHub cannot tell (unknown workflow, no access). One or two REST requests; pass a
+ * shared `workflows` map to reuse the workflow list of a repo.
+ */
+export async function laterRunPassed(
+	token: string,
+	repo: string,
+	workflow: string,
+	branch: string,
+	since: string,
+	workflows: Map<string, Promise<{ id: number; name: string }[]>>
+): Promise<boolean | null> {
+	let list = workflows.get(repo);
+	if (!list) {
+		list = gh(token, `/repos/${repo}/actions/workflows?per_page=100`).then(async (r) =>
+			r.ok ? ((await r.json()) as { workflows: { id: number; name: string }[] }).workflows : []
+		);
+		workflows.set(repo, list);
+	}
+	const wf = (await list).find((w) => w.name === workflow);
+	if (!wf) return null;
+	const res = await gh(
+		token,
+		`/repos/${repo}/actions/workflows/${wf.id}/runs?branch=${encodeURIComponent(branch)}&status=completed&per_page=1`
+	);
+	if (!res.ok) return null;
+	const run = (
+		(await res.json()) as { workflow_runs: { conclusion: string; created_at: string }[] }
+	).workflow_runs[0];
+	if (!run) return null;
+	return run.conclusion === 'success' && Date.parse(run.created_at) > Date.parse(since);
 }
 
 export const markThreadRead = (token: string, id: string) =>
@@ -178,6 +221,7 @@ __typename
   commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
   comments(last: 1) { nodes { author { login __typename } bodyText url createdAt } }
   reviews(last: 1) { nodes { author { login } submittedAt state } }
+  myReviews: reviews(author: $me, last: 1) { nodes { submittedAt state } }
 }
 ... on Issue {
   number url state
@@ -231,6 +275,9 @@ function toEnrichment(n: Node, me: string): Enrichment {
 		mergeable: n.mergeable,
 		ci: (n.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state as CiState | undefined) ?? null,
 		lastCommitAt: n.commits?.nodes?.[0]?.commit?.committedDate ?? null,
+		myReview: n.myReviews?.nodes?.[0]?.submittedAt
+			? { at: n.myReviews.nodes[0].submittedAt, state: n.myReviews.nodes[0].state }
+			: null,
 		latestReview: n.reviews?.nodes?.[0]
 			? {
 					author: n.reviews.nodes[0].author?.login ?? 'ghost',
@@ -256,8 +303,8 @@ export async function enrichSubjects(
 	const out = new Map<string, Enrichment>();
 	for (let i = 0; i < refs.length; i += CHUNK) {
 		const chunk = refs.slice(i, i + CHUNK);
-		const vars: Record<string, string | number> = {};
-		const decl: string[] = [];
+		const vars: Record<string, string | number> = { me };
+		const decl: string[] = ['$me: String!'];
 		const body: string[] = [];
 		chunk.forEach((r, j) => {
 			vars[`o${j}`] = r.owner;
@@ -393,6 +440,29 @@ function toFacts(n: Node, me: string, myTeams: Set<string>): DashFacts {
 		myLastReviewState: review?.state ?? null,
 		lastCommitAt: commit?.committedDate ?? null
 	};
+}
+
+/** One PR or issue as a dashboard item (for a quick check after you acted on it). About 1 point. */
+export async function fetchSubjectFacts(
+	token: string,
+	me: string,
+	myTeams: Set<string>,
+	owner: string,
+	repo: string,
+	number: number
+): Promise<DashFacts | null> {
+	const query = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
+  repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) { __typename ...P ...I } }
+}
+${SEARCH_FIELDS}`;
+	const res = await gh(token, '/graphql', {
+		method: 'POST',
+		body: JSON.stringify({ query, variables: { me, o: owner, r: repo, n: number } })
+	});
+	if (!res.ok) return null;
+	const json = (await res.json()) as { data?: Node };
+	const n = json.data?.repository?.issueOrPullRequest;
+	return n?.id ? toFacts(n, me, myTeams) : null;
 }
 
 export interface SearchHit {

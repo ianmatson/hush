@@ -7,6 +7,7 @@
 	import { api } from '$lib/api';
 	import { dashQuery, keys, leaveTo, queryClient, threadsQuery } from '$lib/queries';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
+	import { openOnGitHub } from '$lib/recheck';
 	import type { View } from '$lib/shared/types';
 	import * as Command from '$lib/components/ui/command';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -243,7 +244,7 @@
 	function choose(e: Entry, newTab = false) {
 		palette.remember(e.id);
 		// A new tab must open inside the key or click handler, or the browser blocks it.
-		if (newTab && e.url) window.open(e.url, '_blank', 'noopener');
+		if (newTab && e.url) openOnGitHub(e.url);
 		else pending = e.run;
 		palette.open = false;
 	}

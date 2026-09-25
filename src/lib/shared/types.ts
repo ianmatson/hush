@@ -67,6 +67,8 @@ export interface Enrichment {
 	lastCommitAt?: string | null;
 	/** PRs: the newest review. */
 	latestReview?: { author: string; at: string; state: string } | null;
+	/** PRs: your own newest review. */
+	myReview?: { at: string; state: string } | null;
 }
 
 /** Everything the classifier needs to know about one notification thread. */
@@ -256,6 +258,8 @@ export interface ThreadDTO {
 	snoozedUntil: number | null;
 	/** Snoozed until something happens (e.g. "ci_pass"); `snoozedUntil` is then the deadline. */
 	snoozeEvent: string | null;
+	/** Set when Hush moved the thread to Done by itself, e.g. "You approved". */
+	resolvedNote: string | null;
 	number: number | null;
 	state: Enrichment['state'] | null;
 	draft: boolean;
@@ -289,6 +293,8 @@ export interface MeDTO {
 	avatarUrl: string | null;
 	settings: Settings;
 	lastPollAt: number | null;
+	/** When the server polls GitHub next; the browser refreshes the inbox just after it. */
+	nextPollAt: number | null;
 	lastPollError: string | null;
 	/** Orgs whose notifications GitHub hides from this token (SAML SSO not authorized). */
 	ssoHiddenOrgs: number;

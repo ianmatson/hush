@@ -127,6 +127,12 @@
 			{#if t.rule}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">rule: {t.rule}</span>
 			{/if}
+			{#if t.resolvedNote}
+				<span
+					class="flex items-center gap-1 rounded-md bg-signal-merge/10 px-1.5 py-0.5 text-signal-merge"
+					><Check class="size-3" />{t.resolvedNote}</span
+				>
+			{/if}
 			{#if t.draft}
 				<span class="rounded-md bg-muted px-1.5 py-0.5">draft</span>
 			{/if}

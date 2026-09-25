@@ -24,6 +24,7 @@
 	import { Kbd } from '$lib/components/ui/kbd';
 	import DashRow from './dash-row.svelte';
 	import { palette, type PaletteCommand } from '$lib/palette.svelte';
+	import { openOnGitHub } from '$lib/recheck';
 	import Peek from './peek.svelte';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -448,7 +449,7 @@
 	}
 
 	function open(i: DashItem, url: string) {
-		window.open(url, '_blank', 'noopener');
+		openOnGitHub(url);
 	}
 
 	async function copyLinks(ids: string[]) {

@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { classify, shouldPush } from '../src/lib/shared/classify';
 import { expandSections, finishItem, keepItem, sortItems } from '../src/lib/shared/dashboard';
 import { snoozeEvent, snoozeOutcome } from '../src/lib/shared/snooze';
+import { REOPEN_WINDOW_MS, watchOutcome } from '../src/lib/shared/watch';
 import type {
 	Classification,
 	DashKind,
@@ -16,8 +17,11 @@ import { bumpVersion, getUser, parseSettings, userToken, type Env, type ThreadRo
 import { allowedOrgs, checkAccess } from './access';
 import {
 	enrichSubjects,
+	fetchSubjectFacts,
 	fetchTeams,
+	laterRunPassed,
 	listNotifications,
+	parseWorkflowTitle,
 	searchDashboard,
 	subjectHtmlUrl,
 	subjectNumber,
@@ -36,7 +40,12 @@ const DAY = 24 * 60 * MIN;
 const PAUSE_AFTER_NO_PUSH = 14 * DAY;
 const PAUSE_AFTER_WITH_PUSH = 90 * DAY;
 const ACCESS_RECHECK = DAY;
-const SNOOZE_CHECK = 15 * MIN;
+// The inbox watcher: how often it looks again at open PR and issue threads (see watch()), and
+// how many threads it checks each time (two GraphQL requests of 40).
+const WATCH_EVERY = 15 * MIN;
+const WATCH_BATCH = 80;
+// Read and done states come from GitHub for threads updated in this window.
+const SYNC_DAYS = 14;
 // Poll every 5 minutes while someone can see the result (push on, or Hush open lately), else
 // every 15. Push arrives a few minutes late, but each user costs a fifth of the Cloudflare budget.
 const POLL_ACTIVE = 5 * MIN;
@@ -64,6 +73,22 @@ type Existing = Pick<
 	| 'snooze_event'
 	| 'snoozed_at'
 >;
+
+/** Threads the watcher looks at: open PR and issue work. ?1 user id, ?2 the reopen cutoff. */
+const WATCHED = `user_id = ?1 AND subject_type IN ('PullRequest', 'Issue') AND category != 'muted'
+  AND (triage = 'inbox' OR (triage = 'snoozed' AND snooze_event IS NOT NULL)
+       OR (triage = 'done' AND resolved_at > ?2))`;
+
+/** Owner, repo, and number of a stored thread's PR or issue. */
+function subjectRefOf(
+	r: Pick<ThreadRow, 'id' | 'repo' | 'enrichment' | 'html_url'>
+): SubjectRef | null {
+	const [owner, repo] = r.repo.split('/');
+	const num =
+		(r.enrichment ? (JSON.parse(r.enrichment) as Enrichment).number : undefined) ??
+		Number(r.html_url.match(/\/(?:pull|issues)\/(\d+)$/)?.[1]);
+	return owner && repo && num ? { key: r.id, owner, repo, number: num } : null;
+}
 
 const clearSnooze = (db: D1Database, userId: number, id: string) =>
 	db
@@ -197,8 +222,9 @@ export class Poller extends DurableObject<Env> {
 		const userId = await this.ctx.storage.get<number>('userId');
 		const user = userId ? await getUser(this.env, userId) : null;
 		if (!user) throw new Error('Not signed in.');
-		const { dash } = parseSettings(user.settings);
+		const { dash, botsAreFyi } = parseSettings(user.settings);
 		const sig = JSON.stringify([
+			botsAreFyi,
 			dash[kind],
 			dash.scope,
 			dash.excludedTeams,
@@ -237,7 +263,9 @@ export class Poller extends DurableObject<Env> {
 						ordered.map((s) => s.id),
 						ordered.map((s) => s.name),
 						user.login,
-						dash.staleDays
+						dash.staleDays,
+						Date.now(),
+						{ botsAreFyi }
 					);
 				})
 		);
@@ -370,14 +398,22 @@ export class Poller extends DurableObject<Env> {
 		});
 		if (page.status === 304) {
 			await this.wakeSnoozed(userId);
-			return this.checkSnoozeEvents(userId, user.login, token, settings);
+			return this.watch(userId, user.login, token, settings);
 		}
 		await this.putChanged({ ssoHiddenOrgs: page.ssoHiddenOrgs });
 
 		const myTeams = settings.teamReviewsAreAction
 			? (await this.teams()).teams.map((t) => t.slug)
 			: [];
-		await this.ingest(userId, user.login, token, settings, page.items, initialized, myTeams);
+		const ingested = await this.ingest(
+			userId,
+			user.login,
+			token,
+			settings,
+			page.items,
+			initialized,
+			myTeams
+		);
 		// Save Last-Modified only after the threads are stored. If ingest fails, the next poll
 		// asks GitHub again instead of getting a 304 and losing those notifications.
 		await this.ctx.storage.put({
@@ -385,7 +421,7 @@ export class Poller extends DurableObject<Env> {
 			...(page.lastModified ? { lastModified: page.lastModified } : {})
 		});
 		await this.wakeSnoozed(userId);
-		await this.checkSnoozeEvents(userId, user.login, token, settings);
+		await this.watch(userId, user.login, token, settings, ingested);
 		await this.cleanup(userId);
 	}
 
@@ -396,9 +432,10 @@ export class Poller extends DurableObject<Env> {
 		settings: Settings,
 		items: GhNotification[],
 		initialized: boolean,
-		myTeams: string[]
-	) {
-		if (!items.length) return;
+		myTeams: string[],
+		opts: { knownOrUnread?: boolean } = {}
+	): Promise<string[]> {
+		if (!items.length) return [];
 		const db = this.env.DB;
 		const now = Date.now();
 
@@ -415,8 +452,13 @@ export class Poller extends DurableObject<Env> {
 			for (const r of results) existing.set(r.id, r);
 		}
 
-		const changed = items.filter((n) => existing.get(n.id)?.gh_updated_at !== n.updated_at);
-		if (!changed.length) return;
+		const changed = items.filter(
+			(n) =>
+				existing.get(n.id)?.gh_updated_at !== n.updated_at &&
+				// The GitHub sync lists read threads too; old ones Hush never had stay out.
+				(!opts.knownOrUnread || existing.has(n.id) || n.unread)
+		);
+		if (!changed.length) return [];
 
 		const refs: SubjectRef[] = [];
 		for (const n of changed) {
@@ -505,7 +547,9 @@ export class Poller extends DurableObject<Env> {
                gh_updated_at = excluded.gh_updated_at, enrichment = excluded.enrichment,
                category = excluded.category, kind = excluded.kind, summary = excluded.summary, why = excluded.why,
                action_label = excluded.action_label, action_url = excluded.action_url, rule = excluded.rule,
-               triage = excluded.triage, pushed_updated_at = excluded.pushed_updated_at`
+               triage = excluded.triage, pushed_updated_at = excluded.pushed_updated_at,
+               resolved_at = CASE WHEN excluded.triage = 'done' THEN threads.resolved_at END,
+               resolved_note = CASE WHEN excluded.triage = 'done' THEN threads.resolved_note END`
 					)
 					.bind(
 						userId,
@@ -535,6 +579,7 @@ export class Poller extends DurableObject<Env> {
 		await db.batch(stmts);
 		if (toPush.length) await this.push(userId, toPush);
 		if (woken.length) await this.send(userId, woken);
+		return changed.map((n) => n.id);
 	}
 
 	private async push(userId: number, items: { n: GhNotification; c: Classification }[]) {
@@ -596,62 +641,364 @@ export class Poller extends DurableObject<Env> {
 	}
 
 	/**
-	 * Every 15 minutes, and only while some thread is snoozed until something happens: fetch those
-	 * threads in one GraphQL request (about 1 point) and wake the ones whose event happened. This
-	 * catches what GitHub sends no notification for, like CI passing on someone else's PR.
+	 * The inbox watcher, every 15 minutes. GitHub sends no notification for your own review,
+	 * reply, or push, or for CI results, merges, and closes that do not involve you. So look again
+	 * at the open PR and issue threads (in rotation, WATCH_BATCH at a time), and let watchOutcome
+	 * move each one: resolved actions go to Done, closed FYIs go to Done, conditional snoozes wake,
+	 * and threads Hush resolved come back if they need you again. Then copy read and done states
+	 * from GitHub.
 	 */
-	private async checkSnoozeEvents(userId: number, me: string, token: string, settings: Settings) {
-		const last = (await this.ctx.storage.get<number>('lastSnoozeCheck')) ?? 0;
-		if (Date.now() - last < SNOOZE_CHECK) return;
-		await this.ctx.storage.put('lastSnoozeCheck', Date.now());
-		const { results } = await this.env.DB.prepare(
-			`SELECT id, repo, title, enrichment, action_url, snooze_event, snoozed_at FROM threads
-       WHERE user_id = ? AND triage = 'snoozed' AND snooze_event IS NOT NULL
-       ORDER BY snoozed_at ASC LIMIT 40`
-		)
-			.bind(userId)
-			.all<
-				Pick<
-					ThreadRow,
-					'id' | 'repo' | 'title' | 'enrichment' | 'action_url' | 'snooze_event' | 'snoozed_at'
-				>
-			>();
-		const refs: SubjectRef[] = [];
-		for (const r of results) {
-			const num = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment).number : undefined;
-			const [owner, repo] = r.repo.split('/');
-			if (num && owner && repo) refs.push({ key: r.id, owner, repo, number: num });
-		}
-		if (!refs.length) return;
-		const fresh = await enrichSubjects(token, refs, me);
+	private async watch(
+		userId: number,
+		me: string,
+		token: string,
+		settings: Settings,
+		/** Threads this poll already looked up: the watcher skips them. */
+		fresh: string[] = []
+	) {
+		const last = (await this.ctx.storage.get<number>('lastWatch')) ?? 0;
+		if (Date.now() - last < WATCH_EVERY) return;
+		await this.ctx.storage.put('lastWatch', Date.now());
+		const myTeams = settings.teamReviewsAreAction
+			? (await this.teams()).teams.map((t) => t.slug)
+			: [];
+		const synced = await this.syncFromGitHub(userId, me, token, settings, myTeams);
+		const skip = new Set([...fresh, ...synced]);
 
-		const stmts: D1PreparedStatement[] = [];
-		const messages: PushMessage[] = [];
-		for (const r of results) {
-			const e = fresh.get(r.id);
-			const ev = snoozeEvent(r.snooze_event);
-			// No data (PR deleted, access lost): keep waiting; the deadline still ends it.
-			const outcome = e && ev ? snoozeOutcome(ev.id, e, r.snoozed_at ?? 0, me) : null;
-			if (!e || !outcome?.wake) continue;
-			stmts.push(
-				this.env.DB.prepare(
-					`UPDATE threads SET enrichment = ?, triage = 'inbox', snoozed_until = NULL, snooze_event = NULL
-           WHERE user_id = ? AND id = ?`
-				).bind(JSON.stringify(e), userId, r.id)
-			);
-			messages.push({
-				title: `Snooze over: ${outcome.reason}`,
-				body: `${r.title}\n${r.repo}`,
-				url: r.action_url,
-				tag: r.id
-			});
-		}
-		if (!stmts.length) return;
-		await this.env.DB.batch([...stmts, bumpVersion(this.env, userId)]);
-		if (settings.pushAction) await this.send(userId, messages.slice(0, MAX_INDIVIDUAL_PUSHES));
+		const cursor = (await this.ctx.storage.get<string>('watchCursor')) ?? '';
+		const select = (op: '>' | '<=', limit: number) =>
+			this.env.DB.prepare(
+				`SELECT * FROM threads WHERE ${WATCHED} AND id ${op} ?3 ORDER BY id LIMIT ?4`
+			)
+				.bind(userId, Date.now() - REOPEN_WINDOW_MS, cursor, limit)
+				.all<ThreadRow>();
+		let rows = (await select('>', WATCH_BATCH)).results;
+		if (rows.length < WATCH_BATCH && cursor)
+			rows = [...rows, ...(await select('<=', WATCH_BATCH - rows.length)).results];
+		await this.putChanged({ watchCursor: rows.at(-1)?.id ?? '' });
+		rows = rows.filter((r) => !skip.has(r.id));
+		// The first run after an update of the rules may move many threads at once: no pushes.
+		await this.refresh(userId, me, token, settings, myTeams, rows, { quiet: last === 0 });
+		await this.resolveWorkflowRuns(userId, token);
 	}
 
-	/** Snoozes that are due go back to the inbox, and clients see a new version. */
+	/**
+	 * "A workflow run failed" threads: GitHub notifies about the failure but not about the next
+	 * run that passes. Move a thread to Done when the newest completed run of that workflow on that
+	 * branch passed after it. Up to 10 threads per watch, one or two REST requests each.
+	 */
+	private async resolveWorkflowRuns(userId: number, token: string) {
+		const db = this.env.DB;
+		const { results } = await db
+			.prepare(
+				`SELECT id, repo, title, gh_updated_at FROM threads
+         WHERE user_id = ? AND subject_type = 'CheckSuite' AND triage = 'inbox' AND category = 'action'
+         ORDER BY gh_updated_at DESC LIMIT 10`
+			)
+			.bind(userId)
+			.all<Pick<ThreadRow, 'id' | 'repo' | 'title' | 'gh_updated_at'>>();
+		const workflows = new Map<string, Promise<{ id: number; name: string }[]>>();
+		const passed = await Promise.all(
+			results.map(async (r) => {
+				const w = parseWorkflowTitle(r.title);
+				if (!w) return false;
+				return (
+					(await laterRunPassed(
+						token,
+						r.repo,
+						w.workflow,
+						w.branch,
+						r.gh_updated_at,
+						workflows
+					).catch(() => null)) === true
+				);
+			})
+		);
+		const stmts = results
+			.filter((_, k) => passed[k])
+			.map((r) =>
+				db
+					.prepare(
+						`UPDATE threads SET triage = 'done', resolved_at = ?, resolved_note = 'A later run passed'
+             WHERE user_id = ? AND id = ?`
+					)
+					.bind(Date.now(), userId, r.id)
+			);
+		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
+	}
+
+	/**
+	 * Look again at these threads' PRs and issues and apply watchOutcome. Writes only threads
+	 * that changed. Returns the ones it moved to Done, for a toast.
+	 */
+	private async refresh(
+		userId: number,
+		me: string,
+		token: string,
+		settings: Settings,
+		myTeams: string[],
+		rows: ThreadRow[],
+		opts: { quiet?: boolean } = {}
+	): Promise<{ id: string; title: string; note: string }[]> {
+		const refs = rows.flatMap((r) => {
+			const ref = subjectRefOf(r);
+			return ref ? [ref] : [];
+		});
+		if (!refs.length) return [];
+		const fresh = await enrichSubjects(token, refs, me);
+
+		const db = this.env.DB;
+		const stmts: D1PreparedStatement[] = [];
+		const messages: PushMessage[] = [];
+		const resolved: { id: string; title: string; note: string }[] = [];
+		for (const r of rows) {
+			// No data (deleted, access lost, GitHub error): change nothing. Snooze deadlines still end.
+			const e = fresh.get(r.id);
+			if (!e) continue;
+			const before = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : null;
+			const c = classify(
+				{
+					repo: r.repo,
+					subjectType: r.subject_type,
+					title: r.title,
+					reason: r.reason,
+					htmlUrl: r.html_url,
+					enrichment: e,
+					me,
+					myTeams
+				},
+				settings
+			);
+			const out = watchOutcome(
+				{
+					category: r.category,
+					kind: r.kind,
+					triage: r.triage,
+					enrichment: before,
+					resolvedAt: r.resolved_at,
+					snoozeEvent: r.snooze_event,
+					snoozedAt: r.snoozed_at
+				},
+				c,
+				e,
+				me
+			);
+			const note = out.triage === 'done' ? (out.resolvedNote ?? r.resolved_note) : null;
+			const same =
+				JSON.stringify(e) === r.enrichment &&
+				c.category === r.category &&
+				c.kind === r.kind &&
+				c.summary === r.summary &&
+				c.actionLabel === r.action_label &&
+				c.actionUrl === r.action_url &&
+				(c.rule ?? null) === r.rule &&
+				out.triage === r.triage &&
+				out.resolvedAt === r.resolved_at &&
+				note === r.resolved_note &&
+				!out.clearSnooze;
+			if (same) continue;
+			stmts.push(
+				db
+					.prepare(
+						`UPDATE threads SET enrichment = ?, category = ?, kind = ?, summary = ?, action_label = ?,
+               action_url = ?, rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
+               snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
+               snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
+             WHERE user_id = ? AND id = ?`
+					)
+					.bind(
+						JSON.stringify(e),
+						c.category,
+						c.kind,
+						c.summary,
+						c.actionLabel,
+						c.actionUrl,
+						c.rule ?? null,
+						out.triage,
+						out.resolvedAt,
+						note,
+						out.clearSnooze ? 1 : 0,
+						out.clearSnooze ? 1 : 0,
+						userId,
+						r.id
+					)
+			);
+			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
+			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
+			if (out.push && (snoozeOver ? settings.pushAction : shouldPush(c, settings)))
+				messages.push({
+					title: out.push,
+					body: `${r.title}\n${r.repo}`,
+					url: c.actionUrl,
+					tag: r.id
+				});
+		}
+		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
+		if (messages.length && !opts.quiet)
+			await this.send(userId, messages.slice(0, MAX_INDIVIDUAL_PUSHES));
+		return resolved;
+	}
+
+	/**
+	 * Copy read and done states from GitHub. The poll lists only unread threads, so a thread you
+	 * read (or marked done) on GitHub never shows up there again. One to three REST requests.
+	 */
+	private async syncFromGitHub(
+		userId: number,
+		me: string,
+		token: string,
+		settings: Settings,
+		myTeams: string[]
+	): Promise<string[]> {
+		const db = this.env.DB;
+		const oldest = await db
+			.prepare(
+				`SELECT MIN(gh_updated_at) AS t FROM threads WHERE user_id = ? AND triage IN ('inbox', 'snoozed')`
+			)
+			.bind(userId)
+			.first<{ t: string | null }>();
+		if (!oldest?.t) return [];
+		const floor = new Date(Date.now() - SYNC_DAYS * DAY).toISOString();
+		const since = oldest.t > floor ? oldest.t : floor;
+
+		// GitHub's `since` means "updated after", so ask from a little earlier: the oldest thread
+		// itself must be in the list, or it would look done on GitHub.
+		const askSince = new Date(Date.parse(since) - 60 * MIN).toISOString();
+		let page;
+		try {
+			page = await listNotifications(token, { all: true, since: askSince, maxPages: 3 });
+		} catch {
+			return [];
+		}
+		if (page.status !== 200) return [];
+		// New activity that you read on GitHub before a poll saw it.
+		const ingested = await this.ingest(userId, me, token, settings, page.items, true, myTeams, {
+			knownOrUnread: true
+		});
+
+		const listed = new Map(page.items.map((n) => [n.id, n]));
+		// "Not in the list" means done on GitHub only when the list is whole: every page read, and
+		// no org hidden by SAML single sign-on.
+		const whole = page.complete && !page.ssoHiddenOrgs.length;
+		const { results } = await db
+			.prepare(
+				`SELECT id, unread, marked_unread_at FROM threads
+         WHERE user_id = ? AND triage IN ('inbox', 'snoozed') AND gh_updated_at >= ?`
+			)
+			.bind(userId, since)
+			.all<Pick<ThreadRow, 'id' | 'unread' | 'marked_unread_at'>>();
+		const stmts: D1PreparedStatement[] = [];
+		for (const r of results) {
+			const n = listed.get(r.id);
+			if (n) {
+				if (!r.unread || n.unread) continue;
+				// "Mark as unread" in Hush wins, unless you read the thread on GitHub after it.
+				const readAt = n.last_read_at ? Date.parse(n.last_read_at) : 0;
+				if (r.marked_unread_at && readAt <= r.marked_unread_at) continue;
+				stmts.push(
+					db
+						.prepare(
+							`UPDATE threads SET unread = 0, marked_unread_at = NULL WHERE user_id = ? AND id = ?`
+						)
+						.bind(userId, r.id)
+				);
+			} else if (whole) {
+				stmts.push(
+					db
+						.prepare(
+							`UPDATE threads SET triage = 'done', unread = 0, snoozed_until = NULL, snooze_event = NULL,
+                 resolved_at = NULL, resolved_note = 'Done on GitHub'
+               WHERE user_id = ? AND id = ?`
+						)
+						.bind(userId, r.id)
+				);
+			}
+		}
+		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
+		return ingested;
+	}
+
+	/**
+	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Updates its inbox
+	 * threads and its entry in the cached dashboards. About 2 points.
+	 */
+	async recheck(
+		repo: string,
+		number: number
+	): Promise<{ resolved: { title: string; note: string }[] }> {
+		const userId = await this.ctx.storage.get<number>('userId');
+		const user = userId ? await getUser(this.env, userId) : null;
+		if (!user) return { resolved: [] };
+		const token = await userToken(this.env, user);
+		const settings = parseSettings(user.settings);
+		const teams = (await this.teams()).teams.map((t) => t.slug);
+		const { results: rows } = await this.env.DB.prepare(
+			`SELECT * FROM threads WHERE user_id = ? AND html_url IN (?, ?) AND category != 'muted'`
+		)
+			.bind(
+				user.id,
+				`https://github.com/${repo}/pull/${number}`,
+				`https://github.com/${repo}/issues/${number}`
+			)
+			.all<ThreadRow>();
+		const [resolved] = await Promise.all([
+			this.refresh(
+				user.id,
+				user.login,
+				token,
+				settings,
+				settings.teamReviewsAreAction ? teams : [],
+				rows
+			),
+			this.patchDashboards(token, user.login, settings, new Set(teams), repo, number)
+		]);
+		return { resolved: resolved.map(({ title, note }) => ({ title, note })) };
+	}
+
+	/** Replace one item in the cached dashboards with fresh facts (or drop it once it closed). */
+	private async patchDashboards(
+		token: string,
+		me: string,
+		settings: Settings,
+		myTeams: Set<string>,
+		repo: string,
+		number: number
+	) {
+		const [owner, name] = repo.split('/');
+		const facts = await fetchSubjectFacts(token, me, myTeams, owner, name, number);
+		if (!facts) return;
+		const key = `dash:${facts.kind}`;
+		const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
+		const old = cached?.data.items.find((i) => i.id === facts.id);
+		if (!cached || !old) return;
+		const names = Object.fromEntries(cached.data.sections.map((s) => [s.id, s.name]));
+		const rest = cached.data.items.filter((i) => i.id !== facts.id);
+		const items =
+			facts.state === 'open'
+				? sortItems([
+						...rest,
+						finishItem(
+							facts,
+							old.sections,
+							old.sections.map((s) => names[s] ?? s),
+							me,
+							settings.dash.staleDays,
+							Date.now(),
+							{ botsAreFyi: settings.botsAreFyi }
+						)
+					])
+				: rest;
+		const data: DashResponse = {
+			...cached.data,
+			items,
+			sections: cached.data.sections.map((s) => ({
+				...s,
+				count: items.filter((i) => i.sections.includes(s.id)).length
+			}))
+		};
+		await this.ctx.storage.put(key, { sig: cached.sig, data });
+	}
+
 	private async wakeSnoozed(userId: number) {
 		const res = await this.env.DB.prepare(
 			`UPDATE threads SET triage = 'inbox', snoozed_until = NULL, snooze_event = NULL

@@ -8,8 +8,11 @@
 	import AppHeader from './app-header.svelte';
 	import TabStatus from './tab-status.svelte';
 	import CommandPalette from './command-palette.svelte';
+	import { watchReturns } from '$lib/recheck';
 
 	let { children }: { children: Snippet } = $props();
+
+	$effect(() => watchReturns());
 
 	const isRestoring = useIsRestoring();
 	const me = createQuery(meQuery);

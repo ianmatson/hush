@@ -1,5 +1,14 @@
-import { isBot } from './classify';
-import type { DashItem, DashKind, DashSection, DashSettings, TeamDTO, Turn } from './types';
+import { isBot } from './bots';
+import type {
+	ActionKind,
+	DashItem,
+	DashKind,
+	DashSection,
+	DashSettings,
+	Enrichment,
+	TeamDTO,
+	Turn
+} from './types';
 
 export const DEFAULT_PR_SECTIONS: DashSection[] = [
 	{
@@ -132,39 +141,124 @@ export interface TurnResult {
 	actionUrl: string;
 	/** Lower sorts first inside a turn group. */
 	priority: number;
+	/** What you must do, for the inbox ("none" unless it is your turn). */
+	kind: ActionKind;
+	/** The inbox line, e.g. "CI failed on your PR". */
+	summary: string;
+}
+
+/** The facts the turn rules read. Dashboard items have them all; inbox threads get them from
+ *  their enrichment (see turnFactsFromEnrichment). */
+export type TurnFacts = Pick<
+	DashFacts,
+	| 'kind'
+	| 'url'
+	| 'author'
+	| 'authorIsBot'
+	| 'state'
+	| 'draft'
+	| 'assignees'
+	| 'comments'
+	| 'lastCommentBy'
+	| 'lastCommentAt'
+	| 'lastCommentIsBot'
+	| 'ci'
+	| 'reviewDecision'
+	| 'mergeable'
+	| 'lastCommitAt'
+	| 'requestedMe'
+	| 'requestedTeams'
+	| 'requestedAt'
+	| 'myLastReviewAt'
+	| 'myLastReviewState'
+	| 'createdAt'
+	| 'updatedAt'
+>;
+
+export interface TurnOptions {
+	/** Bots' PRs and comments never make it your turn (Settings → Inbox). */
+	botsAreFyi?: boolean;
 }
 
 const after = (a: string | null, b: string | null) => !!a && (!b || Date.parse(a) > Date.parse(b));
 
-/** Whose move is it? The core of the PR and issue views. */
-export function computeTurn(i: DashFacts, me: string, sectionNames: string[]): TurnResult {
+/**
+ * Whose move is it? The one set of rules for the inbox and the PR and issue dashboards, so an
+ * item is "Needs you" exactly when it is "Your turn".
+ */
+export function computeTurn(
+	i: TurnFacts,
+	me: string,
+	sectionNames: string[],
+	opts: TurnOptions = {}
+): TurnResult {
 	const meL = me.toLowerCase();
 	const mine = i.author.toLowerCase() === meL;
 	const assigned = i.assignees.some((a) => a.toLowerCase() === meL);
 	const lastByMe = i.lastCommentBy?.toLowerCase() === meL;
-	const lastByOtherHuman = !!i.lastCommentBy && !lastByMe && !i.lastCommentIsBot;
+	const lastByOtherHuman =
+		!!i.lastCommentBy && !lastByMe && !(i.lastCommentIsBot && opts.botsAreFyi !== false);
+	const botPr = !mine && !!opts.botsAreFyi && (i.authorIsBot || isBot(i.author));
 	const r = (
 		turn: Turn,
 		turnReason: string,
 		priority: number,
 		waitingSince: string | null,
 		actionLabel = 'Open',
-		actionUrl = i.url
+		actionUrl = i.url,
+		kind: ActionKind = 'none',
+		summary = turnReason
 	): TurnResult => ({
 		turn,
 		turnReason,
 		priority,
 		waitingSince: waitingSince || i.updatedAt,
 		actionLabel,
-		actionUrl
+		actionUrl,
+		kind,
+		summary
 	});
+	const you = (
+		turnReason: string,
+		priority: number,
+		waitingSince: string | null,
+		actionLabel: string,
+		kind: ActionKind,
+		summary: string,
+		actionUrl = i.url
+	) => r('you', turnReason, priority, waitingSince, actionLabel, actionUrl, kind, summary);
+
+	if (i.state === 'merged') return r('none', 'Merged', 0, i.updatedAt);
+	if (i.state === 'closed') return r('none', 'Closed', 0, i.updatedAt);
 
 	if (i.kind === 'issue') {
 		if (assigned && lastByOtherHuman)
-			return r('you', `@${i.lastCommentBy} replied`, 1, i.lastCommentAt, 'Reply');
-		if (assigned) return r('you', 'Assigned to you', 3, i.createdAt);
+			return you(
+				`@${i.lastCommentBy} replied`,
+				1,
+				i.lastCommentAt,
+				'Reply',
+				'reply',
+				`@${i.lastCommentBy} replied on an issue assigned to you`
+			);
+		if (assigned)
+			return you(
+				'Assigned to you',
+				3,
+				i.createdAt,
+				'Triage',
+				'triage',
+				'An issue was assigned to you'
+			);
 		if (mine && lastByOtherHuman)
-			return r('you', `@${i.lastCommentBy} replied`, 2, i.lastCommentAt, 'Reply');
+			return you(
+				`@${i.lastCommentBy} replied`,
+				2,
+				i.lastCommentAt,
+				'Reply',
+				'reply',
+				`@${i.lastCommentBy} replied on your issue`
+			);
 		if (mine)
 			return r(
 				'them',
@@ -179,31 +273,87 @@ export function computeTurn(i: DashFacts, me: string, sectionNames: string[]): T
 	if (mine) {
 		if (i.draft) return r('none', 'Draft', 0, i.updatedAt);
 		if (i.ci === 'FAILURE' || i.ci === 'ERROR')
-			return r('you', 'CI failing', 0, i.lastCommitAt, 'Fix CI', `${i.url}/checks`);
+			return you(
+				'CI failing',
+				0,
+				i.lastCommitAt,
+				'Fix CI',
+				'fix_ci',
+				'CI failed on your PR',
+				`${i.url}/checks`
+			);
 		if (i.reviewDecision === 'CHANGES_REQUESTED')
-			return r('you', 'Changes requested', 1, i.updatedAt, 'Address');
-		if (i.mergeable === 'CONFLICTING') return r('you', 'Merge conflict', 1, i.updatedAt, 'Resolve');
+			return you(
+				'Changes requested',
+				1,
+				i.updatedAt,
+				'Address',
+				'address_review',
+				'Changes requested on your PR'
+			);
+		if (i.mergeable === 'CONFLICTING')
+			return you(
+				'Merge conflict',
+				1,
+				i.updatedAt,
+				'Resolve',
+				'resolve_conflict',
+				'Your PR has merge conflicts'
+			);
 		if (i.reviewDecision === 'APPROVED' && i.ci !== 'PENDING' && i.ci !== 'EXPECTED')
-			return r('you', 'Ready to merge', 2, i.updatedAt, 'Merge');
+			return you(
+				'Ready to merge',
+				2,
+				i.updatedAt,
+				'Merge',
+				'merge',
+				'Your PR is approved and ready to merge'
+			);
 		if (lastByOtherHuman && after(i.lastCommentAt, i.lastCommitAt))
-			return r('you', `@${i.lastCommentBy} commented`, 2, i.lastCommentAt, 'Reply');
+			return you(
+				`@${i.lastCommentBy} commented`,
+				2,
+				i.lastCommentAt,
+				'Reply',
+				'reply',
+				`@${i.lastCommentBy} commented on your PR`
+			);
 		if (i.ci === 'PENDING' || i.ci === 'EXPECTED')
 			return r('them', 'CI running', 0, i.lastCommitAt);
 		return r('them', 'Waiting for review', 0, i.requestedAt || i.createdAt);
 	}
 
+	if (botPr) return r('none', 'Bot PR', 0, i.updatedAt);
 	if (i.requestedMe)
 		return i.myLastReviewAt
-			? r('you', 'Re-review requested', 0, i.requestedAt, 'Review', `${i.url}/files`)
-			: r('you', 'Review requested', 0, i.requestedAt || i.createdAt, 'Review', `${i.url}/files`);
-	if (assigned) return r('you', 'Assigned to you', 1, i.updatedAt);
+			? you(
+					'Re-review requested',
+					0,
+					i.requestedAt,
+					'Review',
+					'review',
+					`@${i.author} requests your re-review`,
+					`${i.url}/files`
+				)
+			: you(
+					'Review requested',
+					0,
+					i.requestedAt || i.createdAt,
+					'Review',
+					'review',
+					`@${i.author} requests your review`,
+					`${i.url}/files`
+				);
+	if (assigned)
+		return you('Assigned to you', 1, i.updatedAt, 'Open', 'triage', 'A PR was assigned to you');
 	if (i.myLastReviewAt && after(i.lastCommitAt, i.myLastReviewAt))
-		return r(
-			'you',
+		return you(
 			'New commits since your review',
 			2,
 			i.lastCommitAt,
 			'Re-review',
+			'review',
+			'New commits since your review',
 			`${i.url}/files`
 		);
 	if (i.requestedTeams.length)
@@ -213,7 +363,9 @@ export function computeTurn(i: DashFacts, me: string, sectionNames: string[]): T
 			0,
 			i.requestedAt || i.createdAt,
 			'Review',
-			`${i.url}/files`
+			`${i.url}/files`,
+			'review',
+			`@${i.author} requests review from ${i.requestedTeams[0]}`
 		);
 	if (i.myLastReviewAt)
 		return r(
@@ -226,15 +378,56 @@ export function computeTurn(i: DashFacts, me: string, sectionNames: string[]): T
 	return r('none', sectionNames[0] ?? 'Involves you', 0, i.updatedAt);
 }
 
+/**
+ * Turn facts for an inbox thread. `myTeams` are "org/team" slugs; only requests for those count.
+ * Threads have no creation or update times here; they only affect dashboard sorting.
+ */
+export function turnFactsFromEnrichment(
+	e: Enrichment,
+	repo: string,
+	me: string,
+	myTeams: string[] = []
+): TurnFacts {
+	const org = repo.split('/')[0];
+	return {
+		kind: e.kind === 'issue' ? 'issue' : 'pr',
+		url: e.url ?? '',
+		author: e.author ?? 'ghost',
+		authorIsBot: !!e.authorIsBot,
+		state: e.state ?? 'open',
+		draft: !!e.draft,
+		assignees: e.assignedToMe ? [me] : [],
+		comments: e.lastComment ? 1 : 0,
+		lastCommentBy: e.lastComment?.author ?? null,
+		lastCommentAt: e.lastComment?.createdAt ?? null,
+		lastCommentIsBot: !!e.lastComment?.authorIsBot,
+		ci: e.ci ?? null,
+		reviewDecision: e.reviewDecision ?? null,
+		mergeable: e.mergeable ?? null,
+		lastCommitAt: e.lastCommitAt ?? null,
+		requestedMe: !!e.reviewRequestedFromMe,
+		requestedTeams: (e.requestedTeams ?? [])
+			.map((slug) => `${org}/${slug}`)
+			.filter((slug) => myTeams.includes(slug)),
+		requestedAt: null,
+		myLastReviewAt: e.myReview?.at ?? null,
+		myLastReviewState: e.myReview?.state ?? null,
+		createdAt: '',
+		updatedAt: ''
+	};
+}
+
 export function finishItem(
 	facts: DashFacts,
 	sections: string[],
 	sectionNames: string[],
 	me: string,
 	staleDays: number,
-	now = Date.now()
+	now = Date.now(),
+	opts: TurnOptions = {}
 ): DashItem {
-	const t = computeTurn(facts, me, sectionNames);
+	// `kind` and `summary` are for the inbox; the item's own `kind` is "pr" or "issue".
+	const { kind: _kind, summary: _summary, ...t } = computeTurn(facts, me, sectionNames, opts);
 	const stale = t.turn !== 'none' && now - Date.parse(t.waitingSince) > staleDays * 86_400_000;
 	return {
 		...facts,

@@ -190,6 +190,7 @@ app.get('/api/me', async (c) => {
 		avatarUrl: u.avatar_url,
 		settings: parseSettings(u.settings),
 		lastPollAt: status.lastPollAt,
+		nextPollAt: status.nextPollAt,
 		lastPollError: status.lastError,
 		ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
 		scopes: u.scopes ? u.scopes.split(',') : []
@@ -320,21 +321,30 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 			threads.splice(0, threads.length, ...threads.filter((t) => !already.includes(t)));
 	}
 
+	// Your own triage choice replaces an automatic one (see the inbox watcher).
+	const NOT_AUTO = `resolved_at = NULL, resolved_note = NULL`;
 	const update = (t: ThreadRow, sql: string, ...args: unknown[]) =>
 		db.prepare(`UPDATE threads SET ${sql} WHERE user_id = ? AND id = ?`).bind(...args, u.id, t.id);
 	const settings = action === 'unmute' ? parseSettings(u.settings) : null;
 	const stmts = threads.map((t) => {
 		switch (action) {
 			case 'done':
-				return update(t, `triage = 'done', snoozed_until = NULL, snooze_event = NULL, unread = 0`);
+				return update(
+					t,
+					`triage = 'done', snoozed_until = NULL, snooze_event = NULL, unread = 0, ${NOT_AUTO}`
+				);
 			case 'undone':
 			case 'unsnooze':
-				return update(t, `triage = 'inbox', snoozed_until = NULL, snooze_event = NULL`);
+				return update(
+					t,
+					`triage = 'inbox', snoozed_until = NULL, snooze_event = NULL, ${NOT_AUTO}`
+				);
 			case 'read':
-				return update(t, `unread = 0`);
-			// GitHub has no "mark as unread" API, so this one stays in Hush.
+				return update(t, `unread = 0, marked_unread_at = NULL`);
+			// GitHub has no "mark as unread" API, so this one stays in Hush (and the read sync from
+			// GitHub leaves it alone until you read the thread there again).
 			case 'unread':
-				return update(t, `unread = 1`);
+				return update(t, `unread = 1, marked_unread_at = ?`, Date.now());
 			case 'snooze':
 				return update(
 					t,
@@ -576,9 +586,30 @@ app.post('/api/push/test', async (c) => {
 	return c.json({ sent: statuses.filter((s) => s >= 200 && s < 300).length, statuses });
 });
 
-// --- Peek ------------------------------------------------------------------
+// --- Quick check -----------------------------------------------------------
 
-const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
+// GitHub owner or repo name. Names of only dots ("..") are not allowed.
+const NAME = /^(?!\.+$)[A-Za-z0-9_.-]{1,100}$/;
+
+/** You came back from a PR or issue on GitHub: look at it again now, not in 15 minutes. */
+app.post('/api/recheck', async (c) => {
+	const u = c.get('user');
+	const body = (await c.req.json().catch(() => ({}))) as { repo?: unknown; number?: unknown };
+	const repo = typeof body.repo === 'string' ? body.repo : '';
+	const [owner, name, extra] = repo.split('/');
+	const number = Number(body.number);
+	if (
+		!NAME.test(owner ?? '') ||
+		!NAME.test(name ?? '') ||
+		extra !== undefined ||
+		!Number.isInteger(number) ||
+		number < 1
+	)
+		return c.json({ error: 'Not a PR or issue.' }, 400);
+	return c.json(await poller(c.env, u.id).recheck(repo, number));
+});
+
+// --- Peek ------------------------------------------------------------------
 
 app.get('/api/peek/:owner/:repo/:number', async (c) => {
 	const u = c.get('user');

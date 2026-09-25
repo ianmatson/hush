@@ -63,7 +63,24 @@ export const keys = {
 	peek: (repo: string, number: number) => ['peek', repo, number] as const
 };
 
-export const meQuery = () => queryOptions({ queryKey: keys.me, queryFn: api.me, staleTime: MIN });
+/**
+ * The server gets new data only when it polls GitHub (every 5 or 15 minutes). Refresh just after
+ * each poll instead of every minute; focus still refreshes at once. Falls back to every minute
+ * while the next poll time is unknown or past (a poll can run late).
+ */
+const afterNextPoll = (extra: number) => () => {
+	const next = queryClient.getQueryData<MeDTO>(keys.me)?.nextPollAt;
+	const wait = next ? next - Date.now() + extra : 0;
+	return wait > 5_000 ? Math.min(wait, 16 * MIN) : MIN;
+};
+
+export const meQuery = () =>
+	queryOptions({
+		queryKey: keys.me,
+		queryFn: api.me,
+		staleTime: MIN,
+		refetchInterval: afterNextPoll(5_000)
+	});
 
 export const threadsQuery = (view: View) =>
 	queryOptions({
@@ -77,7 +94,7 @@ export const threadsQuery = (view: View) =>
 			reconcileViews(view, res.counts);
 			return res;
 		},
-		refetchInterval: MIN
+		refetchInterval: afterNextPoll(10_000)
 	});
 
 /** The API returns at most this many threads per view. */

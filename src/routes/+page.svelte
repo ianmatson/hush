@@ -29,6 +29,7 @@
 	import Peek from '$lib/components/app/peek.svelte';
 	import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
 	import { palette, type PaletteCommand } from '$lib/palette.svelte';
+	import { openOnGitHub } from '$lib/recheck';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
@@ -250,7 +251,7 @@
 	const toggleRead = (ids: string[]) => ids.length && act(ids, readAction(ids));
 
 	function open(t: ThreadDTO, url: string) {
-		window.open(url, '_blank', 'noopener');
+		openOnGitHub(url);
 		if (t.unread) act([t.id], 'read');
 	}
 
