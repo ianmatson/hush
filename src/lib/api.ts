@@ -78,7 +78,12 @@ export const api = {
 			`/api/threads/${encodeURIComponent(id)}/${action}`,
 			body ?? {}
 		),
-	sync: () => request<{ lastPollAt: number | null; lastError: string | null }>('POST', '/api/sync'),
+	sync: () =>
+		request<{
+			lastPollAt: number | null;
+			lastError: string | null;
+			resolved?: { title: string; note: string }[];
+		}>('POST', '/api/sync'),
 	previewRules: (rules: Rule[]) =>
 		request<{
 			perRule: {

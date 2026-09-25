@@ -40,7 +40,7 @@
 	import type { Component } from 'svelte';
 	import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
 	import { palette, type PaletteCommand } from '$lib/palette.svelte';
-	import { openOnGitHub } from '$lib/recheck';
+	import { openOnGitHub, reportResolved } from '$lib/recheck';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
@@ -189,6 +189,7 @@
 		try {
 			const status = await api.sync();
 			if (status.lastError) toast.error(status.lastError);
+			reportResolved(status.resolved ?? []);
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: keys.threadsAll }),
 				queryClient.invalidateQueries({ queryKey: keys.me })

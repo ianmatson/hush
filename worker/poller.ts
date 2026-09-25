@@ -13,11 +13,17 @@ import type {
 	ThreadFacts
 } from '../src/lib/shared/types';
 import type { DashFacts } from '../src/lib/shared/dashboard';
+import {
+	dashFactsOf,
+	enrichmentOf,
+	subjectKey,
+	subjectUrls,
+	type SubjectFacts
+} from '../src/lib/shared/subject';
 import { bumpVersion, getUser, parseSettings, userToken, type Env, type ThreadRow } from './db';
 import { allowedOrgs, checkAccess } from './access';
 import {
-	enrichSubjects,
-	fetchSubjectFacts,
+	fetchSubjects,
 	fetchTeams,
 	laterRunPassed,
 	listNotifications,
@@ -48,6 +54,9 @@ const WATCH_BATCH = 80;
 const SYNC_DAYS = 14;
 /** Alerts pushed within this time are updated when their thread is resolved. */
 const RESOLVE_WINDOW = DAY;
+// A manual refresh checks up to this many inbox threads again, at most once a minute.
+const INBOX_CHECK_MAX = 40;
+const INBOX_CHECK_GAP = MIN;
 /** The alert history (the bell) keeps this long. */
 const ALERT_LOG_KEEP = 30 * DAY;
 
@@ -66,6 +75,8 @@ export interface PollStatus {
 	nextPollAt: number | null;
 	/** Orgs whose notifications GitHub hides until the token is SAML-authorized. */
 	ssoHiddenOrgs: number;
+	/** Threads a manual refresh moved to Done (see checkInbox). */
+	resolved?: { title: string; note: string }[];
 }
 
 type Existing = Pick<
@@ -85,6 +96,17 @@ type Existing = Pick<
 const WATCHED = `user_id = ?1 AND subject_type IN ('PullRequest', 'Issue') AND category != 'muted'
   AND (triage = 'inbox' OR (triage = 'snoozed' AND snooze_event IS NOT NULL)
        OR (triage = 'done' AND resolved_at > ?2))`;
+
+/** What the subject store needs about the user to update their views. */
+interface Who {
+	userId: number;
+	me: string;
+	settings: Settings;
+	/** Team slugs whose review requests count in the inbox (Settings → Inbox). */
+	inboxTeams: string[];
+}
+
+type Resolved = { id: string; title: string; note: string };
 
 /** Owner, repo, and number of a stored thread's PR or issue. */
 function subjectRefOf(
@@ -165,7 +187,38 @@ export class Poller extends DurableObject<Env> {
 		await this.ctx.storage.put('lastActive', Date.now());
 		await this.runOnce();
 		await this.schedule();
-		return this.status();
+		const resolved = await this.checkInbox().catch((err) => {
+			console.error('inbox check failed', err);
+			return [];
+		});
+		return { ...(await this.status()), resolved };
+	}
+
+	/**
+	 * A manual refresh also looks again at the inbox's open PRs and issues (the newest 40, one
+	 * GraphQL request), not only at new notifications. GitHub sends none when, for example, the
+	 * author closes a PR you were asked to review; the watcher sees that only within 15 minutes.
+	 */
+	private async checkInbox(): Promise<{ title: string; note: string }[]> {
+		const last = (await this.ctx.storage.get<number>('lastInboxCheck')) ?? 0;
+		if (Date.now() - last < INBOX_CHECK_GAP) return [];
+		await this.ctx.storage.put('lastInboxCheck', Date.now());
+		const userId = await this.ctx.storage.get<number>('userId');
+		const user = userId ? await getUser(this.env, userId) : null;
+		if (!user) return [];
+		const token = await userToken(this.env, user);
+		const settings = parseSettings(user.settings);
+		const myTeams = settings.teamReviewsAreAction
+			? (await this.teams()).teams.map((t) => t.slug)
+			: [];
+		const { results: rows } = await this.env.DB.prepare(
+			`SELECT * FROM threads WHERE user_id = ? AND triage = 'inbox' AND category != 'muted'
+       AND subject_type IN ('PullRequest', 'Issue') ORDER BY gh_updated_at DESC LIMIT ?`
+		)
+			.bind(user.id, INBOX_CHECK_MAX)
+			.all<ThreadRow>();
+		const resolved = await this.refresh(user.id, user.login, token, settings, myTeams, rows);
+		return resolved.map(({ title, note }) => ({ title, note }));
 	}
 
 	async status(): Promise<PollStatus> {
@@ -231,7 +284,8 @@ export class Poller extends DurableObject<Env> {
 		const userId = await this.ctx.storage.get<number>('userId');
 		const user = userId ? await getUser(this.env, userId) : null;
 		if (!user) throw new Error('Not signed in.');
-		const { dash, botsAreFyi, reviewResolution } = parseSettings(user.settings);
+		const settings = parseSettings(user.settings);
+		const { dash, botsAreFyi, reviewResolution } = settings;
 		const sig = JSON.stringify([
 			botsAreFyi,
 			reviewResolution,
@@ -255,17 +309,20 @@ export class Poller extends DurableObject<Env> {
 		const { hits, errors, counts } = await searchDashboard(
 			await userToken(this.env, user),
 			user.login,
-			new Set(teams.map((t) => t.slug)),
 			queries,
 			lastCounts
 		);
 		await this.putChanged({ [countsKey]: counts });
 
+		const teamSet = new Set(teams.map((t) => t.slug));
 		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
 		for (const h of hits) {
-			const e = byId.get(h.facts.id) ?? { facts: h.facts, sections: new Set<string>() };
+			const e = byId.get(h.subject.id) ?? {
+				facts: dashFactsOf(h.subject, user.login, teamSet),
+				sections: new Set<string>()
+			};
 			e.sections.add(h.section);
-			byId.set(h.facts.id, e);
+			byId.set(h.subject.id, e);
 		}
 		const enabled = dash[kind].filter((s) => s.enabled);
 		const items = sortItems(
@@ -298,6 +355,17 @@ export class Poller extends DurableObject<Env> {
 			errors: teamError ? [teamError, ...errors] : errors
 		};
 		await this.ctx.storage.put(key, { sig, data });
+		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
+		await this.recordSubjects(
+			{
+				userId: user.id,
+				me: user.login,
+				settings,
+				inboxTeams: settings.teamReviewsAreAction ? [...teamSet] : []
+			},
+			hits.map((h) => h.subject),
+			{ dash: false }
+		);
 		return data;
 	}
 
@@ -486,7 +554,16 @@ export class Poller extends DurableObject<Env> {
 					number: num
 				});
 		}
-		const enriched = await enrichSubjects(token, refs, me);
+		const fetched = await fetchSubjects(token, refs, me);
+		// Store the facts; this ingest writes these threads itself.
+		await this.recordSubjects(
+			{ userId, me, settings, inboxTeams: myTeams },
+			[...fetched.values()],
+			{
+				threads: false
+			}
+		);
+		const enriched = new Map([...fetched].map(([id, sub]) => [id, enrichmentOf(sub, me)]));
 
 		const toPush: { n: GhNotification; c: Classification }[] = [];
 		const woken: PushMessage[] = [];
@@ -838,22 +915,149 @@ export class Poller extends DurableObject<Env> {
 		myTeams: string[],
 		rows: ThreadRow[],
 		opts: { quiet?: boolean } = {}
-	): Promise<{ id: string; title: string; note: string }[]> {
+	): Promise<Resolved[]> {
 		const refs = rows.flatMap((r) => {
 			const ref = subjectRefOf(r);
 			return ref ? [ref] : [];
 		});
 		if (!refs.length) return [];
-		const fresh = await enrichSubjects(token, refs, me);
+		const fresh = await fetchSubjects(token, refs, me);
+		const who: Who = { userId, me, settings, inboxTeams: myTeams };
+		// Store the facts (and update the dashboards); these threads are applied below, also when
+		// their subject did not change, so a thread that missed an update catches up.
+		await this.recordSubjects(who, [...fresh.values()], { threads: false });
+		const byThread = new Map(
+			rows.flatMap((r) => (fresh.has(r.id) ? [[r.id, fresh.get(r.id)!]] : []))
+		);
+		return (await this.applyFacts(who, rows, (r) => byThread.get(r.id), opts)).resolved;
+	}
 
+	/**
+	 * The one write path for PR and issue facts from GitHub. Stores each subject whose facts
+	 * changed (unchanged ones cost one read), then updates every view of it: the cached dashboards
+	 * and the inbox threads about it. Callers that write those threads themselves pass
+	 * `threads: false`; the dashboard build passes `dash: false`.
+	 */
+	private async recordSubjects(
+		who: Who,
+		subjects: SubjectFacts[],
+		opts: { threads?: boolean; dash?: boolean; quiet?: boolean } = {}
+	): Promise<{ changed: SubjectFacts[]; resolved: Resolved[]; wrote: number }> {
+		const db = this.env.DB;
+		const byKey = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
+		const keys = [...byKey.keys()];
+		const stored = new Map<string, string>();
+		for (let i = 0; i < keys.length; i += 90) {
+			const chunk = keys.slice(i, i + 90);
+			const { results } = await db
+				.prepare(
+					`SELECT key, facts FROM subjects WHERE user_id = ? AND key IN (${chunk.map(() => '?').join(',')})`
+				)
+				.bind(who.userId, ...chunk)
+				.all<{ key: string; facts: string }>();
+			for (const r of results) stored.set(r.key, r.facts);
+		}
+		const changed = [...byKey].filter(([k, x]) => stored.get(k) !== JSON.stringify(x));
+		if (!changed.length) return { changed: [], resolved: [], wrote: 0 };
+		const now = Date.now();
+		await db.batch(
+			changed.map(([k, x]) =>
+				db
+					.prepare(
+						`INSERT INTO subjects (user_id, key, facts, changed_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT (user_id, key) DO UPDATE SET facts = excluded.facts, changed_at = excluded.changed_at`
+					)
+					.bind(who.userId, k, JSON.stringify(x), now)
+			)
+		);
+		const subs = changed.map(([, x]) => x);
+		if (opts.dash !== false) await this.patchDashCaches(who, subs);
+		if (opts.threads === false) return { changed: subs, resolved: [], wrote: 0 };
+
+		const urls = changed.flatMap(([k]) => subjectUrls(k));
+		const rows: ThreadRow[] = [];
+		for (let i = 0; i < urls.length; i += 90) {
+			const chunk = urls.slice(i, i + 90);
+			const { results } = await db
+				.prepare(
+					`SELECT * FROM threads WHERE user_id = ? AND category != 'muted'
+           AND html_url IN (${chunk.map(() => '?').join(',')})`
+				)
+				.bind(who.userId, ...chunk)
+				.all<ThreadRow>();
+			rows.push(...results);
+		}
+		const keyOf = (r: ThreadRow) => {
+			const ref = subjectRefOf(r);
+			return ref ? subjectKey(`${ref.owner}/${ref.repo}`, ref.number) : null;
+		};
+		const out = await this.applyFacts(who, rows, (r) => byKey.get(keyOf(r) ?? ''), opts);
+		return { changed: subs, ...out };
+	}
+
+	/** Replace changed subjects in the cached dashboards (and drop the ones that closed). */
+	private async patchDashCaches(who: Who, subs: SubjectFacts[]) {
+		if (!subs.length) return;
+		const { dash, botsAreFyi, reviewResolution } = who.settings;
+		let teamSet: Set<string> | null = null;
+		for (const kind of ['pr', 'issue'] as const) {
+			const key = `dash:${kind}`;
+			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
+			const byId = new Map(subs.filter((x) => x.kind === kind).map((x) => [x.id, x]));
+			if (!cached || !cached.data.items.some((i) => byId.has(i.id))) continue;
+			teamSet ??= new Set((await this.teams()).teams.map((t) => t.slug));
+			const names = Object.fromEntries(cached.data.sections.map((x) => [x.id, x.name]));
+			const items = sortItems(
+				cached.data.items.flatMap((i) => {
+					const sub = byId.get(i.id);
+					if (!sub) return [i];
+					const f = dashFactsOf(sub, who.me, teamSet!);
+					if (f.state !== 'open' || !keepItem(f, who.me, dash)) return [];
+					return [
+						finishItem(
+							f,
+							i.sections,
+							i.sections.map((x) => names[x] ?? x),
+							who.me,
+							dash.staleDays,
+							Date.now(),
+							{ botsAreFyi, reviewResolution }
+						)
+					];
+				})
+			);
+			const data: DashResponse = {
+				...cached.data,
+				items,
+				sections: cached.data.sections.map((x) => ({
+					...x,
+					count: items.filter((i) => i.sections.includes(x.id)).length
+				}))
+			};
+			await this.ctx.storage.put(key, { sig: cached.sig, data });
+		}
+	}
+
+	/**
+	 * Apply fresh facts to inbox threads: classify, then watchOutcome (resolve, reopen, wake).
+	 * Writes only threads that changed, and pushes what now needs you.
+	 */
+	private async applyFacts(
+		who: Who,
+		rows: ThreadRow[],
+		subjectOf: (r: ThreadRow) => SubjectFacts | undefined,
+		opts: { quiet?: boolean } = {}
+	): Promise<{ resolved: Resolved[]; wrote: number }> {
+		const { userId, me, settings, inboxTeams: myTeams } = who;
 		const db = this.env.DB;
 		const stmts: D1PreparedStatement[] = [];
 		const messages: PushMessage[] = [];
-		const resolved: { id: string; title: string; note: string }[] = [];
+		const resolved: Resolved[] = [];
 		for (const r of rows) {
 			// No data (deleted, access lost, GitHub error): change nothing. Snooze deadlines still end.
-			const e = fresh.get(r.id);
-			if (!e) continue;
+			const sub = subjectOf(r);
+			if (!sub) continue;
+			const e = enrichmentOf(sub, me);
 			const before = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : null;
 			const c = classify(
 				{
@@ -939,7 +1143,7 @@ export class Poller extends DurableObject<Env> {
 		if (messages.length && !opts.quiet)
 			await this.send(userId, messages.slice(0, MAX_INDIVIDUAL_PUSHES));
 		if (resolved.length && !opts.quiet) await this.notifyResolved(resolved);
-		return resolved;
+		return { resolved, wrote: stmts.length };
 	}
 
 	/**
@@ -1024,85 +1228,77 @@ export class Poller extends DurableObject<Env> {
 		return ingested;
 	}
 
+	/** The user and what the subject store needs to update their views, or null. */
+	private async who(): Promise<(Who & { token: string; login: string }) | null> {
+		const userId = await this.ctx.storage.get<number>('userId');
+		const user = userId ? await getUser(this.env, userId) : null;
+		if (!user) return null;
+		const settings = parseSettings(user.settings);
+		return {
+			userId: user.id,
+			me: user.login,
+			login: user.login,
+			settings,
+			inboxTeams: settings.teamReviewsAreAction
+				? (await this.teams()).teams.map((t) => t.slug)
+				: [],
+			token: await userToken(this.env, user)
+		};
+	}
+
+	/** The inbox threads about one PR or issue. */
+	private async threadsOf(userId: number, key: string): Promise<ThreadRow[]> {
+		const { results } = await this.env.DB.prepare(
+			`SELECT * FROM threads WHERE user_id = ? AND html_url IN (?, ?) AND category != 'muted'`
+		)
+			.bind(userId, ...subjectUrls(key))
+			.all<ThreadRow>();
+		return results;
+	}
+
 	/**
-	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Updates its inbox
-	 * threads and its entry in the cached dashboards. About 2 points.
+	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Stores its facts,
+	 * which updates its inbox threads and its entry in the cached dashboards. About 1 point.
 	 */
 	async recheck(
 		repo: string,
 		number: number
 	): Promise<{ resolved: { title: string; note: string }[] }> {
-		const userId = await this.ctx.storage.get<number>('userId');
-		const user = userId ? await getUser(this.env, userId) : null;
-		if (!user) return { resolved: [] };
-		const token = await userToken(this.env, user);
-		const settings = parseSettings(user.settings);
-		const teams = (await this.teams()).teams.map((t) => t.slug);
-		const { results: rows } = await this.env.DB.prepare(
-			`SELECT * FROM threads WHERE user_id = ? AND html_url IN (?, ?) AND category != 'muted'`
-		)
-			.bind(
-				user.id,
-				`https://github.com/${repo}/pull/${number}`,
-				`https://github.com/${repo}/issues/${number}`
-			)
-			.all<ThreadRow>();
-		const [resolved] = await Promise.all([
-			this.refresh(
-				user.id,
-				user.login,
-				token,
-				settings,
-				settings.teamReviewsAreAction ? teams : [],
-				rows
-			),
-			this.patchDashboards(token, user.login, settings, new Set(teams), repo, number)
-		]);
-		return { resolved: resolved.map(({ title, note }) => ({ title, note })) };
+		const who = await this.who();
+		if (!who) return { resolved: [] };
+		const [owner, name] = repo.split('/');
+		const key = subjectKey(repo, number);
+		const fresh = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
+		const sub = fresh.get(key);
+		if (!sub) return { resolved: [] };
+		return { resolved: (await this.applySubject(who, sub)).resolved };
 	}
 
-	/** Replace one item in the cached dashboards with fresh facts (or drop it once it closed). */
-	private async patchDashboards(
-		token: string,
-		me: string,
-		settings: Settings,
-		myTeams: Set<string>,
-		repo: string,
-		number: number
-	) {
-		const [owner, name] = repo.split('/');
-		const facts = await fetchSubjectFacts(token, me, myTeams, owner, name, number);
-		if (!facts) return;
-		const key = `dash:${facts.kind}`;
-		const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
-		const old = cached?.data.items.find((i) => i.id === facts.id);
-		if (!cached || !old) return;
-		const names = Object.fromEntries(cached.data.sections.map((s) => [s.id, s.name]));
-		const rest = cached.data.items.filter((i) => i.id !== facts.id);
-		const items =
-			facts.state === 'open'
-				? sortItems([
-						...rest,
-						finishItem(
-							facts,
-							old.sections,
-							old.sections.map((s) => names[s] ?? s),
-							me,
-							settings.dash.staleDays,
-							Date.now(),
-							{ botsAreFyi: settings.botsAreFyi, reviewResolution: settings.reviewResolution }
-						)
-					])
-				: rest;
-		const data: DashResponse = {
-			...cached.data,
-			items,
-			sections: cached.data.sections.map((s) => ({
-				...s,
-				count: items.filter((i) => i.sections.includes(s.id)).length
-			}))
+	/**
+	 * Facts that the API fetched (the peek): store them and update every view. `changed` tells the
+	 * browser to refetch its lists.
+	 */
+	async recordFetched(
+		sub: SubjectFacts
+	): Promise<{ changed: boolean; resolved: { title: string; note: string }[] }> {
+		const who = await this.who();
+		if (!who) return { changed: false, resolved: [] };
+		const out = await this.applySubject(who, sub);
+		return { changed: out.changed, resolved: out.resolved };
+	}
+
+	/** Store one subject, then apply it to its threads (also when it did not change). */
+	private async applySubject(
+		who: Who,
+		sub: SubjectFacts
+	): Promise<{ changed: boolean; resolved: { title: string; note: string }[] }> {
+		const stored = await this.recordSubjects(who, [sub], { threads: false });
+		const rows = await this.threadsOf(who.userId, subjectKey(sub.repo, sub.number));
+		const out = await this.applyFacts(who, rows, () => sub);
+		return {
+			changed: stored.changed.length > 0 || out.wrote > 0,
+			resolved: out.resolved.map(({ title, note }) => ({ title, note }))
 		};
-		await this.ctx.storage.put(key, { sig: cached.sig, data });
 	}
 
 	private async wakeSnoozed(userId: number) {
@@ -1151,6 +1347,10 @@ export class Poller extends DurableObject<Env> {
 			.bind(userId, cutoff)
 			.run();
 		if (res.meta.changes) await bumpVersion(this.env, userId).run();
+		// Subjects nothing changed for 30 days; the next read stores them again.
+		await this.env.DB.prepare('DELETE FROM subjects WHERE user_id = ? AND changed_at < ?')
+			.bind(userId, Date.now() - 30 * DAY)
+			.run();
 		await this.ctx.storage.put('lastCleanup', Date.now());
 	}
 }

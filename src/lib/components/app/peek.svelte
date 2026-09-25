@@ -64,5 +64,5 @@
 			>
 		{/if}
 	{/snippet}
-	{#if target}<PeekContent {...target} />{/if}
+	{#if target}<PeekContent repo={target.repo} number={target.number} title={target.title} />{/if}
 </SidePanel>

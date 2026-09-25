@@ -384,6 +384,8 @@ export interface AlertDTO {
 }
 
 export interface PeekDTO {
+	/** The peek also updated the stored facts: `changed` means the lists are out of date. */
+	sync?: { changed: boolean; resolved: { title: string; note: string }[] };
 	kind: 'pr' | 'issue';
 	number: number;
 	title: string;

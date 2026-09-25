@@ -17,6 +17,7 @@ import {
 } from '../src/lib/shared/snooze';
 import type {
 	AlertDTO,
+	PeekDTO,
 	Counts,
 	DashItem,
 	DashKind,
@@ -785,13 +786,19 @@ app.get('/api/peek/:owner/:repo/:number', async (c) => {
 	if (!NAME.test(owner) || !NAME.test(repo) || !Number.isInteger(number) || number < 1)
 		return c.json({ error: 'Not a PR or issue.' }, 400);
 	try {
-		const peek = await fetchPeek(await userToken(c.env, u), owner, repo, number);
-		if (!peek)
+		const found = await fetchPeek(await userToken(c.env, u), u.login, owner, repo, number);
+		if (!found)
 			return c.json(
 				{ error: 'GitHub did not find this PR or issue. Maybe you have no access.' },
 				404
 			);
-		return c.json(peek, 200, { 'Cache-Control': 'private, no-store' });
+		// The peek is a fresh read too: store it, so the inbox and dashboards agree with it.
+		const sync = await poller(c.env, u.id)
+			.recordFetched(found.subject)
+			.catch(() => ({ changed: false, resolved: [] }));
+		return c.json({ ...found.peek, sync } satisfies PeekDTO, 200, {
+			'Cache-Control': 'private, no-store'
+		});
 	} catch (err) {
 		const status = err instanceof GitHubError && err.status === 401 ? 401 : 502;
 		return c.json({ error: (err as Error).message }, status);

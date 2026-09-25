@@ -1,14 +1,14 @@
 import type {
 	CheckState,
 	CiState,
-	Enrichment,
 	PeekDTO,
 	PeekEntry,
 	PeekPerson,
 	TeamDTO
 } from '../src/lib/shared/types';
 import { isBot } from '../src/lib/shared/classify';
-import type { DashFacts, ExpandedQuery } from '../src/lib/shared/dashboard';
+import type { ExpandedQuery } from '../src/lib/shared/dashboard';
+import type { SubjectFacts } from '../src/lib/shared/subject';
 
 const API = 'https://api.github.com';
 const UA = 'hush-notifications (+https://github.com)';
@@ -206,31 +206,37 @@ export const muteThread = (token: string, id: string) =>
 	});
 
 // ---------------------------------------------------------------------------
-// GraphQL enrichment: one request for up to CHUNK subjects, with aliases.
+// PR and issue facts: one fragment set and one parser for every read (inbox enrichment, watcher,
+// dashboard search, quick check, peek), so every view sees the same facts (see SubjectFacts).
 
 const CHUNK = 40;
 
-const FIELDS = `
-__typename
-... on PullRequest {
-  number url state isDraft merged additions deletions reviewDecision mergeable
-  author { login __typename }
-  labels(first: 10) { nodes { name } }
+/** Fragments P (pull request) and I (issue). Queries that use them declare `$me: String!`. */
+export const SUBJECT_FIELDS = `
+fragment P on PullRequest {
+  id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable
+  repository { nameWithOwner }
+  author { login avatarUrl(size: 48) __typename }
+  labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
-  reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug } } } }
+  comments(last: 1) { totalCount nodes { author { login __typename } bodyText url createdAt } }
   commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
-  comments(last: 1) { nodes { author { login __typename } bodyText url createdAt } }
-  reviews(last: 1) { nodes { author { login } submittedAt state } }
+  reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
+  requestEvents: timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
+    nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
+  }
+  latestReview: reviews(last: 1) { nodes { author { login } submittedAt state } }
   myReviews: reviews(author: $me, last: 1) { nodes { submittedAt state } }
   verdicts: latestOpinionatedReviews(first: 10) { nodes { author { login } submittedAt state } }
   reviewThreads(first: 50) { nodes { isResolved } }
 }
-... on Issue {
-  number url state
-  author { login __typename }
-  labels(first: 10) { nodes { name } }
+fragment I on Issue {
+  id number title url state createdAt updatedAt
+  repository { nameWithOwner }
+  author { login avatarUrl(size: 48) __typename }
+  labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
-  comments(last: 1) { nodes { author { login __typename } bodyText url createdAt } }
+  comments(last: 1) { totalCount nodes { author { login __typename } bodyText url createdAt } }
 }`;
 
 export interface SubjectRef {
@@ -242,90 +248,76 @@ export interface SubjectRef {
 
 type Node = Record<string, any>;
 
-/** Review threads nobody resolved (GraphQL `reviewThreads`, up to 50). */
-function openThreadsOf(n: Node): number {
-	return (n.reviewThreads?.nodes ?? []).filter((t: Node) => t && t.isResolved === false).length;
-}
+const reviewer = (r: Node | null | undefined) =>
+	r?.__typename === 'Team'
+		? { team: true, name: String(r.combinedSlug ?? '') }
+		: { team: false, name: String(r?.login ?? '') };
 
-/**
- * The newest approval or change request by someone who is neither you nor the author, from
- * `latestOpinionatedReviews` (each reviewer's latest verdict).
- */
-function lastVerdictOf(n: Node, me: string): { by: string; at: string } | null {
-	const skip = new Set([me.toLowerCase(), String(n.author?.login ?? '').toLowerCase()]);
-	let best: { by: string; at: string } | null = null;
-	for (const r of n.verdicts?.nodes ?? []) {
-		const by = r?.author?.login;
-		if (!by || skip.has(by.toLowerCase()) || !r.submittedAt) continue;
-		if (r.state !== 'APPROVED' && r.state !== 'CHANGES_REQUESTED') continue;
-		if (!best || Date.parse(r.submittedAt) > Date.parse(best.at)) best = { by, at: r.submittedAt };
-	}
-	return best;
-}
-
-function toEnrichment(n: Node, me: string): Enrichment {
-	const meL = me.toLowerCase();
-	const authorLogin: string | undefined = n.author?.login;
-	const comment = n.comments?.nodes?.[0];
-	const base: Enrichment = {
-		kind: n.__typename === 'PullRequest' ? 'pr' : 'issue',
-		number: n.number,
-		url: n.url,
-		author: authorLogin,
-		authorIsBot: n.author?.__typename === 'Bot' || isBot(authorLogin),
-		labels: (n.labels?.nodes ?? []).map((l: Node) => l.name),
-		assignedToMe: (n.assignees?.nodes ?? []).some((a: Node) => a.login?.toLowerCase() === meL),
-		lastComment: comment
-			? {
-					author: comment.author?.login ?? 'ghost',
-					authorIsBot: comment.author?.__typename === 'Bot' || isBot(comment.author?.login),
-					body: String(comment.bodyText ?? '').slice(0, 280),
-					url: comment.url,
-					createdAt: comment.createdAt
-				}
-			: null
-	};
-	if (base.kind === 'issue') return { ...base, state: n.state === 'CLOSED' ? 'closed' : 'open' };
-
-	const reviewers: Node[] = (n.reviewRequests?.nodes ?? []).map(
-		(r: Node) => r.requestedReviewer ?? {}
-	);
+/** A PR or issue node (fragments P and I) as SubjectFacts. */
+export function toSubject(n: Node): SubjectFacts {
+	const pr = n.__typename === 'PullRequest';
+	const c = n.comments?.nodes?.[0];
+	const commit = n.commits?.nodes?.[0]?.commit;
+	const latest = n.latestReview?.nodes?.[0];
+	const mine = n.myReviews?.nodes?.[0];
 	return {
-		...base,
+		id: n.id,
+		kind: pr ? 'pr' : 'issue',
+		repo: n.repository?.nameWithOwner ?? '',
+		number: n.number,
+		title: n.title ?? '',
+		url: n.url,
+		author: n.author?.login ?? 'ghost',
+		authorAvatar: n.author?.avatarUrl ?? null,
+		authorIsBot: n.author?.__typename === 'Bot' || isBot(n.author?.login),
+		createdAt: n.createdAt,
+		updatedAt: n.updatedAt,
 		state: n.merged ? 'merged' : n.state === 'CLOSED' ? 'closed' : 'open',
 		draft: !!n.isDraft,
-		reviewDecision: n.reviewDecision ?? null,
-		mergeable: n.mergeable,
-		ci: (n.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state as CiState | undefined) ?? null,
-		lastCommitAt: n.commits?.nodes?.[0]?.commit?.committedDate ?? null,
-		openThreads: openThreadsOf(n),
-		lastVerdict: lastVerdictOf(n, me),
-		myReview: n.myReviews?.nodes?.[0]?.submittedAt
-			? { at: n.myReviews.nodes[0].submittedAt, state: n.myReviews.nodes[0].state }
-			: null,
-		latestReview: n.reviews?.nodes?.[0]
+		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
+		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
+		comments: n.comments?.totalCount ?? 0,
+		lastComment: c
 			? {
-					author: n.reviews.nodes[0].author?.login ?? 'ghost',
-					at: n.reviews.nodes[0].submittedAt,
-					state: n.reviews.nodes[0].state
+					author: c.author?.login ?? 'ghost',
+					authorIsBot: c.author?.__typename === 'Bot' || isBot(c.author?.login),
+					body: String(c.bodyText ?? '').slice(0, 280),
+					url: c.url,
+					createdAt: c.createdAt
 				}
 			: null,
-		reviewRequestedFromMe: reviewers.some(
-			(r) => r.__typename === 'User' && r.login?.toLowerCase() === meL
-		),
-		requestedTeams: reviewers.filter((r) => r.__typename === 'Team').map((r) => r.slug),
-		additions: n.additions,
-		deletions: n.deletions
+		ci: pr ? ((commit?.statusCheckRollup?.state as CiState | undefined) ?? null) : null,
+		reviewDecision: pr ? (n.reviewDecision ?? null) : null,
+		mergeable: pr ? (n.mergeable ?? null) : null,
+		additions: n.additions ?? 0,
+		deletions: n.deletions ?? 0,
+		lastCommitAt: commit?.committedDate ?? null,
+		reviewRequests: (n.reviewRequests?.nodes ?? [])
+			.map((r: Node) => reviewer(r.requestedReviewer))
+			.filter((r: { name: string }) => r.name),
+		requestEvents: (n.requestEvents?.nodes ?? [])
+			.filter((e: Node) => e?.createdAt && e.requestedReviewer)
+			.map((e: Node) => ({ at: e.createdAt, ...reviewer(e.requestedReviewer) })),
+		myReview: mine?.submittedAt ? { at: mine.submittedAt, state: mine.state } : null,
+		latestReview: latest
+			? { author: latest.author?.login ?? 'ghost', at: latest.submittedAt, state: latest.state }
+			: null,
+		verdicts: (n.verdicts?.nodes ?? [])
+			.filter((v: Node) => v?.author?.login && v.submittedAt)
+			.map((v: Node) => ({ by: v.author.login, at: v.submittedAt, state: v.state })),
+		openThreads: pr
+			? (n.reviewThreads?.nodes ?? []).filter((t: Node) => t && t.isResolved === false).length
+			: 0
 	};
 }
 
-/** Enrich PR/issue subjects. Subjects that fail (no access, SAML, deleted) are left out. */
-export async function enrichSubjects(
+/** Fetch PRs and issues (40 per request). Subjects that fail (no access, SAML, deleted) are left out. */
+export async function fetchSubjects(
 	token: string,
 	refs: SubjectRef[],
 	me: string
-): Promise<Map<string, Enrichment>> {
-	const out = new Map<string, Enrichment>();
+): Promise<Map<string, SubjectFacts>> {
+	const out = new Map<string, SubjectFacts>();
 	for (let i = 0; i < refs.length; i += CHUNK) {
 		const chunk = refs.slice(i, i + CHUNK);
 		const vars: Record<string, string | number> = { me };
@@ -337,10 +329,10 @@ export async function enrichSubjects(
 			vars[`n${j}`] = r.number;
 			decl.push(`$o${j}: String!, $r${j}: String!, $n${j}: Int!`);
 			body.push(
-				`t${j}: repository(owner: $o${j}, name: $r${j}) { issueOrPullRequest(number: $n${j}) { ${FIELDS} } }`
+				`t${j}: repository(owner: $o${j}, name: $r${j}) { issueOrPullRequest(number: $n${j}) { __typename ...P ...I } }`
 			);
 		});
-		const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}`;
+		const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`;
 		const res = await gh(token, '/graphql', {
 			method: 'POST',
 			body: JSON.stringify({ query, variables: vars })
@@ -349,7 +341,7 @@ export async function enrichSubjects(
 		const json = (await res.json()) as { data?: Record<string, Node | null> };
 		chunk.forEach((r, j) => {
 			const node = json.data?.[`t${j}`]?.issueOrPullRequest;
-			if (node) out.set(r.key, toEnrichment(node, me));
+			if (node?.id) out.set(r.key, toSubject(node));
 		});
 	}
 	return out;
@@ -383,121 +375,11 @@ export async function fetchTeams(
 	};
 }
 
-const SEARCH_FIELDS = `
-fragment P on PullRequest {
-  id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable
-  repository { nameWithOwner }
-  author { login avatarUrl(size: 48) __typename }
-  labels(first: 6) { nodes { name color } }
-  assignees(first: 5) { nodes { login } }
-  comments(last: 1) { totalCount nodes { author { login __typename } createdAt } }
-  commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
-  reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
-  myReviews: reviews(author: $me, last: 1) { nodes { submittedAt state } }
-  verdicts: latestOpinionatedReviews(first: 10) { nodes { author { login } submittedAt state } }
-  reviewThreads(first: 50) { nodes { isResolved } }
-  timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
-    nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
-  }
-}
-fragment I on Issue {
-  id number title url state createdAt updatedAt
-  repository { nameWithOwner }
-  author { login avatarUrl(size: 48) __typename }
-  labels(first: 6) { nodes { name color } }
-  assignees(first: 5) { nodes { login } }
-  comments(last: 1) { totalCount nodes { author { login __typename } createdAt } }
-}`;
-
 const SEARCH_CHUNK = 10;
-
-function toFacts(n: Node, me: string, myTeams: Set<string>): DashFacts {
-	const meL = me.toLowerCase();
-	const pr = n.__typename === 'PullRequest';
-	const c = n.comments?.nodes?.[0];
-	const commit = n.commits?.nodes?.[0]?.commit;
-	const reviewers: Node[] = (n.reviewRequests?.nodes ?? []).map(
-		(r: Node) => r.requestedReviewer ?? {}
-	);
-	const isMe = (r: Node) => r?.__typename === 'User' && r.login?.toLowerCase() === meL;
-	const requestedTeams = reviewers
-		.filter((r) => r.__typename === 'Team' && myTeams.has(r.combinedSlug))
-		.map((r) => r.combinedSlug as string);
-	const requestedMe = reviewers.some(isMe);
-	// Newest review-request event that targets you (or one of your teams).
-	const events: Node[] = n.timelineItems?.nodes ?? [];
-	const ev = [...events]
-		.reverse()
-		.find(
-			(e) =>
-				isMe(e.requestedReviewer) ||
-				(e.requestedReviewer?.__typename === 'Team' &&
-					myTeams.has(e.requestedReviewer.combinedSlug))
-		);
-	const review = n.myReviews?.nodes?.[0];
-	return {
-		id: n.id,
-		kind: pr ? 'pr' : 'issue',
-		number: n.number,
-		title: n.title,
-		url: n.url,
-		repo: n.repository?.nameWithOwner ?? '',
-		author: n.author?.login ?? 'ghost',
-		authorAvatar: n.author?.avatarUrl ?? null,
-		authorIsBot: n.author?.__typename === 'Bot' || isBot(n.author?.login),
-		createdAt: n.createdAt,
-		updatedAt: n.updatedAt,
-		state: n.merged ? 'merged' : n.state === 'CLOSED' ? 'closed' : 'open',
-		draft: !!n.isDraft,
-		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
-		comments: n.comments?.totalCount ?? 0,
-		lastCommentBy: c?.author?.login ?? null,
-		lastCommentAt: c?.createdAt ?? null,
-		lastCommentIsBot: c?.author?.__typename === 'Bot' || isBot(c?.author?.login),
-		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
-		ci: pr ? ((commit?.statusCheckRollup?.state as CiState | undefined) ?? null) : null,
-		reviewDecision: pr ? (n.reviewDecision ?? null) : null,
-		mergeable: pr ? (n.mergeable ?? null) : null,
-		additions: n.additions ?? 0,
-		deletions: n.deletions ?? 0,
-		requestedMe,
-		requestedTeams,
-		requestedAt: requestedMe || requestedTeams.length ? (ev?.createdAt ?? null) : null,
-		myLastReviewAt: review?.submittedAt ?? null,
-		myLastReviewState: review?.state ?? null,
-		openThreads: pr ? openThreadsOf(n) : 0,
-		lastVerdictBy: pr ? (lastVerdictOf(n, me)?.by ?? null) : null,
-		lastVerdictAt: pr ? (lastVerdictOf(n, me)?.at ?? null) : null,
-		lastCommitAt: commit?.committedDate ?? null
-	};
-}
-
-/** One PR or issue as a dashboard item (for a quick check after you acted on it). About 1 point. */
-export async function fetchSubjectFacts(
-	token: string,
-	me: string,
-	myTeams: Set<string>,
-	owner: string,
-	repo: string,
-	number: number
-): Promise<DashFacts | null> {
-	const query = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
-  repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) { __typename ...P ...I } }
-}
-${SEARCH_FIELDS}`;
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query, variables: { me, o: owner, r: repo, n: number } })
-	});
-	if (!res.ok) return null;
-	const json = (await res.json()) as { data?: Node };
-	const n = json.data?.repository?.issueOrPullRequest;
-	return n?.id ? toFacts(n, me, myTeams) : null;
-}
 
 export interface SearchHit {
 	section: string;
-	facts: DashFacts;
+	subject: SubjectFacts;
 }
 
 /** The most results one dashboard search asks for, and the fewest. */
@@ -523,7 +405,6 @@ export function searchSize(lastCount: number | undefined): number {
 export async function searchDashboard(
 	token: string,
 	me: string,
-	myTeams: Set<string>,
 	queries: ExpandedQuery[],
 	lastCounts: Record<string, number> = {}
 ): Promise<{ hits: SearchHit[]; errors: string[]; counts: Record<string, number> }> {
@@ -544,7 +425,7 @@ export async function searchDashboard(
 					decl.push(`$q${j}: String!`);
 					return `s${j}: search(type: ISSUE, query: $q${j}, first: ${first}) { issueCount nodes { __typename ...P ...I } }`;
 				});
-				const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SEARCH_FIELDS}`;
+				const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`;
 				const res = await gh(token, '/graphql', {
 					method: 'POST',
 					body: JSON.stringify({ query, variables: vars })
@@ -566,7 +447,7 @@ export async function searchDashboard(
 						q,
 						(result.nodes ?? [])
 							.filter((n: Node) => n?.id)
-							.map((n: Node) => ({ section: q.section, facts: toFacts(n, me, myTeams) }))
+							.map((n: Node) => ({ section: q.section, subject: toSubject(n) }))
 					);
 				});
 			})
@@ -593,9 +474,10 @@ const PEEK_TIMELINE = 10;
 
 const PERSON = `login avatarUrl(size: 48) __typename`;
 
-const PEEK_QUERY = `query($o: String!, $r: String!, $n: Int!) {
+// The peek also asks for fragments P and I, so each peek refreshes the stored facts too.
+const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
   repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) {
-    __typename
+    __typename ...P ...I
     ... on PullRequest {
       number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
       baseRefName headRefName reviewDecision mergeable
@@ -635,7 +517,8 @@ const PEEK_QUERY = `query($o: String!, $r: String!, $n: Int!) {
       }
     }
   } }
-}`;
+}
+${SUBJECT_FIELDS}`;
 
 const person = (a: Node | null | undefined): PeekPerson => ({
 	login: a?.login ?? 'ghost',
@@ -667,16 +550,20 @@ function checkState(n: Node): CheckState {
 
 const CHECK_ORDER: Record<CheckState, number> = { failure: 0, pending: 1, neutral: 2, success: 3 };
 
-/** Fetch one PR or issue for the peek panel. Returns null when it does not exist or is hidden. */
+/**
+ * Fetch one PR or issue for the peek panel, with its facts for the store. Returns null when it
+ * does not exist or is hidden.
+ */
 export async function fetchPeek(
 	token: string,
+	me: string,
 	owner: string,
 	repo: string,
 	number: number
-): Promise<PeekDTO | null> {
+): Promise<{ peek: PeekDTO; subject: SubjectFacts } | null> {
 	const res = await gh(token, '/graphql', {
 		method: 'POST',
-		body: JSON.stringify({ query: PEEK_QUERY, variables: { o: owner, r: repo, n: number } })
+		body: JSON.stringify({ query: PEEK_QUERY, variables: { me, o: owner, r: repo, n: number } })
 	});
 	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
 	const json = (await res.json()) as { data?: Node; errors?: { message: string }[] };
@@ -687,6 +574,7 @@ export async function fetchPeek(
 		return null;
 	}
 	const pr = n.__typename === 'PullRequest';
+	const subject = toSubject(n);
 	const items: PeekEntry[] = (n.timelineItems?.nodes ?? [])
 		.filter((t: Node) => t?.__typename)
 		.map((t: Node) =>
@@ -723,7 +611,7 @@ export async function fetchPeek(
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
 		timeline: { total: n.timelineItems?.totalCount ?? items.length, items }
 	};
-	if (!pr) return base;
+	if (!pr) return { peek: base, subject };
 
 	const rollup = n.commits?.nodes?.[0]?.commit?.statusCheckRollup;
 	const checks = (rollup?.contexts?.nodes ?? [])
@@ -737,7 +625,7 @@ export async function fetchPeek(
 			(a: { state: CheckState }, b: { state: CheckState }) =>
 				CHECK_ORDER[a.state] - CHECK_ORDER[b.state]
 		);
-	return {
+	const peek: PeekDTO = {
 		...base,
 		pr: {
 			base: n.baseRefName,
@@ -745,7 +633,7 @@ export async function fetchPeek(
 			additions: n.additions ?? 0,
 			deletions: n.deletions ?? 0,
 			files: n.changedFiles ?? 0,
-			openThreads: openThreadsOf(n),
+			openThreads: subject.openThreads,
 			reviewDecision: n.reviewDecision ?? null,
 			mergeable: n.mergeable ?? null,
 			reviews: (n.latestOpinionatedReviews?.nodes ?? []).map((r: Node) => ({
@@ -761,4 +649,5 @@ export async function fetchPeek(
 			checksTotal: rollup?.contexts?.totalCount ?? checks.length
 		}
 	};
+	return { peek, subject };
 }

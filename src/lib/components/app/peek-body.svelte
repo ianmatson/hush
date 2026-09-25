@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { peekQuery } from '$lib/queries';
+	import { keys, queryClient } from '$lib/queries';
+	import { reportResolved } from '$lib/recheck';
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -24,6 +26,19 @@
 	let { repo, number }: { repo: string; number: number } = $props();
 
 	const q = createQuery(() => peekQuery(repo, number));
+	// The server stored what this peek read. If that changed the inbox or dashboards, refetch
+	// them now (once per fetch), so every view agrees with the peek.
+	let synced = 0;
+	$effect(() => {
+		const at = q.dataUpdatedAt;
+		const sync = q.data?.sync;
+		if (!sync?.changed || at === synced) return;
+		synced = at;
+		reportResolved(sync.resolved);
+		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+		queryClient.invalidateQueries({ queryKey: keys.dashAll });
+		queryClient.invalidateQueries({ queryKey: keys.alerts });
+	});
 	let allChecks = $state(false);
 	// A new item starts with the passed checks folded.
 	$effect(() => {

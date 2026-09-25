@@ -44,7 +44,7 @@ describe('searchDashboard', () => {
 
 	it('uses the small size when the section did not grow', async () => {
 		const firsts = fakeGitHub(3);
-		const r = await searchDashboard('t', 'ian', new Set(), q, { 'is:pr author:@me': 3 });
+		const r = await searchDashboard('t', 'ian', q, { 'is:pr author:@me': 3 });
 		expect(firsts).toEqual([8]);
 		expect(r.hits).toHaveLength(3);
 		expect(r.counts).toEqual({ 'is:pr author:@me': 3 });
@@ -52,7 +52,7 @@ describe('searchDashboard', () => {
 
 	it('asks again at the full size when the section grew past its size, and loses nothing', async () => {
 		const firsts = fakeGitHub(12);
-		const r = await searchDashboard('t', 'ian', new Set(), q, { 'is:pr author:@me': 1 });
+		const r = await searchDashboard('t', 'ian', q, { 'is:pr author:@me': 1 });
 		expect(firsts).toEqual([6, SEARCH_MAX]);
 		expect(r.hits).toHaveLength(12);
 		expect(r.counts['is:pr author:@me']).toBe(12);

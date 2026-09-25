@@ -31,16 +31,20 @@ async function checkReturned() {
 	const results = await Promise.all(
 		due.slice(-MAX_PER_RETURN).map(([, o]) => api.recheck(o.repo, o.number).catch(() => null))
 	);
-	const resolved = results.flatMap((r) => r?.resolved ?? []);
+	reportResolved(results.flatMap((r) => r?.resolved ?? []));
+	await Promise.all([
+		queryClient.invalidateQueries({ queryKey: keys.threadsAll }),
+		queryClient.invalidateQueries({ queryKey: keys.dashAll })
+	]);
+}
+
+/** A toast for threads a check moved to Done. */
+export function reportResolved(resolved: { title: string; note: string }[]) {
 	if (resolved.length === 1) toast.success(resolved[0].note, { description: resolved[0].title });
 	else if (resolved.length > 1)
 		toast.success(`${resolved.length} items moved to Done`, {
 			description: resolved.map((r) => `${r.note}: ${r.title}`).join('\n')
 		});
-	await Promise.all([
-		queryClient.invalidateQueries({ queryKey: keys.threadsAll }),
-		queryClient.invalidateQueries({ queryKey: keys.dashAll })
-	]);
 }
 
 /** Start listening; returns the cleanup. Call once, from the app shell. */
