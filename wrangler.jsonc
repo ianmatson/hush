@@ -49,6 +49,7 @@
 	// Keep workers.dev on: old links, push links, and feed URLs use it. (With routes set,
 	// wrangler turns it off unless this says otherwise.)
 	"workers_dev": true,
+	"preview_urls": false,
 	"routes": [
 		{ "pattern": "hush-gh.com", "custom_domain": true },
 		{ "pattern": "www.hush-gh.com", "custom_domain": true }
