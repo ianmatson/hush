@@ -50,6 +50,7 @@
 	let { kind }: { kind: DashKind } = $props();
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
 	const FLIP = { duration: 260, easing: cubicOut };
+	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
 
 	const dashQ = createQuery(() => dashQuery(kind));
 	const me = createQuery(meQuery);
@@ -842,7 +843,10 @@
 								</button>
 								{#if !collapsed[g.turn]}
 									<!-- An empty list is 0 px tall; the placeholder opens it when you drag over. -->
+									<!-- Opening or closing a group slides it; the rows' own transitions are local, so
+									     they do not also play. -->
 									<ul
+										transition:slide={SECTION_SLIDE}
 										class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
 										role="listbox"
 										aria-multiselectable="true"
