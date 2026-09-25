@@ -23,8 +23,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import DashRow from './dash-row.svelte';
+	import { palette, type PaletteCommand } from '$lib/palette.svelte';
 	import Peek from './peek.svelte';
-	import { MediaQuery } from 'svelte/reactivity';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
@@ -130,7 +130,6 @@
 
 	// --- Peek: follows the cursor while open ----------------------------------------------
 	let peekOpen = $state(false);
-	const phone = new MediaQuery('max-width: 639px');
 	// Read the cursor row even while closed: a derived whose dependencies change between runs
 	// (only `peekOpen` while closed) missed later cursor moves.
 	const peekItem = $derived.by(() => {
@@ -152,6 +151,75 @@
 		selectedId = i.id;
 		peekOpen = true;
 	}
+
+	// --- Command palette: actions on the cursor row or the selection ------------------------
+	$effect(() =>
+		palette.register(() => {
+			const ids = targets();
+			const cmds: PaletteCommand[] = [
+				{
+					id: 'act:refresh',
+					label: `Refresh ${noun} from GitHub`,
+					icon: RefreshCw,
+					shortcut: 'R',
+					run: () => refresh()
+				},
+				{
+					id: 'act:hidden',
+					label: showHidden ? `Show ${noun}` : 'Show hidden items',
+					icon: showHidden ? Eye : EyeOff,
+					shortcut: 'H',
+					run: () => (showHidden = !showHidden)
+				}
+			];
+			if (!ids.length) return cmds;
+			const one = ids.length === 1 ? byId(ids[0]) : undefined;
+			const detail = one ? one.title : `${ids.length} selected`;
+			const add = (c: Omit<PaletteCommand, 'detail'>) => cmds.unshift({ ...c, detail });
+			// unshift: added in reverse, so row actions come first, in this order.
+			add({
+				id: 'act:copy',
+				label: ids.length > 1 ? 'Copy links' : 'Copy link',
+				icon: Link,
+				shortcut: 'C',
+				run: () => copyLinks(ids)
+			});
+			add({
+				id: 'act:hide',
+				label: showHidden ? 'Show again' : 'Hide until it changes',
+				icon: showHidden ? Eye : EyeOff,
+				shortcut: 'E',
+				run: () => toggleHide(ids)
+			});
+			if (ids.some((id) => byId(id)?.movedByYou))
+				add({ id: 'act:undomove', label: 'Undo move', icon: Undo, run: () => arrange(ids, null) });
+			for (const g of [...GROUPS].reverse())
+				if (!ids.every((id) => byId(id)?.turn === g.turn))
+					add({
+						id: `act:move:${g.turn}`,
+						label: `Move to ${g.label}`,
+						icon: ArrowRightLeft,
+						run: () => moveTo(ids, g.turn)
+					});
+			if (one) {
+				add({
+					id: 'act:open',
+					label: one.actionLabel,
+					icon: ExternalLink,
+					shortcut: '↵',
+					run: () => open(one, one.actionUrl)
+				});
+				add({
+					id: 'act:peek',
+					label: 'Peek',
+					icon: PanelRightOpen,
+					shortcut: 'Space',
+					run: () => peek(one)
+				});
+			}
+			return cmds;
+		})
+	);
 
 	/** `index` counts the visible rows left in the group once the dragged rows are out. */
 	function dropAt(ids: string[], turn: Turn, index: number) {
@@ -308,8 +376,28 @@
 			section = null;
 			selectedId = null;
 			sel.clear();
+			peekOpen = false;
 			const saved = localStorage.getItem(`hush:collapsed:${k}`);
 			if (saved) collapsed = JSON.parse(saved);
+		});
+	});
+	// (After the effect above, which resets the cursor when the page opens.)
+	// The command palette chose an item on this dashboard: show it (clear filters, open its
+	// group) and peek it.
+	$effect(() => {
+		const r = palette.peekRequest;
+		if (!r || r.page !== (kind === 'pr' ? 'pulls' : 'issues') || !data) return;
+		const item = data.items.find((x) => x.id === r.id);
+		untrack(() => {
+			palette.peekRequest = null;
+			if (!item) return;
+			query = '';
+			section = null;
+			showHidden = !!item.dismissed;
+			collapsed[item.turn] = false;
+			sel.clear();
+			selectedId = item.id;
+			peekOpen = true;
 		});
 	});
 
@@ -385,11 +473,10 @@
 
 	function onRowClick(e: MouseEvent, i: DashItem) {
 		if (sel.click(e, i.id, order, selectedId)) return;
-		// Phones: a tap reads the item (desktop keeps click for the cursor, Space to peek).
-		const read = phone.current && !sel.size;
+		// A click on the card peeks it.
 		sel.clear();
 		selectedId = i.id;
-		if (read) peekOpen = true;
+		peekOpen = true;
 	}
 
 	function onToggle(e: MouseEvent, i: DashItem) {
@@ -489,6 +576,7 @@
 		['0 – 9', 'All, or one section'],
 		['R', 'Refresh from GitHub'],
 		['/', 'Filter'],
+		['⌘ / Ctrl + K', 'Search and commands'],
 		['?', 'Show shortcuts']
 	];
 </script>
@@ -724,9 +812,11 @@
 					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
 						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
 					</ContextMenu.Item>
-					<ContextMenu.Item onclick={() => open(menuOne, menuOne.url)}>
-						<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
-					</ContextMenu.Item>
+					{#if menuOne.url !== menuOne.actionUrl}
+						<ContextMenu.Item onclick={() => open(menuOne, menuOne.url)}>
+							<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
+						</ContextMenu.Item>
+					{/if}
 					<ContextMenu.Separator />
 				{/if}
 				<ContextMenu.Sub>

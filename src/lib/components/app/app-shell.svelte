@@ -7,6 +7,7 @@
 	import { keys, leaveTo, meQuery, queryClient } from '$lib/queries';
 	import AppHeader from './app-header.svelte';
 	import TabStatus from './tab-status.svelte';
+	import CommandPalette from './command-palette.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -49,6 +50,7 @@
 		{#if me.data && !signedOut && !onLogin}
 			<AppHeader />
 			<TabStatus />
+			<CommandPalette />
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
 			<p class="mx-auto max-w-4xl px-4 pt-6 text-sm text-destructive">

@@ -27,7 +27,8 @@
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
 	import Peek from '$lib/components/app/peek.svelte';
-	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
+	import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
+	import { palette, type PaletteCommand } from '$lib/palette.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
@@ -42,6 +43,7 @@
 	import Mail from '@lucide/svelte/icons/mail';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
+	import Zap from '@lucide/svelte/icons/zap';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
 
@@ -91,7 +93,6 @@
 	// --- Peek: follows the cursor while open ----------------------------------------------
 	let peekOpen = $state(false);
 	let peekSnoozeOpen = $state(false);
-	const phone = new MediaQuery('max-width: 639px');
 	const wide = new MediaQuery('min-width: 1024px');
 	// Read the cursor row even while closed: a derived whose dependencies change between runs
 	// (only `peekOpen` while closed) missed later cursor moves.
@@ -129,6 +130,21 @@
 		untrack(() => {
 			sel.clear();
 			peekOpen = false;
+		});
+	});
+	// The command palette chose a thread in this view: peek it. (After the view effect above,
+	// which closes the peek.)
+	$effect(() => {
+		const r = palette.peekRequest;
+		const list = threadsQ.data?.threads;
+		if (!r || r.page !== 'inbox' || r.view !== view || !list) return;
+		untrack(() => {
+			palette.peekRequest = null;
+			if (!list.some((t) => t.id === r.id)) return;
+			query = '';
+			sel.clear();
+			selectedId = r.id;
+			peekOpen = true;
 		});
 	});
 
@@ -249,11 +265,10 @@
 
 	function onRowClick(e: MouseEvent, t: ThreadDTO) {
 		if (sel.click(e, t.id, order, selectedId)) return;
-		// Phones: a tap reads the thread (desktop keeps click for the cursor, Space to peek).
-		const read = phone.current && !sel.size && !!t.number;
+		// A click on the card peeks it (PRs and issues; other threads only get the cursor).
 		sel.clear();
 		selectedId = t.id;
-		if (read) peekOpen = true;
+		if (t.number) peekOpen = true;
 	}
 
 	function onToggle(e: MouseEvent, t: ThreadDTO) {
@@ -342,6 +357,97 @@
 				? 'unsnooze'
 				: 'undone';
 
+	// --- Command palette: actions on the cursor row or the selection ------------------------
+	$effect(() =>
+		palette.register(() => {
+			const ids = targets();
+			if (!ids.length) return [];
+			const one = ids.length === 1 ? byId(ids[0]) : undefined;
+			const detail = one ? one.title : `${ids.length} selected`;
+			const cmds: PaletteCommand[] = [];
+			const add = (c: Omit<PaletteCommand, 'detail'>) => cmds.push({ ...c, detail });
+			if (one?.number)
+				add({
+					id: 'act:peek',
+					label: 'Peek',
+					icon: PanelRightOpen,
+					shortcut: 'Space',
+					run: () => peek(one)
+				});
+			if (one)
+				add({
+					id: 'act:open',
+					label: one.actionLabel,
+					icon: ExternalLink,
+					shortcut: '↵',
+					run: () => open(one, one.actionUrl)
+				});
+			if (inInbox) {
+				add({
+					id: 'act:done',
+					label: 'Mark as done',
+					icon: Check,
+					shortcut: 'E',
+					run: () => act(ids, 'done')
+				});
+				for (const o of snoozeOptions())
+					add({
+						id: `act:snooze:${o.label}`,
+						label: /^\d/.test(o.label) ? `Snooze for ${o.label}` : `Snooze until ${o.label}`,
+						icon: AlarmClock,
+						run: () => act(ids, 'snooze', { until: o.until })
+					});
+				const already = one ? alreadyTrue(one) : [];
+				for (const ev of eventsFor(ids.map((id) => subjectKind(byId(id)?.subjectType ?? ''))))
+					if (!already.includes(ev.id))
+						add({
+							id: `act:snooze:${ev.id}`,
+							label: `Snooze until ${ev.label.charAt(0).toLowerCase()}${ev.label.slice(1)}`,
+							icon: Zap,
+							keywords: ['snooze', 'wait'],
+							run: () => act(ids, 'snooze', { event: ev.id })
+						});
+				add({
+					id: 'act:mute',
+					label: 'Mute',
+					icon: BellOff,
+					shortcut: 'M',
+					run: () => act(ids, 'mute')
+				});
+			} else {
+				add({
+					id: 'act:restore',
+					label: view === 'muted' ? 'Unmute' : 'Move to inbox',
+					icon: Undo,
+					run: () => act(ids, restoreAction(one))
+				});
+			}
+			const read = readAction(ids);
+			add({
+				id: 'act:read',
+				label: read === 'read' ? 'Mark as read' : 'Mark as unread',
+				icon: read === 'read' ? MailOpen : Mail,
+				shortcut: 'U',
+				run: () => act(ids, read)
+			});
+			add({
+				id: 'act:copy',
+				label: ids.length > 1 ? 'Copy links' : 'Copy link',
+				icon: Link,
+				shortcut: 'C',
+				run: () => copyLinks(ids)
+			});
+			add({
+				id: 'act:all',
+				label: 'Select all',
+				icon: SquareCheck,
+				shortcut: '⌘A',
+				run: () => sel.all(order)
+			});
+			return cmds;
+		})
+	);
+
 	const count = (v: View) => (v === 'action' || v === 'fyi' || v === 'snoozed' ? counts[v] : null);
 
 	const shortcuts = [
@@ -363,6 +469,7 @@
 		['R', 'Sync with GitHub now'],
 		['/', 'Search'],
 		['1 – 5', 'Change view'],
+		['⌘ / Ctrl + K', 'Search and commands'],
 		['?', 'Show shortcuts']
 	];
 </script>
@@ -532,9 +639,11 @@
 					<ContextMenu.Item onclick={() => open(menuOne, menuOne.actionUrl)}>
 						<ExternalLink />{menuOne.actionLabel}<ContextMenu.Shortcut>↵</ContextMenu.Shortcut>
 					</ContextMenu.Item>
-					<ContextMenu.Item onclick={() => open(menuOne, menuOne.htmlUrl)}>
-						<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
-					</ContextMenu.Item>
+					{#if menuOne.htmlUrl !== menuOne.actionUrl}
+						<ContextMenu.Item onclick={() => open(menuOne, menuOne.htmlUrl)}>
+							<ExternalLink />Open on GitHub<ContextMenu.Shortcut>⇧O</ContextMenu.Shortcut>
+						</ContextMenu.Item>
+					{/if}
 					<ContextMenu.Separator />
 				{/if}
 				{#if inInbox}

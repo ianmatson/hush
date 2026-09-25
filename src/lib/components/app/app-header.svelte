@@ -10,6 +10,9 @@
 	import ThemeToggle from './theme-toggle.svelte';
 	import Settings from '@lucide/svelte/icons/settings';
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import Search from '@lucide/svelte/icons/search';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import { palette } from '$lib/palette.svelte';
 
 	const me = createQuery(meQuery);
 	const inboxCount = createQuery(() => ({
@@ -20,12 +23,15 @@
 	const issueTurns = createQuery(() => ({ ...dashQuery('issue'), select: turnCount }));
 
 	const links = $derived([
-		{ href: '/', label: 'Inbox', short: undefined as string | undefined, badge: inboxCount.data },
-		{ href: '/pulls', label: 'Pull requests', short: 'PRs', badge: prTurns.data },
+		{ href: '/', label: 'Inbox', badge: inboxCount.data },
+		{ href: '/pulls', label: 'Pull requests', badge: prTurns.data },
 		{ href: '/issues', label: 'Issues', badge: issueTurns.data }
 	]);
 	const active = (href: string) =>
 		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+	// Phones: one menu instead of three tabs. On settings pages it reads "Go to".
+	const current = $derived(links.find((l) => active(l.href)));
+	const othersWaiting = $derived(links.some((l) => l !== current && l.badge));
 
 	async function signOut() {
 		await api.logout().catch(() => {});
@@ -39,7 +45,37 @@
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
-		<nav class="flex min-w-0 items-center gap-0.5 overflow-x-auto pr-1 text-sm">
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger
+				class="flex h-8 min-w-0 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm sm:hidden"
+			>
+				<span class="truncate">{current?.label ?? 'Go to'}</span>
+				{#if current?.badge}
+					<span
+						class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
+						>{current.badge}</span
+					>
+				{/if}
+				{#if othersWaiting}
+					<span class="size-1.5 rounded-full bg-primary" aria-label="Other pages have items"></span>
+				{/if}
+				<ChevronDown class="size-3.5 text-muted-foreground" />
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="start" class="min-w-48">
+				{#each links as l (l.href)}
+					<DropdownMenu.Item onclick={() => goto(l.href)} class={cn(active(l.href) && 'bg-muted')}>
+						{l.label}
+						{#if l.badge}
+							<span
+								class="ml-auto min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
+								>{l.badge}</span
+							>
+						{/if}
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+		<nav class="hidden min-w-0 items-center gap-0.5 overflow-x-auto pr-1 text-sm sm:flex">
 			{#each links as l (l.href)}
 				<a
 					href={l.href}
@@ -48,9 +84,7 @@
 						active(l.href) && 'bg-muted text-foreground'
 					)}
 				>
-					{#if l.short}<span class="hidden sm:inline">{l.label}</span><span class="sm:hidden"
-							>{l.short}</span
-						>{:else}{l.label}{/if}
+					{l.label}
 					{#if l.badge}
 						<span
 							class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
@@ -61,6 +95,17 @@
 			{/each}
 		</nav>
 		<div class="ml-auto flex items-center gap-1">
+			<button
+				type="button"
+				aria-label="Search and commands (⌘K)"
+				title="Search and commands (⌘K)"
+				class="flex h-7 items-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-md:w-7 max-md:justify-center md:border md:pr-1 md:pl-2 md:text-xs"
+				onclick={() => (palette.open = true)}
+			>
+				<Search class="size-4 md:size-3.5" /><span class="hidden md:inline">Search</span><kbd
+					class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline">⌘K</kbd
+				>
+			</button>
 			<a
 				href="/settings"
 				aria-label="Settings"

@@ -145,12 +145,8 @@
 				target="_blank"
 				rel="noreferrer"
 				draggable="false"
-				class="line-clamp-2 text-sm font-medium hover:underline sm:truncate"
-				onclick={(e) => {
-					e.stopPropagation();
-					e.preventDefault();
-					onopen(i, i.url);
-				}}>{i.title}</a
+				class="line-clamp-2 text-sm font-medium sm:truncate"
+				onclick={(e) => e.preventDefault()}>{i.title}</a
 			>
 			{#if i.stale}
 				<span class="shrink-0 text-xs font-medium text-signal-warn tabular-nums"
@@ -254,9 +250,11 @@
 					<DropdownMenu.Item onclick={() => onopen(i, i.actionUrl)}
 						><ExternalLink />{i.actionLabel}</DropdownMenu.Item
 					>
-					<DropdownMenu.Item onclick={() => onopen(i, i.url)}
-						><ExternalLink />Open on GitHub</DropdownMenu.Item
-					>
+					{#if i.url !== i.actionUrl}
+						<DropdownMenu.Item onclick={() => onopen(i, i.url)}
+							><ExternalLink />Open on GitHub</DropdownMenu.Item
+						>
+					{/if}
 					<DropdownMenu.Separator />
 					<DropdownMenu.Sub>
 						<DropdownMenu.SubTrigger><ArrowRightLeft />Move to</DropdownMenu.SubTrigger>
@@ -289,25 +287,6 @@
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>
-			{#if onpeek}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Peek"
-								onclick={(e: MouseEvent) => {
-									e.stopPropagation();
-									onpeek(i);
-								}}><PanelRightOpen /></Button
-							>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content>Peek <kbd class="ml-1 opacity-60">Space</kbd></Tooltip.Content>
-				</Tooltip.Root>
-			{/if}
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					{#snippet child({ props })}

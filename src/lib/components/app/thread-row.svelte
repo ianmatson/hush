@@ -116,12 +116,8 @@
 			href={t.htmlUrl}
 			target="_blank"
 			rel="noreferrer"
-			class="mt-0.5 block truncate text-[0.8rem] text-muted-foreground select-text hover:text-foreground"
-			onclick={(e) => {
-				e.stopPropagation();
-				e.preventDefault();
-				onopen(t, t.htmlUrl);
-			}}
+			class="mt-0.5 block truncate text-[0.8rem] text-muted-foreground select-text"
+			onclick={(e) => e.preventDefault()}
 		>
 			<span class="font-mono text-[0.75rem]">{ref}</span>
 			<span class="mx-1 opacity-50">·</span>{t.title}
@@ -169,9 +165,11 @@
 				<DropdownMenu.Item onclick={() => onopen(t, t.actionUrl)}
 					><ExternalLink />{t.actionLabel}</DropdownMenu.Item
 				>
-				<DropdownMenu.Item onclick={() => onopen(t, t.htmlUrl)}
-					><ExternalLink />Open on GitHub</DropdownMenu.Item
-				>
+				{#if t.htmlUrl !== t.actionUrl}
+					<DropdownMenu.Item onclick={() => onopen(t, t.htmlUrl)}
+						><ExternalLink />Open on GitHub</DropdownMenu.Item
+					>
+				{/if}
 				<DropdownMenu.Separator />
 				{#if inInbox}
 					<DropdownMenu.Item onclick={() => onaction(t, 'done')}><Check />Done</DropdownMenu.Item>
@@ -200,25 +198,6 @@
 		<div
 			class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-data-selected:opacity-100 focus-within:opacity-100"
 		>
-			{#if onpeek && t.number}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<Button
-								{...props}
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Peek"
-								onclick={(e: MouseEvent) => {
-									e.stopPropagation();
-									onpeek(t);
-								}}><PanelRightOpen /></Button
-							>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content>Peek <kbd class="ml-1 opacity-60">Space</kbd></Tooltip.Content>
-				</Tooltip.Root>
-			{/if}
 			{#if inInbox}
 				<Tooltip.Root>
 					<Tooltip.Trigger>
