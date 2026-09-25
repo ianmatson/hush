@@ -7,8 +7,9 @@
 </script>
 
 <script lang="ts">
-	import type { Category, Rule, RuleMatch } from '$lib/shared/types';
-	import { RULE_FIELDS, asList, fieldInfo, type RuleField } from '$lib/shared/rule-fields';
+	import type { Category, Rule } from '$lib/shared/types';
+	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
+	import ConditionsEditor from './conditions-editor.svelte';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -17,8 +18,6 @@
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
-	import Plus from '@lucide/svelte/icons/plus';
-	import X from '@lucide/svelte/icons/x';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Trash from '@lucide/svelte/icons/trash-2';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -45,24 +44,6 @@
 		onremove: () => void;
 	} = $props();
 
-	const conditions = $derived(Object.keys(rule.when ?? {}) as RuleField[]);
-	const unused = $derived(RULE_FIELDS.filter((f) => !conditions.includes(f.key)));
-	const id = $derived(`rule-${index}`);
-
-	function setWhen(key: RuleField, value: unknown) {
-		const when: RuleMatch = { ...rule.when };
-		if (value === undefined) delete when[key];
-		else (when as Record<string, unknown>)[key] = value;
-		rule = { ...rule, when };
-	}
-	function addCondition(key: RuleField) {
-		const f = fieldInfo(key)!;
-		setWhen(key, f.input === 'yesno' ? true : f.input === 'text' ? '' : []);
-	}
-	/** Repo and author: one glob is stored as a string (the form people write by hand). */
-	const setList = (key: RuleField, list: string[]) =>
-		setWhen(key, (key === 'repo' || key === 'author') && list.length === 1 ? list[0] : list);
-
 	function setThen(patch: { category?: Category | null; push?: boolean | null }) {
 		const then = { ...rule.then };
 		if (patch.category !== undefined) {
@@ -74,15 +55,6 @@
 			else then.push = patch.push;
 		}
 		rule = { ...rule, then };
-	}
-
-	let drafts = $state<Record<string, string>>({});
-	function addValue(key: RuleField) {
-		const v = (drafts[key] ?? '').trim();
-		if (!v) return;
-		const list = asList(rule.when[key]);
-		if (!list.includes(v)) setList(key, [...list, v]);
-		drafts[key] = '';
 	}
 
 	const CATEGORIES: { value: Category | null; label: string }[] = [
@@ -184,133 +156,13 @@
 		</DropdownMenu.Root>
 	</header>
 
-	<section class="grid gap-2">
-		<h3 class="text-xs font-medium text-muted-foreground">
-			When {conditions.length > 1 ? 'all of these match' : ''}
-		</h3>
-		{#each conditions as key (key)}
-			{@const f = fieldInfo(key)}
-			{#if f}
-				<div class="grid gap-1.5 rounded-lg bg-muted/40 p-2.5">
-					<div class="flex items-center gap-2">
-						<span class="text-sm font-medium">{f.label}</span>
-						<Button
-							variant="ghost"
-							size="icon-xs"
-							class="ml-auto"
-							aria-label="Remove condition {f.label}"
-							onclick={() => setWhen(key, undefined)}><X /></Button
-						>
-					</div>
-					{#if f.input === 'options'}
-						{@const picked = asList(rule.when[key])}
-						<div class="flex flex-wrap gap-1">
-							{#each f.options ?? [] as o (o.value)}
-								{@const on = picked.includes(o.value)}
-								<button
-									type="button"
-									aria-pressed={on}
-									class={cn(
-										'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
-										on
-											? 'border-primary bg-primary text-primary-foreground'
-											: 'bg-background text-muted-foreground hover:text-foreground'
-									)}
-									onclick={() =>
-										setList(key, on ? picked.filter((x) => x !== o.value) : [...picked, o.value])}
-									>{o.label}</button
-								>
-							{/each}
-						</div>
-					{:else if f.input === 'globs'}
-						{@const list = asList(rule.when[key])}
-						<div class="flex flex-wrap items-center gap-1">
-							{#each list as v (v)}
-								<span
-									class="flex items-center gap-0.5 rounded-full border bg-background py-0.5 pr-0.5 pl-2 font-mono text-xs"
-									>{v}<button
-										type="button"
-										class="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-										aria-label="Remove {v}"
-										onclick={() =>
-											setList(
-												key,
-												list.filter((x) => x !== v)
-											)}><X class="size-3" /></button
-									></span
-								>
-							{/each}
-							<input
-								class="h-7 min-w-32 flex-1 rounded-md border bg-background px-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-								list="{id}-{key}"
-								placeholder={list.length
-									? 'Add another…'
-									: key === 'repo'
-										? 'PostHog/*'
-										: 'Type, then Enter'}
-								aria-label="Add {f.label}"
-								bind:value={drafts[key]}
-								onkeydown={(e) => {
-									if (e.key === 'Enter' || e.key === ',') {
-										e.preventDefault();
-										addValue(key);
-									}
-								}}
-								onblur={() => addValue(key)}
-							/>
-							{#if suggest[key]?.length}
-								<datalist id="{id}-{key}">
-									{#each suggest[key] ?? [] as s (s)}<option value={s}></option>{/each}
-								</datalist>
-							{/if}
-						</div>
-					{:else if f.input === 'text'}
-						<Input
-							class="h-8 bg-background"
-							placeholder="Text in the title"
-							value={String(rule.when[key] ?? '')}
-							oninput={(e) => setWhen(key, e.currentTarget.value)}
-						/>
-					{:else}
-						{@render segmented(
-							[
-								{ value: true, label: f.yes! },
-								{ value: false, label: f.no! }
-							],
-							rule.when[key] as boolean,
-							(v) => setWhen(key, v),
-							f.label
-						)}
-					{/if}
-					{#if f.help}<p class="text-xs text-muted-foreground">{f.help}</p>{/if}
-				</div>
-			{/if}
-		{/each}
-		{#if !conditions.length}
-			<p class="flex items-center gap-1.5 text-xs text-signal-warn">
-				<TriangleAlert class="size-3.5" />No conditions: this rule matches every thread.
-			</p>
-		{/if}
-		{#if unused.length}
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="outline"
-							size="sm"
-							class="h-7 justify-self-start font-normal"><Plus />Add condition</Button
-						>
-					{/snippet}
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="start" class="w-60">
-					{#each unused as f (f.key)}
-						<DropdownMenu.Item onclick={() => addCondition(f.key)}>{f.label}</DropdownMenu.Item>
-					{/each}
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-		{/if}
-	</section>
+	<ConditionsEditor
+		bind:when={() => rule.when ?? {}, (when) => (rule = { ...rule, when })}
+		fields={RULE_FIELDS}
+		{suggest}
+		idPrefix="rule-{index}"
+		emptyNote="No conditions: this rule matches every thread."
+	/>
 
 	<section class="grid gap-2">
 		<h3 class="text-xs font-medium text-muted-foreground">Then</h3>

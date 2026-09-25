@@ -2,6 +2,8 @@
 	import type { Component } from 'svelte';
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
+	import { fly, slide } from 'svelte/transition';
+	import { ListDrag } from '$lib/drag.svelte';
 	import { cubicOut } from 'svelte/easing';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
@@ -14,7 +16,6 @@
 		tidySeparators,
 		type MenuKind
 	} from '$lib/shared/menus';
-	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
@@ -42,15 +43,24 @@
 	const me = createQuery(meQuery);
 	const saved = $derived(me.data?.settings.menus);
 
+	/** One entry of the list. Separators repeat, so each row has its own stable key. */
+	type Row = { id: string; key: string };
+	let nextKey = 0;
+	const toRows = (ids: string[]): Row[] =>
+		ids.map((id) => ({ id, key: id === SEP ? `sep-${nextKey++}` : id }));
+
 	let kind = $state<MenuKind>('inbox');
-	let draft = $state<Record<MenuKind, string[]>>({ inbox: [], dash: [] });
+	let draft = $state<Record<MenuKind, Row[]>>({ inbox: [], dash: [] });
+	const ids = (k: MenuKind) => draft[k].map((r) => r.id);
 	let dirty = $state(false);
 	let saving = $state(false);
+	const load = (s: { inbox: string[]; dash: string[] }) =>
+		(draft = { inbox: toRows(s.inbox), dash: toRows(s.dash) });
 	// Fill the editor once the settings arrive, and after each save.
 	$effect(() => {
 		const s = saved;
 		untrack(() => {
-			if (s && !dirty) draft = { inbox: [...s.inbox], dash: [...s.dash] };
+			if (s && !dirty) load(s);
 		});
 	});
 
@@ -87,22 +97,17 @@
 	};
 	const SUBMENUS = new Set(['snooze', 'move']);
 
-	// Separators need stable keys for the list animation.
-	let sepCount = 0;
-	const keyed = $derived(
-		draft[kind].map((id, k) => ({ id, key: id === SEP ? `sep-${k}-${sepCount}` : id }))
-	);
-	const unused = $derived(MENU_ITEMS[kind].filter((i) => !draft[kind].includes(i.id)));
+	const unused = $derived(MENU_ITEMS[kind].filter((i) => !ids(kind).includes(i.id)));
 	// The preview shows a typical open thread: "Needs you" in the inbox, not moved on a dashboard.
 	const NOT_TYPICAL = new Set(['restore', 'undoMove']);
 	const preview = $derived(
 		tidySeparators(
-			draft[kind].filter((id) => !NOT_TYPICAL.has(id)),
+			ids(kind).filter((id) => !NOT_TYPICAL.has(id)),
 			(id) => id === SEP
 		)
 	);
 
-	function set(list: string[]) {
+	function set(list: Row[]) {
 		draft[kind] = list;
 		dirty = true;
 	}
@@ -114,34 +119,104 @@
 		set(list);
 	}
 	const remove = (k: number) => set(draft[kind].filter((_, i) => i !== k));
-	const add = (id: string) => {
-		sepCount++;
-		set([...draft[kind], id]);
-	};
+	const add = (id: string) => set([...draft[kind], ...toRows([id])]);
 
 	async function save() {
 		saving = true;
 		// Separators at the ends or next to each other do nothing; save the tidy list.
 		const menus = {
-			inbox: tidySeparators(draft.inbox, (id) => id === SEP),
-			dash: tidySeparators(draft.dash, (id) => id === SEP),
+			inbox: tidySeparators(ids('inbox'), (id) => id === SEP),
+			dash: tidySeparators(ids('dash'), (id) => id === SEP),
 			v: MENUS_VERSION
 		};
 		if (await saveSettings({ menus }, 'Menus saved')) dirty = false;
 		saving = false;
 	}
 	function reset() {
-		set([...DEFAULT_MENUS[kind]]);
+		set(toRows(DEFAULT_MENUS[kind]));
 	}
 
-	// Mouse drag to reorder (the arrows do the same on touch screens).
-	let dragFrom = $state<number | null>(null);
-	let dragOver = $state<number | null>(null);
-	function drop() {
-		if (dragFrom !== null && dragOver !== null && dragFrom !== dragOver) move(dragFrom, dragOver);
-		dragFrom = dragOver = null;
+	// Drag to reorder: the same controller and feel as the PR and issue dashboards (mouse and pen;
+	// the arrows do the same on touch screens).
+	const drag = new ListDrag({
+		enabled: () => true,
+		pick: (key) => [key],
+		isCollapsed: () => false,
+		drop: (keys, _zone, index) => {
+			const moving = draft[kind].filter((r) => keys.includes(r.key));
+			const left = draft[kind].filter((r) => !keys.includes(r.key));
+			left.splice(index, 0, ...moving);
+			set(left);
+		}
+	});
+	/** Rows to show: the dragged row leaves the list, and a gap opens where it will land. */
+	const shown = $derived.by(() => {
+		const list: { key: string; row: Row | null }[] = draft[kind]
+			.filter((r) => !drag.ids.includes(r.key))
+			.map((r) => ({ key: r.key, row: r }));
+		if (drag.active)
+			list.splice(Math.min(drag.index, list.length), 0, { key: '__placeholder', row: null });
+		return list;
+	});
+	const FLIP = { duration: 220, easing: cubicOut };
+	function enter(node: Element, r: { row: Row | null }) {
+		if (!r.row)
+			return drag.fresh ? { duration: 0 } : slide(node, { duration: 180, easing: cubicOut });
+		return drag.active || drag.settling ? { duration: 0 } : fly(node, { y: -6, duration: 180 });
+	}
+	function leave(node: Element, r: { row: Row | null }) {
+		if (!r.row)
+			return drag.settling ? { duration: 0 } : slide(node, { duration: 180, easing: cubicOut });
+		return drag.active || drag.settling
+			? { duration: 0 }
+			: slide(node, { duration: 180, easing: cubicOut });
 	}
 </script>
+
+{#snippet menuRow(row: Row, k: number)}
+	{@const Icon = iconOf(row.id)}
+	<div
+		class="flex min-w-0 cursor-grab items-center gap-2 px-1.5 py-1 text-sm active:cursor-grabbing"
+	>
+		<GripVertical class="hidden size-4 shrink-0 text-muted-foreground/60 sm:block" />
+		{#if row.id === SEP}
+			<span class="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+				<span class="h-px flex-1 bg-border"></span>Separator<span class="h-px flex-1 bg-border"
+				></span>
+			</span>
+		{:else}
+			<Icon class="size-4 shrink-0 text-muted-foreground" />
+			<span class="min-w-0 flex-1">
+				<span class="block truncate">{info(row.id)?.label ?? row.id}</span>
+				{#if info(row.id)?.note}<span class="block truncate text-xs text-muted-foreground"
+						>{info(row.id)?.note}</span
+					>{/if}
+			</span>
+		{/if}
+		<span class="flex shrink-0 items-center" data-no-drag>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Move up"
+				disabled={k <= 0}
+				onclick={() => move(k, k - 1)}><ChevronUp /></Button
+			>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Move down"
+				disabled={k < 0 || k === draft[kind].length - 1}
+				onclick={() => move(k, k + 1)}><ChevronDown /></Button
+			>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Remove from the menu"
+				onclick={() => remove(k)}><X /></Button
+			>
+		</span>
+	</div>
+{/snippet}
 
 <svelte:head><title>Menus · Settings · Hush</title></svelte:head>
 
@@ -171,79 +246,35 @@
 						menu, for example Done in the Done view.</Card.Description
 					>
 				</Card.Header>
-				<Card.Content class="grid gap-4">
-					<ul class="grid gap-0.5" aria-label="Menu items in order">
-						{#each keyed as row, k (row.key)}
-							{@const Icon = iconOf(row.id)}
-							<li
-								animate:flip={{ duration: 180, easing: cubicOut }}
-								draggable="true"
-								ondragstart={(e) => {
-									dragFrom = k;
-									e.dataTransfer?.setData('text/plain', row.id);
-								}}
-								ondragover={(e) => {
-									e.preventDefault();
-									dragOver = k;
-								}}
-								ondragend={() => (dragFrom = dragOver = null)}
-								ondrop={(e) => {
-									e.preventDefault();
-									drop();
-								}}
-								class={cn(
-									'group flex items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-sm',
-									dragFrom === k && 'opacity-40',
-									dragOver === k && dragFrom !== k && 'border-primary/30 bg-primary/[0.05]'
-								)}
+				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-4">
+					<div data-drag-root>
+						<section data-drag-zone="menu">
+							<ul
+								class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
+								aria-label="Menu items in order"
 							>
-								<GripVertical
-									class="hidden size-4 shrink-0 cursor-grab text-muted-foreground/60 sm:block"
-								/>
-								{#if row.id === SEP}
-									<span class="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
-										<span class="h-px flex-1 bg-border"></span>Separator<span
-											class="h-px flex-1 bg-border"
-										></span>
-									</span>
-								{:else}
-									<Icon class="size-4 shrink-0 text-muted-foreground" />
-									<span class="min-w-0 flex-1">
-										<span class="block truncate">{info(row.id)?.label ?? row.id}</span>
-										{#if info(row.id)?.note}<span
-												class="block truncate text-xs text-muted-foreground"
-												>{info(row.id)?.note}</span
-											>{/if}
-									</span>
+								{#each shown as r (r.key)}
+									<li
+										animate:flip={FLIP}
+										in:enter={r}
+										out:leave={r}
+										data-drag-id={r.row?.key}
+										data-drag-placeholder={!r.row || undefined}
+										style={r.row ? undefined : `height: ${drag.gap}px`}
+										class={r.row
+											? 'drag-row rounded-lg bg-card'
+											: 'rounded-lg border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
+										onpointerdown={(e) => r.row && drag.pointerdown(e, r.row.key, e.currentTarget)}
+									>
+										{#if r.row}{@render menuRow(r.row, draft[kind].indexOf(r.row))}{/if}
+									</li>
+								{/each}
+								{#if !draft[kind].length}
+									<li class="px-2 py-3 text-sm text-muted-foreground">The menu is empty.</li>
 								{/if}
-								<span class="flex shrink-0 items-center">
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label="Move up"
-										disabled={k === 0}
-										onclick={() => move(k, k - 1)}><ChevronUp /></Button
-									>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label="Move down"
-										disabled={k === keyed.length - 1}
-										onclick={() => move(k, k + 1)}><ChevronDown /></Button
-									>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										aria-label="Remove from the menu"
-										onclick={() => remove(k)}><X /></Button
-									>
-								</span>
-							</li>
-						{/each}
-						{#if !keyed.length}
-							<li class="px-2 py-3 text-sm text-muted-foreground">The menu is empty.</li>
-						{/if}
-					</ul>
+							</ul>
+						</section>
+					</div>
 
 					<div class="grid gap-3 border-t pt-4">
 						{#each [['main', 'Not in the menu'], ['shortcut', 'One-click shortcuts']] as [group, title] (group)}
@@ -283,7 +314,7 @@
 								size="sm"
 								onclick={() => {
 									dirty = false;
-									if (saved) draft = { inbox: [...saved.inbox], dash: [...saved.dash] };
+									if (saved) load(saved);
 								}}>Cancel</Button
 							>
 						{/if}
@@ -322,3 +353,23 @@
 		</div>
 	{/if}
 </div>
+
+{#if drag.active}
+	{@const row = draft[kind].find((r) => r.key === drag.ids[0])}
+	{@const lift = drag.lift.current}
+	<!-- The row under the pointer, lifted (the same look as a dragged PR card). -->
+	<div
+		class="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
+		style="width: {drag.width}px; transform-origin: {drag.grab.x}px {drag.grab
+			.y}px; transform: translate3d({drag.pos.current.x}px, {drag.pos.current.y}px, 0) scale({1 -
+			0.04 * lift});"
+	>
+		<div
+			class="rounded-lg border bg-background"
+			style="box-shadow: 0 {6 + 16 * lift}px {18 + 30 * lift}px -{10 -
+				2 * lift}px rgb(0 0 0 / {0.12 + 0.22 * lift});"
+		>
+			{#if row}{@render menuRow(row, -1)}{/if}
+		</div>
+	</div>
+{/if}

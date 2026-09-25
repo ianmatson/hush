@@ -5,7 +5,8 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, leaveTo, queryClient, threadsQuery } from '$lib/queries';
+	import { dashQuery, keys, leaveTo, meQuery, queryClient, threadsQuery } from '$lib/queries';
+	import Bookmark from '@lucide/svelte/icons/bookmark';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
@@ -120,7 +121,8 @@
 		);
 	});
 
-	const goEntries: Entry[] = [
+	const me = createQuery(meQuery);
+	const goEntries = $derived<Entry[]>([
 		...VIEWS.map((v) => ({
 			id: `go:${v.id}`,
 			label: v.label,
@@ -133,6 +135,14 @@
 						: Inbox) as Component,
 			keywords: ['inbox', 'view'],
 			run: () => goto(`/?view=${v.id}`)
+		})),
+		...(me.data?.settings.views ?? []).map((v) => ({
+			id: `go:view:${v.id}`,
+			label: v.name,
+			where: 'Saved view',
+			icon: Bookmark as Component,
+			keywords: ['view', 'saved', v.query ?? ''],
+			run: () => goto(`/?view=v:${v.id}`)
 		})),
 		{
 			id: 'go:pulls',
@@ -165,7 +175,7 @@
 			keywords: ['settings', 'preferences', slug],
 			run: () => goto(`/settings/${slug}`)
 		}))
-	];
+	]);
 
 	async function syncNow() {
 		const t = toast.loading('Syncing with GitHub…');
@@ -294,9 +304,10 @@
 			items: pageCommands
 		},
 		// Threads and PRs only once you type: hundreds of rows are noise in the empty palette.
+		{ heading: 'Saved views', items: goEntries.filter((e) => e.id.startsWith('go:view:')) },
 		{ heading: 'Inbox', items: search.trim() ? threadEntries : [] },
 		{ heading: 'Pull requests and issues', items: search.trim() ? dashEntries : [] },
-		{ heading: 'Go to', items: goEntries },
+		{ heading: 'Go to', items: goEntries.filter((e) => !e.id.startsWith('go:view:')) },
 		{
 			heading: 'Commands',
 			// Themes only once you type ("theme", "gruvbox"…): 15 rows are noise otherwise.

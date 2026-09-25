@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	teamReviewsAreAction: false,
 	rules: [],
 	dash: DEFAULT_DASH,
+	views: [],
 	menus: DEFAULT_MENUS
 };
 

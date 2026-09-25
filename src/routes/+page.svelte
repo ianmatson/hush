@@ -7,11 +7,18 @@
 	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQueries, createQuery } from '@tanstack/svelte-query';
 	import { api, type ThreadAction } from '$lib/api';
 	import { keys, meQuery, queryClient, setCounts, threadsQuery } from '$lib/queries';
 	import { Selection } from '$lib/selection.svelte';
-	import type { Counts, ThreadDTO, View } from '$lib/shared/types';
+	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
+	import { VIEW_BASES, textMatches, viewMatches } from '$lib/shared/views';
+	import { saveSettings } from '$lib/save-settings';
+	import ViewEditor from '$lib/components/app/view-editor.svelte';
+	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import BookmarkPlus from '@lucide/svelte/icons/bookmark-plus';
 	import { ago, snoozeOptions } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
@@ -63,10 +70,29 @@
 	const BULK_MAX = 20;
 	const FLIP = { duration: 220, easing: cubicOut };
 
-	const view = $derived((page.url.searchParams.get('view') as View) || 'action');
-	const inInbox = $derived(view === 'action' || view === 'fyi');
 	const me = createQuery(meQuery);
+	const viewParam = $derived(page.url.searchParams.get('view') || 'action');
+	const savedViews = $derived(me.data?.settings.views ?? []);
+	/** The saved view on screen, when the tab is one (?view=v:<id>). */
+	const saved = $derived(
+		viewParam.startsWith('v:') ? (savedViews.find((v) => `v:${v.id}` === viewParam) ?? null) : null
+	);
+	/** The list the page shows and acts on: a built-in view, or the saved view's base. */
+	const view = $derived<View>(
+		saved ? saved.base : viewParam.startsWith('v:') ? 'action' : (viewParam as View)
+	);
+	const inInbox = $derived(view === 'action' || view === 'fyi' || view === 'inbox');
 	const threadsQ = createQuery(() => threadsQuery(view));
+	// The base lists of the saved views, for their tab counts (D1 only, usually a 304).
+	const bases = $derived([...new Set(savedViews.map((v) => v.base))]);
+	const baseLists = createQueries(() => ({ queries: bases.map((b) => threadsQuery(b)) }));
+	const baseThreads = $derived(
+		Object.fromEntries(bases.map((b, k) => [b, baseLists[k]?.data?.threads])) as Partial<
+			Record<ViewBase, ThreadDTO[]>
+		>
+	);
+	const viewCount = (v: SavedView) =>
+		baseThreads[v.base]?.filter((t) => viewMatches(v, t, me.data?.login ?? '')).length ?? null;
 	const counts = $derived(threadsQ.data?.counts ?? { action: 0, fyi: 0, snoozed: 0 });
 
 	let syncing = $state(false);
@@ -80,11 +106,9 @@
 	const sel = new Selection();
 
 	const visible = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		const list = (threadsQ.data?.threads ?? []).filter((t) => !pending.has(t.id));
-		if (!q) return list;
-		return list.filter((t) =>
-			`${t.summary} ${t.title} ${t.repo} ${t.why} ${t.author ?? ''}`.toLowerCase().includes(q)
+		const login = me.data?.login ?? '';
+		return (threadsQ.data?.threads ?? []).filter(
+			(t) => !pending.has(t.id) && (!saved || viewMatches(saved, t, login)) && textMatches(t, query)
 		);
 	});
 	const order = $derived(visible.map((t) => t.id));
@@ -331,6 +355,9 @@
 			'?': () => (helpOpen = true)
 		};
 		VIEWS.forEach((v, i) => (keys[String(i + 1)] = () => goto(`/?view=${v.id}`)));
+		savedViews
+			.slice(0, 4)
+			.forEach((v, i) => (keys[String(VIEWS.length + i + 1)] = () => goto(`/?view=v:${v.id}`)));
 		const fn = keys[e.key];
 		if (fn) {
 			e.preventDefault();
@@ -561,6 +588,84 @@
 		})
 	);
 
+	// --- Saved views ------------------------------------------------------------------------
+	const tabs = $derived<ViewTab[]>([
+		...VIEWS.map((v) => ({
+			key: v.id,
+			href: `/?view=${v.id}`,
+			label: v.label,
+			count: count(v.id),
+			strong: v.id === 'action',
+			active: !saved && view === v.id
+		})),
+		...savedViews.map((v) => ({
+			key: `v:${v.id}`,
+			href: `/?view=v:${v.id}`,
+			label: v.name,
+			count: viewCount(v),
+			active: saved?.id === v.id,
+			saved: true
+		}))
+	]);
+	let viewEditorOpen = $state(false);
+	let viewEditing = $state<Omit<SavedView, 'id'> & { id?: string }>({
+		name: '',
+		base: 'inbox',
+		when: {}
+	});
+	/** Open the editor: a view to edit, or a new one (from the current tab and filter text). */
+	function editView(v: SavedView | null, fromQuery?: string) {
+		viewEditing = v
+			? structuredClone($state.snapshot(v))
+			: {
+					name: fromQuery ?? '',
+					base:
+						view === 'action' || view === 'fyi' || view === 'snoozed' || view === 'done'
+							? view
+							: 'inbox',
+					query: fromQuery,
+					when: {}
+				};
+		viewEditorOpen = true;
+	}
+	async function saveView(v: Omit<SavedView, 'id'> & { id?: string }) {
+		const clean: SavedView = {
+			...v,
+			name: v.name.trim(),
+			id: v.id ?? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+		};
+		if (!clean.query?.trim()) delete clean.query;
+		const views = v.id
+			? savedViews.map((x) => (x.id === v.id ? clean : x))
+			: [...savedViews, clean];
+		if (await saveSettings({ views }, v.id ? 'View saved' : `View “${clean.name}” added`)) {
+			viewEditorOpen = false;
+			if (!v.id) {
+				query = '';
+				goto(`/?view=v:${clean.id}`);
+			}
+		}
+	}
+	async function deleteView(id: string) {
+		if (await saveSettings({ views: savedViews.filter((x) => x.id !== id) }, 'View deleted')) {
+			viewEditorOpen = false;
+			goto('/?view=action');
+		}
+	}
+	// Suggestions for the view's repository and author conditions.
+	const viewSuggest = $derived.by(() => {
+		const all = Object.values(baseThreads)
+			.flatMap((l) => l ?? [])
+			.concat(threadsQ.data?.threads ?? []);
+		const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort();
+		const repos = uniq(all.map((t) => t.repo));
+		return {
+			repo: [...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos],
+			author: uniq(all.map((t) => t.author)),
+			label: uniq(all.flatMap((t) => t.labels))
+		};
+	});
+
 	const count = (v: View) => (v === 'action' || v === 'fyi' || v === 'snoozed' ? counts[v] : null);
 
 	const shortcuts = [
@@ -581,7 +686,7 @@
 		['Esc', 'Clear the selection'],
 		['R', 'Sync with GitHub now'],
 		['/', 'Search'],
-		['1 – 5', 'Change view'],
+		['1 – 9', 'Change view (6 – 9: your saved views)'],
 		['⌘ / Ctrl + K', 'Search and commands'],
 		['?', 'Show shortcuts']
 	];
@@ -618,34 +723,10 @@
 		</Alert.Root>
 	{/if}
 
-	<div class="flex flex-wrap items-center gap-2">
-		<nav
-			class="flex w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5 text-sm sm:w-auto"
-			aria-label="Views"
-		>
-			{#each VIEWS as v (v.id)}
-				{@const n = count(v.id)}
-				<a
-					href="/?view={v.id}"
-					class={cn(
-						'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
-						view === v.id && 'bg-background text-foreground shadow-xs'
-					)}
-				>
-					{v.label}
-					{#if n}
-						<span
-							class={cn(
-								'min-w-4.5 rounded-full px-1 text-center text-[0.7rem] tabular-nums',
-								v.id === 'action' ? 'bg-primary text-primary-foreground' : 'bg-foreground/10'
-							)}>{n}</span
-						>
-					{/if}
-				</a>
-			{/each}
-		</nav>
+	<div class="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+		<ViewTabs {tabs} onnew={() => editView(null)} />
 
-		<div class="relative min-w-0 flex-1 sm:ml-auto sm:w-56 sm:flex-none">
+		<div class="relative min-w-0 flex-1 sm:w-48 sm:flex-none lg:w-56">
 			<Search
 				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
 			/>
@@ -657,6 +738,19 @@
 				aria-label="Filter threads"
 			/>
 		</div>
+		{#if saved}
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Edit view {saved.name}"
+				title="Edit view"
+				onclick={() => editView(saved)}><Pencil /></Button
+			>
+		{:else if query.trim()}
+			<Button variant="ghost" size="sm" onclick={() => editView(null, query.trim())}
+				><BookmarkPlus />Save as view</Button
+			>
+		{/if}
 		<Button variant="ghost" size="icon-sm" aria-label="Sync now" onclick={sync} disabled={syncing}>
 			<RefreshCw class={cn(syncing && 'animate-spin')} />
 		</Button>
@@ -673,7 +767,12 @@
 
 	<p class="mt-3 mb-2 px-1 text-xs text-muted-foreground">
 		{#if me.data?.lastPollAt}Synced {ago(me.data.lastPollAt)}{:else}First sync in progress…{/if}
-		{#if view === 'fyi'}· Activity you may want to know about, but that does not need you.{/if}
+		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{saved.query
+				? `, “${saved.query}”`
+				: ''}{Object.keys(saved.when ?? {}).length
+				? `, ${Object.keys(saved.when).length} ${Object.keys(saved.when).length === 1 ? 'condition' : 'conditions'}`
+				: ''}{:else if view === 'fyi'}· Activity you may want to know about, but that does not need
+			you.{/if}
 	</p>
 
 	{#if threadsQ.isPending}
@@ -881,6 +980,16 @@
 		onpick={(b) => peekThread && act([peekThread.id], 'snooze', b)}
 	/>
 {/if}
+
+<ViewEditor
+	bind:open={viewEditorOpen}
+	initial={viewEditing}
+	threads={{ ...baseThreads, [view]: threadsQ.data?.threads }}
+	me={me.data?.login ?? ''}
+	suggest={viewSuggest}
+	onsave={saveView}
+	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
+/>
 
 <Dialog.Root bind:open={helpOpen}>
 	<Dialog.Content class="sm:max-w-sm">

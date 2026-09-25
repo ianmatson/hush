@@ -2,7 +2,21 @@
 
 export type Category = 'action' | 'fyi' | 'muted';
 export type Triage = 'inbox' | 'done' | 'snoozed';
-export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all';
+export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all' | 'inbox';
+
+/** What a saved view starts from. "inbox" is Needs you and FYI together. */
+export type ViewBase = 'inbox' | 'action' | 'fyi' | 'snoozed' | 'done';
+
+/** A named filter on the inbox, shown as a tab (see shared/views.ts). */
+export interface SavedView {
+	id: string;
+	name: string;
+	base: ViewBase;
+	/** Free text, the same as the Filter box. */
+	query?: string;
+	/** The same conditions as rules. All must match. */
+	when: RuleMatch;
+}
 
 export type ActionKind =
 	| 'review'
@@ -135,6 +149,8 @@ export interface Settings {
 	/** Evaluated top to bottom after the defaults; the first match wins. */
 	rules: Rule[];
 	dash: DashSettings;
+	/** Saved views: extra inbox tabs, in order. */
+	views: SavedView[];
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
 	menus: { inbox: string[]; dash: string[]; v?: number };
 }
@@ -267,6 +283,8 @@ export interface ThreadDTO {
 	draft: boolean;
 	ci: CiState | null;
 	author: string | null;
+	authorIsBot: boolean;
+	labels: string[];
 	rule: string | null;
 }
 

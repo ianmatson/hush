@@ -8,6 +8,7 @@ import {
 } from '../src/lib/shared/classify';
 import { validateDash } from '../src/lib/shared/dashboard';
 import { MENUS_VERSION, validateMenus } from '../src/lib/shared/menus';
+import { validateViews } from '../src/lib/shared/views';
 import {
 	SNOOZE_EVENT_MAX_MS,
 	snoozeEvent,
@@ -57,7 +58,7 @@ export { Poller } from './poller';
 const SESSION_COOKIE = 'hush_sid';
 const SESSION_DAYS = 30;
 const MAX_DEVICES = 10;
-const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all']);
+const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all', 'inbox']);
 
 type Vars = { user: UserRow };
 type Ctx = Context<{ Bindings: Env; Variables: Vars }>;
@@ -535,6 +536,14 @@ app.put('/api/settings', async (c) => {
 		const err = validateDash(dash);
 		if (err) return c.json({ error: err }, 400);
 		next.dash = dash;
+	}
+	if (body.views !== undefined) {
+		// A view's conditions are checked like a rule's (a rule with a no-op result).
+		const whenError = (when: unknown) =>
+			validateRules([{ when, then: { category: 'fyi' } }])?.replace(/^Rule 1: /, '') ?? null;
+		const err = validateViews(body.views, whenError);
+		if (err) return c.json({ error: err }, 400);
+		next.views = body.views;
 	}
 	if (body.menus !== undefined) {
 		const menus = { ...next.menus, ...body.menus, v: MENUS_VERSION };

@@ -105,6 +105,8 @@ export function toDTO(r: ThreadRow): ThreadDTO {
 		draft: !!e?.draft,
 		ci: e?.ci ?? null,
 		author: e?.author ?? null,
+		authorIsBot: !!e?.authorIsBot,
+		labels: e?.labels ?? [],
 		rule: r.rule
 	};
 }
@@ -122,6 +124,8 @@ export function viewWhere(view: string): string {
 			return `user_id = ?1 AND category = 'action' AND ${inbox}`;
 		case 'fyi':
 			return `user_id = ?1 AND category = 'fyi' AND ${inbox}`;
+		case 'inbox':
+			return `user_id = ?1 AND category IN ('action', 'fyi') AND ${inbox}`;
 		case 'snoozed':
 			return `user_id = ?1 AND triage = 'snoozed' AND snoozed_until > ?2`;
 		case 'done':
