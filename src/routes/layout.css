@@ -187,9 +187,9 @@
 :root {
 	--peek-w: min(34rem, 44vw);
 }
-/* Docked on the right: center the page in the space left over. */
+/* Docked on the right: center the page (its outer [data-page] box) in the space left over. */
 @media (min-width: 1024px) {
-	html.peek-docked main {
+	html.peek-docked [data-page] {
 		--peek-gap: max(0px, calc((100vw - var(--peek-w) - 56rem) / 2));
 		margin-left: var(--peek-gap);
 		margin-right: calc(var(--peek-w) + var(--peek-gap));
@@ -198,7 +198,7 @@
 		padding-right: calc(var(--peek-w) + 1rem);
 	}
 }
-main {
+[data-page] {
 	transition: margin 200ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
