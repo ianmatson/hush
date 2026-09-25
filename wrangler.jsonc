@@ -45,6 +45,11 @@
 		}
 	],
 	// Only members of these GitHub orgs can sign in (comma-separated). Empty = anyone with a token.
+	// hush-gh.com is the address; www and the old workers.dev address send you there (app.html).
+	"routes": [
+		{ "pattern": "hush-gh.com", "custom_domain": true },
+		{ "pattern": "www.hush-gh.com", "custom_domain": true }
+	],
 	"vars": {
 		"ALLOWED_ORGS": "PostHog"
 	},

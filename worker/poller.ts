@@ -133,9 +133,11 @@ export class Poller extends DurableObject<Env> {
 	}
 
 	/** The UI calls this when it is open. An idle account (15-minute polls) polls again within 5. */
-	async touch(): Promise<void> {
+	async touch(origin?: string): Promise<void> {
 		const now = Date.now();
 		await this.ctx.storage.put('lastActive', now);
+		// Push links open the address you use now (for example after a domain move).
+		if (origin) await this.putChanged({ origin });
 		const [alarm, lastPollAt, stopped] = await Promise.all([
 			this.ctx.storage.getAlarm(),
 			this.lastPollAt(),

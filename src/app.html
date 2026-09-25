@@ -5,6 +5,12 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
+			// One address: the old workers.dev one and www open hush-gh.com at the same path.
+			// (Local development and other hosts are left alone.)
+			if (/(^|\.)workers\.dev$|^www\.hush-gh\.com$/.test(location.hostname))
+				location.replace('https://hush-gh.com' + location.pathname + location.search + location.hash);
+		</script>
+		<script>
 			// The color theme (Settings → Appearance), before the first paint.
 			try {
 				var t = localStorage.getItem('mode-watcher-theme');

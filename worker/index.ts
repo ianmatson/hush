@@ -234,7 +234,7 @@ function markSeen(c: Ctx, u: UserRow) {
 	c.executionCtx.waitUntil(
 		Promise.all([
 			c.env.DB.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').bind(now, u.id).run(),
-			poller(c.env, u.id).touch()
+			poller(c.env, u.id).touch(new URL(c.req.url).origin)
 		])
 	);
 }
