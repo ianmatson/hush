@@ -364,6 +364,25 @@ export interface PeekEntry {
 	inline?: number;
 }
 
+/** One alert from the history (the bell). */
+export interface AlertDTO {
+	id: number;
+	sentAt: number;
+	title: string;
+	body: string;
+	/** Where the alert went (the main action). */
+	url: string;
+	/** The thread, while Hush still has it. PRs and issues have a number and can be peeked. */
+	thread: {
+		repo: string;
+		number: number | null;
+		title: string;
+		htmlUrl: string;
+		/** What happened to it since: "Done", "Muted", "Snoozed", or the resolved note. */
+		state: string | null;
+	} | null;
+}
+
 export interface PeekDTO {
 	kind: 'pr' | 'issue';
 	number: number;

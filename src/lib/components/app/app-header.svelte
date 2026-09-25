@@ -3,14 +3,16 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { dashQuery, leaveTo, meQuery, threadsQuery, turnCount } from '$lib/queries';
+	import { alertsQuery, dashQuery, leaveTo, meQuery, threadsQuery, turnCount } from '$lib/queries';
+	import { alertsSeen } from '$lib/alerts.svelte';
+	import { ui } from '$lib/ui.svelte';
 	import { cn } from '$lib/utils';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import ThemeToggle from './theme-toggle.svelte';
 	import Settings from '@lucide/svelte/icons/settings';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Search from '@lucide/svelte/icons/search';
+	import Bell from '@lucide/svelte/icons/bell';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import { palette } from '$lib/palette.svelte';
 
@@ -21,6 +23,10 @@
 	}));
 	const prTurns = createQuery(() => ({ ...dashQuery('pr'), select: turnCount }));
 	const issueTurns = createQuery(() => ({ ...dashQuery('issue'), select: turnCount }));
+
+	// Alerts newer than the last time you opened the history (on this device).
+	const alerts = createQuery(alertsQuery);
+	const newAlerts = $derived(alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0);
 
 	const links = $derived([
 		{ href: '/', label: 'Inbox', badge: inboxCount.data },
@@ -106,21 +112,30 @@
 					class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline">⌘K</kbd
 				>
 			</button>
-			<a
-				href="/settings"
-				aria-label="Settings"
+			<button
+				type="button"
+				aria-label={newAlerts ? `Alerts, ${newAlerts} new` : 'Alerts'}
+				aria-pressed={ui.alertsOpen}
+				title="Alerts"
 				class={cn(
-					'flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground',
-					active('/settings') && 'bg-muted text-foreground'
-				)}><Settings class="size-4" /></a
+					'relative flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground',
+					ui.alertsOpen && 'bg-muted text-foreground'
+				)}
+				onclick={() => (ui.alertsOpen = !ui.alertsOpen)}
 			>
-			<!-- On phones the theme lives in Settings → Appearance, to leave room for the tabs. -->
-			<span class="hidden sm:contents"><ThemeToggle /></span>
+				<Bell class="size-4" />
+				{#if newAlerts}
+					<span
+						class="absolute -top-0.5 -right-0.5 min-w-3.5 rounded-full bg-primary px-0.5 text-center text-[0.6rem] leading-3.5 text-primary-foreground tabular-nums"
+						>{newAlerts > 9 ? '9+' : newAlerts}</span
+					>
+				{/if}
+			</button>
 			{#if me.data}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger
 						aria-label="Account menu"
-						class="rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+						class="cursor-pointer rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
 					>
 						<Avatar.Root class="size-7">
 							<Avatar.Image src={me.data.avatarUrl} alt={me.data.login} />

@@ -60,7 +60,8 @@ export const keys = {
 	feeds: ['feeds'] as const,
 	pushDevices: ['push-devices'] as const,
 	teams: ['teams'] as const,
-	peek: (repo: string, number: number) => ['peek', repo, number] as const
+	peek: (repo: string, number: number) => ['peek', repo, number] as const,
+	alerts: ['alerts'] as const
 };
 
 /**
@@ -80,6 +81,14 @@ export const meQuery = () =>
 		queryFn: api.me,
 		staleTime: MIN,
 		refetchInterval: afterNextPoll(5_000)
+	});
+
+/** The alert history (the bell): D1 only, refreshed after each poll like the lists. */
+export const alertsQuery = () =>
+	queryOptions({
+		queryKey: keys.alerts,
+		queryFn: api.alerts,
+		refetchInterval: afterNextPoll(10_000)
 	});
 
 export const threadsQuery = (view: View) =>

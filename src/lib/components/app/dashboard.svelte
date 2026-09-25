@@ -69,7 +69,7 @@
 	});
 	const sel = new Selection();
 
-	const GROUPS: { turn: Turn; label: string; hint: string }[] = [
+	const ALL_GROUPS: { turn: Turn; label: string; hint: string }[] = [
 		{ turn: 'you', label: 'Your turn', hint: 'You are the next person who must act.' },
 		{
 			turn: 'team',
@@ -79,7 +79,14 @@
 		{ turn: 'them', label: 'Waiting on others', hint: 'You did your part. Someone else must act.' },
 		{ turn: 'none', label: 'Other', hint: 'Drafts, and threads that only mention you.' }
 	];
-	const groupLabel = (t: Turn) => GROUPS.find((g) => g.turn === t)!.label;
+	// Only a team review request makes it the team's turn, and only PRs have review requests (GitHub
+	// assigns issues to people, not teams). Issues show the group only if you moved one there.
+	const GROUPS = $derived(
+		kind === 'pr' || dashQ.data?.items.some((i) => i.turn === 'team')
+			? ALL_GROUPS
+			: ALL_GROUPS.filter((g) => g.turn !== 'team')
+	);
+	const groupLabel = (t: Turn) => ALL_GROUPS.find((g) => g.turn === t)!.label;
 
 	const sectionNames = $derived(
 		Object.fromEntries((data?.sections ?? []).map((s) => [s.id, s.name]))
@@ -575,7 +582,7 @@
 			shortcut?: string,
 			disabled = false
 		): MenuEntry => ({ type: 'item', key, label, icon, run, shortcut, disabled });
-		const moveItem = (g: (typeof GROUPS)[number], key: string, label: string) =>
+		const moveItem = (g: (typeof ALL_GROUPS)[number], key: string, label: string) =>
 			item(
 				key,
 				label,

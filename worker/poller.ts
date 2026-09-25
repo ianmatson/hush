@@ -48,6 +48,8 @@ const WATCH_BATCH = 80;
 const SYNC_DAYS = 14;
 /** Alerts pushed within this time are updated when their thread is resolved. */
 const RESOLVE_WINDOW = DAY;
+/** The alert history (the bell) keeps this long. */
+const ALERT_LOG_KEEP = 30 * DAY;
 
 /** Push tags that are not a thread id. */
 const NON_THREAD_TAGS = new Set(['digest', 'test']);
@@ -617,7 +619,17 @@ export class Poller extends DurableObject<Env> {
 						}
 					];
 
-		await this.send(userId, messages);
+		// The history lists each alert, also the ones this push put together in one.
+		await this.send(
+			userId,
+			messages,
+			items.map(({ n, c }) => ({
+				title: c.summary,
+				body: `${n.subject.title}\n${n.repository.full_name}`,
+				url: c.actionUrl,
+				tag: n.id
+			}))
+		);
 	}
 
 	/**
@@ -657,8 +669,11 @@ export class Poller extends DurableObject<Env> {
 			.run();
 	}
 
-	/** Send push messages to every device of the user; forget devices the push service dropped. */
-	private async send(userId: number, messages: PushMessage[]) {
+	/**
+	 * Send push messages to every device of the user; forget devices the push service dropped.
+	 * `log` is what the alert history records (default: the messages; never resolve updates).
+	 */
+	private async send(userId: number, messages: PushMessage[], log = messages) {
 		const { results: subs } = await this.env.DB.prepare(
 			'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?'
 		)
@@ -688,6 +703,27 @@ export class Poller extends DurableObject<Env> {
 			)
 				.bind(...gone)
 				.run();
+		const now = Date.now();
+		const logged = log.filter((m) => !m.resolve && m.tag !== 'test');
+		if (logged.length)
+			await this.env.DB.batch([
+				this.env.DB.prepare(
+					`INSERT INTO alert_log (user_id, sent_at, title, body, url, thread_id) VALUES ${logged.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}`
+				).bind(
+					...logged.flatMap((m) => [
+						userId,
+						now,
+						m.title,
+						m.body,
+						m.url,
+						m.tag && !NON_THREAD_TAGS.has(m.tag) ? m.tag : null
+					])
+				),
+				this.env.DB.prepare('DELETE FROM alert_log WHERE user_id = ? AND sent_at < ?').bind(
+					userId,
+					now - ALERT_LOG_KEEP
+				)
+			]);
 		// Remember which threads have an alert on screen, so a resolution can update it.
 		const threadIds = messages
 			.filter((m) => !m.resolve && m.tag && !NON_THREAD_TAGS.has(m.tag))
@@ -696,7 +732,7 @@ export class Poller extends DurableObject<Env> {
 			await this.env.DB.prepare(
 				`UPDATE threads SET pushed_at = ? WHERE user_id = ? AND id IN (${threadIds.map(() => '?').join(',')})`
 			)
-				.bind(Date.now(), userId, ...threadIds)
+				.bind(now, userId, ...threadIds)
 				.run();
 	}
 

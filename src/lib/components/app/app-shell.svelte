@@ -8,6 +8,7 @@
 	import AppHeader from './app-header.svelte';
 	import TabStatus from './tab-status.svelte';
 	import CommandPalette from './command-palette.svelte';
+	import AlertsPanel from './alerts-panel.svelte';
 	import { watchReturns } from '$lib/recheck';
 
 	let { children }: { children: Snippet } = $props();
@@ -54,6 +55,7 @@
 			<AppHeader />
 			<TabStatus />
 			<CommandPalette />
+			<AlertsPanel />
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
 			<p class="mx-auto max-w-4xl px-4 pt-6 text-sm text-destructive">

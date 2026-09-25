@@ -4,7 +4,7 @@
 	import { untrack } from 'svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import { flip } from 'svelte/animate';
-	import { fly, slide } from 'svelte/transition';
+	import { fade, fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQueries, createQuery } from '@tanstack/svelte-query';
@@ -91,9 +91,15 @@
 			Record<ViewBase, ThreadDTO[]>
 		>
 	);
-	const viewCount = (v: SavedView) =>
-		baseThreads[v.base]?.filter((t) => viewMatches(v, t, me.data?.login ?? '')).length ?? null;
-	const counts = $derived(threadsQ.data?.counts ?? { action: 0, fyi: 0, snoozed: 0 });
+	// While a tab's list loads, its counts keep the last known numbers (no badges that go away).
+	const lastViewCounts: Record<string, number> = {};
+	const viewCount = (v: SavedView) => {
+		const n = baseThreads[v.base]?.filter((t) => viewMatches(v, t, me.data?.login ?? '')).length;
+		if (n !== undefined) lastViewCounts[v.id] = n;
+		return lastViewCounts[v.id] ?? null;
+	};
+	let lastCounts: Counts = { action: 0, fyi: 0, snoozed: 0 };
+	const counts = $derived.by(() => (lastCounts = threadsQ.data?.counts ?? lastCounts));
 
 	let syncing = $state(false);
 	let query = $state('');
@@ -784,76 +790,82 @@
 			you.{/if}
 	</p>
 
-	{#if threadsQ.isPending}
-		<div class="grid gap-2">
-			{#each [0, 1, 2, 3] as i (i)}
-				<div class="flex items-center gap-3 px-3 py-3">
-					<Skeleton class="size-8 rounded-full" />
-					<div class="grid flex-1 gap-2">
-						<Skeleton class="h-4 w-2/3" />
-						<Skeleton class="h-3 w-1/2" />
-					</div>
+	<!-- A new tab replaces the list at once and fades the new one in. The rows' own transitions are
+	     local, so they play only for changes inside one tab (done, snooze, filter). -->
+	{#key viewParam}
+		<div in:fade={{ duration: 150 }}>
+			{#if threadsQ.isPending}
+				<div class="grid gap-2">
+					{#each [0, 1, 2, 3] as i (i)}
+						<div class="flex items-center gap-3 px-3 py-3">
+							<Skeleton class="size-8 rounded-full" />
+							<div class="grid flex-1 gap-2">
+								<Skeleton class="h-4 w-2/3" />
+								<Skeleton class="h-3 w-1/2" />
+							</div>
+						</div>
+					{/each}
 				</div>
-			{/each}
-		</div>
-	{:else if visible.length === 0}
-		<div
-			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
-		>
-			<CircleCheck class="mb-3 size-8 text-signal-merge" />
-			{#if query}
-				<p class="font-medium">No threads match “{query}”.</p>
-			{:else if view === 'action'}
-				<p class="font-medium">Nothing needs you right now.</p>
-				<p class="mt-1 text-sm text-muted-foreground">
-					{#if counts.fyi}There {counts.fyi === 1 ? 'is' : 'are'}
-						<a class="underline" href="/?view=fyi"
-							>{counts.fyi} FYI {counts.fyi === 1 ? 'item' : 'items'}</a
-						>, if you want them.{:else}Hush tells you when that changes.{/if}
-				</p>
+			{:else if visible.length === 0}
+				<div
+					class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
+				>
+					<CircleCheck class="mb-3 size-8 text-signal-merge" />
+					{#if query}
+						<p class="font-medium">No threads match “{query}”.</p>
+					{:else if view === 'action'}
+						<p class="font-medium">Nothing needs you right now.</p>
+						<p class="mt-1 text-sm text-muted-foreground">
+							{#if counts.fyi}There {counts.fyi === 1 ? 'is' : 'are'}
+								<a class="underline" href="/?view=fyi"
+									>{counts.fyi} FYI {counts.fyi === 1 ? 'item' : 'items'}</a
+								>, if you want them.{:else}Hush tells you when that changes.{/if}
+						</p>
+					{:else}
+						<p class="font-medium">This view is empty.</p>
+					{/if}
+				</div>
 			{:else}
-				<p class="font-medium">This view is empty.</p>
+				<ContextMenu.Root>
+					<ContextMenu.Trigger>
+						{#snippet child({ props })}
+							<ul
+								{...props}
+								class="grid grid-cols-[minmax(0,1fr)] gap-0.5"
+								role="listbox"
+								aria-multiselectable="true"
+								aria-label="Threads"
+								oncontextmenucapture={onContextMenu}
+							>
+								{#each visible as t (t.id)}
+									<li
+										animate:flip={FLIP}
+										out:slide={{ duration: 200, easing: cubicOut }}
+										in:fly={{ y: -8, duration: 200 }}
+									>
+										<ThreadRow
+											thread={t}
+											selected={t.id === selectedId}
+											checked={sel.has(t.id)}
+											selecting={sel.size > 0}
+											onaction={(x, action, body) => act([x.id], action, body)}
+											onopen={open}
+											onrowclick={(e) => onRowClick(e, t)}
+											ontoggle={(e) => onToggle(e, t)}
+											menu={() => menuFor([t.id])}
+										/>
+									</li>
+								{/each}
+							</ul>
+						{/snippet}
+					</ContextMenu.Trigger>
+					<ContextMenu.Content class="w-60">
+						<AppMenu entries={menuFor(menuIds)} kind="context" />
+					</ContextMenu.Content>
+				</ContextMenu.Root>
 			{/if}
 		</div>
-	{:else}
-		<ContextMenu.Root>
-			<ContextMenu.Trigger>
-				{#snippet child({ props })}
-					<ul
-						{...props}
-						class="grid grid-cols-[minmax(0,1fr)] gap-0.5"
-						role="listbox"
-						aria-multiselectable="true"
-						aria-label="Threads"
-						oncontextmenucapture={onContextMenu}
-					>
-						{#each visible as t (t.id)}
-							<li
-								animate:flip={FLIP}
-								out:slide={{ duration: 200, easing: cubicOut }}
-								in:fly={{ y: -8, duration: 200 }}
-							>
-								<ThreadRow
-									thread={t}
-									selected={t.id === selectedId}
-									checked={sel.has(t.id)}
-									selecting={sel.size > 0}
-									onaction={(x, action, body) => act([x.id], action, body)}
-									onopen={open}
-									onrowclick={(e) => onRowClick(e, t)}
-									ontoggle={(e) => onToggle(e, t)}
-									menu={() => menuFor([t.id])}
-								/>
-							</li>
-						{/each}
-					</ul>
-				{/snippet}
-			</ContextMenu.Trigger>
-			<ContextMenu.Content class="w-60">
-				<AppMenu entries={menuFor(menuIds)} kind="context" />
-			</ContextMenu.Content>
-		</ContextMenu.Root>
-	{/if}
+	{/key}
 </main>
 
 <BulkBar count={sel.size} onclear={() => sel.clear()}>

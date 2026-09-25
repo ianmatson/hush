@@ -1,4 +1,5 @@
 import type {
+	AlertDTO,
 	Counts,
 	DashKind,
 	DashResponse,
@@ -122,6 +123,7 @@ export const api = {
 			'GET',
 			`/api/peek/${repo.split('/').map(encodeURIComponent).join('/')}/${number}`
 		),
+	alerts: () => request<AlertDTO[]>('GET', '/api/alerts'),
 	feeds: () => request<FeedDTO[]>('GET', '/api/feeds'),
 	createFeed: (name: string, filter: FeedFilter) =>
 		request<FeedDTO>('POST', '/api/feeds', { name, filter }),
