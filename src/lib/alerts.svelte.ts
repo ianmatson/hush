@@ -10,3 +10,9 @@ export function markAlertsSeen(at: number) {
 	alertsSeen.at = at;
 	localStorage.setItem(KEY, String(at));
 }
+
+// Opened in another tab: the counts here follow.
+if (browser)
+	window.addEventListener('storage', (e) => {
+		if (e.key === KEY) alertsSeen.at = Number(e.newValue) || 0;
+	});

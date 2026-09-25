@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { createQuery } from '@tanstack/svelte-query';
-	import { dashQuery, threadsQuery } from '$lib/queries';
+	import { createTabCounts } from '$lib/tab-counts.svelte';
 	import {
 		DEFAULT_PREFS,
 		DOT_COLORS,
@@ -11,10 +10,8 @@
 		titlePrefix,
 		total,
 		type CountSource,
-		type Counts,
 		type DotColor
 	} from '$lib/tab-status';
-	import type { DashResponse } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -28,18 +25,8 @@
 	// Save on every change; the live component in the shell listens for it.
 	$effect(() => savePrefs($state.snapshot(prefs)));
 
-	const inbox = createQuery(() => threadsQuery('action'));
-	const prs = createQuery(() => dashQuery('pr'));
-	const issues = createQuery(() => dashQuery('issue'));
-	const turns = (d: DashResponse | undefined, turn: 'you' | 'team') =>
-		d?.items.filter((i) => i.turn === turn && !i.dismissed).length ?? 0;
-	const counts = $derived<Counts>({
-		inbox: inbox.data?.counts.action ?? 0,
-		inboxFyi: inbox.data?.counts.fyi ?? 0,
-		prYou: turns(prs.data, 'you'),
-		prTeam: turns(prs.data, 'team'),
-		issueYou: turns(issues.data, 'you')
-	});
+	const tabCounts = createTabCounts();
+	const counts = $derived(tabCounts.current);
 
 	function toggle(list: CountSource[], id: CountSource, on: boolean): CountSource[] {
 		return on ? [...new Set([...list, id])] : list.filter((s) => s !== id);
@@ -57,6 +44,10 @@
 			? DOT_COLORS[prefs.favicon.color]
 			: null
 	);
+	const previewCount = $derived(
+		prefs.favicon.style === 'count' ? total(counts, prefs.favicon.sources) : undefined
+	);
+	const dotStyles = { count: 'Number', dot: 'Dot only' } as const;
 	const previewBadge = $derived(prefs.appBadge.enabled ? total(counts, prefs.appBadge.sources) : 0);
 	const canBadge = typeof navigator !== 'undefined' && 'setAppBadge' in navigator;
 </script>
@@ -89,7 +80,8 @@
 			<div class="grid gap-1.5">
 				<Card.Title>Tab title & icon</Card.Title>
 				<Card.Description
-					>Show what needs you on the browser tab, and on the app icon when Hush is installed.</Card.Description
+					>Show unread alerts (or what needs you) on the browser tab, and on the app icon when Hush
+					is installed.</Card.Description
 				>
 			</div>
 			<Button variant="ghost" size="xs" onclick={() => (prefs = structuredClone(DEFAULT_PREFS))}
@@ -103,7 +95,7 @@
 			<div
 				class="flex min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 shadow-xs"
 			>
-				<img src={faviconHref(previewDot)} alt="" class="size-4 shrink-0" />
+				<img src={faviconHref(previewDot, previewCount)} alt="" class="size-4 shrink-0" />
 				<span class="truncate text-sm">{previewTitle}</span>
 			</div>
 			{#if prefs.appBadge.enabled}
@@ -154,7 +146,7 @@
 				<Switch id="ts-dot" bind:checked={prefs.favicon.enabled} />
 			</div>
 			{@render sources('favicon')}
-			<div class="flex items-center gap-3">
+			<div class="flex flex-wrap items-center gap-3">
 				<span class="text-xs text-muted-foreground">Color</span>
 				<div class="flex gap-1.5" role="radiogroup" aria-label="Dot color">
 					{#each Object.entries(DOT_COLORS) as [name, hex] (name)}
@@ -172,6 +164,19 @@
 						></button>
 					{/each}
 				</div>
+				<span class="text-xs text-muted-foreground sm:ml-4">Show</span>
+				<Select.Root
+					type="single"
+					bind:value={prefs.favicon.style}
+					disabled={!prefs.favicon.enabled}
+				>
+					<Select.Trigger class="w-32">{dotStyles[prefs.favicon.style]}</Select.Trigger>
+					<Select.Content>
+						{#each Object.entries(dotStyles) as [value, label] (value)}
+							<Select.Item {value} {label} />
+						{/each}
+					</Select.Content>
+				</Select.Root>
 			</div>
 		</section>
 

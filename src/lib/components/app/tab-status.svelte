@@ -1,33 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createQuery } from '@tanstack/svelte-query';
-	import { dashQuery, threadsQuery } from '$lib/queries';
+	import { createTabCounts } from '$lib/tab-counts.svelte';
 	import {
 		DOT_COLORS,
 		faviconHref,
 		loadPrefs,
 		titlePrefix,
 		total,
-		withPrefix,
-		type Counts
+		withPrefix
 	} from '$lib/tab-status';
-	import type { DashResponse } from '$lib/shared/types';
 
-	// Same queries as the header badges, so this adds no requests.
-	const inbox = createQuery(() => threadsQuery('action'));
-	const prs = createQuery(() => dashQuery('pr'));
-	const issues = createQuery(() => dashQuery('issue'));
-
-	const turns = (d: DashResponse | undefined, turn: 'you' | 'team') =>
-		d?.items.filter((i) => i.turn === turn && !i.dismissed).length ?? 0;
-
-	const counts = $derived<Counts>({
-		inbox: inbox.data?.counts.action ?? 0,
-		inboxFyi: inbox.data?.counts.fyi ?? 0,
-		prYou: turns(prs.data, 'you'),
-		prTeam: turns(prs.data, 'team'),
-		issueYou: turns(issues.data, 'you')
-	});
+	const tabCounts = createTabCounts();
+	const counts = $derived(tabCounts.current);
 
 	let prefs = $state(loadPrefs());
 	const prefix = $derived(titlePrefix(counts, prefs.title));
@@ -35,6 +19,9 @@
 		prefs.favicon.enabled && total(counts, prefs.favicon.sources) > 0
 			? DOT_COLORS[prefs.favicon.color]
 			: null
+	);
+	const dotCount = $derived(
+		prefs.favicon.style === 'count' ? total(counts, prefs.favicon.sources) : undefined
 	);
 	const badge = $derived(prefs.appBadge.enabled ? total(counts, prefs.appBadge.sources) : 0);
 
@@ -53,7 +40,7 @@
 
 	$effect(() => {
 		// Read `dot` before the null check, so the effect always tracks it.
-		const href = faviconHref(dot);
+		const href = faviconHref(dot, dotCount);
 		if (icon) icon.href = href;
 	});
 
