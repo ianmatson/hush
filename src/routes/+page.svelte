@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
+	import { INBOX_SHORTCUTS } from '$lib/shortcuts';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -16,7 +18,6 @@
 	import { saveSettings } from '$lib/save-settings';
 	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
-	import Plus from '@lucide/svelte/icons/plus';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import BookmarkPlus from '@lucide/svelte/icons/bookmark-plus';
 	import { ago, snoozeOptions } from '$lib/time';
@@ -25,21 +26,23 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
-	import * as Dialog from '$lib/components/ui/dialog';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Kbd } from '$lib/components/ui/kbd';
 	import ThreadRow from '$lib/components/app/thread-row.svelte';
 	import BulkBar from '$lib/components/app/bulk-bar.svelte';
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
 	import Peek from '$lib/components/app/peek.svelte';
 	import AppMenu from '$lib/components/app/app-menu.svelte';
-	import { buildMenu, type MenuEntry } from '$lib/menu';
-	import { DEFAULT_MENUS, MENU_ITEMS } from '$lib/shared/menus';
-	import type { Component } from 'svelte';
-	import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
-	import { palette, type PaletteCommand } from '$lib/palette.svelte';
+	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
+	import { palette } from '$lib/palette.svelte';
+	import {
+		inboxCommands,
+		inboxMenu,
+		readAction,
+		restoreAction,
+		type InboxActionContext
+	} from '$lib/inbox-actions';
 	import { openOnGitHub, reportResolved } from '$lib/recheck';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
@@ -53,10 +56,6 @@
 	import Link from '@lucide/svelte/icons/link';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import Mail from '@lucide/svelte/icons/mail';
-	import SquareCheck from '@lucide/svelte/icons/square-check';
-	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
-	import Zap from '@lucide/svelte/icons/zap';
-	import ListFilter from '@lucide/svelte/icons/list-filter';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
 
@@ -278,13 +277,8 @@
 	/** Rows an action applies to: the selection, or else the cursor row. */
 	const targets = () => sel.targets(order, selectedId);
 
-	/**
-	 * Read/unread toggle (like Gmail): if any of the threads is unread, mark them all read;
-	 * otherwise mark them all unread.
-	 */
-	const readAction = (ids: string[]): 'read' | 'unread' =>
-		ids.some((id) => byId(id)?.unread) ? 'read' : 'unread';
-	const toggleRead = (ids: string[]) => ids.length && act(ids, readAction(ids));
+	// Read/unread toggle (see readAction).
+	const toggleRead = (ids: string[]) => ids.length && act(ids, readAction(actions, ids));
 
 	function open(t: ThreadDTO, url: string) {
 		openOnGitHub(url);
@@ -391,209 +385,34 @@
 	// --- Menus (Settings → Menus): one list for the right-click and the phone "⋯" menus ---
 	let menuSnoozeIds = $state<string[]>([]);
 	let menuSnoozeOpen = $state(false);
-	const itemLabel = (id: string) => MENU_ITEMS.inbox.find((i) => i.id === id)?.label ?? id;
 
-	/** The menu for these threads, in your saved order, with only the items that apply. */
-	function menuFor(ids: string[]): MenuEntry[] {
-		const one = ids.length === 1 ? byId(ids[0]) : undefined;
-		const n = (label: string) => (ids.length > 1 ? `${label} (${ids.length})` : label);
-		const kinds = ids.map((id) => subjectKind(byId(id)?.subjectType ?? ''));
-		const already = one ? alreadyTrue(one) : [];
-		const events = eventsFor(kinds);
-		const item = (
-			key: string,
-			label: string,
-			icon: Component,
-			run: () => void,
-			shortcut?: string
-		): MenuEntry => ({ type: 'item', key, label, icon, run, shortcut });
-		const make = (id: string): MenuEntry | null => {
-			switch (id) {
-				case 'peek':
-					return one?.number ? item(id, 'Peek', PanelRightOpen, () => peek(one), 'Space') : null;
-				case 'main':
-					return one
-						? item(id, one.actionLabel, ExternalLink, () => open(one, one.actionUrl), '↵')
-						: null;
-				case 'github':
-					return one && one.htmlUrl !== one.actionUrl
-						? item(id, 'Open on GitHub', ExternalLink, () => open(one, one.htmlUrl), '⇧O')
-						: null;
-				case 'done':
-					return inInbox ? item(id, n('Done'), Check, () => act(ids, 'done'), 'E') : null;
-				case 'snooze':
-					return inInbox
-						? {
-								type: 'snooze',
-								key: id,
-								label: n('Snooze'),
-								icon: AlarmClock,
-								subjects: kinds,
-								disabled: already,
-								onpick: (b) => act(ids, 'snooze', b),
-								sheet: () => {
-									menuSnoozeIds = ids;
-									menuSnoozeOpen = true;
-								}
-							}
-						: null;
-				case 'mute':
-					return inInbox ? item(id, n('Mute'), BellOff, () => act(ids, 'mute'), 'M') : null;
-				case 'restore':
-					return inInbox
-						? null
-						: item(id, n(view === 'muted' ? 'Unmute' : 'Move to inbox'), Undo, () =>
-								act(ids, restoreAction(one))
-							);
-				case 'read': {
-					const r = readAction(ids);
-					return item(
-						id,
-						n(r === 'read' ? 'Mark as read' : 'Mark as unread'),
-						r === 'read' ? MailOpen : Mail,
-						() => act(ids, r),
-						'U'
-					);
-				}
-				case 'copy':
-					return item(
-						id,
-						n(ids.length > 1 ? 'Copy links' : 'Copy link'),
-						Link,
-						() => copyLinks(ids),
-						'C'
-					);
-				case 'rule':
-					return one
-						? item(id, 'Make a rule…', ListFilter, () =>
-								goto(
-									`/settings/inbox?rule=${encodeURIComponent(JSON.stringify({ repo: one.repo, type: [one.subjectType] }))}`
-								)
-							)
-						: null;
-				case 'select':
-					return one
-						? item(
-								id,
-								sel.has(one.id) ? 'Deselect' : 'Select',
-								SquareCheck,
-								() => sel.toggle(one.id),
-								'X'
-							)
-						: null;
-				case 'selectAll':
-					return item(id, 'Select all', SquareCheck, () => sel.all(order), '⌘A');
-			}
-			if (!inInbox) return null;
-			const time = snoozeOptions().find((o) => `snooze:${o.id}` === id);
-			if (time)
-				return item(id, n(itemLabel(id)), AlarmClock, () =>
-					act(ids, 'snooze', { until: time.until })
-				);
-			const ev = events.find((e) => `until:${e.id}` === id);
-			if (ev && !already.includes(ev.id))
-				return item(id, n(itemLabel(id)), Zap, () => act(ids, 'snooze', { event: ev.id }));
-			return null;
-		};
-		return buildMenu(me.data?.settings.menus.inbox ?? DEFAULT_MENUS.inbox, make);
-	}
-	const restoreAction = (t: ThreadDTO | undefined): ThreadAction =>
-		view === 'muted' || t?.category === 'muted'
-			? 'unmute'
-			: view === 'snoozed'
-				? 'unsnooze'
-				: 'undone';
-
-	// --- Command palette: actions on the cursor row or the selection ------------------------
-	$effect(() =>
-		palette.register(() => {
-			const ids = targets();
-			if (!ids.length) return [];
-			const one = ids.length === 1 ? byId(ids[0]) : undefined;
-			const detail = one ? one.title : `${ids.length} selected`;
-			const cmds: PaletteCommand[] = [];
-			const add = (c: Omit<PaletteCommand, 'detail'>) => cmds.push({ ...c, detail });
-			if (one?.number)
-				add({
-					id: 'act:peek',
-					label: 'Peek',
-					icon: PanelRightOpen,
-					shortcut: 'Space',
-					run: () => peek(one)
-				});
-			if (one)
-				add({
-					id: 'act:open',
-					label: one.actionLabel,
-					icon: ExternalLink,
-					shortcut: '↵',
-					run: () => open(one, one.actionUrl)
-				});
-			if (inInbox) {
-				add({
-					id: 'act:done',
-					label: 'Mark as done',
-					icon: Check,
-					shortcut: 'E',
-					run: () => act(ids, 'done')
-				});
-				for (const o of snoozeOptions())
-					add({
-						id: `act:snooze:${o.label}`,
-						label: /^\d/.test(o.label) ? `Snooze for ${o.label}` : `Snooze until ${o.label}`,
-						icon: AlarmClock,
-						run: () => act(ids, 'snooze', { until: o.until })
-					});
-				const already = one ? alreadyTrue(one) : [];
-				for (const ev of eventsFor(ids.map((id) => subjectKind(byId(id)?.subjectType ?? ''))))
-					if (!already.includes(ev.id))
-						add({
-							id: `act:snooze:${ev.id}`,
-							label: `Snooze until ${ev.label.charAt(0).toLowerCase()}${ev.label.slice(1)}`,
-							icon: Zap,
-							keywords: ['snooze', 'wait'],
-							run: () => act(ids, 'snooze', { event: ev.id })
-						});
-				add({
-					id: 'act:mute',
-					label: 'Mute',
-					icon: BellOff,
-					shortcut: 'M',
-					run: () => act(ids, 'mute')
-				});
-			} else {
-				add({
-					id: 'act:restore',
-					label: view === 'muted' ? 'Unmute' : 'Move to inbox',
-					icon: Undo,
-					run: () => act(ids, restoreAction(one))
-				});
-			}
-			const read = readAction(ids);
-			add({
-				id: 'act:read',
-				label: read === 'read' ? 'Mark as read' : 'Mark as unread',
-				icon: read === 'read' ? MailOpen : Mail,
-				shortcut: 'U',
-				run: () => act(ids, read)
-			});
-			add({
-				id: 'act:copy',
-				label: ids.length > 1 ? 'Copy links' : 'Copy link',
-				icon: Link,
-				shortcut: 'C',
-				run: () => copyLinks(ids)
-			});
-			add({
-				id: 'act:all',
-				label: 'Select all',
-				icon: SquareCheck,
-				shortcut: '⌘A',
-				run: () => sel.all(order)
-			});
-			return cmds;
-		})
-	);
+	// Menus and ⌘K commands (see inbox-actions.ts) read the page through this context.
+	const actions: InboxActionContext = {
+		get view() {
+			return view;
+		},
+		get inInbox() {
+			return inInbox;
+		},
+		get order() {
+			return order;
+		},
+		get menu() {
+			return me.data?.settings.menus.inbox;
+		},
+		sel,
+		byId,
+		peek,
+		open,
+		act,
+		copyLinks,
+		snoozeSheet: (ids) => {
+			menuSnoozeIds = ids;
+			menuSnoozeOpen = true;
+		}
+	};
+	const menuFor = (ids: string[]) => inboxMenu(actions, ids);
+	$effect(() => palette.register(() => inboxCommands(actions, targets())));
 
 	// --- Saved views ------------------------------------------------------------------------
 	// Settings → Inbox links here with &edit=1 to edit a view.
@@ -683,29 +502,6 @@
 	});
 
 	const count = (v: View) => (v === 'action' || v === 'fyi' || v === 'snoozed' ? counts[v] : null);
-
-	const shortcuts = [
-		['J / K', 'Next / previous'],
-		['Shift + J / K', 'Extend the selection'],
-		['Space', 'Peek (J / K move while it is open)'],
-		['X', 'Select or deselect'],
-		['⌘ / Ctrl + A', 'Select all'],
-		['⌘ / Ctrl + click', 'Add to selection'],
-		['Shift + click', 'Select a range'],
-		['Enter / O', 'Main action (review, fix CI, reply…)'],
-		['Shift + O', 'Open the thread on GitHub'],
-		['E', 'Done'],
-		['S', 'Snooze until tomorrow 9:00'],
-		['M', 'Mute the thread'],
-		['U', 'Mark as read / unread'],
-		['C', 'Copy link'],
-		['Esc', 'Clear the selection'],
-		['R', 'Sync with GitHub now'],
-		['/', 'Search'],
-		['1 – 9', 'Change view (6 – 9: your saved views)'],
-		['⌘ / Ctrl + K', 'Search and commands'],
-		['?', 'Show shortcuts']
-	];
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -902,11 +698,15 @@
 			><BellOff /><span class="hidden sm:inline">Mute</span></Button
 		>
 	{:else}
-		<Button variant="ghost" size="sm" onclick={() => act(targets(), restoreAction(undefined))}>
+		<Button
+			variant="ghost"
+			size="sm"
+			onclick={() => act(targets(), restoreAction(view, undefined))}
+		>
 			<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
 		</Button>
 	{/if}
-	{@const bulkRead = readAction(targets())}
+	{@const bulkRead = readAction(actions, targets())}
 	<Button
 		variant="ghost"
 		size="sm"
@@ -959,7 +759,7 @@
 				><BellOff /><span class="max-sm:sr-only">Mute</span></Button
 			>
 		{:else}
-			<Button variant="ghost" size="sm" onclick={() => act([t.id], restoreAction(t))}>
+			<Button variant="ghost" size="sm" onclick={() => act([t.id], restoreAction(view, t))}>
 				<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
 			</Button>
 		{/if}
@@ -1013,16 +813,4 @@
 	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
 />
 
-<Dialog.Root bind:open={helpOpen}>
-	<Dialog.Content class="sm:max-w-sm">
-		<Dialog.Header>
-			<Dialog.Title>Keyboard shortcuts</Dialog.Title>
-		</Dialog.Header>
-		<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-			{#each shortcuts as [k, d] (k)}
-				<dt><Kbd>{k}</Kbd></dt>
-				<dd class="text-muted-foreground">{d}</dd>
-			{/each}
-		</dl>
-	</Dialog.Content>
-</Dialog.Root>
+<ShortcutsDialog bind:open={helpOpen} shortcuts={INBOX_SHORTCUTS} />

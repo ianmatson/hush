@@ -137,3 +137,17 @@ export function viewWhere(view: string): string {
 			return `user_id = ?1 AND ${unusedNow}`;
 	}
 }
+
+/** The classifier's input for a stored thread. */
+export function factsFromRow(r: ThreadRow, me: string, myTeams: string[] = []) {
+	return {
+		myTeams,
+		repo: r.repo,
+		subjectType: r.subject_type,
+		title: r.title,
+		reason: r.reason,
+		htmlUrl: r.html_url,
+		enrichment: r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : null,
+		me
+	};
+}

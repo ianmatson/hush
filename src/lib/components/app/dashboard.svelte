@@ -1,4 +1,12 @@
 <script lang="ts">
+	import {
+		dashCommands,
+		dashMenu,
+		type DashActionContext,
+		type TurnGroup
+	} from '$lib/dash-actions';
+	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
+	import { DASH_SHORTCUTS } from '$lib/shortcuts';
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
@@ -18,17 +26,12 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
-	import * as Dialog from '$lib/components/ui/dialog';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { Kbd } from '$lib/components/ui/kbd';
 	import DashRow from './dash-row.svelte';
-	import { palette, type PaletteCommand } from '$lib/palette.svelte';
+	import { palette } from '$lib/palette.svelte';
 	import AppMenu from './app-menu.svelte';
-	import { buildMenu, type MenuEntry } from '$lib/menu';
-	import { DEFAULT_MENUS } from '$lib/shared/menus';
 	import { meQuery } from '$lib/queries';
-	import type { Component } from 'svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import Peek from './peek.svelte';
 	import BulkBar from './bulk-bar.svelte';
@@ -44,8 +47,6 @@
 	import Link from '@lucide/svelte/icons/link';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
-	import SquareCheck from '@lucide/svelte/icons/square-check';
-	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 
 	let { kind }: { kind: DashKind } = $props();
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
@@ -70,7 +71,7 @@
 	});
 	const sel = new Selection();
 
-	const ALL_GROUPS: { turn: Turn; label: string; hint: string }[] = [
+	const ALL_GROUPS: TurnGroup[] = [
 		{ turn: 'you', label: 'Your turn', hint: 'You are the next person who must act.' },
 		{
 			turn: 'team',
@@ -166,75 +167,6 @@
 		selectedId = i.id;
 		peekOpen = true;
 	}
-
-	// --- Command palette: actions on the cursor row or the selection ------------------------
-	$effect(() =>
-		palette.register(() => {
-			const ids = targets();
-			const cmds: PaletteCommand[] = [
-				{
-					id: 'act:refresh',
-					label: `Refresh ${noun} from GitHub`,
-					icon: RefreshCw,
-					shortcut: 'R',
-					run: () => refresh()
-				},
-				{
-					id: 'act:hidden',
-					label: showHidden ? `Show ${noun}` : 'Show hidden items',
-					icon: showHidden ? Eye : EyeOff,
-					shortcut: 'H',
-					run: () => (showHidden = !showHidden)
-				}
-			];
-			if (!ids.length) return cmds;
-			const one = ids.length === 1 ? byId(ids[0]) : undefined;
-			const detail = one ? one.title : `${ids.length} selected`;
-			const add = (c: Omit<PaletteCommand, 'detail'>) => cmds.unshift({ ...c, detail });
-			// unshift: added in reverse, so row actions come first, in this order.
-			add({
-				id: 'act:copy',
-				label: ids.length > 1 ? 'Copy links' : 'Copy link',
-				icon: Link,
-				shortcut: 'C',
-				run: () => copyLinks(ids)
-			});
-			add({
-				id: 'act:hide',
-				label: showHidden ? 'Show again' : 'Hide until it changes',
-				icon: showHidden ? Eye : EyeOff,
-				shortcut: 'E',
-				run: () => toggleHide(ids)
-			});
-			if (ids.some((id) => byId(id)?.movedByYou))
-				add({ id: 'act:undomove', label: 'Undo move', icon: Undo, run: () => arrange(ids, null) });
-			for (const g of [...GROUPS].reverse())
-				if (!ids.every((id) => byId(id)?.turn === g.turn))
-					add({
-						id: `act:move:${g.turn}`,
-						label: `Move to ${g.label}`,
-						icon: ArrowRightLeft,
-						run: () => moveTo(ids, g.turn)
-					});
-			if (one) {
-				add({
-					id: 'act:open',
-					label: one.actionLabel,
-					icon: ExternalLink,
-					shortcut: '↵',
-					run: () => open(one, one.actionUrl)
-				});
-				add({
-					id: 'act:peek',
-					label: 'Peek',
-					icon: PanelRightOpen,
-					shortcut: 'Space',
-					run: () => peek(one)
-				});
-			}
-			return cmds;
-		})
-	);
 
 	/** `index` counts the visible rows left in the group once the dragged rows are out. */
 	function dropAt(ids: string[], turn: Turn, index: number) {
@@ -570,104 +502,36 @@
 		menuIds = sel.size ? sel.targets(order, id) : [id];
 	}
 
-	// --- Menus (Settings → Menus): one list for the right-click and the phone "⋯" menus ---
-	/** The menu for these items, in your saved order, with only the items that apply. */
-	function menuFor(ids: string[]): MenuEntry[] {
-		const one = ids.length === 1 ? byId(ids[0]) : undefined;
-		const n = (label: string) => (ids.length > 1 ? `${label} (${ids.length})` : label);
-		const item = (
-			key: string,
-			label: string,
-			icon: Component,
-			run: () => void,
-			shortcut?: string,
-			disabled = false
-		): MenuEntry => ({ type: 'item', key, label, icon, run, shortcut, disabled });
-		const moveItem = (g: (typeof ALL_GROUPS)[number], key: string, label: string) =>
-			item(
-				key,
-				label,
-				ArrowRightLeft,
-				() => moveTo(ids, g.turn),
-				undefined,
-				ids.every((id) => byId(id)?.turn === g.turn)
-			);
-		const make = (id: string): MenuEntry | null => {
-			switch (id) {
-				case 'peek':
-					return one ? item(id, 'Peek', PanelRightOpen, () => peek(one), 'Space') : null;
-				case 'main':
-					return one
-						? item(id, one.actionLabel, ExternalLink, () => open(one, one.actionUrl), '↵')
-						: null;
-				case 'github':
-					return one && one.url !== one.actionUrl
-						? item(id, 'Open on GitHub', ExternalLink, () => open(one, one.url), '⇧O')
-						: null;
-				case 'move':
-					return {
-						type: 'sub',
-						key: id,
-						label: n('Move to'),
-						icon: ArrowRightLeft,
-						items: GROUPS.map((g) => moveItem(g, `move-${g.turn}`, g.label))
-					};
-				case 'undoMove':
-					return ids.some((x) => byId(x)?.movedByYou)
-						? item(id, n('Undo move'), Undo, () => arrange(ids, null))
-						: null;
-				case 'hide':
-					return showHidden
-						? item(id, n('Show again'), Eye, () => toggleHide(ids), 'E')
-						: item(id, n('Hide until it changes'), EyeOff, () => toggleHide(ids), 'E');
-				case 'copy':
-					return item(
-						id,
-						n(ids.length > 1 ? 'Copy links' : 'Copy link'),
-						Link,
-						() => copyLinks(ids),
-						'C'
-					);
-				case 'select':
-					return one
-						? item(
-								id,
-								sel.has(one.id) ? 'Deselect' : 'Select',
-								SquareCheck,
-								() => sel.toggle(one.id),
-								'X'
-							)
-						: null;
-				case 'selectAll':
-					return item(id, 'Select all', SquareCheck, () => sel.all(order), '⌘A');
-			}
-			const g = GROUPS.find((x) => `move:${x.turn}` === id);
-			return g ? moveItem(g, id, n(`Move to ${g.label}`)) : null;
-		};
-		return buildMenu(me.data?.settings.menus.dash ?? DEFAULT_MENUS.dash, make);
-	}
-
-	const shortcuts = [
-		['J / K', 'Next / previous'],
-		['Shift + J / K', 'Extend the selection'],
-		['Space', 'Peek (J / K move while it is open)'],
-		['X', 'Select or deselect'],
-		['⌘ / Ctrl + A', 'Select all'],
-		['⌘ / Ctrl + click', 'Add to selection'],
-		['Shift + click', 'Select a range'],
-		['Drag ⋮⋮', 'Move to another group or position'],
-		['Enter / O', 'Main action (review, fix CI…)'],
-		['Shift + O', 'Open on GitHub'],
-		['E', 'Hide until it changes (or show again)'],
-		['C', 'Copy link'],
-		['H', 'Show hidden items'],
-		['Esc', 'Clear the selection'],
-		['0 – 9', 'All, or one section'],
-		['R', 'Refresh from GitHub'],
-		['/', 'Filter'],
-		['⌘ / Ctrl + K', 'Search and commands'],
-		['?', 'Show shortcuts']
-	];
+	// Menus and ⌘K commands (see dash-actions.ts) read the dashboard through this context.
+	const actions: DashActionContext = {
+		get noun() {
+			return noun;
+		},
+		get showHidden() {
+			return showHidden;
+		},
+		get groups() {
+			return GROUPS;
+		},
+		get order() {
+			return order;
+		},
+		get menu() {
+			return me.data?.settings.menus.dash;
+		},
+		sel,
+		byId,
+		peek,
+		open,
+		moveTo,
+		arrange,
+		toggleHide,
+		copyLinks,
+		refresh,
+		toggleShowHidden: () => (showHidden = !showHidden)
+	};
+	const menuFor = (ids: string[]) => dashMenu(actions, ids);
+	$effect(() => palette.register(() => dashCommands(actions, targets())));
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -1003,14 +867,4 @@
 
 <Peek target={peekTarget} onclose={() => (peekOpen = false)} footer={peekFooter} />
 
-<Dialog.Root bind:open={helpOpen}>
-	<Dialog.Content class="sm:max-w-sm">
-		<Dialog.Header><Dialog.Title>Keyboard shortcuts</Dialog.Title></Dialog.Header>
-		<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-			{#each shortcuts as [k, d] (k)}
-				<dt><Kbd>{k}</Kbd></dt>
-				<dd class="text-muted-foreground">{d}</dd>
-			{/each}
-		</dl>
-	</Dialog.Content>
-</Dialog.Root>
+<ShortcutsDialog bind:open={helpOpen} shortcuts={DASH_SHORTCUTS} />
