@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	pushFyi: false,
 	pushTurnChanges: true,
 	pushResolved: true,
+	quietHours: null,
 	peekMarksRead: true,
 	reviewResolution: 'strict',
 	botsAreFyi: true,

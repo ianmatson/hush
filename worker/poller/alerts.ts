@@ -1,3 +1,4 @@
+import { inQuietHours } from '../../src/lib/shared/quiet';
 import type { Classification } from '../../src/lib/shared/types';
 import type { GhNotification } from '../github';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
@@ -51,7 +52,7 @@ export abstract class PollerAlerts extends PollerBase {
 		);
 		if (!rows.length) return;
 		const note = new Map(items.map((i) => [i.id, i.note]));
-		await this.send(
+		const sent = await this.send(
 			rows.map((r) => ({
 				title: `✓ ${note.get(r.id)}`,
 				body: `${r.title}\n${r.repo}`,
@@ -60,23 +61,30 @@ export abstract class PollerAlerts extends PollerBase {
 				resolve: true
 			}))
 		);
-		// Once is enough: a second change to the same thread must not bring the alert back.
-		this.run(
-			`UPDATE threads SET pushed_at = NULL WHERE id IN (${marks(rows.length)})`,
-			...rows.map((r) => r.id)
-		);
+		// Once is enough: a second change to the same thread must not bring the alert back. In quiet
+		// hours nothing was sent, so a later resolution can still update the alert.
+		if (sent)
+			this.run(
+				`UPDATE threads SET pushed_at = NULL WHERE id IN (${marks(rows.length)})`,
+				...rows.map((r) => r.id)
+			);
 	}
 
 	/**
 	 * Send push messages to every device; forget devices the push service dropped. `log` is what
-	 * the alert history records (default: the messages; never resolve updates).
+	 * the alert history records (default: the messages; never resolve updates). In quiet hours
+	 * nothing is sent, but the history still records the alerts. Returns whether it sent.
 	 */
-	protected async send(messages: PushMessage[], log = messages) {
+	protected async send(messages: PushMessage[], log = messages): Promise<boolean> {
 		const devices = this.all<{ endpoint: string; p256dh: string; auth: string }>(
 			'SELECT endpoint, p256dh, auth FROM push_devices'
 		);
 		await this.putChanged({ hasPush: devices.length > 0 });
-		if (!devices.length || !this.env.VAPID_PRIVATE_KEY) return;
+		if (!devices.length || !this.env.VAPID_PRIVATE_KEY) return false;
+		if (inQuietHours((await this.settings()).quietHours)) {
+			this.logAlerts(log.filter((m) => !m.resolve));
+			return false;
+		}
 		const origin = (await this.ctx.storage.get<string>('origin')) ?? '';
 		const vapid = vapidFromEnv(this.env, origin);
 		const gone: string[] = [];
@@ -94,7 +102,6 @@ export abstract class PollerAlerts extends PollerBase {
 			}
 		}
 		const now = Date.now();
-		const logged = log.filter((m) => !m.resolve && m.tag !== 'test');
 		// Remember which threads have an alert on screen, so a resolution can update it.
 		const threadIds = messages
 			.filter((m) => !m.resolve && m.tag && !NON_THREAD_TAGS.has(m.tag))
@@ -102,6 +109,23 @@ export abstract class PollerAlerts extends PollerBase {
 		this.transaction(() => {
 			if (gone.length)
 				this.run(`DELETE FROM push_devices WHERE endpoint IN (${marks(gone.length)})`, ...gone);
+			if (threadIds.length)
+				this.run(
+					`UPDATE threads SET pushed_at = ? WHERE id IN (${marks(threadIds.length)})`,
+					now,
+					...threadIds
+				);
+		});
+		this.logAlerts(log.filter((m) => !m.resolve));
+		return true;
+	}
+
+	/** Record alerts in the history (not test pushes), and drop the old ones. */
+	private logAlerts(messages: PushMessage[]) {
+		const logged = messages.filter((m) => m.tag !== 'test');
+		if (!logged.length) return;
+		const now = Date.now();
+		this.transaction(() => {
 			for (const m of logged)
 				this.run(
 					'INSERT INTO alerts (sent_at, title, body, url, thread_id) VALUES (?, ?, ?, ?, ?)',
@@ -111,14 +135,8 @@ export abstract class PollerAlerts extends PollerBase {
 					m.url,
 					m.tag && !NON_THREAD_TAGS.has(m.tag) ? m.tag : null
 				);
-			if (logged.length) this.run('DELETE FROM alerts WHERE sent_at < ?', now - ALERT_LOG_KEEP);
-			if (threadIds.length)
-				this.run(
-					`UPDATE threads SET pushed_at = ? WHERE id IN (${marks(threadIds.length)})`,
-					now,
-					...threadIds
-				);
+			this.run('DELETE FROM alerts WHERE sent_at < ?', now - ALERT_LOG_KEEP);
 		});
-		if (logged.length) this.broadcast({ type: 'alerts' });
+		this.broadcast({ type: 'alerts' });
 	}
 }

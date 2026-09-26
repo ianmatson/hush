@@ -12,10 +12,13 @@
 		type PushSupport
 	} from '$lib/push';
 	import { saveSettings } from '$lib/save-settings';
+	import { fromClock, inQuietHours, toClock } from '$lib/shared/quiet';
+	import type { QuietHours } from '$lib/shared/types';
 
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
+	import { Input } from '$lib/components/ui/input';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
@@ -26,6 +29,32 @@
 	const me = createQuery(meQuery);
 	const devices = createQuery(pushDevicesQuery);
 	const settings = $derived(me.data?.settings);
+
+	const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	const quiet = $derived(settings?.quietHours ?? null);
+	// Checked again each minute, for the "Quiet now" note.
+	let now = $state(Date.now());
+	onMount(() => {
+		const t = setInterval(() => (now = Date.now()), 60_000);
+		return () => clearInterval(t);
+	});
+	const quietNow = $derived(inQuietHours(quiet, now));
+
+	function setQuiet(patch: Partial<QuietHours> | null) {
+		const next: QuietHours | null =
+			patch === null
+				? null
+				: {
+						...(quiet ?? { from: 22 * 60, to: 7 * 60, weekends: false, timeZone: browserZone }),
+						...patch
+					};
+		saveSettings({ quietHours: next }, next ? 'Quiet hours saved' : 'Quiet hours off');
+	}
+
+	function setClock(key: 'from' | 'to', value: string) {
+		const m = fromClock(value);
+		if (m !== null && m !== quiet?.[key]) setQuiet({ [key]: m });
+	}
 
 	let support = $state<PushSupport>('unsupported');
 	let thisDevice = $state<PushSubscription | null>(null);
@@ -211,6 +240,71 @@
 						onCheckedChange={(v) => saveSettings({ pushFyi: v })}
 					/>
 				</SettingRow>
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Quiet hours</Card.Title>
+				<Card.Description
+					>No pushes at these times. The alerts still go in the bell history, and the inbox is up to
+					date when you look.</Card.Description
+				>
+			</Card.Header>
+			<Card.Content class="divide-y">
+				<SettingRow
+					id="quiet-on"
+					label="Quiet hours"
+					description={quiet ? (quietNow ? 'Quiet now.' : 'Not quiet now.') : 'Off.'}
+				>
+					<Switch
+						id="quiet-on"
+						checked={!!quiet}
+						onCheckedChange={(v) => setQuiet(v ? {} : null)}
+					/>
+				</SettingRow>
+				{#if quiet}
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 text-sm">
+						<label class="flex items-center gap-2"
+							>From <Input
+								type="time"
+								class="h-8 w-auto"
+								value={toClock(quiet.from)}
+								onchange={(e) => setClock('from', e.currentTarget.value)}
+							/></label
+						>
+						<label class="flex items-center gap-2"
+							>to <Input
+								type="time"
+								class="h-8 w-auto"
+								value={toClock(quiet.to)}
+								onchange={(e) => setClock('to', e.currentTarget.value)}
+							/></label
+						>
+						<span class="text-xs text-muted-foreground">
+							{quiet.from > quiet.to ? 'Ends the next morning.' : ''}
+							Time zone: {quiet.timeZone}.
+							{#if quiet.timeZone !== browserZone}
+								<button
+									type="button"
+									class="underline underline-offset-2 hover:text-foreground"
+									onclick={() => setQuiet({ timeZone: browserZone })}>Use {browserZone}</button
+								>
+							{/if}
+						</span>
+					</div>
+					<SettingRow
+						id="quiet-weekends"
+						label="All weekend"
+						description="Also quiet all day on Saturday and Sunday."
+					>
+						<Switch
+							id="quiet-weekends"
+							checked={quiet.weekends}
+							onCheckedChange={(v) => setQuiet({ weekends: v })}
+						/>
+					</SettingRow>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	{/if}

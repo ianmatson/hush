@@ -152,6 +152,15 @@ export interface Rule {
 	};
 }
 
+/** Minutes after midnight, in `timeZone`. `from` after `to` crosses midnight. */
+export interface QuietHours {
+	from: number;
+	to: number;
+	/** Also quiet all day on Saturday and Sunday. */
+	weekends: boolean;
+	timeZone: string;
+}
+
 export interface Settings {
 	/** Send Web Push for Action items. */
 	pushAction: boolean;
@@ -161,6 +170,8 @@ export interface Settings {
 	pushTurnChanges: boolean;
 	/** Replace an alert already shown with a quiet "✓ resolved" one when its thread is resolved. */
 	pushResolved: boolean;
+	/** No pushes during these hours (they still go in the alert history). Null: off. */
+	quietHours: QuietHours | null;
 	/** A thread open in the peek for a moment is marked as read. */
 	peekMarksRead: boolean;
 	/**

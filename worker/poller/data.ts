@@ -8,6 +8,7 @@ import {
 } from '../../src/lib/shared/classify';
 import { validateDash } from '../../src/lib/shared/dashboard';
 import { MENUS_VERSION, validateMenus } from '../../src/lib/shared/menus';
+import { validateQuietHours } from '../../src/lib/shared/quiet';
 import { validateViews } from '../../src/lib/shared/views';
 import {
 	SNOOZE_EVENT_MAX_MS,
@@ -346,6 +347,11 @@ export abstract class PollerData extends PollerDashboard {
 			'teamReviewsAreAction'
 		] as const)
 			if (typeof body[k] === 'boolean') next[k] = body[k];
+		if (body.quietHours !== undefined) {
+			const err = validateQuietHours(body.quietHours);
+			if (err) return { error: err, status: 400 };
+			next.quietHours = body.quietHours;
+		}
 		if (body.dash !== undefined) {
 			const dash = { ...next.dash, ...body.dash };
 			const err = validateDash(dash);
