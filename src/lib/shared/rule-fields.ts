@@ -96,7 +96,12 @@ export const RULE_FIELDS: RuleFieldInfo[] = [
 			{ value: 'merged', label: 'Merged' }
 		]
 	},
-	{ key: 'titleContains', label: 'Title contains', input: 'text', help: 'Not case-sensitive.' },
+	{
+		key: 'text',
+		label: 'Words',
+		input: 'text',
+		help: 'Each word must be in the title, repo, or author. Not case-sensitive.'
+	},
 	{
 		key: 'label',
 		label: 'Has label',

@@ -2,17 +2,18 @@
 	import { untrack } from 'svelte';
 	import type { SavedView, ThreadDTO, ViewBase } from '$lib/shared/types';
 	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
-	import { VIEW_BASES, viewMatches } from '$lib/shared/views';
+	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import ConditionsEditor from './conditions-editor.svelte';
+	import QueryInput from './query-input.svelte';
 
 	/**
-	 * Create or edit a saved view: a name, a base list, optional search text, and conditions (the
-	 * same as rules). Shows how many threads match while you edit.
+	 * Create or edit a saved view: a name, a base list, and conditions (the same as rules, also as
+	 * text). Shows how many threads match while you edit.
 	 */
 	let {
 		open = $bindable(false),
@@ -47,7 +48,7 @@
 	// "Category" is the base's job; "Hush's default" means little outside rules.
 	const FIELDS = RULE_FIELDS.filter((f) => f.key !== 'category');
 	const list = $derived(threads[draft.base]);
-	const count = $derived(list?.filter((t) => viewMatches(draft as SavedView, t, me)).length);
+	const count = $derived(list?.filter((t) => threadMatches(draft.when, t, me)).length);
 	const nameOk = $derived(!!draft.name.trim());
 </script>
 
@@ -87,19 +88,6 @@
 			</div>
 		</div>
 
-		<div class="grid gap-1.5">
-			<Label for="view-query"
-				>Search text <span class="font-normal text-muted-foreground">(optional)</span></Label
-			>
-			<Input
-				id="view-query"
-				placeholder="Words in the title, repo, or author"
-				maxlength={100}
-				value={draft.query ?? ''}
-				oninput={(e) => (draft.query = e.currentTarget.value || undefined)}
-			/>
-		</div>
-
 		<ConditionsEditor
 			bind:when={draft.when}
 			fields={FIELDS}
@@ -108,6 +96,7 @@
 			title="Only threads where"
 			emptyNote="No conditions: the view shows every thread of its base."
 		/>
+		<QueryInput bind:when={draft.when} id="view-query" />
 
 		<p class="text-xs text-muted-foreground" aria-live="polite">
 			{#if count !== undefined}

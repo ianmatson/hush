@@ -9,6 +9,7 @@
 	import { validateRules } from '$lib/shared/classify';
 	import type { Rule, SavedView, ThreadDTO } from '$lib/shared/types';
 	import { VIEW_BASES } from '$lib/shared/views';
+	import { formatQuery } from '$lib/shared/query';
 	import SortableList from '$lib/components/app/sortable-list.svelte';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Trash from '@lucide/svelte/icons/trash-2';
@@ -161,12 +162,7 @@
 	// Saved views, for reordering here (they are made and edited on the inbox).
 	const viewRows = $derived((settings?.views ?? []).map((view) => ({ key: view.id, view })));
 	function describeView(v: SavedView) {
-		const n = Object.keys(v.when ?? {}).length;
-		return [
-			VIEW_BASES.find((b) => b.id === v.base)?.label,
-			v.query ? `“${v.query}”` : null,
-			n ? `${n} ${n === 1 ? 'condition' : 'conditions'}` : null
-		]
+		return [VIEW_BASES.find((b) => b.id === v.base)?.label, formatQuery(v.when ?? {}) || null]
 			.filter(Boolean)
 			.join(', ');
 	}

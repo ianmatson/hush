@@ -1,5 +1,5 @@
 import { ruleMatches } from './classify';
-import type { Classification, SavedView, ThreadDTO, ViewBase } from './types';
+import type { Classification, RuleMatch, SavedView, ThreadDTO, ViewBase } from './types';
 
 export const VIEW_BASES: { id: ViewBase; label: string }[] = [
 	{ id: 'inbox', label: 'Needs you + FYI' },
@@ -10,23 +10,14 @@ export const VIEW_BASES: { id: ViewBase; label: string }[] = [
 ];
 export const MAX_VIEWS = 12;
 
-/** The Filter box's match: every thread text field, not case-sensitive. */
-export function textMatches(t: ThreadDTO, query: string): boolean {
-	const q = query.trim().toLowerCase();
-	return (
-		!q || `${t.summary} ${t.title} ${t.repo} ${t.why} ${t.author ?? ''}`.toLowerCase().includes(q)
-	);
-}
-
 /**
- * Does a thread belong in a saved view? The conditions mean the same as in rules; "category" is
- * the thread's category now (the view's base already picks it).
+ * Does a thread belong in a saved view (or match the Filter box)? The conditions mean the same as
+ * in rules; "category" is the thread's category now (the view's base already picks it).
  */
-export function viewMatches(v: SavedView, t: ThreadDTO, me: string): boolean {
-	if (v.query && !textMatches(t, v.query)) return false;
+export function threadMatches(when: RuleMatch, t: ThreadDTO, me: string): boolean {
 	const c = { category: t.category, kind: t.kind } as Classification;
 	return ruleMatches(
-		v.when ?? {},
+		when,
 		{
 			repo: t.repo,
 			subjectType: t.subjectType,
@@ -39,7 +30,8 @@ export function viewMatches(v: SavedView, t: ThreadDTO, me: string): boolean {
 				author: t.author ?? undefined,
 				authorIsBot: t.authorIsBot,
 				labels: t.labels,
-				draft: t.draft
+				draft: t.draft,
+				state: t.state ?? undefined
 			}
 		},
 		c
@@ -59,8 +51,6 @@ export function validateViews(views: unknown, validateWhen: (when: unknown) => s
 		if (typeof v.name !== 'string' || !v.name.trim() || v.name.length > 40)
 			return 'Each view needs a name (40 characters or fewer).';
 		if (!VIEW_BASES.some((b) => b.id === v.base)) return `"${v.name}": unknown base.`;
-		if (v.query !== undefined && (typeof v.query !== 'string' || v.query.length > 100))
-			return `"${v.name}": the search text must be 100 characters or fewer.`;
 		const err = validateWhen(v.when);
 		if (err) return `"${v.name}": ${err}`;
 	}

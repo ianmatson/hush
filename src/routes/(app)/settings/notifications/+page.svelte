@@ -247,8 +247,8 @@
 			<Card.Header>
 				<Card.Title>Quiet hours</Card.Title>
 				<Card.Description
-					>No pushes at these times. The alerts still go in the bell history, and the inbox is up to
-					date when you look.</Card.Description
+					>No pushes at these times. The alerts go in the bell history, and one push lists them when
+					quiet hours end.</Card.Description
 				>
 			</Card.Header>
 			<Card.Content class="divide-y">

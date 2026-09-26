@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedView, ThreadDTO } from './types';
-import { textMatches, validateViews, viewMatches } from './views';
+import { threadMatches, validateViews } from './views';
 import { validateRules } from './classify';
 
 const t = (over: Partial<ThreadDTO> = {}): ThreadDTO =>
@@ -44,19 +44,19 @@ const view = (over: Partial<SavedView> = {}): SavedView => ({
 
 describe('saved views', () => {
 	it('match on text, like the Filter box', () => {
-		expect(textMatches(t(), 'hogfm')).toBe(true);
-		expect(viewMatches(view({ query: 'nope' }), t(), 'ian')).toBe(false);
+		expect(threadMatches({ text: 'hogfm' }, t(), 'ian')).toBe(true);
+		expect(threadMatches({ text: 'failed posthog.com' }, t(), 'ian')).toBe(true);
+		expect(threadMatches({ text: 'nope' }, t(), 'ian')).toBe(false);
+		expect(threadMatches({ state: ['open'] }, t({ state: 'open' }), 'ian')).toBe(true);
 	});
 
 	it('match on the same conditions as rules', () => {
-		expect(viewMatches(view({ when: { repo: 'PostHog/*' } }), t(), 'ian')).toBe(true);
-		expect(viewMatches(view({ when: { repo: 'other/*' } }), t(), 'ian')).toBe(false);
-		expect(viewMatches(view({ when: { type: ['PullRequest'] } }), t(), 'ian')).toBe(false);
-		expect(viewMatches(view({ when: { kind: ['fix_ci'] } }), t(), 'ian')).toBe(true);
-		expect(viewMatches(view({ when: { label: ['docs'] } }), t({ labels: ['docs'] }), 'ian')).toBe(
-			true
-		);
-		expect(viewMatches(view({ when: { bot: true } }), t({ authorIsBot: true }), 'ian')).toBe(true);
+		expect(threadMatches({ repo: 'PostHog/*' }, t(), 'ian')).toBe(true);
+		expect(threadMatches({ repo: 'other/*' }, t(), 'ian')).toBe(false);
+		expect(threadMatches({ type: ['PullRequest'] }, t(), 'ian')).toBe(false);
+		expect(threadMatches({ kind: ['fix_ci'] }, t(), 'ian')).toBe(true);
+		expect(threadMatches({ label: ['docs'] }, t({ labels: ['docs'] }), 'ian')).toBe(true);
+		expect(threadMatches({ bot: true }, t({ authorIsBot: true }), 'ian')).toBe(true);
 	});
 
 	it('refuses bad views', () => {

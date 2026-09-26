@@ -8,6 +8,9 @@ import type { ThreadRow } from './schema';
 
 const marks = (n: number) => Array(n).fill('?').join(',');
 
+/** Alerts that waited for the end of quiet hours: how many, and the first titles. */
+type Held = { count: number; lines: string[] };
+
 /** Push alerts: send them, record them in the alert history, and update them when resolved. */
 export abstract class PollerAlerts extends PollerBase {
 	protected async push(items: { n: GhNotification; c: Classification }[]) {
@@ -73,7 +76,8 @@ export abstract class PollerAlerts extends PollerBase {
 	/**
 	 * Send push messages to every device; forget devices the push service dropped. `log` is what
 	 * the alert history records (default: the messages; never resolve updates). In quiet hours
-	 * nothing is sent, but the history still records the alerts. Returns whether it sent.
+	 * nothing is sent: the history records the alerts, and they go out as one push when quiet
+	 * hours end (see flushQuiet). Returns whether it sent.
 	 */
 	protected async send(messages: PushMessage[], log = messages): Promise<boolean> {
 		const devices = this.all<{ endpoint: string; p256dh: string; auth: string }>(
@@ -82,7 +86,15 @@ export abstract class PollerAlerts extends PollerBase {
 		await this.putChanged({ hasPush: devices.length > 0 });
 		if (!devices.length || !this.env.VAPID_PRIVATE_KEY) return false;
 		if (inQuietHours((await this.settings()).quietHours)) {
-			this.logAlerts(log.filter((m) => !m.resolve));
+			const held = log.filter((m) => !m.resolve && m.tag !== 'test');
+			this.logAlerts(held);
+			if (held.length) {
+				const q = (await this.ctx.storage.get<Held>('quietHeld')) ?? { count: 0, lines: [] };
+				await this.ctx.storage.put('quietHeld', {
+					count: q.count + held.length,
+					lines: [...q.lines, ...held.map((m) => m.title)].slice(0, 4)
+				});
+			}
 			return false;
 		}
 		const origin = (await this.ctx.storage.get<string>('origin')) ?? '';
@@ -118,6 +130,22 @@ export abstract class PollerAlerts extends PollerBase {
 		});
 		this.logAlerts(log.filter((m) => !m.resolve));
 		return true;
+	}
+
+	/** After quiet hours: one push for the alerts that waited (called after each poll). */
+	protected async flushQuiet(): Promise<void> {
+		const held = await this.ctx.storage.get<Held>('quietHeld');
+		if (!held || inQuietHours((await this.settings()).quietHours)) return;
+		await this.ctx.storage.delete('quietHeld');
+		const origin = (await this.ctx.storage.get<string>('origin')) ?? '';
+		const summary: PushMessage = {
+			title: held.count === 1 ? '1 alert while quiet' : `${held.count} alerts while quiet`,
+			body: held.lines.join('\n'),
+			url: `${origin}/inbox`,
+			tag: 'digest'
+		};
+		// Already in the history, one by one.
+		await this.send([summary], []);
 	}
 
 	/** Record alerts in the history (not test pushes), and drop the old ones. */

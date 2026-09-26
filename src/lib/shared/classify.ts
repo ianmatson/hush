@@ -8,6 +8,7 @@ import type {
 	ThreadFacts
 } from './types';
 import { isBot } from './bots';
+import { textMatches } from './text-match';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 
 /** Notification reasons, as Hush shows them. */
@@ -163,8 +164,7 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	if (m.reason && !m.reason.includes(t.reason)) return false;
 	if (m.type && !m.type.includes(t.subjectType)) return false;
 	if (!matchGlobs(e?.author, m.author)) return false;
-	if (m.titleContains && !t.title.toLowerCase().includes(m.titleContains.toLowerCase()))
-		return false;
+	if (!textMatches(m.text, [t.title, t.repo, e?.author])) return false;
 	if (m.kind && !m.kind.includes(c.kind)) return false;
 	if (m.category && !m.category.includes(c.category)) return false;
 	if (m.bot !== undefined && m.bot !== !!(e?.authorIsBot || isBot(e?.author))) return false;
@@ -218,7 +218,7 @@ const MATCH_KEYS = new Set([
 	'reason',
 	'type',
 	'author',
-	'titleContains',
+	'text',
 	'kind',
 	'category',
 	'bot',

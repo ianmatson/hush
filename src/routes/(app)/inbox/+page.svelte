@@ -14,7 +14,8 @@
 	import { keys, meQuery, queryClient, setCounts, threadsQuery } from '$lib/queries';
 	import { Selection } from '$lib/selection.svelte';
 	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
-	import { VIEW_BASES, textMatches, viewMatches } from '$lib/shared/views';
+	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
+	import { formatQuery, parseQuery, type ParsedQuery } from '$lib/shared/query';
 	import { saveSettings } from '$lib/save-settings';
 	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
@@ -93,7 +94,9 @@
 	// While a tab's list loads, its counts keep the last known numbers (no badges that go away).
 	const lastViewCounts: Record<string, number> = {};
 	const viewCount = (v: SavedView) => {
-		const n = baseThreads[v.base]?.filter((t) => viewMatches(v, t, me.data?.login ?? '')).length;
+		const n = baseThreads[v.base]?.filter((t) =>
+			threadMatches(v.when, t, me.data?.login ?? '')
+		).length;
 		if (n !== undefined) lastViewCounts[v.id] = n;
 		return lastViewCounts[v.id] ?? null;
 	};
@@ -102,6 +105,8 @@
 
 	let syncing = $state(false);
 	let query = $state('');
+	// The Filter box speaks the query language (shared/query.ts); parts with errors are left out.
+	const filter = $derived(parseQuery(query));
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
 	let bulkSnoozeOpen = $state(false);
@@ -113,7 +118,10 @@
 	const visible = $derived.by(() => {
 		const login = me.data?.login ?? '';
 		return (threadsQ.data?.threads ?? []).filter(
-			(t) => !pending.has(t.id) && (!saved || viewMatches(saved, t, login)) && textMatches(t, query)
+			(t) =>
+				!pending.has(t.id) &&
+				(!saved || threadMatches(saved.when, t, login)) &&
+				threadMatches(filter.when, t, login)
 		);
 	});
 	const order = $derived(visible.map((t) => t.id));
@@ -451,17 +459,16 @@
 		when: {}
 	});
 	/** Open the editor: a view to edit, or a new one (from the current tab and filter text). */
-	function editView(v: SavedView | null, fromQuery?: string) {
+	function editView(v: SavedView | null, from?: ParsedQuery) {
 		viewEditing = v
 			? structuredClone($state.snapshot(v))
 			: {
-					name: fromQuery ?? '',
+					name: from ? query.trim().slice(0, 40) : '',
 					base:
 						view === 'action' || view === 'fyi' || view === 'snoozed' || view === 'done'
 							? view
 							: 'inbox',
-					query: fromQuery,
-					when: {}
+					when: from?.when ?? {}
 				};
 		viewEditorOpen = true;
 	}
@@ -471,7 +478,6 @@
 			name: v.name.trim(),
 			id: v.id ?? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
 		};
-		if (!clean.query?.trim()) delete clean.query;
 		const views = v.id
 			? savedViews.map((x) => (x.id === v.id ? clean : x))
 			: [...savedViews, clean];
@@ -547,17 +553,25 @@
 			<Input
 				bind:ref={searchEl}
 				bind:value={query}
-				placeholder="Filter"
+				placeholder="Filter: words or repo:, kind:, is:bot…"
 				class="h-8 pl-8"
 				aria-label="Filter threads"
 			/>
 			<!-- Under the box, over the list: typing does not move the box or the buttons. -->
-			{#if !saved && query.trim()}
+			{#if filter.errors.length}
+				<p
+					transition:fly={{ y: -4, duration: 120 }}
+					class="absolute top-full right-0 z-10 mt-1 w-max max-w-72 rounded-md border bg-popover px-2.5 py-1 text-xs text-destructive shadow-md"
+					role="status"
+				>
+					{filter.errors[0]}
+				</p>
+			{:else if !saved && query.trim()}
 				<button
 					type="button"
 					transition:fly={{ y: -4, duration: 120 }}
 					class="absolute top-full right-0 z-10 mt-1 flex items-center gap-1.5 rounded-md border bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-md hover:bg-muted"
-					onclick={() => editView(null, query.trim())}
+					onclick={() => editView(null, filter)}
 					><BookmarkPlus class="size-3.5" />Save as view</button
 				>
 			{/if}
@@ -587,10 +601,9 @@
 
 	<p class="mt-3 mb-2 px-1 text-xs text-muted-foreground">
 		{#if me.data?.lastPollAt}Synced {ago(me.data.lastPollAt)}{:else}First sync in progress…{/if}
-		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{saved.query
-				? `, “${saved.query}”`
-				: ''}{Object.keys(saved.when ?? {}).length
-				? `, ${Object.keys(saved.when).length} ${Object.keys(saved.when).length === 1 ? 'condition' : 'conditions'}`
+		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{Object.keys(saved.when ?? {})
+				.length
+				? `, ${formatQuery(saved.when)}`
 				: ''}{:else if view === 'fyi'}· Activity you may want to know about, but that does not need
 			you.{/if}
 	</p>

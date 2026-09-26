@@ -12,9 +12,7 @@ export interface SavedView {
 	id: string;
 	name: string;
 	base: ViewBase;
-	/** Free text, the same as the Filter box. */
-	query?: string;
-	/** The same conditions as rules. All must match. */
+	/** The same conditions as rules (and the Filter box). All must match. */
 	when: RuleMatch;
 }
 
@@ -128,8 +126,8 @@ export interface RuleMatch {
 	type?: string[];
 	/** Glob(s) on the subject author's login. */
 	author?: string | string[];
-	/** Case-insensitive substring of the title. */
-	titleContains?: string;
+	/** Words that must all be in the title, repo, or author (not case-sensitive). */
+	text?: string;
 	kind?: ActionKind[];
 	category?: Category[];
 	bot?: boolean;

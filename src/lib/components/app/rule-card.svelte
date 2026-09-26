@@ -10,6 +10,7 @@
 	import type { Category, Rule } from '$lib/shared/types';
 	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
 	import ConditionsEditor from './conditions-editor.svelte';
+	import QueryInput from './query-input.svelte';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -191,6 +192,10 @@
 		{suggest}
 		idPrefix="rule-{index}"
 		emptyNote="No conditions: this rule matches every thread."
+	/>
+	<QueryInput
+		bind:when={() => rule.when ?? {}, (when) => (rule = { ...rule, when })}
+		id="rule-{index}-query"
 	/>
 
 	<section class="grid gap-2">

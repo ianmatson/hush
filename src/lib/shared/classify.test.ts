@@ -177,7 +177,7 @@ describe('rules', () => {
 		expect(validateRules([{ when: { repo: [] }, then: { category: 'fyi' } }])).toMatch(
 			/needs a value/
 		);
-		expect(validateRules([{ when: { titleContains: ' ' }, then: { category: 'fyi' } }])).toMatch(
+		expect(validateRules([{ when: { text: ' ' }, then: { category: 'fyi' } }])).toMatch(
 			/needs a value/
 		);
 		expect(validateRules([{ when: { bot: false }, then: { category: 'fyi' } }])).toBeNull();
