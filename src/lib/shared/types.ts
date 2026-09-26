@@ -113,6 +113,9 @@ export interface Classification {
 	actionUrl: string;
 	/** Set by a rule; overrides the default push decision. */
 	push?: boolean;
+	/** Set by a rule: move the thread to Done, or snooze it for `snoozeHours`. */
+	triage?: 'done' | 'snooze';
+	snoozeHours?: number;
 	/** Name of the rule that matched, if any. */
 	rule?: string;
 }
@@ -132,13 +135,21 @@ export interface RuleMatch {
 	bot?: boolean;
 	label?: string[];
 	draft?: boolean;
+	/** PRs and issues only: open, closed, or merged. */
+	state?: ('open' | 'closed' | 'merged')[];
 }
 
 export interface Rule {
 	name?: string;
 	enabled?: boolean;
 	when: RuleMatch;
-	then: { category?: Category; push?: boolean };
+	then: {
+		category?: Category;
+		push?: boolean;
+		/** Also move the thread: to Done, or snoozed for `snoozeHours` (see ruleTriage). */
+		triage?: 'done' | 'snooze';
+		snoozeHours?: number;
+	};
 }
 
 export interface Settings {

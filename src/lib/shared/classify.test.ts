@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify, globToRegExp, shouldPush, validateRules } from './classify';
+import { classify, globToRegExp, ruleTriage, shouldPush, validateRules } from './classify';
 import { DEFAULT_SETTINGS } from './settings';
 import type { Enrichment, Settings, ThreadFacts } from './types';
 
@@ -184,7 +184,42 @@ describe('rules', () => {
 		expect(validateRules([{ when: { nope: 1 }, then: { push: true } }])).toMatch(
 			/unknown condition/
 		);
-		expect(validateRules([{ when: {}, then: {} }])).toMatch(/needs category or push/);
+		expect(validateRules([{ when: {}, then: {} }])).toMatch(/needs category, push, or triage/);
+		expect(validateRules([{ when: { state: ['merged'] }, then: { triage: 'done' } }])).toBeNull();
+		expect(validateRules([{ when: { state: ['gone'] }, then: { triage: 'done' } }])).toBeTruthy();
+		expect(validateRules([{ when: {}, then: { triage: 'snooze', snoozeHours: 4 } }])).toBeNull();
+		expect(validateRules([{ when: {}, then: { triage: 'later' } }])).toBeTruthy();
+		for (const snoozeHours of [0, 1.5, 721])
+			expect(validateRules([{ when: {}, then: { triage: 'snooze', snoozeHours } }])).toBeTruthy();
+	});
+
+	it('matches on state', () => {
+		const rules = [
+			{ name: 'merged', when: { state: ['merged' as const] }, then: { triage: 'done' as const } }
+		];
+		expect(run(facts({ enrichment: pr({ state: 'merged' }) }), { rules }).rule).toBe('merged');
+		expect(run(facts(), { rules }).rule).toBeUndefined();
+		expect(run(facts({ enrichment: null }), { rules }).rule).toBeUndefined();
+	});
+
+	it('ruleTriage moves only for rules that ask', () => {
+		const now = 1_000_000;
+		const done = run(facts(), { rules: [{ name: 'x', when: {}, then: { triage: 'done' } }] });
+		expect(ruleTriage(done, now)).toEqual({ triage: 'done', note: 'Rule: x' });
+		const snooze = run(facts(), {
+			rules: [{ when: {}, then: { triage: 'snooze', snoozeHours: 4 } }]
+		});
+		expect(ruleTriage(snooze, now)).toEqual({
+			triage: 'snoozed',
+			until: now + 4 * 3_600_000,
+			note: 'Rule: Rule 1'
+		});
+		const day = run(facts(), { rules: [{ when: {}, then: { triage: 'snooze' } }] });
+		expect(ruleTriage(day, now)).toMatchObject({ until: now + 24 * 3_600_000 });
+		expect(
+			ruleTriage(run(facts(), { rules: [{ when: {}, then: { push: true } }] }), now)
+		).toBeNull();
+		expect(ruleTriage(run(facts()), now)).toBeNull();
 	});
 
 	it('globs match owner/repo case-insensitively', () => {

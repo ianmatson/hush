@@ -123,10 +123,10 @@
 		if (settings) draft = structuredClone($state.snapshot(settings.rules) as Rule[]);
 	}
 
-	// Preview: what the unsaved rules would catch, from the server (your stored threads, D1 only).
+	// Preview: what the unsaved rules would catch, from the server (your stored threads).
 	let preview = $state<{
 		perRule: RulePreview[];
-		moves: { action: number; fyi: number; muted: number };
+		moves: { action: number; fyi: number; muted: number; done: number; snoozed: number };
 	} | null>(null);
 	$effect(() => {
 		const rules = jsonMode ? null : $state.snapshot(draft);
@@ -146,7 +146,9 @@
 			[
 				['action', 'Needs you'],
 				['fyi', 'FYI'],
-				['muted', 'Muted']
+				['muted', 'Muted'],
+				['done', 'Done'],
+				['snoozed', 'Snoozed']
 			] as const
 		)
 			.filter(([k]) => preview!.moves[k])

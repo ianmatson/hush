@@ -85,6 +85,17 @@ export const RULE_FIELDS: RuleFieldInfo[] = [
 			{ value: 'fyi', label: 'FYI' }
 		]
 	},
+	{
+		key: 'state',
+		label: 'State',
+		input: 'options',
+		help: 'Of the pull request or issue.',
+		options: [
+			{ value: 'open', label: 'Open' },
+			{ value: 'closed', label: 'Closed' },
+			{ value: 'merged', label: 'Merged' }
+		]
+	},
 	{ key: 'titleContains', label: 'Title contains', input: 'text', help: 'Not case-sensitive.' },
 	{
 		key: 'label',

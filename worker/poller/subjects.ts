@@ -1,4 +1,4 @@
-import { classify, shouldPush } from '../../src/lib/shared/classify';
+import { classify, ruleTriage, shouldPush } from '../../src/lib/shared/classify';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
 import type { DashResponse } from '../../src/lib/shared/types';
@@ -155,6 +155,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 		const writes: (() => void)[] = [];
 		const messages: PushMessage[] = [];
 		const resolved: Resolved[] = [];
+		const now = Date.now();
 		for (const { row: r, fresh, before } of items) {
 			const e = enrichmentOf(fresh, me);
 			const c = classify(
@@ -184,7 +185,20 @@ export abstract class PollerSubjects extends PollerAlerts {
 				e,
 				me
 			);
-			const note = out.triage === 'done' ? (out.resolvedNote ?? r.resolved_note) : null;
+			// A rule that moves threads acts when it starts to match (and not again after you moved
+			// the thread back yourself: then the rule already matched).
+			const moved =
+				out.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
+			const triage = moved?.triage ?? out.triage;
+			const resolvedAt = moved ? null : out.resolvedAt;
+			const note =
+				moved?.triage === 'done'
+					? moved.note
+					: triage === 'done'
+						? (out.resolvedNote ?? r.resolved_note)
+						: null;
+			// Snooze columns: 1 = a rule snoozes it now, 2 = clear them, 0 = keep.
+			const snooze = moved?.triage === 'snoozed' ? 1 : out.clearSnooze ? 2 : 0;
 			const same =
 				c.category === r.category &&
 				c.kind === r.kind &&
@@ -193,17 +207,18 @@ export abstract class PollerSubjects extends PollerAlerts {
 				c.actionLabel === r.action_label &&
 				c.actionUrl === r.action_url &&
 				(c.rule ?? null) === r.rule &&
-				out.triage === r.triage &&
-				out.resolvedAt === r.resolved_at &&
+				triage === r.triage &&
+				resolvedAt === r.resolved_at &&
 				note === r.resolved_note &&
-				!out.clearSnooze;
+				!snooze;
 			if (same) continue;
 			writes.push(() =>
 				this.run(
 					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
              rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
-             snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
-             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
+             snoozed_until = CASE ? WHEN 1 THEN ? WHEN 2 THEN NULL ELSE snoozed_until END,
+             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END,
+             snoozed_at = CASE ? WHEN 1 THEN ? ELSE snoozed_at END
            WHERE id = ?`,
 					c.category,
 					c.kind,
@@ -212,20 +227,25 @@ export abstract class PollerSubjects extends PollerAlerts {
 					c.actionLabel,
 					c.actionUrl,
 					c.rule ?? null,
-					out.triage,
-					out.resolvedAt,
+					triage,
+					resolvedAt,
 					note,
-					out.clearSnooze ? 1 : 0,
-					out.clearSnooze ? 1 : 0,
+					snooze,
+					moved?.triage === 'snoozed' ? moved.until : null,
+					snooze,
+					snooze,
+					now,
 					r.id
 				)
 			);
-			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
+			if (moved?.triage === 'done') resolved.push({ id: r.id, title: r.title, note: moved.note });
+			else if (out.resolvedNote && !moved)
+				resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
 			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
 			const wanted = snoozeOver
 				? settings.pushAction
 				: settings.pushTurnChanges && shouldPush(c, settings);
-			if (out.push && wanted)
+			if (out.push && wanted && !moved)
 				messages.push({
 					title: out.push,
 					body: `${r.title}\n${r.repo}`,

@@ -1,4 +1,4 @@
-import { classify, shouldPush } from '../../src/lib/shared/classify';
+import { classify, ruleTriage, shouldPush } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { Classification, ThreadFacts } from '../../src/lib/shared/types';
@@ -119,7 +119,10 @@ export abstract class PollerSync extends PollerSubjects {
 					wokeBy = outcome.reason;
 				}
 			}
-			const keepSnooze = triage === 'snoozed';
+			// New activity: a rule that moves threads acts now (not for a snooze that just woke).
+			const moved = triage === 'inbox' && !wokeBy ? ruleTriage(c, now) : null;
+			if (moved) triage = moved.triage;
+			const keepSnooze = triage === 'snoozed' && !moved;
 
 			let pushed = ex?.pushed_updated_at ?? null;
 			if (wokeBy && settings.pushAction) {
@@ -131,6 +134,7 @@ export abstract class PollerSync extends PollerSubjects {
 				});
 				pushed = n.updated_at;
 			} else if (
+				!moved &&
 				initialized &&
 				n.unread &&
 				triage === 'inbox' &&
@@ -144,8 +148,9 @@ export abstract class PollerSync extends PollerSubjects {
 			writes.push(() =>
 				this.run(
 					`INSERT INTO threads (id, repo, subject_type, subject_key, title, html_url, reason, unread, gh_updated_at,
-             category, kind, summary, why, action_label, action_url, rule, triage, pushed_updated_at, first_seen_at)
-           VALUES (${marks(19)})
+             category, kind, summary, why, action_label, action_url, rule, triage, pushed_updated_at, first_seen_at,
+             snoozed_until, snoozed_at, resolved_note)
+           VALUES (${marks(22)})
            ON CONFLICT (id) DO UPDATE SET
              repo = excluded.repo, subject_type = excluded.subject_type, subject_key = excluded.subject_key,
              title = excluded.title, html_url = excluded.html_url, reason = excluded.reason, unread = excluded.unread,
@@ -153,10 +158,13 @@ export abstract class PollerSync extends PollerSubjects {
              summary = excluded.summary, why = excluded.why, action_label = excluded.action_label,
              action_url = excluded.action_url, rule = excluded.rule, triage = excluded.triage,
              pushed_updated_at = excluded.pushed_updated_at,
-             snoozed_until = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_until END,
+             snoozed_until = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_until ELSE excluded.snoozed_until END,
              snooze_event = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snooze_event END,
-             resolved_at = CASE WHEN excluded.triage = 'done' THEN threads.resolved_at END,
-             resolved_note = CASE WHEN excluded.triage = 'done' THEN threads.resolved_note END`,
+             snoozed_at = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_at ELSE excluded.snoozed_at END,
+             resolved_at = CASE WHEN excluded.resolved_note IS NOT NULL THEN NULL
+               WHEN excluded.triage = 'done' THEN threads.resolved_at END,
+             resolved_note = CASE WHEN excluded.resolved_note IS NOT NULL THEN excluded.resolved_note
+               WHEN excluded.triage = 'done' THEN threads.resolved_note END`,
 					n.id,
 					facts.repo,
 					facts.subjectType,
@@ -175,7 +183,10 @@ export abstract class PollerSync extends PollerSubjects {
 					c.rule ?? null,
 					triage,
 					pushed,
-					now
+					now,
+					moved?.triage === 'snoozed' ? moved.until : null,
+					moved?.triage === 'snoozed' ? now : null,
+					moved?.triage === 'done' ? moved.note : null
 				)
 			);
 		}

@@ -3,6 +3,7 @@ import {
 	classifyDefault,
 	firstMatchingRule,
 	globToRegExp,
+	ruleTriage,
 	validateRules
 } from '../../src/lib/shared/classify';
 import { validateDash } from '../../src/lib/shared/dashboard';
@@ -275,7 +276,7 @@ export abstract class PollerData extends PollerDashboard {
 					inInbox: number;
 					examples: { title: string; repo: string; category: string }[];
 				}[];
-				moves: { action: number; fyi: number; muted: number };
+				moves: { action: number; fyi: number; muted: number; done: number; snoozed: number };
 				total: number;
 		  }
 	> {
@@ -293,7 +294,7 @@ export abstract class PollerData extends PollerDashboard {
 			open: [] as Example[],
 			other: [] as Example[]
 		}));
-		const moves = { action: 0, fyi: 0, muted: 0 };
+		const moves = { action: 0, fyi: 0, muted: 0, done: 0, snoozed: 0 };
 		for (const r of rows) {
 			if (r.rule === MUTED_BY_USER) continue;
 			const facts = factsFromRow(r, me, myTeams);
@@ -313,6 +314,11 @@ export abstract class PollerData extends PollerDashboard {
 			// The effect of your edits: compare with the rules you have saved now.
 			const before = categoryWith(saved.rules, firstMatchingRule(facts, saved.rules, base));
 			if (category !== before) moves[category as keyof typeof moves]++;
+			// A rule that moves threads acts on the inbox threads it starts to match (see reclassify).
+			const then = i >= 0 ? settings.rules[i].then : null;
+			const name = i >= 0 ? settings.rules[i].name || `Rule ${i + 1}` : null;
+			if (then?.triage && r.triage === 'inbox' && name !== r.rule)
+				moves[then.triage === 'done' ? 'done' : 'snoozed']++;
 		}
 		return {
 			// Examples: threads in the inbox first.
@@ -382,25 +388,35 @@ export abstract class PollerData extends PollerDashboard {
 		return { settings: next, reclassified };
 	}
 
-	/** Re-run the classifier on stored threads after the settings change. */
+	/**
+	 * Re-run the classifier on stored threads after the settings change. A rule that moves threads
+	 * acts on the inbox threads it starts to match.
+	 */
 	private async reclassify(settings: Settings): Promise<number> {
 		const me = await this.login();
 		const myTeams = await this.inboxTeamsFor(settings);
+		const now = Date.now();
 		const changes: (() => void)[] = [];
+		const done: { id: string; note: string }[] = [];
 		for (const r of this.threads('1')) {
 			if (r.rule === MUTED_BY_USER) continue;
 			const c = classify(factsFromRow(r, me, myTeams), settings);
+			const moved =
+				r.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
 			const same =
+				!moved &&
 				c.category === r.category &&
 				c.kind === r.kind &&
 				c.summary === r.summary &&
 				(c.rule ?? null) === r.rule &&
 				c.actionUrl === r.action_url;
 			if (same) continue;
+			if (moved?.triage === 'done') done.push({ id: r.id, note: moved.note });
 			changes.push(() =>
 				this.run(
 					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
-             rule = ? WHERE id = ?`,
+             rule = ?, triage = ?, resolved_at = ?, resolved_note = ?, snoozed_until = ?, snoozed_at = ?
+           WHERE id = ?`,
 					c.category,
 					c.kind,
 					c.summary,
@@ -408,6 +424,11 @@ export abstract class PollerData extends PollerDashboard {
 					c.actionLabel,
 					c.actionUrl,
 					c.rule ?? null,
+					moved?.triage ?? r.triage,
+					moved ? null : r.resolved_at,
+					moved?.triage === 'done' ? moved.note : r.resolved_note,
+					moved?.triage === 'snoozed' ? moved.until : r.snoozed_until,
+					moved?.triage === 'snoozed' ? now : r.snoozed_at,
 					r.id
 				)
 			);
@@ -416,6 +437,7 @@ export abstract class PollerData extends PollerDashboard {
 			this.transaction(() => changes.forEach((change) => change()));
 			await this.bumpVersion();
 		}
+		await this.notifyResolved(done);
 		return changes.length;
 	}
 

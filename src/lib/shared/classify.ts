@@ -171,6 +171,7 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	if (m.label && !m.label.some((l) => e?.labels?.some((x) => x.toLowerCase() === l.toLowerCase())))
 		return false;
 	if (m.draft !== undefined && m.draft !== !!e?.draft) return false;
+	if (m.state && !(e?.state && m.state.includes(e.state))) return false;
 	return true;
 }
 
@@ -185,7 +186,23 @@ export function classify(t: ThreadFacts, settings: Settings): Classification {
 	if (i < 0) return base;
 	const rule = settings.rules[i];
 	const category: Category = rule.then.category ?? base.category;
-	return { ...base, category, push: rule.then.push, rule: rule.name || `Rule ${i + 1}` };
+	const { push, triage, snoozeHours } = rule.then;
+	return { ...base, category, push, triage, snoozeHours, rule: rule.name || `Rule ${i + 1}` };
+}
+
+/**
+ * Where a rule moves a thread that is in the inbox: to Done, or snoozed for some hours. Null when
+ * the rule does not move threads (or no rule matched). Callers apply it only on new activity or
+ * when the rule starts to match, so a thread you moved back yourself stays where you put it.
+ */
+export function ruleTriage(
+	c: Classification,
+	now = Date.now()
+): null | { triage: 'done'; note: string } | { triage: 'snoozed'; until: number; note: string } {
+	if (!c.rule || !c.triage) return null;
+	const note = `Rule: ${c.rule}`;
+	if (c.triage === 'done') return { triage: 'done', note };
+	return { triage: 'snoozed', until: now + (c.snoozeHours ?? 24) * 3_600_000, note };
 }
 
 export function shouldPush(c: Classification, settings: Settings): boolean {
@@ -206,8 +223,12 @@ const MATCH_KEYS = new Set([
 	'category',
 	'bot',
 	'label',
-	'draft'
+	'draft',
+	'state'
 ]);
+const STATES = new Set(['open', 'closed', 'merged']);
+/** A rule may snooze for 1 hour to 30 days. */
+const MAX_SNOOZE_HOURS = 30 * 24;
 
 /** Validate user-supplied rules. Returns an error message, or null when valid. */
 export function validateRules(rules: unknown): string | null {
@@ -228,8 +249,21 @@ export function validateRules(rules: unknown): string | null {
 			return `${at}: "then.category" must be action, fyi, or muted.`;
 		if (then.push !== undefined && typeof then.push !== 'boolean')
 			return `${at}: "then.push" must be true or false.`;
-		if (then.category === undefined && then.push === undefined)
-			return `${at}: "then" needs category or push.`;
+		if (when.state && (!Array.isArray(when.state) || when.state.some((x) => !STATES.has(x))))
+			return `${at}: "state" must be a list of open, closed, merged.`;
+		if (then.triage !== undefined && then.triage !== 'done' && then.triage !== 'snooze')
+			return `${at}: "then.triage" must be done or snooze.`;
+		if (
+			then.triage === 'snooze' &&
+			!(
+				Number.isInteger(then.snoozeHours) &&
+				then.snoozeHours! >= 1 &&
+				then.snoozeHours! <= MAX_SNOOZE_HOURS
+			)
+		)
+			return `${at}: "then.snoozeHours" must be a whole number of hours from 1 to ${MAX_SNOOZE_HOURS}.`;
+		if (then.category === undefined && then.push === undefined && then.triage === undefined)
+			return `${at}: "then" needs category, push, or triage.`;
 	}
 	return null;
 }

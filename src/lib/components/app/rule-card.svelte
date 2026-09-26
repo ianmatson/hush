@@ -44,7 +44,13 @@
 		onremove: () => void;
 	} = $props();
 
-	function setThen(patch: { category?: Category | null; push?: boolean | null }) {
+	type Triage = NonNullable<Rule['then']['triage']>;
+	function setThen(patch: {
+		category?: Category | null;
+		push?: boolean | null;
+		triage?: Triage | null;
+		snoozeHours?: number;
+	}) {
 		const then = { ...rule.then };
 		if (patch.category !== undefined) {
 			if (patch.category === null) delete then.category;
@@ -54,6 +60,13 @@
 			if (patch.push === null) delete then.push;
 			else then.push = patch.push;
 		}
+		if (patch.triage !== undefined) {
+			if (patch.triage === null) delete then.triage;
+			else then.triage = patch.triage;
+			if (patch.triage === 'snooze') then.snoozeHours ??= 24;
+			else delete then.snoozeHours;
+		}
+		if (patch.snoozeHours !== undefined) then.snoozeHours = patch.snoozeHours;
 		rule = { ...rule, then };
 	}
 
@@ -68,7 +81,23 @@
 		{ value: true, label: 'Always' },
 		{ value: false, label: 'Never' }
 	];
-	const noResult = $derived(rule.then.category === undefined && rule.then.push === undefined);
+	const TRIAGE: { value: Triage | null; label: string }[] = [
+		{ value: null, label: 'No change' },
+		{ value: 'done', label: 'Move to Done' },
+		{ value: 'snooze', label: 'Snooze' }
+	];
+	const SNOOZE_HOURS: { value: number; label: string }[] = [
+		{ value: 1, label: '1 hour' },
+		{ value: 4, label: '4 hours' },
+		{ value: 24, label: '1 day' },
+		{ value: 72, label: '3 days' },
+		{ value: 168, label: '1 week' }
+	];
+	const noResult = $derived(
+		rule.then.category === undefined &&
+			rule.then.push === undefined &&
+			rule.then.triage === undefined
+	);
 	const CATEGORY_LABEL: Record<string, string> = {
 		action: 'Needs you',
 		fyi: 'FYI',
@@ -176,10 +205,26 @@
 			)}
 			<span class="text-sm">Push</span>
 			{@render segmented(PUSH, rule.then.push ?? null, (v) => setThen({ push: v }), 'Push')}
+			<span class="text-sm">Also</span>
+			{@render segmented(TRIAGE, rule.then.triage ?? null, (v) => setThen({ triage: v }), 'Also')}
+			{#if rule.then.triage === 'snooze'}
+				<span class="text-sm">For</span>
+				{@render segmented(
+					SNOOZE_HOURS,
+					rule.then.snoozeHours ?? 24,
+					(v) => setThen({ snoozeHours: v }),
+					'Snooze for'
+				)}
+			{/if}
 		</div>
+		{#if rule.then.triage}
+			<p class="text-xs text-muted-foreground">
+				When the rule starts to match a thread in your inbox. If you move the thread back, it stays.
+			</p>
+		{/if}
 		{#if noResult}
 			<p class="flex items-center gap-1.5 text-xs text-destructive">
-				<TriangleAlert class="size-3.5" />Choose where it goes, or a push setting.
+				<TriangleAlert class="size-3.5" />Choose where it goes, a push setting, or a move.
 			</p>
 		{/if}
 	</section>
