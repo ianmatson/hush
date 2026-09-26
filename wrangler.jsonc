@@ -39,13 +39,11 @@
 			"new_sqlite_classes": ["Poller"]
 		}
 	],
-	// Only members of these GitHub orgs can sign in (comma-separated). Empty = anyone with a token.
-	// hush-gh.com is the address; www and the old workers.dev address send you there (app.html).
-	// Keep workers.dev on: old links, push links, and feed URLs use it. (With routes set,
-	// wrangler turns it off unless this says otherwise.)
-	"workers_dev": true,
+	// The app and its API; the public site (hush-gh.com) is wrangler.site.jsonc.
+	"workers_dev": false,
 	"preview_urls": false,
 	"routes": [{ "pattern": "app.hush-gh.com", "custom_domain": true }],
+	// Only members of these GitHub orgs can sign in (comma-separated). Empty = anyone with a token.
 	"vars": {
 		"ALLOWED_ORGS": "PostHog"
 	},

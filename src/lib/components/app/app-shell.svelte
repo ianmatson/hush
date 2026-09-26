@@ -30,8 +30,6 @@
 	const signedOut = $derived(me.error instanceof ApiError && me.error.status === 401);
 	const onLogin = $derived(page.url.pathname === '/login');
 	let startChecked = false;
-	// Before the app moved to /inbox, the inbox start page was saved as "/".
-	const isInbox = (path: string) => path === '/' || path === '/inbox';
 
 	$effect(() => {
 		if (signedOut && !onLogin) leaveTo('/login');
@@ -40,7 +38,7 @@
 			startChecked = true;
 			// Start page preference (Settings → Appearance).
 			const start = localStorage.getItem('hush:start');
-			if (page.url.pathname === '/inbox' && !page.url.search && start && !isInbox(start))
+			if (page.url.pathname === '/inbox' && !page.url.search && start && start !== '/inbox')
 				goto(start, { replaceState: true });
 		}
 	});

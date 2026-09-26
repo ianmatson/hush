@@ -2,9 +2,10 @@
 //   dist/app  → app.hush-gh.com: the app shell as index.html (SPA fallback), and the API Worker.
 //   dist/site → hush-gh.com: the prerendered pages, with real 404s. Static files only.
 // Both need the shared JS and CSS in _app/ and the icons.
+import { createHash } from 'node:crypto';
 import {
 	cpSync,
-	mkdirSync,
+	readFileSync,
 	readdirSync,
 	renameSync,
 	rmSync,
@@ -13,7 +14,6 @@ import {
 } from 'node:fs';
 import { join, relative } from 'node:path';
 
-const APP_ORIGIN = 'https://app.hush-gh.com';
 const BUILD = 'build';
 const DIST = 'dist';
 
@@ -30,9 +30,12 @@ rmSync(DIST, { recursive: true, force: true });
 const shell = 'app.html';
 const pages = htmlFiles().filter((f) => f !== shell);
 
-// --- The app: everything but the site's pages; the shell is its index.html.
+// Files only the site uses.
+const siteOnly = [...pages, 'sitemap.xml', 'og.png'];
+
+// --- The app: everything but the site's files; the shell is its index.html.
 const app = join(DIST, 'app');
-cpSync(BUILD, app, { recursive: true, filter: (src) => !pages.includes(relative(BUILD, src)) });
+cpSync(BUILD, app, { recursive: true, filter: (src) => !siteOnly.includes(relative(BUILD, src)) });
 renameSync(join(app, shell), join(app, 'index.html'));
 writeFileSync(
 	join(app, '_redirects'),
@@ -47,23 +50,31 @@ writeFileSync(
 const site = join(DIST, 'site');
 const appOnly = [shell, 'service-worker.js', 'manifest.webmanifest'];
 cpSync(BUILD, site, { recursive: true, filter: (src) => !appOnly.includes(relative(BUILD, src)) });
-// Old app links on hush-gh.com (before the app moved to its subdomain). This list is fixed: new
-// app pages live only on the app host.
-const moved = ['/inbox', '/pulls', '/issues', '/settings', '/login', '/feeds'];
-writeFileSync(
-	join(site, '_redirects'),
-	'# The app moved to its own subdomain; old links go there (the query string is kept).\n' +
-		moved
-			.flatMap((p) => [`${p} ${APP_ORIGIN}${p} 301`, `${p}/* ${APP_ORIGIN}${p}/:splat 301`])
-			.join('\n') +
-		'\n'
+// Security headers. The site loads only its own code: scripts from this origin, and the inline
+// scripts of the built pages by their hash (so an added or third-party script does not run).
+const hashes = new Set(
+	pages.flatMap((f) =>
+		[...readFileSync(join(BUILD, f), 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+			(m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`
+		)
+	)
 );
-// Browsers that had the app installed here still run its service worker: replace it with one that
-// removes itself, so the old push subscriptions end.
+const csp = [
+	"default-src 'self'",
+	`script-src 'self' ${[...hashes].join(' ')}`,
+	"style-src 'self' 'unsafe-inline'",
+	"img-src 'self' data:",
+	"font-src 'self'",
+	"connect-src 'self'",
+	"object-src 'none'",
+	"base-uri 'self'",
+	"form-action 'self'",
+	"frame-ancestors 'none'"
+].join('; ');
 writeFileSync(
-	join(site, 'service-worker.js'),
-	"self.addEventListener('install', () => self.skipWaiting());\n" +
-		"self.addEventListener('activate', (e) => e.waitUntil(self.registration.unregister()));\n"
+	join(site, '_headers'),
+	`/*\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`
 );
-mkdirSync(DIST, { recursive: true });
-console.log(`split: ${pages.length} site pages → dist/site, app shell → dist/app`);
+console.log(
+	`split: ${pages.length} site pages → dist/site (${hashes.size} inline scripts in the CSP), app shell → dist/app`
+);

@@ -1,3 +1,5 @@
-# allow crawling everything by default
+# The public site. The app (app.hush-gh.com) has its own robots.txt that blocks all crawling.
 User-agent: *
-Disallow:
+Allow: /
+
+Sitemap: https://hush-gh.com/sitemap.xml

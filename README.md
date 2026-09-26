@@ -52,7 +52,7 @@ npx wrangler secret put TOKEN_ENC_KEY
 npx wrangler secret put VAPID_PUBLIC_KEY
 npx wrangler secret put VAPID_PRIVATE_KEY
 # optional: npx wrangler secret put VAPID_SUBJECT  (push contact; defaults to the app URL)
-pnpm run deploy                          # build + remote migrations + wrangler deploy
+pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 
 Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users must sign in again). Changing the VAPID keys breaks existing push subscriptions.

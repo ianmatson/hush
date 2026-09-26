@@ -1,14 +1,13 @@
 <script lang="ts">
+	import SiteMeta from '$lib/components/site/site-meta.svelte';
 	import { APP_URL } from '$lib/site';
 </script>
 
-<svelte:head>
-	<title>Hush · GitHub notifications that only show what needs you</title>
-	<meta
-		name="description"
-		content="Hush sorts your GitHub notifications into what needs you and what is only FYI, and pushes only the first."
-	/>
-</svelte:head>
+<SiteMeta
+	title="Hush · GitHub notifications that only show what needs you"
+	description="Hush sorts your GitHub notifications into what needs you and what is only FYI, and pushes only the first."
+	path="/"
+/>
 
 <main class="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-6 px-4 py-16">
 	<div class="flex items-center gap-3">

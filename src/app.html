@@ -5,16 +5,11 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
-			// One address each: the app on app.hush-gh.com (also for the old workers.dev address),
-			// the site on hush-gh.com (also for www). Local development and other hosts stay.
-			(function (h) {
-				var to = /(^|\.)workers\.dev$/.test(h)
-					? 'https://app.hush-gh.com'
-					: h === 'www.hush-gh.com'
-						? 'https://hush-gh.com'
-						: '';
-				if (to) location.replace(to + location.pathname + location.search + location.hash);
-			})(location.hostname);
+			// One address for the site: www opens hush-gh.com at the same path.
+			if (location.hostname === 'www.hush-gh.com')
+				location.replace(
+					'https://hush-gh.com' + location.pathname + location.search + location.hash
+				);
 		</script>
 		<script>
 			// The color theme and light/dark mode (Settings → Appearance), before the first paint.

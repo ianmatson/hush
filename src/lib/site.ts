@@ -1,5 +1,8 @@
+/** The public site (prerendered pages, for people and crawlers). */
+export const SITE_URL = 'https://hush-gh.com';
+
 /**
- * Where the app lives. Production: its own subdomain, apart from the public site (hush-gh.com).
- * Local development serves both from one host, so the links stay relative.
+ * Where the app lives: its own subdomain. Local development serves both from one host, so links
+ * stay relative there.
  */
 export const APP_URL = import.meta.env.DEV ? '' : 'https://app.hush-gh.com';
