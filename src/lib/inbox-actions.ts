@@ -1,6 +1,6 @@
 import type { Component } from 'svelte';
 import { goto } from '$app/navigation';
-import type { ThreadAction } from '$lib/api';
+import type { ActionBody, ThreadAction } from '$lib/api';
 import { buildMenu, type MenuEntry } from '$lib/menu';
 import type { PaletteCommand } from '$lib/palette.svelte';
 import type { Selection } from '$lib/selection.svelte';
@@ -37,7 +37,7 @@ export interface InboxActionContext {
 	byId(id: string): ThreadDTO | undefined;
 	peek(t: ThreadDTO): void;
 	open(t: ThreadDTO, url: string): void;
-	act(ids: string[], action: ThreadAction, body?: unknown): unknown;
+	act(ids: string[], action: ThreadAction, body?: ActionBody): unknown;
 	copyLinks(ids: string[]): unknown;
 	/** Open the snooze sheet (phones) for these threads. */
 	snoozeSheet(ids: string[]): void;

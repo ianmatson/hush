@@ -10,7 +10,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQueries, createQuery } from '@tanstack/svelte-query';
-	import { api, type ThreadAction } from '$lib/api';
+	import { api, type ActionBody, type ThreadAction } from '$lib/api';
 	import { keys, meQuery, queryClient, setCounts, threadsQuery } from '$lib/queries';
 	import { Selection } from '$lib/selection.svelte';
 	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
@@ -217,7 +217,7 @@
 	};
 
 	/** Send an action for many threads, 20 per request. */
-	async function run(ids: string[], action: ThreadAction, body?: unknown) {
+	async function run(ids: string[], action: ThreadAction, body?: ActionBody) {
 		for (let i = 0; i < ids.length; i += BULK_MAX) {
 			const res = await api.actMany(ids.slice(i, i + BULK_MAX), action, body);
 			setCounts(res.counts);
@@ -226,7 +226,7 @@
 		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
 	}
 
-	async function act(ids: string[], action: ThreadAction, body?: unknown) {
+	async function act(ids: string[], action: ThreadAction, body?: ActionBody) {
 		if (!ids.length) return;
 		const threads = ids.map(byId).filter((t): t is ThreadDTO => !!t);
 		if (action === 'read' || action === 'unread') {

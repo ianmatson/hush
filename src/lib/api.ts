@@ -1,19 +1,8 @@
-import type {
-	AlertDTO,
-	Counts,
-	DashKind,
-	DashResponse,
-	FeedDTO,
-	FeedFilter,
-	MeDTO,
-	PeekDTO,
-	Rule,
-	Settings,
-	TeamDTO,
-	ThreadDTO,
-	Turn,
-	View
-} from '$lib/shared/types';
+import { hc, type ClientResponse } from 'hono/client';
+import type { SuccessStatusCode } from 'hono/utils/http-status';
+import type { AppType } from '../../.api-types/worker/index';
+import type { SnoozeEvent } from '$lib/shared/snooze';
+import type { DashKind, FeedFilter, Rule, Settings, Turn, View } from '$lib/shared/types';
 
 export class ApiError extends Error {
 	constructor(
@@ -24,113 +13,108 @@ export class ApiError extends Error {
 	}
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-	const res = await fetch(path, {
-		method,
-		headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-		body: body === undefined ? undefined : JSON.stringify(body),
-		credentials: 'same-origin'
-	});
+// The typed client: paths, inputs, and outputs come from the Worker's routes (worker/index.ts →
+// AppType, emitted as declarations by `pnpm types:api`). A route that changes shape is a type error
+// here and in the pages that use it.
+const client = hc<AppType>('/');
+
+/** The body of a successful (2xx) answer. */
+type Success<R> =
+	R extends ClientResponse<infer T, infer S, infer _F>
+		? S extends SuccessStatusCode
+			? T
+			: never
+		: never;
+
+/** Await a request: the success body, or an ApiError with the server's message. */
+async function ok<R extends ClientResponse<unknown, number, string>>(
+	request: Promise<R>
+): Promise<Success<R>> {
+	const res = await request;
 	const data = await res.json().catch(() => ({}));
 	if (!res.ok)
 		throw new ApiError(
 			res.status,
 			(data as { error?: string }).error ?? `Request failed (${res.status})`
 		);
-	return data as T;
+	return data as Success<R>;
 }
 
-export interface ThreadsResponse {
-	threads: ThreadDTO[];
-	counts: Counts;
+type ThreadsBody = Success<Awaited<ReturnType<typeof client.api.threads.$get>>>;
+export type ThreadsResponse = ThreadsBody & {
 	/** Send back as If-None-Match; the server answers 304 while nothing changes. */
 	etag?: string;
-}
+};
 
 export type ThreadAction =
 	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+/** The body of a thread action: snooze takes a time or a condition. */
+export type ActionBody = { until?: number; event?: SnoozeEvent };
 
 export const api = {
-	me: () => request<MeDTO>('GET', '/api/me'),
-	login: (token: string) => request<{ login: string }>('POST', '/api/auth/login', { token }),
-	logout: () => request('POST', '/api/auth/logout'),
-	deleteAccount: () => request('DELETE', '/api/account'),
+	me: () => ok(client.api.me.$get()),
+	login: (token: string) => ok(client.api.auth.login.$post({ json: { token } })),
+	logout: () => ok(client.api.auth.logout.$post()),
+	deleteAccount: () => ok(client.api.account.$delete()),
 	/** Returns null when the server says nothing changed since `etag` (304). */
 	threads: async (view: View, etag?: string): Promise<ThreadsResponse | null> => {
-		const res = await fetch(`/api/threads?view=${view}`, {
-			headers: etag ? { 'If-None-Match': etag } : {},
-			credentials: 'same-origin'
-		});
+		const res = await client.api.threads.$get(
+			{ query: { view } },
+			{ headers: etag ? { 'If-None-Match': etag } : {} }
+		);
 		if (res.status === 304) return null;
-		const data = await res.json().catch(() => ({}));
-		if (!res.ok) throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`);
+		const data = await ok(Promise.resolve(res));
 		return { ...data, etag: res.headers.get('ETag') ?? undefined };
 	},
-	actMany: (ids: string[], action: ThreadAction, body?: unknown) =>
-		request<{ counts: Counts; updated: number }>(
-			'POST',
-			`/api/threads/bulk/${action}?ids=${ids.map(encodeURIComponent).join(',')}`,
-			body ?? {}
+	actMany: (ids: string[], action: ThreadAction, body?: ActionBody) =>
+		ok(
+			client.api.threads.bulk[':action'].$post({
+				param: { action },
+				query: { ids: ids.join(',') },
+				json: body ?? {}
+			})
 		),
-	act: (id: string, action: ThreadAction, body?: unknown) =>
-		request<{ counts: Counts }>(
-			'POST',
-			`/api/threads/${encodeURIComponent(id)}/${action}`,
-			body ?? {}
-		),
-	sync: () =>
-		request<{
-			lastPollAt: number | null;
-			lastError: string | null;
-			resolved?: { title: string; note: string }[];
-		}>('POST', '/api/sync'),
-	previewRules: (rules: Rule[]) =>
-		request<{
-			perRule: {
-				matches: number;
-				inInbox: number;
-				examples: { title: string; repo: string; category: string }[];
-			}[];
-			moves: { action: number; fyi: number; muted: number };
-			total: number;
-		}>('POST', '/api/rules/preview', { rules }),
-	saveSettings: (s: Partial<Settings>) =>
-		request<{ settings: Settings; reclassified: number }>('PUT', '/api/settings', s),
-	vapidKey: () => request<{ publicKey: string | null }>('GET', '/api/push/vapid-key'),
-	subscriptions: () =>
-		request<{ id: string; endpoint: string; label: string | null; createdAt: number }[]>(
-			'GET',
-			'/api/push/subscriptions'
-		),
+	act: (id: string, action: ThreadAction, body?: ActionBody) =>
+		ok(client.api.threads[':id'][':action'].$post({ param: { id, action }, json: body ?? {} })),
+	sync: () => ok(client.api.sync.$post()),
+	previewRules: (rules: Rule[]) => ok(client.api.rules.preview.$post({ json: { rules } })),
+	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
+	vapidKey: () => ok(client.api.push['vapid-key'].$get()),
+	subscriptions: () => ok(client.api.push.subscriptions.$get()),
 	subscribe: (sub: PushSubscriptionJSON, label: string) =>
-		request('POST', '/api/push/subscribe', { ...sub, label }),
-	unsubscribe: (endpoint: string) => request('POST', '/api/push/unsubscribe', { endpoint }),
-	testPush: () => request<{ sent: number }>('POST', '/api/push/test'),
+		ok(
+			client.api.push.subscribe.$post({
+				json: { endpoint: sub.endpoint, keys: sub.keys as { p256dh: string; auth: string }, label }
+			})
+		),
+	unsubscribe: (endpoint: string) => ok(client.api.push.unsubscribe.$post({ json: { endpoint } })),
+	testPush: () => ok(client.api.push.test.$post()),
 	dashboard: (kind: DashKind, refresh = false) =>
-		request<DashResponse>('GET', `/api/dashboard/${kind}${refresh ? '?refresh=1' : ''}`),
+		ok(
+			client.api.dashboard[':kind'].$get({
+				param: { kind },
+				query: refresh ? { refresh: '1' } : {}
+			})
+		),
 	hide: (items: { id: string; updatedAt: string }[]) =>
-		request('POST', '/api/dashboard/hide', { items }),
-	unhide: (ids: string[]) => request('POST', '/api/dashboard/unhide', { ids }),
+		ok(client.api.dashboard.hide.$post({ json: { items } })),
+	unhide: (ids: string[]) => ok(client.api.dashboard.unhide.$post({ json: { ids } })),
 	arrange: (items: { id: string; updatedAt: string; turn?: Turn | null }[], order: string[]) =>
-		request('POST', '/api/dashboard/arrange', { items, order }),
-	teams: (refresh = false) =>
-		request<{ teams: TeamDTO[]; error?: string }>(
-			'GET',
-			`/api/teams${refresh ? '?refresh=1' : ''}`
-		),
+		ok(client.api.dashboard.arrange.$post({ json: { items, order } })),
+	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
-		request<{ resolved: { title: string; note: string }[] }>('POST', '/api/recheck', {
-			repo,
-			number
-		}),
-	peek: (repo: string, number: number) =>
-		request<PeekDTO>(
-			'GET',
-			`/api/peek/${repo.split('/').map(encodeURIComponent).join('/')}/${number}`
-		),
-	alerts: () => request<AlertDTO[]>('GET', '/api/alerts'),
-	feeds: () => request<FeedDTO[]>('GET', '/api/feeds'),
+		ok(client.api.recheck.$post({ json: { repo, number } })),
+	peek: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.peek[':owner'][':repo'][':number'].$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
+	alerts: () => ok(client.api.alerts.$get()),
+	feeds: () => ok(client.api.feeds.$get()),
 	createFeed: (name: string, filter: FeedFilter) =>
-		request<FeedDTO>('POST', '/api/feeds', { name, filter }),
-	deleteFeed: (id: string) => request('DELETE', `/api/feeds/${id}`)
+		ok(client.api.feeds.$post({ json: { name, filter } })),
+	deleteFeed: (id: string) => ok(client.api.feeds[':id'].$delete({ param: { id } }))
 };

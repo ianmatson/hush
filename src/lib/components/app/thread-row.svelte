@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ThreadDTO } from '$lib/shared/types';
-	import type { ThreadAction } from '$lib/api';
+	import type { ActionBody, ThreadAction } from '$lib/api';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
@@ -37,7 +37,7 @@
 		checked?: boolean;
 		/** Some row is checked: show checkboxes on every row. */
 		selecting?: boolean;
-		onaction: (t: ThreadDTO, action: ThreadAction, body?: unknown) => void;
+		onaction: (t: ThreadDTO, action: ThreadAction, body?: ActionBody) => void;
 		onopen: (t: ThreadDTO, url: string) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;

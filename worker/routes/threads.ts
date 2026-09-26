@@ -19,11 +19,9 @@ import {
 } from '../db';
 import { markThreadDone, markThreadRead, muteThread } from '../github';
 import { MUTED_BY_USER } from '../poller';
-import { routes, type Ctx, poller } from '../app';
+import { routes, type Ctx, poller, json, query } from '../app';
 
 const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all', 'inbox']);
-
-const app = routes();
 
 // --- Threads ----------------------------------------------------------------
 
@@ -57,25 +55,6 @@ function markSeen(c: Ctx, u: UserRow) {
 		])
 	);
 }
-
-app.get('/api/threads', async (c) => {
-	const u = c.get('user');
-	const view = (c.req.query('view') ?? 'action') as View;
-	if (!VIEWS.has(view)) return c.json({ error: 'Unknown view' }, 400);
-	markSeen(c, u);
-	// Nothing changed since the client's copy: answer 304 without reading any threads.
-	const etag = `W/"${u.id}.${u.threads_version}.${view}"`;
-	const noStore = { 'Cache-Control': 'private, no-cache', ETag: etag };
-	if (c.req.header('If-None-Match') === etag) return c.body(null, 304, noStore);
-	const order = view === 'snoozed' ? 'snoozed_until ASC' : 'gh_updated_at DESC';
-	const { results } = await c.env.DB.prepare(
-		`SELECT * FROM threads WHERE ${viewWhere(view)} ORDER BY ${order} LIMIT 300`
-	)
-		.bind(u.id, Date.now())
-		.all<ThreadRow>();
-	const threads: ThreadDTO[] = results.map(toDTO);
-	return c.json({ threads, counts: await counts(c.env, u.id) }, 200, noStore);
-});
 
 type ThreadAction =
 	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
@@ -224,19 +203,39 @@ async function applyThreadAction(c: Ctx, ids: string[], action: ThreadAction) {
 	return c.json({ ok: true, updated: threads.length, counts: await counts(c.env, u.id) });
 }
 
-// Before the :id route, so "bulk" is not read as a thread id.
-app.post('/api/threads/bulk/:action', async (c) => {
-	const ids = c.req.query('ids')?.split(',').filter(Boolean) ?? [];
-	return applyThreadAction(c, ids, c.req.param('action') as ThreadAction);
-});
+/** Snooze takes a time or a condition; the other actions take no body. */
+const snoozeBody = () => json<{ until?: number; event?: SnoozeEvent }>();
 
-app.post('/api/threads/:id/:action', (c) =>
-	applyThreadAction(c, [c.req.param('id')], c.req.param('action') as ThreadAction)
-);
-
-app.post('/api/sync', async (c) => {
-	const u = c.get('user');
-	return c.json(await poller(c.env, u.id).pollNow());
-});
+const app = routes()
+	.get('/api/threads', query<{ view: View }>(), async (c) => {
+		const u = c.get('user');
+		const view = (c.req.valid('query').view ?? 'action') as View;
+		if (!VIEWS.has(view)) return c.json({ error: 'Unknown view' }, 400);
+		markSeen(c, u);
+		// Nothing changed since the client's copy: answer 304 without reading any threads.
+		const etag = `W/"${u.id}.${u.threads_version}.${view}"`;
+		const noStore = { 'Cache-Control': 'private, no-cache', ETag: etag };
+		if (c.req.header('If-None-Match') === etag) return c.body(null, 304, noStore);
+		const order = view === 'snoozed' ? 'snoozed_until ASC' : 'gh_updated_at DESC';
+		const { results } = await c.env.DB.prepare(
+			`SELECT * FROM threads WHERE ${viewWhere(view)} ORDER BY ${order} LIMIT 300`
+		)
+			.bind(u.id, Date.now())
+			.all<ThreadRow>();
+		const threads: ThreadDTO[] = results.map(toDTO);
+		return c.json({ threads, counts: await counts(c.env, u.id) }, 200, noStore);
+	})
+	// Before the :id route, so "bulk" is not read as a thread id.
+	.post('/api/threads/bulk/:action', query<{ ids: string }>(), snoozeBody(), async (c) => {
+		const ids = c.req.valid('query').ids?.split(',').filter(Boolean) ?? [];
+		return applyThreadAction(c, ids, c.req.param('action') as ThreadAction);
+	})
+	.post('/api/threads/:id/:action', snoozeBody(), (c) =>
+		applyThreadAction(c, [c.req.param('id')], c.req.param('action') as ThreadAction)
+	)
+	.post('/api/sync', async (c) => {
+		const u = c.get('user');
+		return c.json(await poller(c.env, u.id).pollNow());
+	});
 
 export default app;

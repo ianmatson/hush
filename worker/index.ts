@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { getCookie } from 'hono/cookie';
 import { sha256 } from './crypto';
 import type { UserRow } from './db';
@@ -57,13 +58,28 @@ app.use('/api/*', async (c, next) => {
 
 app.get('/api/health', (c) => c.json({ ok: true }));
 
-app.get('/api/health', (c) => c.json({ ok: true }));
-
-// Route groups, in the order they were registered before the split.
-for (const group of [auth, threads, settings, push, alerts, subjects, dashboard, feeds])
-	app.route('/', group);
+// Route groups, in the order they were registered before the split. One chain, so that
+// `AppType` carries every route's input and output types (the browser's typed client uses it).
+const api = app
+	.route('/', auth)
+	.route('/', threads)
+	.route('/', settings)
+	.route('/', push)
+	.route('/', alerts)
+	.route('/', subjects)
+	.route('/', dashboard)
+	.route('/', feeds);
+export type AppType = typeof api;
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
+
+// Errors that Hono raises itself (for example a JSON body that does not parse) answer in the same
+// { error } form as the routes. Anything else is a bug: log it, and answer 500.
+app.onError((err, c) => {
+	if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+	console.error('unhandled', err);
+	return c.json({ error: 'Something went wrong.' }, 500);
+});
 
 // Everything else is the SPA (served by the assets binding).
 app.all('*', (c: Ctx) => c.env.ASSETS.fetch(c.req.raw));

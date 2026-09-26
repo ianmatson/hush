@@ -1,11 +1,9 @@
 import type { AlertDTO } from '../../src/lib/shared/types';
 import { routes } from '../app';
 
-const app = routes();
-
 // --- Alert history -----------------------------------------------------------
 
-app.get('/api/alerts', async (c) => {
+const app = routes().get('/api/alerts', async (c) => {
 	const { results } = await c.env.DB.prepare(
 		`SELECT a.id, a.sent_at, a.title, a.body, a.url, t.id AS tid, t.repo, t.title AS ttitle,
             t.html_url, t.triage, t.snoozed_until, t.resolved_note,

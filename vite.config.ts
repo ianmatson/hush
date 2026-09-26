@@ -2,6 +2,11 @@ import { defineConfig } from 'vitest/config';
 import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import type { ProxyOptions } from 'vite';
+
+const WORKER = 'http://localhost:8787';
+// The Worker rejects writes whose Origin is not its own, so the proxy sends its address.
+const toWorker: ProxyOptions = { target: WORKER, changeOrigin: true, headers: { origin: WORKER } };
 
 export default defineConfig({
 	plugins: [
@@ -19,23 +24,13 @@ export default defineConfig({
 	],
 	server: {
 		// `pnpm dev` runs the Worker on :8787 (wrangler dev) next to Vite.
-		proxy: {
-			'/api': 'http://localhost:8787',
-			'/feeds': 'http://localhost:8787'
-		}
+		proxy: { '/api': toWorker, '/feeds': toWorker }
 	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
 			{
 				extends: './vite.config.ts',
-				server: {
-					// `pnpm dev` runs the Worker on :8787 (wrangler dev) next to Vite.
-					proxy: {
-						'/api': 'http://localhost:8787',
-						'/feeds': 'http://localhost:8787'
-					}
-				},
 				test: {
 					name: 'server',
 					environment: 'node',

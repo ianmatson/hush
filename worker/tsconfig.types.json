@@ -1,0 +1,14 @@
+{
+	// Declaration files for the browser's typed API client (src/lib/api.ts): the route types
+	// without the Worker's own globals (D1, Durable Objects), which the browser project lacks.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"rootDir": "..",
+		"outDir": "../.api-types"
+	},
+	"include": [],
+	"files": ["./index.ts"]
+}

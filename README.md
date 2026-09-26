@@ -24,6 +24,7 @@ Static assets  → the SPA (build/)
 - **Limits**: Workers rate-limit bindings (approximate, per location): sign-in 10/min per IP, feeds 30/min per IP, API 300/min per user. Max 10 push devices per user. The poller pauses accounts with no visits for 14 days (90 with push devices); opening Hush resumes it.
 - **Cheap refresh**: every change bumps `users.threads_version`; `/api/threads` answers `304 Not Modified` for a matching ETag without reading threads.
 - Shared logic lives in `src/lib/shared/` and runs in both the Worker and the browser.
+- **Typed API**: the Worker's routes (`worker/routes/`) are one Hono chain, exported as `AppType`. `pnpm types:api` writes its declarations to `.api-types/` (also on install, `pnpm dev`, and `pnpm check`), and `src/lib/api.ts` calls the routes through Hono's typed client. A route that changes its path, input, or output is a type error in the browser code.
 
 ## Local development
 
