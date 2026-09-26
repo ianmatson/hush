@@ -119,5 +119,6 @@ export abstract class PollerAlerts extends PollerBase {
 					...threadIds
 				);
 		});
+		if (logged.length) this.broadcast({ type: 'alerts' });
 	}
 }

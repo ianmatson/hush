@@ -3,6 +3,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import type { MenuEntry } from '$lib/menu';
 	import SnoozeItems from './snooze-items.svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 
 	/**
 	 * The items of a right-click menu (`context`) or a "⋯" menu (`dropdown`), from one list, so
@@ -10,6 +11,8 @@
 	 */
 	let { entries, kind }: { entries: MenuEntry[]; kind: 'context' | 'dropdown' } = $props();
 	const M = $derived(kind === 'context' ? ContextMenu : DropdownMenu);
+	// A submenu beside a phone-wide menu has no room: list its items under a heading instead.
+	const narrow = new MediaQuery('max-width: 639px');
 </script>
 
 {#snippet list(items: MenuEntry[])}
@@ -21,6 +24,13 @@
 				{#if e.icon}<e.icon />{/if}{e.label}
 				{#if e.shortcut && kind === 'context'}<M.Shortcut>{e.shortcut}</M.Shortcut>{/if}
 			</M.Item>
+		{:else if e.type === 'sub' && narrow.current}
+			<M.Group>
+				<M.GroupHeading class="flex items-center gap-2 text-xs text-muted-foreground"
+					>{#if e.icon}<e.icon class="size-3.5" />{/if}{e.label}</M.GroupHeading
+				>
+				{@render list(e.items)}
+			</M.Group>
 		{:else if e.type === 'sub'}
 			<M.Sub>
 				<M.SubTrigger

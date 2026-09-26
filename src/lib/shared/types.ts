@@ -417,3 +417,20 @@ export interface PeekDTO {
 	};
 	timeline: { total: number; items: PeekEntry[] };
 }
+
+/**
+ * A message from the user's Durable Object on the live socket (/api/live): something changed, so
+ * the tab refetches only that (or, for `status`, uses the values in the message).
+ */
+export type LiveMessage =
+	| { type: 'threads' }
+	| { type: 'alerts' }
+	| { type: 'dash'; kind: DashKind }
+	| { type: 'settings' }
+	| {
+			type: 'status';
+			lastPollAt: number | null;
+			nextPollAt: number | null;
+			lastPollError: string | null;
+			ssoHiddenOrgs: number;
+	  };

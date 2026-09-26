@@ -8,6 +8,7 @@ import alerts from './routes/alerts';
 import auth from './routes/auth';
 import dashboard from './routes/dashboard';
 import feeds from './routes/feeds';
+import live from './routes/live';
 import push from './routes/push';
 import settings from './routes/settings';
 import subjects from './routes/subjects';
@@ -68,7 +69,8 @@ const api = app
 	.route('/', alerts)
 	.route('/', subjects)
 	.route('/', dashboard)
-	.route('/', feeds);
+	.route('/', feeds)
+	.route('/', live);
 export type AppType = typeof api;
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));

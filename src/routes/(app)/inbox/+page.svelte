@@ -551,6 +551,16 @@
 				class="h-8 pl-8"
 				aria-label="Filter threads"
 			/>
+			<!-- Under the box, over the list: typing does not move the box or the buttons. -->
+			{#if !saved && query.trim()}
+				<button
+					type="button"
+					transition:fly={{ y: -4, duration: 120 }}
+					class="absolute top-full right-0 z-10 mt-1 flex items-center gap-1.5 rounded-md border bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-md hover:bg-muted"
+					onclick={() => editView(null, query.trim())}
+					><BookmarkPlus class="size-3.5" />Save as view</button
+				>
+			{/if}
 		</div>
 		{#if saved}
 			<Button
@@ -559,10 +569,6 @@
 				aria-label="Edit view {saved.name}"
 				title="Edit view"
 				onclick={() => editView(saved)}><Pencil /></Button
-			>
-		{:else if query.trim()}
-			<Button variant="ghost" size="sm" onclick={() => editView(null, query.trim())}
-				><BookmarkPlus />Save as view</Button
 			>
 		{/if}
 		<Button variant="ghost" size="icon-sm" aria-label="Sync now" onclick={sync} disabled={syncing}>

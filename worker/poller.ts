@@ -66,6 +66,7 @@ export class Poller extends PollerData {
 		await this.ctx.storage.put('lastActive', Date.now());
 		await this.runOnce();
 		await this.schedule();
+		await this.broadcastStatus();
 		const resolved = await this.checkInbox().catch((err) => {
 			console.error('inbox check failed', err);
 			return [];
@@ -103,6 +104,20 @@ export class Poller extends PollerData {
 	async alarm(): Promise<void> {
 		await this.runOnce();
 		await this.schedule();
+		await this.broadcastStatus();
+	}
+
+	/** The poll times and error for open tabs ("Synced 2m ago"), with no request from them. */
+	private async broadcastStatus(): Promise<void> {
+		if (!this.ctx.getWebSockets().length) return;
+		const s = await this.status();
+		this.broadcast({
+			type: 'status',
+			lastPollAt: s.lastPollAt,
+			nextPollAt: s.nextPollAt,
+			lastPollError: s.lastError,
+			ssoHiddenOrgs: s.ssoHiddenOrgs
+		});
 	}
 
 	private runOnce(): Promise<void> {

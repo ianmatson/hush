@@ -1,6 +1,7 @@
 import { QueryCache, QueryClient, queryOptions } from '@tanstack/svelte-query';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { browser } from '$app/environment';
+import { live } from '$lib/live-state.svelte';
 import { api, ApiError, type ThreadsResponse } from '$lib/api';
 import type {
 	Counts,
@@ -65,11 +66,13 @@ export const keys = {
 };
 
 /**
- * The server gets new data only when it polls GitHub (every 5 or 15 minutes). Refresh just after
- * each poll instead of every minute; focus still refreshes at once. Falls back to every minute
- * while the next poll time is unknown or past (a poll can run late).
+ * Without the live socket: the server gets new data only when it polls GitHub (every 5 or 15
+ * minutes), so refresh just after each poll; focus still refreshes at once. Falls back to every
+ * minute while the next poll time is unknown or past (a poll can run late).
  */
-const afterNextPoll = (extra: number) => () => {
+const afterNextPoll = (extra: number) => (): number | false => {
+	// The live socket says what changed; the timer is only for when it is down.
+	if (live.connected) return false;
 	const next = queryClient.getQueryData<MeDTO>(keys.me)?.nextPollAt;
 	const wait = next ? next - Date.now() + extra : 0;
 	return wait > 5_000 ? Math.min(wait, 16 * MIN) : MIN;
@@ -83,7 +86,7 @@ export const meQuery = () =>
 		refetchInterval: afterNextPoll(5_000)
 	});
 
-/** The alert history (the bell): D1 only, refreshed after each poll like the lists. */
+/** The alert history (the bell), refreshed when the live socket says so (or after each poll). */
 export const alertsQuery = () =>
 	queryOptions({
 		queryKey: keys.alerts,

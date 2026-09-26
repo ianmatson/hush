@@ -42,6 +42,29 @@
 	} = $props();
 
 	const wide = new MediaQuery('min-width: 1024px');
+
+	// Phones: swipe the sheet down by its top bar to close it (or tap the handle).
+	const CLOSE_AT = 80;
+	let dragY = $state(0);
+	let dragging = $state(false);
+	let startY = 0;
+	function dragStart(e: PointerEvent) {
+		// Buttons in the bar keep their clicks; the handle itself also drags.
+		const target = e.target as Element;
+		if (target.closest('button, a') && !target.closest('[data-sheet-handle]')) return;
+		startY = e.clientY;
+		dragging = true;
+		(e.currentTarget as Element).setPointerCapture(e.pointerId);
+	}
+	function dragMove(e: PointerEvent) {
+		if (dragging) dragY = Math.max(0, e.clientY - startY);
+	}
+	function dragEnd() {
+		if (!dragging) return;
+		dragging = false;
+		if (dragY > CLOSE_AT) onclose();
+		dragY = 0;
+	}
 	const docked = $derived(open && wide.current);
 
 	function setDocked(on: boolean) {
@@ -88,13 +111,29 @@
 		<Dialog.Content
 			showCloseButton={false}
 			class="top-auto bottom-0 left-0 flex h-[88dvh] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-t-2xl rounded-b-none p-0 pb-[env(safe-area-inset-bottom)] sm:max-w-none data-open:zoom-in-100 data-open:slide-in-from-bottom data-closed:zoom-out-100 data-closed:slide-out-to-bottom"
+			style={dragY ? `transform: translateY(${dragY}px); transition: none` : undefined}
 		>
 			<Dialog.Title class="sr-only">{title}</Dialog.Title>
-			<div class="relative flex h-12 shrink-0 items-center gap-1 border-b px-2">
+			<!-- The top bar is the handle: drag it down to close. -->
+			<div
+				role="presentation"
+				class="relative flex h-12 shrink-0 touch-none items-center gap-1 border-b px-2"
+				onpointerdown={dragStart}
+				onpointermove={dragMove}
+				onpointerup={dragEnd}
+				onpointercancel={dragEnd}
+			>
 				<div class="absolute left-2 flex items-center">
 					{#if open}{@render start?.(false)}{/if}
 				</div>
-				<span class="mx-auto h-1 w-10 rounded-full bg-muted-foreground/30"></span>
+				<button
+					type="button"
+					data-sheet-handle
+					aria-label="Close {label}"
+					class="mx-auto flex h-6 w-16 items-center justify-center"
+					onclick={onclose}
+					><span class="h-1 w-10 rounded-full bg-muted-foreground/30"></span></button
+				>
 				<div class="absolute right-2 flex items-center">
 					{#if open}{@render actions?.('icon')}{/if}
 					<Button variant="ghost" size="icon" aria-label="Close {label}" onclick={onclose}

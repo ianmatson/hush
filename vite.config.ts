@@ -6,7 +6,12 @@ import type { ProxyOptions } from 'vite';
 
 const WORKER = 'http://localhost:8787';
 // The Worker rejects writes whose Origin is not its own, so the proxy sends its address.
-const toWorker: ProxyOptions = { target: WORKER, changeOrigin: true, headers: { origin: WORKER } };
+const toWorker: ProxyOptions = {
+	target: WORKER,
+	changeOrigin: true,
+	ws: true,
+	headers: { origin: WORKER }
+};
 
 export default defineConfig({
 	plugins: [

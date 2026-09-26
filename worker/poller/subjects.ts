@@ -138,6 +138,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 				}))
 			};
 			await this.ctx.storage.put(key, { sig: cached.sig, data });
+			this.broadcast({ type: 'dash', kind });
 		}
 	}
 
