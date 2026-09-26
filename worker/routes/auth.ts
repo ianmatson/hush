@@ -2,7 +2,6 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { MeDTO } from '../../src/lib/shared/types';
 import { allowedOrgs, checkAccess } from '../access';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
-import { parseSettings } from '../db';
 import { getViewer } from '../github';
 import { routes, SESSION_COOKIE, SESSION_DAYS, poller, json } from '../app';
 
@@ -36,7 +35,7 @@ const app = routes()
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
      ON CONFLICT (id) DO UPDATE SET login = excluded.login, name = excluded.name, avatar_url = excluded.avatar_url,
        token_ct = excluded.token_ct, token_iv = excluded.token_iv, scopes = excluded.scopes, updated_at = excluded.updated_at,
-       access_checked_at = excluded.updated_at, last_seen_at = excluded.updated_at`
+       access_checked_at = excluded.updated_at`
 		)
 			.bind(user.id, user.login, user.name, user.avatar_url, ct, iv, scopes.join(','), now)
 			.run();
@@ -75,12 +74,12 @@ const app = routes()
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const status = await poller(c.env, u.id).status();
+		const { settings, status } = await poller(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,
 			avatarUrl: u.avatar_url,
-			settings: parseSettings(u.settings),
+			settings,
 			lastPollAt: status.lastPollAt,
 			nextPollAt: status.nextPollAt,
 			lastPollError: status.lastError,

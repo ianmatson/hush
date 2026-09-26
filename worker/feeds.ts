@@ -1,6 +1,6 @@
 import type { FeedFilter } from '../src/lib/shared/types';
-import { globToRegExp } from '../src/lib/shared/classify';
-import type { Env, ThreadRow } from './db';
+import type { Env } from './db';
+import { factsOf } from './poller/schema';
 
 const esc = (s: string) =>
 	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -12,21 +12,15 @@ export async function renderFeed(env: Env, token: string, origin: string): Promi
 	if (!feed) return new Response('Not found', { status: 404 });
 	const filter = JSON.parse(feed.filter) as FeedFilter;
 
-	const where = ['user_id = ?1', "category != 'muted'"];
-	if (filter.view === 'action' || filter.view === 'fyi') where.push(`category = '${filter.view}'`);
-	const { results } = await env.DB.prepare(
-		`SELECT * FROM threads WHERE ${where.join(' AND ')} ORDER BY gh_updated_at DESC LIMIT 200`
-	)
-		.bind(feed.user_id)
-		.all<ThreadRow>();
-	const repoRe = filter.repo ? globToRegExp(filter.repo) : null;
-	const rows = results.filter((r) => !repoRe || repoRe.test(r.repo)).slice(0, 50);
+	const rows = await env.POLLER.get(env.POLLER.idFromName(String(feed.user_id))).feedThreads(
+		filter
+	);
 
 	const self = `${origin}/feeds/${token}`;
 	const updated = rows[0]?.gh_updated_at ?? new Date(0).toISOString();
 	const entries = rows
 		.map((r) => {
-			const e = r.enrichment ? JSON.parse(r.enrichment) : null;
+			const e = factsOf(r);
 			const num = e?.number ? `#${e.number}` : '';
 			return `  <entry>
     <id>tag:hush,${r.id}:${esc(r.gh_updated_at)}</id>

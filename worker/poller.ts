@@ -1,4 +1,3 @@
-import { getUser, parseSettings, userToken } from './db';
 import { listNotifications } from './github';
 import {
 	MIN,
@@ -10,18 +9,18 @@ import {
 	POLL_IDLE,
 	type PollStatus
 } from './poller/shared';
-import { PollerDashboard } from './poller/dashboard';
+import { PollerData } from './poller/data';
 
 export { MUTED_BY_USER, type PollStatus } from './poller/shared';
 
-export class Poller extends PollerDashboard {
+export class Poller extends PollerData {
 	private running: Promise<void> | null = null;
 	/** Time of the last good poll by this instance. Covers the moment between alarms (no alarm set). */
 	private lastGoodPoll = 0;
 
 	async start(userId: number, origin: string): Promise<void> {
-		// Signing in redoes the first sync (the last 14 days). A new token can see threads the old one
-		// could not, and D1 may have been reset. Existing threads keep their triage state.
+		// Signing in redoes the first sync (the last 14 days): a new token can see threads the old one
+		// could not. Existing threads keep their triage state.
 		await this.ctx.storage.delete(['initialized', 'lastModified', 'pollGap']);
 		await this.ctx.storage.put({
 			userId,
@@ -32,6 +31,8 @@ export class Poller extends PollerDashboard {
 			stopped: false,
 			retryAt: 0
 		});
+		// After stop() (account deleted, then signed in again), the tables are gone.
+		await this.migrate();
 		await this.ctx.storage.setAlarm(Date.now() + 500);
 	}
 
@@ -159,26 +160,22 @@ export class Poller extends PollerDashboard {
 	}
 
 	private async poll(): Promise<void> {
-		const userId = await this.ctx.storage.get<number>('userId');
-		if (!userId) return;
-		const user = await getUser(this.env, userId);
-		if (!user) return this.stop();
-
-		let token: string;
+		const user = await this.account();
+		if (!user) return (await this.ctx.storage.get<number>('userId')) ? this.stop() : undefined;
+		let who;
 		try {
-			token = await userToken(this.env, user);
+			who = await this.who();
 		} catch {
 			return this.fail('Could not decrypt the stored token. Sign in again.', { stop: true });
 		}
-		if (!(await this.recheckAccess(user.id, token, user.access_checked_at))) return;
-		const settings = parseSettings(user.settings);
+		if (!who || !(await this.recheckAccess(user, who.token))) return;
 		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
 		const lastModified = await this.ctx.storage.get<string>('lastModified');
 
 		let page;
 		try {
 			page = await listNotifications(
-				token,
+				who.token,
 				initialized
 					? { ifModifiedSince: lastModified }
 					: {
@@ -210,31 +207,19 @@ export class Poller extends PollerDashboard {
 			retryAt: 0
 		});
 		if (page.status === 304) {
-			await this.wakeSnoozed(userId);
-			return this.watch(userId, user.login, token, settings);
+			await this.wakeSnoozed();
+			return this.watch(who);
 		}
 		await this.putChanged({ ssoHiddenOrgs: page.ssoHiddenOrgs });
-
-		const myTeams = settings.teamReviewsAreAction
-			? (await this.teams()).teams.map((t) => t.slug)
-			: [];
-		const ingested = await this.ingest(
-			userId,
-			user.login,
-			token,
-			settings,
-			page.items,
-			initialized,
-			myTeams
-		);
+		const ingested = await this.ingest(who, page.items, initialized);
 		// Save Last-Modified only after the threads are stored. If ingest fails, the next poll
 		// asks GitHub again instead of getting a 304 and losing those notifications.
 		await this.ctx.storage.put({
 			initialized: true,
 			...(page.lastModified ? { lastModified: page.lastModified } : {})
 		});
-		await this.wakeSnoozed(userId);
-		await this.watch(userId, user.login, token, settings, ingested);
-		await this.cleanup(userId);
+		await this.wakeSnoozed();
+		await this.watch(who, ingested);
+		await this.cleanup();
 	}
 }

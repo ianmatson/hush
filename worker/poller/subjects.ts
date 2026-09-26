@@ -1,112 +1,101 @@
 import { classify, shouldPush } from '../../src/lib/shared/classify';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
-import type { DashResponse, Enrichment, Settings } from '../../src/lib/shared/types';
+import type { DashResponse } from '../../src/lib/shared/types';
 import {
 	dashFactsOf,
 	enrichmentOf,
 	subjectKey,
-	subjectUrls,
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
-import { bumpVersion, type ThreadRow } from '../db';
 import { fetchSubjects } from '../github';
 import type { PushMessage } from '../webpush';
-import { MAX_INDIVIDUAL_PUSHES, type Who, type Resolved, subjectRefOf } from './shared';
 import { PollerAlerts } from './alerts';
+import { subjectRefOf, type ThreadRow } from './schema';
+import { MAX_INDIVIDUAL_PUSHES, type Resolved, type Who } from './shared';
 
-/** The subject store: every GitHub read of a PR or issue goes through recordSubjects, which updates the inbox threads and the cached dashboards. */
+/** SQLite binds at most this many values per statement here; longer IN lists go in chunks. */
+const CHUNK = 90;
+const marks = (n: number) => Array(n).fill('?').join(',');
+const parse = (json: string | undefined) => (json ? (JSON.parse(json) as SubjectFacts) : null);
+
+/** A thread, and its subject's facts now and before this read. */
+type Apply = { row: ThreadRow; fresh: SubjectFacts; before: SubjectFacts | null };
+
+/**
+ * The subject store. Every GitHub read of a PR or issue goes through `record`, which keeps the
+ * one copy of its facts and updates every view of it: the inbox threads and the cached dashboards.
+ */
 export abstract class PollerSubjects extends PollerAlerts {
 	/**
-	 * Look again at these threads' PRs and issues and apply watchOutcome. Writes only threads
-	 * that changed. Returns the ones it moved to Done, for a toast.
+	 * Store fresh facts from GitHub, then update the views. The threads about these subjects get
+	 * the facts whether or not they changed, so a thread that is out of date catches up. The
+	 * dashboard build passes `dash: false` (its cache is already new); ingest passes
+	 * `threads: false` (it writes those threads itself).
 	 */
-	protected async refresh(
-		userId: number,
-		me: string,
-		token: string,
-		settings: Settings,
-		myTeams: string[],
-		rows: ThreadRow[],
-		opts: { quiet?: boolean } = {}
-	): Promise<Resolved[]> {
-		const refs = rows.flatMap((r) => {
-			const ref = subjectRefOf(r);
-			return ref ? [ref] : [];
-		});
-		if (!refs.length) return [];
-		const fresh = await fetchSubjects(token, refs, me);
-		const who: Who = { userId, me, settings, inboxTeams: myTeams };
-		// Store the facts (and update the dashboards); these threads are applied below, also when
-		// their subject did not change, so a thread that missed an update catches up.
-		await this.recordSubjects(who, [...fresh.values()], { threads: false });
-		const byThread = new Map(
-			rows.flatMap((r) => (fresh.has(r.id) ? [[r.id, fresh.get(r.id)!]] : []))
-		);
-		return (await this.applyFacts(who, rows, (r) => byThread.get(r.id), opts)).resolved;
-	}
-
-	/**
-	 * The one write path for PR and issue facts from GitHub. Stores each subject whose facts
-	 * changed (unchanged ones cost one read), then updates every view of it: the cached dashboards
-	 * and the inbox threads about it. Callers that write those threads themselves pass
-	 * `threads: false`; the dashboard build passes `dash: false`.
-	 */
-	protected async recordSubjects(
+	protected async record(
 		who: Who,
 		subjects: SubjectFacts[],
-		opts: { threads?: boolean; dash?: boolean; quiet?: boolean } = {}
-	): Promise<{ changed: SubjectFacts[]; resolved: Resolved[]; wrote: number }> {
-		const db = this.env.DB;
-		const byKey = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
-		const keys = [...byKey.keys()];
+		opts: { dash?: boolean; threads?: boolean; quiet?: boolean } = {}
+	): Promise<{ changed: number; resolved: Resolved[]; wrote: number }> {
+		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
+		const keys = [...fresh.keys()];
 		const stored = new Map<string, string>();
-		for (let i = 0; i < keys.length; i += 90) {
-			const chunk = keys.slice(i, i + 90);
-			const { results } = await db
-				.prepare(
-					`SELECT key, facts FROM subjects WHERE user_id = ? AND key IN (${chunk.map(() => '?').join(',')})`
-				)
-				.bind(who.userId, ...chunk)
-				.all<{ key: string; facts: string }>();
-			for (const r of results) stored.set(r.key, r.facts);
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const r of this.all<{ key: string; facts: string }>(
+				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
+				...chunk
+			))
+				stored.set(r.key, r.facts);
 		}
-		const changed = [...byKey].filter(([k, x]) => stored.get(k) !== JSON.stringify(x));
-		if (!changed.length) return { changed: [], resolved: [], wrote: 0 };
+		const changed = [...fresh].filter(([k, x]) => stored.get(k) !== JSON.stringify(x));
 		const now = Date.now();
-		await db.batch(
-			changed.map(([k, x]) =>
-				db
-					.prepare(
-						`INSERT INTO subjects (user_id, key, facts, changed_at) VALUES (?, ?, ?, ?)
-             ON CONFLICT (user_id, key) DO UPDATE SET facts = excluded.facts, changed_at = excluded.changed_at`
-					)
-					.bind(who.userId, k, JSON.stringify(x), now)
-			)
-		);
-		const subs = changed.map(([, x]) => x);
-		if (opts.dash !== false) await this.patchDashCaches(who, subs);
-		if (opts.threads === false) return { changed: subs, resolved: [], wrote: 0 };
+		this.transaction(() => {
+			for (const [k, x] of changed)
+				this.run(
+					`INSERT INTO subjects (key, facts, changed_at) VALUES (?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET facts = excluded.facts, changed_at = excluded.changed_at`,
+					k,
+					JSON.stringify(x),
+					now
+				);
+		});
+		if (opts.dash !== false)
+			await this.patchDashCaches(
+				who,
+				changed.map(([, x]) => x)
+			);
+		if (opts.threads === false || !keys.length)
+			return { changed: changed.length, resolved: [], wrote: 0 };
 
-		const urls = changed.flatMap(([k]) => subjectUrls(k));
-		const rows: ThreadRow[] = [];
-		for (let i = 0; i < urls.length; i += 90) {
-			const chunk = urls.slice(i, i + 90);
-			const { results } = await db
-				.prepare(
-					`SELECT * FROM threads WHERE user_id = ? AND category != 'muted'
-           AND html_url IN (${chunk.map(() => '?').join(',')})`
-				)
-				.bind(who.userId, ...chunk)
-				.all<ThreadRow>();
-			rows.push(...results);
+		const items: Apply[] = [];
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const row of this.all<ThreadRow>(
+				`SELECT * FROM threads WHERE category != 'muted' AND subject_key IN (${marks(chunk.length)})`,
+				...chunk
+			))
+				items.push({
+					row,
+					fresh: fresh.get(row.subject_key!)!,
+					before: parse(stored.get(row.subject_key!))
+				});
 		}
-		const keyOf = (r: ThreadRow) => {
-			const ref = subjectRefOf(r);
-			return ref ? subjectKey(`${ref.owner}/${ref.repo}`, ref.number) : null;
-		};
-		const out = await this.applyFacts(who, rows, (r) => byKey.get(keyOf(r) ?? ''), opts);
-		return { changed: subs, ...out };
+		const out = await this.applyFacts(who, items, opts);
+		return { changed: changed.length, ...out };
+	}
+
+	/** Read these threads' PRs and issues again (the watcher, the refresh button). */
+	protected async refresh(
+		who: Who,
+		rows: Pick<ThreadRow, 'id' | 'subject_key'>[],
+		opts: { quiet?: boolean } = {}
+	): Promise<Resolved[]> {
+		const refs = rows.flatMap((r) => subjectRefOf(r) ?? []);
+		if (!refs.length) return [];
+		const fetched = await fetchSubjects(who.token, refs, who.me);
+		return (await this.record(who, [...fetched.values()], opts)).resolved;
 	}
 
 	/** Replace changed subjects in the cached dashboards (and drop the ones that closed). */
@@ -156,23 +145,17 @@ export abstract class PollerSubjects extends PollerAlerts {
 	 * Apply fresh facts to inbox threads: classify, then watchOutcome (resolve, reopen, wake).
 	 * Writes only threads that changed, and pushes what now needs you.
 	 */
-	protected async applyFacts(
+	private async applyFacts(
 		who: Who,
-		rows: ThreadRow[],
-		subjectOf: (r: ThreadRow) => SubjectFacts | undefined,
+		items: Apply[],
 		opts: { quiet?: boolean } = {}
 	): Promise<{ resolved: Resolved[]; wrote: number }> {
-		const { userId, me, settings, inboxTeams: myTeams } = who;
-		const db = this.env.DB;
-		const stmts: D1PreparedStatement[] = [];
+		const { me, settings, inboxTeams: myTeams } = who;
+		const writes: (() => void)[] = [];
 		const messages: PushMessage[] = [];
 		const resolved: Resolved[] = [];
-		for (const r of rows) {
-			// No data (deleted, access lost, GitHub error): change nothing. Snooze deadlines still end.
-			const sub = subjectOf(r);
-			if (!sub) continue;
-			const e = enrichmentOf(sub, me);
-			const before = r.enrichment ? (JSON.parse(r.enrichment) as Enrichment) : null;
+		for (const { row: r, fresh, before } of items) {
+			const e = enrichmentOf(fresh, me);
 			const c = classify(
 				{
 					repo: r.repo,
@@ -191,7 +174,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 					category: r.category,
 					kind: r.kind,
 					triage: r.triage,
-					enrichment: before,
+					enrichment: before ? enrichmentOf(before, me) : null,
 					resolvedAt: r.resolved_at,
 					snoozeEvent: r.snooze_event,
 					snoozedAt: r.snoozed_at
@@ -202,10 +185,10 @@ export abstract class PollerSubjects extends PollerAlerts {
 			);
 			const note = out.triage === 'done' ? (out.resolvedNote ?? r.resolved_note) : null;
 			const same =
-				JSON.stringify(e) === r.enrichment &&
 				c.category === r.category &&
 				c.kind === r.kind &&
 				c.summary === r.summary &&
+				c.why === r.why &&
 				c.actionLabel === r.action_label &&
 				c.actionUrl === r.action_url &&
 				(c.rule ?? null) === r.rule &&
@@ -214,31 +197,27 @@ export abstract class PollerSubjects extends PollerAlerts {
 				note === r.resolved_note &&
 				!out.clearSnooze;
 			if (same) continue;
-			stmts.push(
-				db
-					.prepare(
-						`UPDATE threads SET enrichment = ?, category = ?, kind = ?, summary = ?, action_label = ?,
-               action_url = ?, rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
-               snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
-               snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
-             WHERE user_id = ? AND id = ?`
-					)
-					.bind(
-						JSON.stringify(e),
-						c.category,
-						c.kind,
-						c.summary,
-						c.actionLabel,
-						c.actionUrl,
-						c.rule ?? null,
-						out.triage,
-						out.resolvedAt,
-						note,
-						out.clearSnooze ? 1 : 0,
-						out.clearSnooze ? 1 : 0,
-						userId,
-						r.id
-					)
+			writes.push(() =>
+				this.run(
+					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
+             rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
+             snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
+             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
+           WHERE id = ?`,
+					c.category,
+					c.kind,
+					c.summary,
+					c.why,
+					c.actionLabel,
+					c.actionUrl,
+					c.rule ?? null,
+					out.triage,
+					out.resolvedAt,
+					note,
+					out.clearSnooze ? 1 : 0,
+					out.clearSnooze ? 1 : 0,
+					r.id
+				)
 			);
 			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
 			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
@@ -253,11 +232,13 @@ export abstract class PollerSubjects extends PollerAlerts {
 					tag: r.id
 				});
 		}
-		if (stmts.length) await db.batch([...stmts, bumpVersion(this.env, userId)]);
-		if (messages.length && !opts.quiet)
-			await this.send(userId, messages.slice(0, MAX_INDIVIDUAL_PUSHES));
+		if (writes.length) {
+			this.transaction(() => writes.forEach((w) => w()));
+			await this.bumpVersion();
+		}
+		if (messages.length && !opts.quiet) await this.send(messages.slice(0, MAX_INDIVIDUAL_PUSHES));
 		if (resolved.length && !opts.quiet) await this.notifyResolved(resolved);
-		return { resolved, wrote: stmts.length };
+		return { resolved, wrote: writes.length };
 	}
 
 	/**
@@ -272,10 +253,11 @@ export abstract class PollerSubjects extends PollerAlerts {
 		if (!who) return { resolved: [] };
 		const [owner, name] = repo.split('/');
 		const key = subjectKey(repo, number);
-		const fresh = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
-		const sub = fresh.get(key);
+		const fetched = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
+		const sub = fetched.get(key);
 		if (!sub) return { resolved: [] };
-		return { resolved: (await this.applySubject(who, sub)).resolved };
+		const out = await this.record(who, [sub]);
+		return { resolved: out.resolved.map(({ title, note }) => ({ title, note })) };
 	}
 
 	/**
@@ -287,20 +269,9 @@ export abstract class PollerSubjects extends PollerAlerts {
 	): Promise<{ changed: boolean; resolved: { title: string; note: string }[] }> {
 		const who = await this.who();
 		if (!who) return { changed: false, resolved: [] };
-		const out = await this.applySubject(who, sub);
-		return { changed: out.changed, resolved: out.resolved };
-	}
-
-	/** Store one subject, then apply it to its threads (also when it did not change). */
-	protected async applySubject(
-		who: Who,
-		sub: SubjectFacts
-	): Promise<{ changed: boolean; resolved: { title: string; note: string }[] }> {
-		const stored = await this.recordSubjects(who, [sub], { threads: false });
-		const rows = await this.threadsOf(who.userId, subjectKey(sub.repo, sub.number));
-		const out = await this.applyFacts(who, rows, () => sub);
+		const out = await this.record(who, [sub]);
 		return {
-			changed: stored.changed.length > 0 || out.wrote > 0,
+			changed: out.changed > 0 || out.wrote > 0,
 			resolved: out.resolved.map(({ title, note }) => ({ title, note }))
 		};
 	}

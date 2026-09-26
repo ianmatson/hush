@@ -1,6 +1,6 @@
 # Hush
 
-GitHub notifications that only show what needs you. A SvelteKit SPA (shadcn-svelte) on a single Cloudflare Worker, with D1, one Durable Object per user, Web Push, and Atom feeds.
+GitHub notifications that only show what needs you. A SvelteKit app (shadcn-svelte) on Cloudflare Workers: one Durable Object per user that owns that user's data (its own SQLite), D1 for accounts and sessions only, Web Push, and Atom feeds.
 
 ## How it works
 
@@ -8,7 +8,7 @@ GitHub notifications that only show what needs you. A SvelteKit SPA (shadcn-svel
 Poller (Durable Object, one per user, alarm every ~60 s)
   → GET /notifications (If-Modified-Since; a 304 is free)
   → GraphQL enrichment of changed PRs/issues (one batched request)
-  → classify (defaults + your rules)  → D1 threads table
+  → classify (defaults + your rules)  → the user's own SQLite (threads, subjects, alerts…)
   → Web Push for new "Needs you" items
 Worker (Hono)  → /api/* for the SPA, /feeds/:token for Atom
 Static assets  → the SPA (build/)
@@ -22,7 +22,8 @@ Static assets  → the SPA (build/)
 - **Data fetching**: TanStack Query, with the cache persisted to `localStorage` (cleared on sign-out). Tab changes use the cache; reloads show cached data at once and revalidate in the background.
 - **Access**: `ALLOWED_ORGS` in `wrangler.jsonc` (now `PostHog`). Sign-in checks active org membership, and the poller checks again once a day; if GitHub says the user left, Hush deletes the account and its token. A GitHub error never counts as "left".
 - **Limits**: Workers rate-limit bindings (approximate, per location): sign-in 10/min per IP, feeds 30/min per IP, API 300/min per user. Max 10 push devices per user. The poller pauses accounts with no visits for 14 days (90 with push devices); opening Hush resumes it.
-- **Cheap refresh**: every change bumps `users.threads_version`; `/api/threads` answers `304 Not Modified` for a matching ETag without reading threads.
+- **Cheap refresh**: every change bumps the Durable Object's list version; `/api/threads` answers `304 Not Modified` for a matching ETag without reading threads.
+- **Storage**: each user's Durable Object has their threads, subjects (one record of each PR or issue's facts, which every view reads), alerts, push devices, dashboard marks, and settings (`worker/poller/schema.ts`). D1 has only global data: users (identity and encrypted token), sessions, and feeds.
 - Shared logic lives in `src/lib/shared/` and runs in both the Worker and the browser.
 - **Typed API**: the Worker's routes (`worker/routes/`) are one Hono chain, exported as `AppType`. `pnpm types:api` writes its declarations to `.api-types/` (also on install, `pnpm dev`, and `pnpm check`), and `src/lib/api.ts` calls the routes through Hono's typed client. A route that changes its path, input, or output is a type error in the browser code.
 
@@ -64,7 +65,7 @@ Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users m
 | ----------------------- | ---------- | --------------------- |
 | Worker requests         | 100k/day   | ~1.5k                 |
 | Durable Object requests | 100k/day   | ~1.4k (one alarm/min) |
-| D1 rows written         | 100k/day   | only on change        |
+| DO rows written         | 100k/day   | only on change        |
 | KV / Queues             | not used   | —                     |
 
 The poller backs off to 3–5 min when you are idle and have no push devices. With an open tab, the inbox refresh is a 304 (no thread reads) unless something changed.

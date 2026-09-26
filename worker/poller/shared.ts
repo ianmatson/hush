@@ -1,6 +1,4 @@
-import type { Enrichment, Settings } from '../../src/lib/shared/types';
-import type { ThreadRow } from '../db';
-import type { SubjectRef } from '../github';
+import type { Settings } from '../../src/lib/shared/types';
 
 export const MIN = 60_000;
 export const ACTIVE_WINDOW = 15 * MIN;
@@ -45,54 +43,14 @@ export interface PollStatus {
 	resolved?: { title: string; note: string }[];
 }
 
-export type Existing = Pick<
-	ThreadRow,
-	| 'id'
-	| 'gh_updated_at'
-	| 'triage'
-	| 'pushed_updated_at'
-	| 'enrichment'
-	| 'category'
-	| 'rule'
-	| 'snooze_event'
-	| 'snoozed_at'
->;
-
-/** Threads the watcher looks at: open PR and issue work. ?1 user id, ?2 the reopen cutoff. */
-export const WATCHED = `user_id = ?1 AND subject_type IN ('PullRequest', 'Issue') AND category != 'muted'
-  AND (triage = 'inbox' OR (triage = 'snoozed' AND snooze_event IS NOT NULL)
-       OR (triage = 'done' AND resolved_at > ?2))`;
-
-/** What the subject store needs about the user to update their views. */
+/** The signed-in user, as every layer needs them for one piece of work. */
 export interface Who {
 	userId: number;
 	me: string;
+	token: string;
 	settings: Settings;
 	/** Team slugs whose review requests count in the inbox (Settings → Inbox). */
 	inboxTeams: string[];
 }
 
 export type Resolved = { id: string; title: string; note: string };
-
-/** Owner, repo, and number of a stored thread's PR or issue. */
-export function subjectRefOf(
-	r: Pick<ThreadRow, 'id' | 'repo' | 'enrichment' | 'html_url'>
-): SubjectRef | null {
-	const [owner, repo] = r.repo.split('/');
-	const num =
-		(r.enrichment ? (JSON.parse(r.enrichment) as Enrichment).number : undefined) ??
-		Number(r.html_url.match(/\/(?:pull|issues)\/(\d+)$/)?.[1]);
-	return owner && repo && num ? { key: r.id, owner, repo, number: num } : null;
-}
-
-export const clearSnooze = (db: D1Database, userId: number, id: string) =>
-	db
-		.prepare(
-			`UPDATE threads SET snoozed_until = NULL, snooze_event = NULL WHERE user_id = ? AND id = ?`
-		)
-		.bind(userId, id);
-
-/**
- * One Durable Object per user. An alarm polls the GitHub Notifications API, enriches changed
- * threads, classifies them, writes them to D1, and sends Web Push for new Action items.
- */

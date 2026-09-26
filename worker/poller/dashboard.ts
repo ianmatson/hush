@@ -7,7 +7,6 @@ import {
 } from '../../src/lib/shared/dashboard';
 import type { DashKind, DashResponse } from '../../src/lib/shared/types';
 import { dashFactsOf } from '../../src/lib/shared/subject';
-import { getUser, parseSettings, userToken } from '../db';
 import { searchDashboard } from '../github';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
@@ -27,11 +26,9 @@ export abstract class PollerDashboard extends PollerSync {
 	}
 
 	protected async buildDashboard(kind: DashKind, force: boolean): Promise<DashResponse> {
-		const userId = await this.ctx.storage.get<number>('userId');
-		const user = userId ? await getUser(this.env, userId) : null;
-		if (!user) throw new Error('Not signed in.');
-		const settings = parseSettings(user.settings);
-		const { dash, botsAreFyi, reviewResolution } = settings;
+		const who = await this.who();
+		if (!who) throw new Error('Not signed in.');
+		const { dash, botsAreFyi, reviewResolution } = who.settings;
 		const sig = JSON.stringify([
 			botsAreFyi,
 			reviewResolution,
@@ -52,19 +49,14 @@ export abstract class PollerDashboard extends PollerSync {
 		// Each search asks for about its last count (GitHub prices what a search asks for).
 		const countsKey = `dash:counts:${kind}`;
 		const lastCounts = (await this.ctx.storage.get<Record<string, number>>(countsKey)) ?? {};
-		const { hits, errors, counts } = await searchDashboard(
-			await userToken(this.env, user),
-			user.login,
-			queries,
-			lastCounts
-		);
+		const { hits, errors, counts } = await searchDashboard(who.token, who.me, queries, lastCounts);
 		await this.putChanged({ [countsKey]: counts });
 
 		const teamSet = new Set(teams.map((t) => t.slug));
 		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
 		for (const h of hits) {
 			const e = byId.get(h.subject.id) ?? {
-				facts: dashFactsOf(h.subject, user.login, teamSet),
+				facts: dashFactsOf(h.subject, who.me, teamSet),
 				sections: new Set<string>()
 			};
 			e.sections.add(h.section);
@@ -73,14 +65,14 @@ export abstract class PollerDashboard extends PollerSync {
 		const enabled = dash[kind].filter((s) => s.enabled);
 		const items = sortItems(
 			[...byId.values()]
-				.filter(({ facts }) => keepItem(facts, user.login, dash))
+				.filter(({ facts }) => keepItem(facts, who.me, dash))
 				.map(({ facts, sections }) => {
 					const ordered = enabled.filter((s) => sections.has(s.id));
 					return finishItem(
 						facts,
 						ordered.map((s) => s.id),
 						ordered.map((s) => s.name),
-						user.login,
+						who.me,
 						dash.staleDays,
 						Date.now(),
 						{ botsAreFyi, reviewResolution }
@@ -102,13 +94,8 @@ export abstract class PollerDashboard extends PollerSync {
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
-		await this.recordSubjects(
-			{
-				userId: user.id,
-				me: user.login,
-				settings,
-				inboxTeams: settings.teamReviewsAreAction ? [...teamSet] : []
-			},
+		await this.record(
+			who,
 			hits.map((h) => h.subject),
 			{ dash: false }
 		);
