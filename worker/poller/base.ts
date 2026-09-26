@@ -2,7 +2,6 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Settings, TeamDTO } from '../../src/lib/shared/types';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
-import { importFromD1 } from './import-from-d1';
 import { SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
 import { TEAMS_TTL, type Who } from './shared';
 
@@ -26,7 +25,6 @@ export abstract class PollerBase extends DurableObject<Env> {
 		if (((await this.ctx.storage.get<number>('schema')) ?? 0) >= SCHEMA_VERSION) return;
 		this.transaction(() => this.ctx.storage.sql.exec(SCHEMA));
 		await this.ctx.storage.put('schema', SCHEMA_VERSION);
-		await importFromD1(this.env, this.ctx.storage);
 	}
 
 	// --- SQL ------------------------------------------------------------------------------
