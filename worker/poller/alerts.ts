@@ -24,7 +24,7 @@ export abstract class PollerAlerts extends PollerBase {
 								.slice(0, 4)
 								.map(({ c }) => c.summary)
 								.join('\n'),
-							url: `${origin}/`,
+							url: `${origin}/inbox`,
 							tag: 'digest'
 						}
 					];

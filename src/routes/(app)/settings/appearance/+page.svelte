@@ -19,9 +19,13 @@
 		{ id: 'system', label: 'System', icon: Monitor }
 	] as const;
 
-	const starts = { '/': 'Inbox', '/pulls': 'Pull requests', '/issues': 'Issues' } as const;
-	let start = $state<keyof typeof starts>('/');
-	onMount(() => (start = (localStorage.getItem('hush:start') as keyof typeof starts) || '/'));
+	const starts = { '/inbox': 'Inbox', '/pulls': 'Pull requests', '/issues': 'Issues' } as const;
+	let start = $state<keyof typeof starts>('/inbox');
+	// Before the app moved to /inbox, the inbox was saved as "/".
+	onMount(() => {
+		const saved = localStorage.getItem('hush:start');
+		start = saved && saved in starts ? (saved as keyof typeof starts) : '/inbox';
+	});
 	$effect(() => localStorage.setItem('hush:start', start));
 </script>
 

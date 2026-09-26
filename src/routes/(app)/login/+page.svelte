@@ -24,7 +24,7 @@
 		try {
 			await api.login(token.trim());
 			// Full page load: nothing from a previous account may stay in memory or in the cache.
-			leaveTo('/');
+			leaveTo('/inbox');
 		} catch (err) {
 			error = (err as Error).message;
 		} finally {

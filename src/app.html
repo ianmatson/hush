@@ -5,18 +5,30 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
-			// One address: the old workers.dev one and www open hush-gh.com at the same path.
-			// (Local development and other hosts are left alone.)
-			if (/(^|\.)workers\.dev$|^www\.hush-gh\.com$/.test(location.hostname))
-				location.replace(
-					'https://hush-gh.com' + location.pathname + location.search + location.hash
-				);
+			// One address each: the app on app.hush-gh.com (also for the old workers.dev address),
+			// the site on hush-gh.com (also for www). Local development and other hosts stay.
+			(function (h) {
+				var to = /(^|\.)workers\.dev$/.test(h)
+					? 'https://app.hush-gh.com'
+					: h === 'www.hush-gh.com'
+						? 'https://hush-gh.com'
+						: '';
+				if (to) location.replace(to + location.pathname + location.search + location.hash);
+			})(location.hostname);
 		</script>
 		<script>
-			// The color theme (Settings → Appearance), before the first paint.
+			// The color theme and light/dark mode (Settings → Appearance), before the first paint.
+			// mode-watcher does the same once the app runs; pages with no JavaScript (the 404 page)
+			// get it only from here.
 			try {
+				var root = document.documentElement;
 				var t = localStorage.getItem('mode-watcher-theme');
-				if (t) document.documentElement.dataset.theme = t;
+				if (t) root.dataset.theme = t;
+				var m = localStorage.getItem('mode-watcher-mode') || 'system';
+				var light =
+					m === 'light' || (m === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+				root.classList.toggle('dark', !light);
+				root.style.colorScheme = light ? 'light' : 'dark';
 			} catch (e) {}
 		</script>
 		%sveltekit.head%

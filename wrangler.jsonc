@@ -5,13 +5,10 @@
 	"compatibility_date": "2026-07-01",
 	// The SvelteKit SPA build. The Worker runs first only for the API and feeds.
 	"assets": {
-		"directory": "./build",
+		"directory": "./dist/app",
 		"binding": "ASSETS",
 		"not_found_handling": "single-page-application",
-		"run_worker_first": [
-			"/api/*",
-			"/feeds/*"
-		]
+		"run_worker_first": ["/api/*", "/feeds/*"]
 	},
 	"d1_databases": [
 		{
@@ -39,9 +36,7 @@
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_sqlite_classes": [
-				"Poller"
-			]
+			"new_sqlite_classes": ["Poller"]
 		}
 	],
 	// Only members of these GitHub orgs can sign in (comma-separated). Empty = anyone with a token.
@@ -50,10 +45,7 @@
 	// wrangler turns it off unless this says otherwise.)
 	"workers_dev": true,
 	"preview_urls": false,
-	"routes": [
-		{ "pattern": "hush-gh.com", "custom_domain": true },
-		{ "pattern": "www.hush-gh.com", "custom_domain": true }
-	],
+	"routes": [{ "pattern": "app.hush-gh.com", "custom_domain": true }],
 	"vars": {
 		"ALLOWED_ORGS": "PostHog"
 	},

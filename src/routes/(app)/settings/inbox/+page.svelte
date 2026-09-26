@@ -274,7 +274,7 @@
 							variant="ghost"
 							size="icon-sm"
 							aria-label="Edit {r.view.name}"
-							href="/?view=v:{r.view.id}&edit=1"><Pencil /></Button
+							href="/inbox?view=v:{r.view.id}&edit=1"><Pencil /></Button
 						>
 						<Button
 							variant="ghost"

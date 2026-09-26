@@ -83,7 +83,7 @@
 					where: v.label,
 					run: () =>
 						t.number
-							? peek({ page: 'inbox', view: v.id, id: t.id }, `/?view=${v.id}`)
+							? peek({ page: 'inbox', view: v.id, id: t.id }, `/inbox?view=${v.id}`)
 							: window.open(t.htmlUrl, '_blank', 'noopener')
 				}))
 		);
@@ -134,7 +134,7 @@
 						? BellOff
 						: Inbox) as Component,
 			keywords: ['inbox', 'view'],
-			run: () => goto(`/?view=${v.id}`)
+			run: () => goto(`/inbox?view=${v.id}`)
 		})),
 		...(me.data?.settings.views ?? []).map((v) => ({
 			id: `go:view:${v.id}`,
@@ -142,7 +142,7 @@
 			where: 'Saved view',
 			icon: Bookmark as Component,
 			keywords: ['view', 'saved', v.query ?? ''],
-			run: () => goto(`/?view=v:${v.id}`)
+			run: () => goto(`/inbox?view=v:${v.id}`)
 		})),
 		{
 			id: 'go:pulls',

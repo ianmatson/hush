@@ -29,12 +29,12 @@
 	const newAlerts = $derived(alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0);
 
 	const links = $derived([
-		{ href: '/', label: 'Inbox', badge: inboxCount.data },
+		{ href: '/inbox', label: 'Inbox', badge: inboxCount.data },
 		{ href: '/pulls', label: 'Pull requests', badge: prTurns.data },
 		{ href: '/issues', label: 'Issues', badge: issueTurns.data }
 	]);
 	const active = (href: string) =>
-		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	// Phones: one menu instead of three tabs. On settings pages it reads "Go to".
 	const current = $derived(links.find((l) => active(l.href)));
 	const othersWaiting = $derived(links.some((l) => l !== current && l.badge));
@@ -47,7 +47,7 @@
 
 <header class="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
 	<div class="mx-auto flex h-12 max-w-4xl items-center gap-4 px-4">
-		<a href="/" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
+		<a href="/inbox" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>

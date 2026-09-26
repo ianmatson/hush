@@ -99,7 +99,7 @@ app.post('/api/push/test', async (c) => {
 				{
 					title: 'Hush is connected',
 					body: 'Push notifications work on this device.',
-					url: `${origin}/`,
+					url: `${origin}/inbox`,
 					tag: 'test'
 				},
 				vapid

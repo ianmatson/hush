@@ -355,10 +355,12 @@
 			'/': () => searchEl?.focus(),
 			'?': () => (helpOpen = true)
 		};
-		VIEWS.forEach((v, i) => (keys[String(i + 1)] = () => goto(`/?view=${v.id}`)));
+		VIEWS.forEach((v, i) => (keys[String(i + 1)] = () => goto(`/inbox?view=${v.id}`)));
 		savedViews
 			.slice(0, 4)
-			.forEach((v, i) => (keys[String(VIEWS.length + i + 1)] = () => goto(`/?view=v:${v.id}`)));
+			.forEach(
+				(v, i) => (keys[String(VIEWS.length + i + 1)] = () => goto(`/inbox?view=v:${v.id}`))
+			);
 		const fn = keys[e.key];
 		if (fn) {
 			e.preventDefault();
@@ -421,13 +423,13 @@
 		const v = saved;
 		untrack(() => {
 			editView(v);
-			goto(`/?view=v:${v.id}`, { replaceState: true, noScroll: true });
+			goto(`/inbox?view=v:${v.id}`, { replaceState: true, noScroll: true });
 		});
 	});
 	const tabs = $derived<ViewTab[]>([
 		...VIEWS.map((v) => ({
 			key: v.id,
-			href: `/?view=${v.id}`,
+			href: `/inbox?view=${v.id}`,
 			label: v.label,
 			count: count(v.id),
 			strong: v.id === 'action',
@@ -435,7 +437,7 @@
 		})),
 		...savedViews.map((v) => ({
 			key: `v:${v.id}`,
-			href: `/?view=v:${v.id}`,
+			href: `/inbox?view=v:${v.id}`,
 			label: v.name,
 			count: viewCount(v),
 			active: saved?.id === v.id,
@@ -477,14 +479,14 @@
 			viewEditorOpen = false;
 			if (!v.id) {
 				query = '';
-				goto(`/?view=v:${clean.id}`);
+				goto(`/inbox?view=v:${clean.id}`);
 			}
 		}
 	}
 	async function deleteView(id: string) {
 		if (await saveSettings({ views: savedViews.filter((x) => x.id !== id) }, 'View deleted')) {
 			viewEditorOpen = false;
-			goto('/?view=action');
+			goto('/inbox?view=action');
 		}
 	}
 	// Suggestions for the view's repository and author conditions.
@@ -614,7 +616,7 @@
 						<p class="font-medium">Nothing needs you right now.</p>
 						<p class="mt-1 text-sm text-muted-foreground">
 							{#if counts.fyi}There {counts.fyi === 1 ? 'is' : 'are'}
-								<a class="underline" href="/?view=fyi"
+								<a class="underline" href="/inbox?view=fyi"
 									>{counts.fyi} FYI {counts.fyi === 1 ? 'item' : 'items'}</a
 								>, if you want them.{:else}Hush tells you when that changes.{/if}
 						</p>

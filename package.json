@@ -4,9 +4,9 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "mkdir -p build && concurrently -k -n worker,web -c yellow,cyan \"wrangler dev --port 8787\" \"vite dev\"",
-		"build": "vite build",
-		"preview": "vite build && wrangler dev --port 8787",
+		"dev": "mkdir -p dist/app && concurrently -k -n worker,web -c yellow,cyan \"wrangler dev --port 8787\" \"vite dev\"",
+		"build": "vite build && node scripts/split-build.mjs",
+		"preview": "pnpm build && wrangler dev --port 8787",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p worker/tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -16,7 +16,7 @@
 		"format": "prettier --write .",
 		"db:migrate:local": "wrangler d1 migrations apply hush --local",
 		"db:migrate:remote": "wrangler d1 migrations apply hush --remote",
-		"deploy": "vite build && wrangler d1 migrations apply hush --remote && wrangler deploy",
+		"deploy": "pnpm build && wrangler d1 migrations apply hush --remote && wrangler deploy && wrangler deploy -c wrangler.site.jsonc",
 		"keys": "node scripts/gen-keys.mjs",
 		"cf-typegen": "wrangler types"
 	},

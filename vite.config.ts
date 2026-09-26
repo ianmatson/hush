@@ -12,7 +12,9 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter({ fallback: 'index.html' })
+			adapter: adapter({ fallback: 'app.html' }),
+			// Absolute asset URLs: the 404 page and the app shell are served at many paths.
+			paths: { relative: false }
 		})
 	],
 	server: {
@@ -28,13 +30,13 @@ export default defineConfig({
 			{
 				extends: './vite.config.ts',
 				server: {
-		// `pnpm dev` runs the Worker on :8787 (wrangler dev) next to Vite.
-		proxy: {
-			'/api': 'http://localhost:8787',
-			'/feeds': 'http://localhost:8787'
-		}
-	},
-	test: {
+					// `pnpm dev` runs the Worker on :8787 (wrangler dev) next to Vite.
+					proxy: {
+						'/api': 'http://localhost:8787',
+						'/feeds': 'http://localhost:8787'
+					}
+				},
+				test: {
 					name: 'server',
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}', 'worker/**/*.{test,spec}.ts'],

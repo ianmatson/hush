@@ -2,29 +2,17 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { ModeWatcher } from 'mode-watcher';
-	import { PersistQueryClientProvider } from '@tanstack/svelte-query-persist-client';
-	import { Toaster } from '$lib/components/ui/sonner';
-	import * as Tooltip from '$lib/components/ui/tooltip';
-	import AppShell from '$lib/components/app/app-shell.svelte';
-	import { persistOptions, queryClient } from '$lib/queries';
-	import { ui } from '$lib/ui.svelte';
 
+	// Shared by the public pages and the app; the app's providers are in (app)/+layout.svelte.
 	let { children } = $props();
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<link rel="manifest" href="/manifest.webmanifest" />
 	<link rel="apple-touch-icon" href="/icon-192.png" />
 	<meta name="theme-color" content="#0a0a0a" />
 	<title>Hush</title>
 </svelte:head>
 
 <ModeWatcher />
-<!-- 8 s: long enough to read a toast and press Undo. -->
-<Toaster position="bottom-center" duration={8000} offset={{ bottom: ui.bulkBarOpen ? 92 : 24 }} />
-<PersistQueryClientProvider client={queryClient} {persistOptions}>
-	<Tooltip.Provider delayDuration={300}>
-		<AppShell>{@render children()}</AppShell>
-	</Tooltip.Provider>
-</PersistQueryClientProvider>
+{@render children()}

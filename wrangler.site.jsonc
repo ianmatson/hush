@@ -1,0 +1,17 @@
+// The public site (hush-gh.com): prerendered pages from dist/site, static files only (no Worker
+// code, so no requests count against the Workers plan). The app and its API are wrangler.jsonc.
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "hush-site",
+	"compatibility_date": "2026-07-01",
+	"assets": {
+		"directory": "./dist/site",
+		"not_found_handling": "404-page"
+	},
+	"workers_dev": false,
+	"preview_urls": false,
+	"routes": [
+		{ "pattern": "hush-gh.com", "custom_domain": true },
+		{ "pattern": "www.hush-gh.com", "custom_domain": true }
+	]
+}
