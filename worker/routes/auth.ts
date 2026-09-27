@@ -1,9 +1,8 @@
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
-import { allowedOrgs, checkAccess } from '../access';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
-import { appToken, getUser, userToken, type Env } from '../db';
+import { appToken, getUser, type Env } from '../db';
 import { orgGaps } from '../org-access';
 import { getViewer, type GhUser } from '../github';
 import { routes, SESSION_COOKIE, SESSION_DAYS, poller, json, type AppEnv } from '../app';
@@ -60,10 +59,9 @@ async function saveUser(
 		writes.push(
 			db
 				.prepare(
-					`UPDATE users SET token_ct = ?, token_iv = ?, scopes = ?, token_source = ?, access_checked_at = ?
-         WHERE id = ?`
+					`UPDATE users SET token_ct = ?, token_iv = ?, scopes = ?, token_source = ? WHERE id = ?`
 				)
-				.bind(ct, iv, token.scopes.join(','), token.source, now, user.id)
+				.bind(ct, iv, token.scopes.join(','), token.source, user.id)
 		);
 	}
 	if (signIn) {
@@ -161,19 +159,6 @@ const app = routes()
 		// Your own token stays in use, unless you asked for the app's token again.
 		const existing = await getUser(c.env, viewer.user.id);
 		const keepOwn = existing?.token_source === 'own' && use !== 'app';
-		const orgs = allowedOrgs(c.env);
-		let access = await checkAccess(token, orgs);
-		// An org that has not approved the app hides your membership from its token: then the
-		// custom token you already have decides (also when you switch back from it).
-		if (!access.ok && access.reason === 'error' && existing?.token_source === 'own')
-			access = await checkAccess(await userToken(c.env, existing), orgs);
-		if (!access.ok)
-			return fail(
-				access.reason === 'error'
-					? `${access.message} If your org has not approved Hush yet, ask an owner to approve it on GitHub.`
-					: access.message
-			);
-
 		await saveUser(
 			c.env,
 			viewer.user,
@@ -204,8 +189,6 @@ const app = routes()
 				{ error: `This token is for @${viewer.user.login}. Add a token for @${u.login}.` },
 				400
 			);
-		const access = await checkAccess(token, allowedOrgs(c.env));
-		if (!access.ok) return c.json({ error: access.message }, 403);
 		await saveUser(c.env, viewer.user, { value: token, scopes: viewer.scopes, source: 'own' });
 		// Sync again: the new token can see threads the old one could not.
 		await poller(c.env, u.id).start(u.id, new URL(c.req.url).origin);

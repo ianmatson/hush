@@ -21,7 +21,6 @@ Static assets  → the SPA (build/)
 - **Pull requests / Issues tabs**: live GitHub searches ("sections"), grouped by whose turn it is: _Your turn_, _Your team's turn_, _Waiting on others_, _Other_. `@me` is you; `@team` runs a section once per tracked team. Edit sections, teams, scope, and filters in Settings → PRs & issues. "Hide until it changes" (`E`) hides an item until its `updatedAt` moves. The Poller caches each dashboard for 5 minutes and your teams for 6 hours.
 - **Data fetching**: TanStack Query, with the cache persisted to `localStorage` (cleared on sign-out). Tab changes use the cache; reloads show cached data at once and revalidate in the background.
 - **Sign-in**: Sign in with GitHub (an OAuth app, scopes `notifications repo read:org`; the Notifications API accepts only classic and OAuth tokens). The token is stored encrypted. In Settings → General, a user can add their own token for the same account (for example `gh auth token`), for orgs that have not approved the app; signing in again keeps it.
-- **Access**: the `ORG_ALLOWLIST` secret (comma-separated orgs; not set = anyone with a GitHub account). Sign-in checks active org membership, and the poller checks again once a day; if GitHub says the user left, Hush deletes the account and its token. A GitHub error never counts as "left".
 - **Limits**: Workers rate-limit bindings (approximate, per location): sign-in 10/min per IP, feeds 30/min per IP, API 300/min per user. Max 10 push devices per user. The poller pauses accounts with no visits for 14 days (90 with push devices); opening Hush resumes it.
 - **Cheap refresh**: every change bumps the Durable Object's list version; `/api/threads` answers `304 Not Modified` for a matching ETag without reading threads.
 - **Storage**: each user's Durable Object has their threads, subjects (one record of each PR or issue's facts, which every view reads), alerts, push devices, dashboard marks, and settings (`worker/poller/schema.ts`). D1 has only global data: users (identity and encrypted token), sessions, and feeds.
@@ -62,7 +61,6 @@ pnpm keys                                # prints three secrets
 # GitHub OAuth app: callback https://app.hush-gh.com/api/auth/callback; its client ID goes in
 # wrangler.jsonc (GITHUB_CLIENT_ID), the secret here:
 npx wrangler secret put GITHUB_CLIENT_SECRET
-# optional: npx wrangler secret put ORG_ALLOWLIST  (only members of these orgs may sign in)
 npx wrangler secret put TOKEN_ENC_KEY
 npx wrangler secret put VAPID_PUBLIC_KEY
 npx wrangler secret put VAPID_PRIVATE_KEY

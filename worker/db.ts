@@ -18,8 +18,6 @@ export interface Env {
 	VAPID_PRIVATE_KEY: string;
 	/** Optional push contact (mailto: or https:). Defaults to the app's own URL. */
 	VAPID_SUBJECT?: string;
-	/** Comma-separated GitHub orgs whose members may use Hush. Empty = anyone with a token. */
-	ORG_ALLOWLIST?: string;
 	// Rate limiters (optional, so tests and old configs still work).
 	AUTH_LIMIT?: RateLimit;
 	FEED_LIMIT?: RateLimit;
@@ -39,12 +37,11 @@ export interface UserRow {
 	/** The token from Sign in with GitHub, also while a custom token is in use (null before). */
 	app_token_ct: string | null;
 	app_token_iv: string | null;
-	access_checked_at: number | null;
 }
 
 export function getUser(env: Env, id: number) {
 	return env.DB.prepare(
-		'SELECT id, login, name, avatar_url, token_ct, token_iv, scopes, token_source, app_token_ct, app_token_iv, access_checked_at FROM users WHERE id = ?'
+		'SELECT id, login, name, avatar_url, token_ct, token_iv, scopes, token_source, app_token_ct, app_token_iv FROM users WHERE id = ?'
 	)
 		.bind(id)
 		.first<UserRow>();

@@ -3,8 +3,6 @@ import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { Classification, ThreadFacts } from '../../src/lib/shared/types';
 import { enrichmentOf, subjectKey } from '../../src/lib/shared/subject';
-import type { UserRow } from '../db';
-import { allowedOrgs, checkAccess } from '../access';
 import {
 	fetchSubjects,
 	laterRunPassed,
@@ -20,7 +18,6 @@ import { enrichmentFor, WATCHED, type ThreadRow, type ThreadWithFacts } from './
 import {
 	MIN,
 	DAY,
-	ACCESS_RECHECK,
 	WATCH_EVERY,
 	WATCH_BATCH,
 	SYNC_DAYS,
@@ -373,32 +370,6 @@ export abstract class PollerSync extends PollerSubjects {
 			Date.now()
 		);
 		if (n) await this.bumpVersion();
-	}
-
-	/**
-	 * Once a day, check the user is still in an allowed org. If GitHub says no, delete the account
-	 * (the stored token in D1, and all of this Durable Object's data). A GitHub error is not proof,
-	 * so it changes nothing.
-	 */
-	protected async recheckAccess(user: UserRow, token: string): Promise<boolean> {
-		const orgs = allowedOrgs(this.env);
-		if (
-			!orgs.length ||
-			(user.access_checked_at && Date.now() - user.access_checked_at < ACCESS_RECHECK)
-		)
-			return true;
-		const access = await checkAccess(token, orgs);
-		if (access.ok) {
-			await this.env.DB.prepare('UPDATE users SET access_checked_at = ? WHERE id = ?')
-				.bind(Date.now(), user.id)
-				.run();
-			return true;
-		}
-		if (access.reason === 'error') return true;
-		console.log(`access revoked for user ${user.id}: ${access.message}`);
-		await this.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
-		await this.stop();
-		return false;
 	}
 
 	/**

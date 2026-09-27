@@ -59,7 +59,6 @@
 	// Secrets (wrangler secret put …; locally in .dev.vars):
 	//   TOKEN_ENC_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY — generate with `pnpm keys`.
 	//   GITHUB_CLIENT_SECRET — from the GitHub OAuth app.
-	//   ORG_ALLOWLIST (optional) — comma-separated orgs whose members may sign in.
 	//   VAPID_SUBJECT (optional) — push contact; defaults to the app's own URL.
 	"observability": {
 		"enabled": true

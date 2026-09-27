@@ -184,7 +184,7 @@ export class Poller extends PollerData {
 		} catch {
 			return this.fail('Could not decrypt the stored token. Sign in again.', { stop: true });
 		}
-		if (!who || !(await this.recheckAccess(user, who.token))) return;
+		if (!who) return;
 		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
 		const lastModified = await this.ctx.storage.get<string>('lastModified');
 

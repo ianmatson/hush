@@ -9,7 +9,6 @@ export const DAY = 24 * 60 * MIN;
 // Stop polling for accounts nobody uses. Opening Hush (or signing in) starts it again.
 export const PAUSE_AFTER_NO_PUSH = 14 * DAY;
 export const PAUSE_AFTER_WITH_PUSH = 90 * DAY;
-export const ACCESS_RECHECK = DAY;
 // The inbox watcher: how often it looks again at open PR and issue threads (see watch()), and
 // how many threads it checks each time (two GraphQL requests of 40).
 export const WATCH_EVERY = 15 * MIN;
