@@ -55,8 +55,8 @@ export const api = {
 	me: () => ok(client.api.me.$get()),
 	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
-	/** Which orgs hide their data from your sign-in (a check from the last minute is reused). */
-	orgAccess: () => ok(client.api.account['org-access'].$get()),
+	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */
+	orgs: () => ok(client.api.account.orgs.$get()),
 	logout: () => ok(client.api.auth.logout.$post()),
 	deleteAccount: () => ok(client.api.account.$delete()),
 	/** Returns null when the server says nothing changed since `etag` (304). */

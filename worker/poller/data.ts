@@ -23,7 +23,6 @@ import {
 import type {
 	AlertDTO,
 	Counts,
-	OrgGap,
 	DashItem,
 	DashKind,
 	DashResponse,
@@ -83,22 +82,9 @@ export abstract class PollerData extends PollerDashboard {
 	abstract status(): Promise<PollStatus>;
 
 	/** For /api/me: your settings and the poll status, in one call. */
-	async me(): Promise<{ settings: Settings; status: PollStatus; orgGaps: OrgGap[] }> {
-		const [settings, status, access] = await Promise.all([
-			this.settings(),
-			this.status(),
-			this.orgAccess()
-		]);
-		return { settings, status, orgGaps: access?.gaps ?? [] };
-	}
-
-	/** The last org access check (worker/org-access.ts), from sign-in or the settings page. */
-	async orgAccess(): Promise<{ gaps: OrgGap[]; checkedAt: number } | null> {
-		return (await this.ctx.storage.get<{ gaps: OrgGap[]; checkedAt: number }>('orgAccess')) ?? null;
-	}
-
-	async setOrgAccess(gaps: OrgGap[]): Promise<void> {
-		await this.ctx.storage.put('orgAccess', { gaps, checkedAt: Date.now() });
+	async me(): Promise<{ settings: Settings; status: PollStatus }> {
+		const [settings, status] = await Promise.all([this.settings(), this.status()]);
+		return { settings, status };
 	}
 
 	/** Your GitHub login; the routes call only after the session check, so the account exists. */

@@ -3,7 +3,6 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
 import { appToken, getUser, type Env } from '../db';
-import { orgGaps } from '../org-access';
 import { getViewer, gh, type GhUser } from '../github';
 import { routes, SESSION_COOKIE, SESSION_DAYS, poller, json, type AppEnv } from '../app';
 
@@ -211,49 +210,24 @@ const app = routes()
 		return c.json({ ok: true });
 	})
 	/**
-	 * Check now which orgs hide their data from your sign-in (Settings → General → GitHub access).
-	 * A check from the last minute is reused, so opening the page often costs nothing.
+	 * The orgs your GitHub sign-in can see (Settings → GitHub access, and the note after sign-in).
+	 * GitHub omits orgs that have not approved Hush, so this is only what Hush sees.
 	 */
-	.get('/api/account/org-access', async (c) => {
-		const u = c.get('user');
-		const token = await appToken(c.env, u);
+	.get('/api/account/orgs', async (c) => {
+		const token = await appToken(c.env, c.get('user'));
 		if (!token) return c.json({ available: false } satisfies OrgAccess);
-		const dobj = poller(c.env, u.id);
-		const last = await dobj.orgAccess();
-		const fresh = last && Date.now() - last.checkedAt < 60_000;
-		if (!fresh) await dobj.setOrgAccess(await orgGaps(token));
-		const now = fresh ? last : (await dobj.orgAccess())!;
+		const res = await gh(token, '/user/orgs?per_page=100');
+		if (!res.ok) return c.json({ error: `GitHub returned ${res.status} for your orgs.` }, 502);
+		const orgs = ((await res.json()) as { login: string }[]).map((o) => o.login);
 		return c.json({
 			available: true,
-			gaps: now.gaps,
-			checkedAt: now.checkedAt,
+			orgs,
 			approveUrl: `https://github.com/settings/connections/applications/${c.env.GITHUB_CLIENT_ID}`
 		} satisfies OrgAccess);
 	})
-	/**
-	 * TEMP (2026-09-27): what GitHub shows the sign-in token about your orgs (GraphQL, and the
-	 * public profile), to learn if orgs that restrict the app can be detected. Org names and
-	 * errors only. Remove after the test.
-	 */
-	.get('/api/debug/orgs', async (c) => {
-		const u = c.get('user');
-		const token = await appToken(c.env, u);
-		if (!token) return c.json({ error: 'No sign-in token stored. Sign in with GitHub again.' });
-		const query = `{ viewer { organizations(first: 100) { totalCount nodes { login } } } }`;
-		const gql = await gh(token, '/graphql', { method: 'POST', body: JSON.stringify({ query }) });
-		const pub = await gh(token, `/users/${encodeURIComponent(u.login)}/orgs?per_page=100`);
-		const rest = await gh(token, '/user/orgs?per_page=100');
-		const logins = async (r: Response) =>
-			r.ok ? ((await r.json()) as { login: string }[]).map((o) => o.login) : `HTTP ${r.status}`;
-		return c.json({
-			graphql: { status: gql.status, body: await gql.json().catch(() => null) },
-			publicProfileOrgs: await logins(pub),
-			userOrgs: await logins(rest)
-		});
-	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status, orgGaps: gaps } = await poller(c.env, u.id).me();
+		const { settings, status } = await poller(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,
@@ -264,8 +238,7 @@ const app = routes()
 			lastPollError: status.lastError,
 			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
 			scopes: u.scopes ? u.scopes.split(',') : [],
-			tokenSource: u.token_source,
-			orgGaps: gaps
+			tokenSource: u.token_source
 		};
 		return c.json(me);
 	});

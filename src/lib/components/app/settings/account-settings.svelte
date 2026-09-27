@@ -4,8 +4,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import type { OrgAccess } from '$lib/shared/types';
-	import { checkOrgAccess, orgWarning, setOrgWarningOff } from '$lib/org-warning.svelte';
+	import { loadOrgs, orgNote, setOrgNoteOff } from '$lib/org-note.svelte';
 	import { keys, leaveTo, meQuery, queryClient } from '$lib/queries';
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
@@ -14,8 +13,6 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import KeyRound from '@lucide/svelte/icons/key-round';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import Check from '@lucide/svelte/icons/check';
 
 	const me = createQuery(meQuery);
 
@@ -24,24 +21,26 @@
 		leaveTo('/login');
 	}
 
-	// Which orgs hide their data from your sign-in: checked when this page opens, unless this
-	// browser said "Don't show again" (then only with "Check now").
-	let access = $state<OrgAccess | null>(null);
-	let checking = $state(false);
-	async function runCheck() {
-		checking = true;
+	// The orgs your sign-in can see: loaded when this page opens, unless this browser said
+	// "Don't show again" (then only on request). GitHub omits orgs that have not approved Hush.
+	const access = $derived(orgNote.access);
+	let loading = $state(false);
+	let loadError = $state<string | null>(null);
+	async function showOrgs() {
+		loading = true;
+		loadError = null;
 		try {
-			access = await checkOrgAccess();
-		} catch {
-			access = null;
+			await loadOrgs();
+		} catch (err) {
+			loadError = (err as Error).message;
 		} finally {
-			checking = false;
+			loading = false;
 		}
 	}
 	// A switch back to GitHub sign-in that failed comes back here with ?token_error=.
 	let switchError = $state<string | null>(null);
 	onMount(() => {
-		if (!orgWarning.off) runCheck();
+		if (!orgNote.off || orgNote.access) showOrgs();
 		const url = new URL(location.href);
 		switchError = url.searchParams.get('token_error');
 		if (switchError) {
@@ -204,76 +203,46 @@
 					</form>
 				{/if}
 				<div class="grid gap-2 border-t pt-4">
-					<div class="flex items-center justify-between gap-2">
-						<span class="text-xs font-medium">Org access</span>
-						{#if access?.available}<span class="text-xs text-muted-foreground"
-								>Checked {ago(access.checkedAt)}</span
-							>{/if}
-					</div>
-					{#if orgWarning.off && !access}
+					<span class="text-xs font-medium">Orgs your GitHub sign-in can see</span>
+					{#if !access && orgNote.off && !loading}
 						<p class="text-xs text-muted-foreground">
-							Warnings are off in this browser.
 							<button
 								type="button"
 								class="underline underline-offset-2 hover:text-foreground"
-								onclick={runCheck}>Check now</button
-							>
-							·
-							<button
-								type="button"
-								class="underline underline-offset-2 hover:text-foreground"
-								onclick={() => {
-									setOrgWarningOff(false);
-									runCheck();
-								}}>Show warnings again</button
+								onclick={showOrgs}>Show the list</button
 							>
 						</p>
-					{:else if checking && !access}
-						<p class="text-xs text-muted-foreground">Checking your orgs…</p>
+					{:else if loading && !access}
+						<p class="text-xs text-muted-foreground">Loading…</p>
+					{:else if loadError}
+						<p class="text-xs text-destructive">{loadError}</p>
 					{:else if access && !access.available}
-						<p class="text-xs text-muted-foreground">
-							Sign in again to check which orgs share their repositories with Hush.
-						</p>
-					{:else if access?.available && !access.gaps.length}
-						<p class="flex items-center gap-1.5 text-xs text-muted-foreground">
-							<Check class="size-3.5 text-signal-merge" />Every org you are in shares its
-							repositories with your sign-in.{#if custom}
-								You can switch back to GitHub sign-in.{/if}
-						</p>
+						<p class="text-xs text-muted-foreground">Sign in with GitHub again to see this list.</p>
 					{:else if access?.available}
-						<ul class="grid gap-1.5">
-							{#each access.gaps as g (g.org)}
-								<li class="flex flex-wrap items-baseline gap-x-2 text-xs">
-									<TriangleAlert class="size-3.5 translate-y-0.5 text-signal-warn" />
-									<span class="font-medium">{g.org}</span>
-									<span class="text-muted-foreground"
-										>{g.reason === 'not_approved'
-											? 'has not approved Hush yet.'
-											: g.reason === 'sso'
-												? 'needs you to authorize Hush for its single sign-on.'
-												: g.message}</span
-									>
-									<a
-										class="underline underline-offset-2"
-										href={access.approveUrl}
-										target="_blank"
-										rel="noreferrer">{g.reason === 'sso' ? 'Authorize' : 'Request approval'}</a
-									>
-								</li>
-							{/each}
-						</ul>
-						<p class="text-xs text-muted-foreground">
-							{#if custom}
-								Your custom token can cover these orgs until they approve Hush.
-							{:else}
-								GitHub hides their private repositories and notifications from Hush. A custom token
-								can cover them until they approve Hush.
-							{/if}
-							{#if !orgWarning.off}
+						{#if access.orgs.length}
+							<div class="flex flex-wrap gap-1.5">
+								{#each access.orgs as org (org)}
+									<Badge variant="secondary">{org}</Badge>
+								{/each}
+							</div>
+						{:else}
+							<p class="text-xs text-muted-foreground">None: only your own repositories.</p>
+						{/if}
+						<p class="text-xs leading-relaxed text-muted-foreground">
+							Missing an org? GitHub hides every org that has not approved Hush, so Hush cannot list
+							those.
+							<a
+								class="underline underline-offset-2 hover:text-foreground"
+								href={access.approveUrl}
+								target="_blank"
+								rel="noreferrer">Request approval</a
+							>{#if custom}. Your custom token can read it until then.{:else}, or use a custom token
+								until then.{/if}
+							{#if orgNote.off}
 								<button
 									type="button"
 									class="underline underline-offset-2 hover:text-foreground"
-									onclick={() => setOrgWarningOff(true)}>Don't show again</button
+									onclick={() => setOrgNoteOff(false)}>Show the note after sign-in again</button
 								>
 							{/if}
 						</p>

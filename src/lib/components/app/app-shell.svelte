@@ -11,20 +11,27 @@
 	import AlertsPanel from './alerts-panel.svelte';
 	import { watchReturns } from '$lib/recheck';
 	import { connectLive } from '$lib/live.svelte';
-	import { checkOrgAccess, orgWarning } from '$lib/org-warning.svelte';
+	import { openOrgNote } from '$lib/org-note.svelte';
+	import OrgNote from './org-note.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
 	$effect(() => watchReturns());
 
-	// Just signed in (?signed_in=1 from the callback): check once which orgs hide their data from
-	// the sign-in, unless this browser said "Don't show again".
+	// Just signed in (?signed_in=1 from the callback): once the profile is here, show which orgs
+	// the sign-in can see (only when Hush uses it, not a custom token).
+	let justSignedIn = $state(false);
 	$effect(() => {
 		const url = page.url;
 		if (url.searchParams.get('signed_in') !== '1') return;
+		justSignedIn = true;
 		url.searchParams.delete('signed_in');
 		goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true });
-		if (!orgWarning.off) checkOrgAccess().catch(() => {});
+	});
+	$effect(() => {
+		if (!justSignedIn || !me.data) return;
+		justSignedIn = false;
+		if (me.data.tokenSource === 'app') openOrgNote().catch(() => {});
 	});
 
 	const isRestoring = useIsRestoring();
@@ -80,6 +87,7 @@
 	{#if ready}
 		{#if me.data && !signedOut && !onLogin}
 			<AppHeader />
+			<OrgNote />
 			<TabStatus />
 			<CommandPalette />
 			<AlertsPanel />
