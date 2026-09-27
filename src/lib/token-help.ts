@@ -8,6 +8,14 @@ export function tokenHelp(message: string): { title: string; body: string } | nu
 			title: `${org} blocks classic tokens`,
 			body: `GitHub hides ${org} notifications and search results from this token. Add a token that ${org} allows as a custom token in Settings → General → GitHub access.`
 		};
+	const restricted = message.match(
+		/the `([^`]+)` organization has enabled OAuth App access restrictions/
+	)?.[1];
+	if (restricted)
+		return {
+			title: `${restricted} has not approved Hush`,
+			body: `GitHub hides ${restricted} pull requests, issues, and teams from your GitHub sign-in, so they are missing here. Ask an owner of ${restricted} to approve Hush, or use a custom token until then.`
+		};
 	if (/SAML|single sign-on|SSO/i.test(message))
 		return {
 			title: 'Your token is not authorized for SAML single sign-on',

@@ -21,6 +21,12 @@ describe('tokenHelp', () => {
 		);
 		expect(h?.title).toBe('acme blocks classic tokens');
 	});
+	it('explains an org that has not approved the OAuth app', () => {
+		const h = tokenHelp(
+			'Although you appear to have the correct authorization credentials, the `acme` organization has enabled OAuth App access restrictions, meaning that data access to third-parties is limited.'
+		);
+		expect(h?.title).toBe('acme has not approved Hush');
+	});
 	it('ignores other errors', () => {
 		expect(tokenHelp('Something else')).toBeNull();
 	});

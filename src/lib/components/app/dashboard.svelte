@@ -623,11 +623,13 @@
 	{/if}
 	{#each data?.errors ?? [] as err (err)}
 		{@const help = tokenHelp(err)}
-		<Alert.Root variant="destructive" class="mb-3">
+		<!-- A known token limit is advice, not a failure: the other results are all here. -->
+		<Alert.Root variant={help ? 'default' : 'destructive'} class="mb-3">
 			<Alert.Title>{help?.title ?? 'A search failed'}</Alert.Title>
 			<Alert.Description>
 				{help?.body ?? err}
-				{#if help}<a class="underline" href="/settings/general#token">Change token</a>{/if}
+				{#if help}<a class="underline" href="/settings/general#token">GitHub access settings</a
+					>{/if}
 			</Alert.Description>
 		</Alert.Root>
 	{/each}
