@@ -12,7 +12,9 @@ export async function saveSettings(patch: Partial<Settings>, message = 'Saved'):
 		if (res.reclassified) queryClient.invalidateQueries({ queryKey: keys.threadsAll });
 		if (patch.dash) queryClient.invalidateQueries({ queryKey: keys.dashAll });
 		toast.success(
-			res.reclassified ? `${message}. ${res.reclassified} threads changed category.` : message
+			res.reclassified
+				? `${message}. ${res.reclassified} ${res.reclassified === 1 ? 'thread' : 'threads'} updated.`
+				: message
 		);
 		return true;
 	} catch (err) {
