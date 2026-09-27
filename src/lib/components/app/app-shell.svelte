@@ -63,7 +63,9 @@
 	);
 </script>
 
-<div class="min-h-dvh">
+<!-- Links load their page's code as soon as they are on screen (not on hover), so a first
+     visit opens at once, also from a shortcut or the palette. -->
+<div class="min-h-dvh" data-sveltekit-preload-code="eager">
 	{#if ready}
 		{#if me.data && !signedOut && !onLogin}
 			<AppHeader />

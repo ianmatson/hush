@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import {
 	cpSync,
+	existsSync,
 	readFileSync,
 	readdirSync,
 	renameSync,
@@ -41,6 +42,13 @@ writeFileSync(
 	join(app, '_redirects'),
 	'# The app starts at the inbox; every other path gets the app shell (SPA fallback).\n/ /inbox 302\n'
 );
+// Files in SvelteKit's immutable folder have a content hash in their names, so they never
+// change: the browser keeps them and does not ask again (by default every file is checked on
+// each use). The folder is found in the build, so a changed kit.appDir needs no change here.
+const appDir = readdirSync(BUILD).find((d) => existsSync(join(BUILD, d, 'immutable')));
+if (!appDir) throw new Error(`split: no immutable folder in ${BUILD}/`);
+const IMMUTABLE = `/${appDir}/immutable/*\n  Cache-Control: public, max-age=31536000, immutable\n`;
+writeFileSync(join(app, '_headers'), IMMUTABLE);
 writeFileSync(
 	join(app, 'robots.txt'),
 	'# The app is private: nothing here to index.\nUser-agent: *\nDisallow: /\n'
@@ -73,7 +81,7 @@ const csp = [
 ].join('; ');
 writeFileSync(
 	join(site, '_headers'),
-	`/*\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n`
+	`/*\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n${IMMUTABLE}`
 );
 console.log(
 	`split: ${pages.length} site pages → dist/site (${hashes.size} inline scripts in the CSP), app shell → dist/app`
