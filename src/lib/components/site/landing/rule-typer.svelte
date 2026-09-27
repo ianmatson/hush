@@ -38,7 +38,7 @@
 		border-radius: 0.75rem;
 		background: var(--muted);
 		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.8125rem;
+		font-size: 0.75rem;
 		overflow: hidden;
 	}
 	.prompt {

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import '@fontsource-variable/newsreader/opsz-italic.css';
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
-	import QuietList from '$lib/components/site/landing/quiet-list.svelte';
-	import TurnBaton from '$lib/components/site/landing/turn-baton.svelte';
-	import PushDemo from '$lib/components/site/landing/push-demo.svelte';
+	import HushWave from '$lib/components/site/landing/hush-wave.svelte';
+	import TurnLanes from '$lib/components/site/landing/turn-lanes.svelte';
+	import DayDial from '$lib/components/site/landing/day-dial.svelte';
 	import RuleTyper from '$lib/components/site/landing/rule-typer.svelte';
 	import { APP_URL } from '$lib/site';
 
@@ -40,23 +40,23 @@
 				<a class="quiet" href={REPO} rel="noreferrer">Read the source <span>→</span></a>
 			</p>
 			<div class="in" style:--d="3">
-				<QuietList />
+				<HushWave />
 			</div>
 		</section>
 
 		<section class="specimens">
 			<article class="reveal">
-				<TurnBaton />
+				<TurnLanes />
 				<p>
 					<b>Whose turn it is.</b> Hush follows each pull request as it moves between you and your team,
 					and puts your turn on top. Work that waits too long turns amber.
 				</p>
 			</article>
 			<article class="reveal">
-				<PushDemo />
+				<DayDial />
 				<p>
-					<b>A push only when it matters.</b> When the work is done, the alert turns into a quiet “✓ You
-					approved” and closes on every device. Quiet hours hold the rest until morning.
+					<b>A push only when it matters.</b> What needs you buzzes; FYI stays silent. At night, quiet
+					hours hold everything, and one push brings it in the morning.
 				</p>
 			</article>
 			<article class="reveal">
