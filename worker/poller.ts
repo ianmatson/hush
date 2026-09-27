@@ -19,9 +19,19 @@ export class Poller extends PollerData {
 	private lastGoodPoll = 0;
 
 	async start(userId: number, origin: string): Promise<void> {
-		// Signing in redoes the first sync (the last 14 days): a new token can see threads the old one
-		// could not. Existing threads keep their triage state.
-		await this.ctx.storage.delete(['initialized', 'lastModified', 'pollGap']);
+		// A new token (signing in, or a custom token) can see what the old one could not: redo the
+		// first sync (the last 14 days; existing threads keep their triage state), and build the
+		// dashboards and the team list again.
+		await this.ctx.storage.delete([
+			'initialized',
+			'lastModified',
+			'pollGap',
+			'dash:pr',
+			'dash:issue',
+			'teams'
+		]);
+		this.broadcast({ type: 'dash', kind: 'pr' });
+		this.broadcast({ type: 'dash', kind: 'issue' });
 		await this.ctx.storage.put({
 			userId,
 			origin,

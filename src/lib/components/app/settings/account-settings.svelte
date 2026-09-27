@@ -67,7 +67,9 @@
 			editing = false;
 			toast.success('Hush now uses your custom token, and syncs again with it.');
 			await queryClient.invalidateQueries({ queryKey: keys.me });
-			queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+			// The server syncs again and rebuilds the dashboards and teams with the new token.
+			for (const queryKey of [keys.threadsAll, keys.dashAll, keys.teams])
+				queryClient.invalidateQueries({ queryKey });
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {

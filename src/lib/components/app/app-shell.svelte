@@ -25,6 +25,9 @@
 		const url = page.url;
 		if (url.searchParams.get('signed_in') !== '1') return;
 		justSignedIn = true;
+		// A new sign-in can mean a new token: what this browser cached may be out of date.
+		for (const queryKey of [keys.threadsAll, keys.dashAll, keys.teams])
+			queryClient.invalidateQueries({ queryKey });
 		url.searchParams.delete('signed_in');
 		goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true });
 	});
