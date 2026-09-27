@@ -3,8 +3,8 @@ import type { Env } from './db';
 
 export type Access = { ok: true } | { ok: false; reason: 'not_member' | 'error'; message: string };
 
-export function allowedOrgs(env: Pick<Env, 'ALLOWED_ORGS'>): string[] {
-	return (env.ALLOWED_ORGS ?? '')
+export function allowedOrgs(env: Pick<Env, 'ORG_ALLOWLIST'>): string[] {
+	return (env.ORG_ALLOWLIST ?? '')
 		.split(',')
 		.map((o) => o.trim())
 		.filter(Boolean);

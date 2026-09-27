@@ -19,7 +19,7 @@ export interface Env {
 	/** Optional push contact (mailto: or https:). Defaults to the app's own URL. */
 	VAPID_SUBJECT?: string;
 	/** Comma-separated GitHub orgs whose members may use Hush. Empty = anyone with a token. */
-	ALLOWED_ORGS?: string;
+	ORG_ALLOWLIST?: string;
 	// Rate limiters (optional, so tests and old configs still work).
 	AUTH_LIMIT?: RateLimit;
 	FEED_LIMIT?: RateLimit;

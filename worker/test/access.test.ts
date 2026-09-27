@@ -16,7 +16,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('allowedOrgs', () => {
 	it('parses a comma list and treats empty as open', () => {
-		expect(allowedOrgs({ ALLOWED_ORGS: ' acme , Other ' })).toEqual(['acme', 'Other']);
+		expect(allowedOrgs({ ORG_ALLOWLIST: ' acme , Other ' })).toEqual(['acme', 'Other']);
 		expect(allowedOrgs({})).toEqual([]);
 	});
 });
