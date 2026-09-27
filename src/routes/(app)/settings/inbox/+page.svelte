@@ -3,12 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { keys, meQuery, queryClient } from '$lib/queries';
+	import { feedsQuery, keys, meQuery, queryClient } from '$lib/queries';
 	import { api } from '$lib/api';
 	import { saveSettings } from '$lib/save-settings';
 	import { validateRules } from '$lib/shared/classify';
 	import type { Rule, SavedView, ThreadDTO } from '$lib/shared/types';
-	import { VIEW_BASES } from '$lib/shared/views';
+	import { FEED_TABS, VIEW_BASES } from '$lib/shared/views';
 	import { formatQuery } from '$lib/shared/query';
 	import SortableList from '$lib/components/app/sortable-list.svelte';
 	import Pencil from '@lucide/svelte/icons/pencil';
@@ -16,16 +16,17 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Card from '$lib/components/ui/card';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import RuleCard, { type RulePreview } from '$lib/components/app/rule-card.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
-	import Braces from '@lucide/svelte/icons/braces';
+	import Rss from '@lucide/svelte/icons/rss';
+	import FeedButton from '$lib/components/app/feed-button.svelte';
 
 	const me = createQuery(meQuery);
+	const feeds = createQuery(feedsQuery);
 	const settings = $derived(me.data?.settings);
 
 	const EXAMPLE: Rule[] = [
@@ -43,11 +44,9 @@
 		}
 	];
 
-	// --- Rules: a visual editor, with JSON as an advanced mode -----------------------------
+	// --- Rules: a visual editor (the JSON is in settings.json) -------------------------------
 	let draft = $state<Rule[]>([]);
 	let dirty = $state(false);
-	let jsonMode = $state(false);
-	let jsonText = $state('');
 	let saving = $state(false);
 	// Fill the editor once the settings arrive (from the cache, usually at once), and after saves.
 	$effect(() => {
@@ -66,7 +65,6 @@
 				const when = JSON.parse(raw) as Rule['when'];
 				draft = [...draft, { name: '', when, then: { category: 'fyi' } }];
 				dirty = true;
-				jsonMode = false;
 			} catch {
 				/* A bad link adds nothing. */
 			}
@@ -79,15 +77,7 @@
 		});
 	});
 
-	const jsonError = $derived.by(() => {
-		if (!jsonMode) return null;
-		try {
-			return validateRules(JSON.parse(jsonText));
-		} catch (err) {
-			return `Invalid JSON: ${(err as Error).message}`;
-		}
-	});
-	const rulesError = $derived(jsonMode ? jsonError : validateRules(draft));
+	const rulesError = $derived(validateRules(draft));
 
 	function change(next: Rule[]) {
 		draft = next;
@@ -100,27 +90,14 @@
 		next.splice(to, 0, r);
 		change(next);
 	}
-	function toggleJson() {
-		if (jsonMode) {
-			if (jsonError) return;
-			draft = JSON.parse(jsonText);
-		} else jsonText = JSON.stringify(draft, null, 2);
-		jsonMode = !jsonMode;
-	}
-
 	async function saveRules() {
 		if (rulesError) return;
 		saving = true;
-		const rules = jsonMode ? (JSON.parse(jsonText) as Rule[]) : draft;
-		if (await saveSettings({ rules }, 'Rules saved')) {
-			dirty = false;
-			if (jsonMode) draft = rules;
-		}
+		if (await saveSettings({ rules: draft }, 'Rules saved')) dirty = false;
 		saving = false;
 	}
 	function cancel() {
 		dirty = false;
-		jsonMode = false;
 		if (settings) draft = structuredClone($state.snapshot(settings.rules) as Rule[]);
 	}
 
@@ -130,8 +107,8 @@
 		moves: { action: number; fyi: number; muted: number; done: number; snoozed: number };
 	} | null>(null);
 	$effect(() => {
-		const rules = jsonMode ? null : $state.snapshot(draft);
-		if (!rules || validateRules(rules)) return;
+		const rules = $state.snapshot(draft);
+		if (validateRules(rules)) return;
 		const t = setTimeout(async () => {
 			try {
 				preview = await api.previewRules(rules as Rule[]);
@@ -219,40 +196,27 @@
 						onCheckedChange={(v) => saveSettings({ teamReviewsAreAction: v })}
 					/>
 				</SettingRow>
-				<SettingRow
-					id="any-review"
-					label="Someone else’s review settles a request"
-					description="A review request to you or your team stops being your turn when someone else approves or asks for changes after the last push, even while GitHub still lists you. Off: only when GitHub stops asking you."
-				>
-					<Switch
-						id="any-review"
-						checked={settings.reviewResolution === 'any_review'}
-						onCheckedChange={(v) => saveSettings({ reviewResolution: v ? 'any_review' : 'strict' })}
-					/>
-				</SettingRow>
-				<SettingRow
-					id="peek-read"
-					label="Peek marks a thread as read"
-					description="After it is open in the peek for a moment, as if you opened it on GitHub."
-				>
-					<Switch
-						id="peek-read"
-						checked={settings.peekMarksRead}
-						onCheckedChange={(v) => saveSettings({ peekMarksRead: v })}
-					/>
-				</SettingRow>
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root>
+		<Card.Root id="views">
 			<Card.Header>
-				<Card.Title>Saved views</Card.Title>
+				<Card.Title>Views and feeds</Card.Title>
 				<Card.Description
-					>Extra inbox tabs, in this order. Make one with “+” after the tabs, or “Save as view” next
-					to the filter.</Card.Description
+					>Saved views are extra inbox tabs, in this order. Make one with “+” after the tabs, or
+					“Save as view” next to the filter. <Rss class="inline size-3.5" /> makes an Atom feed of a tab,
+					for any feed reader.</Card.Description
 				>
 			</Card.Header>
-			<Card.Content class="grid grid-cols-[minmax(0,1fr)]">
+			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
+				<ul class="grid gap-1 rounded-lg border p-1 text-sm" aria-label="Built-in tabs">
+					{#each FEED_TABS as t (t.id)}
+						<li class="flex items-center gap-2 rounded-md py-0.5 pr-1 pl-2.5 hover:bg-muted/50">
+							<span class="min-w-0 flex-1 truncate">{t.label}</span>
+							<FeedButton view={t.id} name={t.label} feeds={feeds.data} />
+						</li>
+					{/each}
+				</ul>
 				<SortableList
 					items={viewRows}
 					onchange={(rows) => saveSettings({ views: rows.map((r) => r.view) }, 'Views saved')}
@@ -268,6 +232,7 @@
 						</span>
 					{/snippet}
 					{#snippet actions(r)}
+						<FeedButton view="v:{r.view.id}" name={r.view.name} feeds={feeds.data} />
 						<Button
 							variant="ghost"
 							size="icon-sm"
@@ -298,70 +263,52 @@
 				>
 			</Card.Header>
 			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
-				{#if jsonMode}
-					<Textarea
-						id="rules"
-						class="min-h-72 font-mono text-xs"
-						spellcheck={false}
-						aria-label="Rules as JSON"
-						bind:value={jsonText}
-						oninput={() => (dirty = true)}
+				{#each draft as _, k (k)}
+					<RuleCard
+						bind:rule={draft[k]}
+						index={k}
+						count={draft.length}
+						preview={preview?.perRule[k]}
+						{suggest}
+						onmove={(to) => moveRule(k, to)}
+						onduplicate={() =>
+							change([
+								...draft.slice(0, k + 1),
+								structuredClone($state.snapshot(draft[k]) as Rule),
+								...draft.slice(k + 1)
+							])}
+						onremove={() => change(draft.filter((_, i) => i !== k))}
 					/>
-					{#if jsonError}<p class="text-xs text-destructive">{jsonError}</p>{/if}
 				{:else}
-					{#each draft as _, k (k)}
-						<RuleCard
-							bind:rule={draft[k]}
-							index={k}
-							count={draft.length}
-							preview={preview?.perRule[k]}
-							{suggest}
-							onmove={(to) => moveRule(k, to)}
-							onduplicate={() =>
-								change([
-									...draft.slice(0, k + 1),
-									structuredClone($state.snapshot(draft[k]) as Rule),
-									...draft.slice(k + 1)
-								])}
-							onremove={() => change(draft.filter((_, i) => i !== k))}
-						/>
-					{:else}
-						<p
-							class="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground"
-						>
-							No rules yet. Hush uses its defaults for every thread.
-						</p>
-					{/each}
-					<div class="flex flex-wrap gap-2">
-						<Button
-							variant="outline"
-							size="sm"
-							onclick={() => change([...draft, { name: '', when: {}, then: { category: 'fyi' } }])}
-							><Plus />New rule</Button
-						>
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger>
-								{#snippet child({ props })}
-									<Button {...props} variant="outline" size="sm"><Sparkles />From a template</Button
-									>
-								{/snippet}
-							</DropdownMenu.Trigger>
-							<DropdownMenu.Content align="start" class="w-64">
-								{#each EXAMPLE as ex (ex.name)}
-									<DropdownMenu.Item onclick={() => change([...draft, structuredClone(ex)])}
-										>{ex.name}</DropdownMenu.Item
-									>
-								{/each}
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
-					</div>
-					{#if rulesError && dirty}<p class="text-xs text-destructive">{rulesError}</p>{/if}
-				{/if}
+					<p class="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+						No rules yet. Hush uses its defaults for every thread.
+					</p>
+				{/each}
+				<div class="flex flex-wrap gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => change([...draft, { name: '', when: {}, then: { category: 'fyi' } }])}
+						><Plus />New rule</Button
+					>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="outline" size="sm"><Sparkles />From a template</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start" class="w-64">
+							{#each EXAMPLE as ex (ex.name)}
+								<DropdownMenu.Item onclick={() => change([...draft, structuredClone(ex)])}
+									>{ex.name}</DropdownMenu.Item
+								>
+							{/each}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
+				{#if rulesError && dirty}<p class="text-xs text-destructive">{rulesError}</p>{/if}
 			</Card.Content>
-			<Card.Footer class="flex flex-wrap items-center justify-between gap-2 border-t">
-				<Button variant="ghost" size="sm" onclick={toggleJson} disabled={jsonMode && !!jsonError}
-					><Braces />{jsonMode ? 'Back to the editor' : 'Edit as JSON'}</Button
-				>
+			<Card.Footer class="flex flex-wrap items-center justify-end gap-2 border-t">
 				<div class="flex flex-wrap items-center gap-2">
 					{#if moveText}<span class="text-xs text-muted-foreground">{moveText}</span>{/if}
 					{#if dirty}<Button variant="ghost" size="sm" onclick={cancel}>Cancel</Button>{/if}

@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types';
+import { settingsOverrides } from '../../src/lib/shared/settings-schema';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
 import { SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
@@ -102,8 +103,9 @@ export abstract class PollerBase extends DurableObject<Env> {
 		return parseSettings(await this.ctx.storage.get<string>('settings'));
 	}
 
+	/** Stores only what differs from the defaults (see settingsOverrides). */
 	protected async saveSettings(settings: Settings): Promise<void> {
-		await this.ctx.storage.put('settings', JSON.stringify(settings));
+		await this.ctx.storage.put('settings', JSON.stringify(settingsOverrides(settings)));
 		this.broadcast({ type: 'settings' });
 	}
 

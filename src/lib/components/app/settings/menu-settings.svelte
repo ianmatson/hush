@@ -142,11 +142,9 @@
 	{/if}
 {/snippet}
 
-<svelte:head><title>Menus · Settings · Hush</title></svelte:head>
-
 <div class="grid gap-6">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">Menus</h1>
+		<h2 class="text-base font-semibold tracking-tight">Menus</h2>
 		<p class="text-sm text-muted-foreground">
 			Choose the items and their order in the right-click menu. The same list is the “⋯” menu on
 			phones. Hidden items still work with their keys and in the command palette (⌘K).

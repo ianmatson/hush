@@ -1,61 +1,49 @@
-import type { FeedDTO, FeedFilter } from '../../src/lib/shared/types';
+import type { FeedDTO } from '../../src/lib/shared/types';
+import { feedViewOk } from '../../src/lib/shared/views';
 import { randomToken } from '../crypto';
 import { renderFeed } from '../feeds';
-import { routes, json } from '../app';
+import { routes } from '../app';
 
-// --- Feeds ------------------------------------------------------------------
+// --- Feeds: one inbox tab as Atom, at a secret URL ----------------------------------------
 
-function feedDTO(
-	origin: string,
-	r: { id: string; name: string; token: string; filter: string; created_at: number }
-): FeedDTO {
-	return {
-		id: r.id,
-		name: r.name,
-		filter: JSON.parse(r.filter),
-		url: `${origin}/feeds/${r.token}`,
-		createdAt: r.created_at
-	};
-}
+type FeedRow = { token: string; view: string; created_at: number };
+const feedDTO = (origin: string, r: FeedRow): FeedDTO => ({
+	view: r.view,
+	url: `${origin}/feeds/${r.token}`,
+	createdAt: r.created_at
+});
 
 const app = routes()
 	.get('/api/feeds', async (c) => {
 		const { results } = await c.env.DB.prepare(
-			'SELECT * FROM feeds WHERE user_id = ? ORDER BY created_at'
+			'SELECT token, view, created_at FROM feeds WHERE user_id = ? ORDER BY created_at'
 		)
 			.bind(c.get('user').id)
-			.all<{ id: string; name: string; token: string; filter: string; created_at: number }>();
+			.all<FeedRow>();
 		const origin = new URL(c.req.url).origin;
 		return c.json(results.map((r) => feedDTO(origin, r)));
 	})
-	.post('/api/feeds', json<{ name: string; filter: FeedFilter }>(), async (c) => {
-		const body = c.req.valid('json');
-		const name = body.name?.trim();
-		const view = body?.filter?.view;
-		if (!name) return c.json({ error: 'Give the feed a name.' }, 400);
-		if (view !== 'action' && view !== 'fyi' && view !== 'all')
-			return c.json({ error: 'Unknown feed view.' }, 400);
-		const filter: FeedFilter = {
-			view,
-			...(body?.filter?.repo?.trim() ? { repo: body.filter.repo.trim() } : {})
-		};
-		const row = {
-			id: randomToken(9),
-			name: name.slice(0, 80),
-			token: randomToken(24),
-			filter: JSON.stringify(filter),
-			created_at: Date.now()
-		};
+	/** Turn on the feed of a tab (or get the one it has). */
+	.put('/api/feeds/:view', async (c) => {
+		const view = c.req.param('view');
+		if (!feedViewOk(view)) return c.json({ error: 'Unknown tab.' }, 400);
+		const user = c.get('user').id;
 		await c.env.DB.prepare(
-			'INSERT INTO feeds (id, user_id, name, token, filter, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			'INSERT INTO feeds (token, user_id, view, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id, view) DO NOTHING'
 		)
-			.bind(row.id, c.get('user').id, row.name, row.token, row.filter, row.created_at)
+			.bind(randomToken(24), user, view, Date.now())
 			.run();
-		return c.json(feedDTO(new URL(c.req.url).origin, row));
+		const row = await c.env.DB.prepare(
+			'SELECT token, view, created_at FROM feeds WHERE user_id = ? AND view = ?'
+		)
+			.bind(user, view)
+			.first<FeedRow>();
+		return c.json(feedDTO(new URL(c.req.url).origin, row!));
 	})
-	.delete('/api/feeds/:id', async (c) => {
-		await c.env.DB.prepare('DELETE FROM feeds WHERE user_id = ? AND id = ?')
-			.bind(c.get('user').id, c.req.param('id'))
+	/** Turn off a feed: its URL stops working. */
+	.delete('/api/feeds/:view', async (c) => {
+		await c.env.DB.prepare('DELETE FROM feeds WHERE user_id = ? AND view = ?')
+			.bind(c.get('user').id, c.req.param('view'))
 			.run();
 		return c.json({ ok: true });
 	})

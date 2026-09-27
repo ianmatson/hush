@@ -13,7 +13,6 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
-	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import SectionEditor from '$lib/components/app/section-editor.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -139,11 +138,11 @@
 
 		<Card.Root>
 			<Card.Header>
-				<Card.Title>Filters</Card.Title>
+				<Card.Title>Scope</Card.Title>
 			</Card.Header>
-			<Card.Content class="divide-y">
-				<div class="grid gap-1.5 pb-3">
-					<label for="scope" class="text-sm font-medium">Scope</label>
+			<Card.Content>
+				<div class="grid gap-1.5">
+					<label for="scope" class="sr-only">Scope</label>
 					<Input
 						id="scope"
 						bind:value={draft.scope}
@@ -152,40 +151,10 @@
 					/>
 					<p class="text-xs text-muted-foreground">
 						Added to every search. For example <code>org:PostHog</code>, or
-						<code>-repo:PostHog/posthog.com</code>.
+						<code>-repo:PostHog/posthog.com</code>. Drafts, bots, and “stale after” are in
+						settings.json (General).
 					</p>
 				</div>
-				<SettingRow
-					id="drafts"
-					label="Hide other people's drafts"
-					description="Your own drafts always show (in “Other”)."
-				>
-					<Switch id="drafts" bind:checked={draft.hideOthersDrafts} />
-				</SettingRow>
-				<SettingRow
-					id="dash-bots"
-					label="Hide bot PRs and issues"
-					description="Unless your own review is requested."
-				>
-					<Switch id="dash-bots" bind:checked={draft.hideBots} />
-				</SettingRow>
-				<SettingRow
-					id="stale"
-					label="Stale after"
-					description="Hush marks an item amber when its turn is older than this."
-				>
-					<div class="flex items-center gap-2">
-						<Input
-							id="stale"
-							type="number"
-							min="1"
-							max="60"
-							class="h-8 w-16"
-							bind:value={draft.staleDays}
-						/>
-						<span class="text-sm text-muted-foreground">days</span>
-					</div>
-				</SettingRow>
 			</Card.Content>
 		</Card.Root>
 

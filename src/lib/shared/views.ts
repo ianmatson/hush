@@ -10,6 +10,15 @@ export const VIEW_BASES: { id: ViewBase; label: string }[] = [
 ];
 export const MAX_VIEWS = 12;
 
+/** The built-in tabs that can be a feed, and their names. Saved views are 'v:<id>'. */
+export const FEED_TABS: { id: string; label: string }[] = [
+	{ id: 'action', label: 'Needs you' },
+	{ id: 'fyi', label: 'FYI' },
+	{ id: 'inbox', label: 'Needs you + FYI' }
+];
+export const feedViewOk = (view: string) =>
+	FEED_TABS.some((t) => t.id === view) || /^v:[a-z0-9]{1,16}$/.test(view);
+
 /**
  * Does a thread belong in a saved view (or match the Filter box)? The conditions mean the same as
  * in rules; "category" is the thread's category now (the view's base already picks it).

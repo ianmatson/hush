@@ -192,7 +192,8 @@
 			<Card.Header>
 				<Card.Title>What to push</Card.Title>
 				<Card.Description
-					>Inbox rules can override this for specific repos, people, or kinds of activity.</Card.Description
+					>Inbox rules can override this for specific repos, people, or kinds of activity. More in
+					settings.json (General).</Card.Description
 				>
 			</Card.Header>
 			<Card.Content class="divide-y">
@@ -205,28 +206,6 @@
 						id="push-action"
 						checked={settings.pushAction}
 						onCheckedChange={(v) => saveSettings({ pushAction: v })}
-					/>
-				</SettingRow>
-				<SettingRow
-					id="push-turn"
-					label="When a thread becomes your turn"
-					description="With no new notification from GitHub, for example new commits after your review, or CI failing again after your fix."
-				>
-					<Switch
-						id="push-turn"
-						checked={settings.pushTurnChanges}
-						onCheckedChange={(v) => saveSettings({ pushTurnChanges: v })}
-					/>
-				</SettingRow>
-				<SettingRow
-					id="push-resolved"
-					label="Update alerts when they are resolved"
-					description="An alert from the last day changes to a quiet “✓ You approved” (or “Done”, “CI passes now”…) and then closes, on every device."
-				>
-					<Switch
-						id="push-resolved"
-						checked={settings.pushResolved}
-						onCheckedChange={(v) => saveSettings({ pushResolved: v })}
 					/>
 				</SettingRow>
 				<SettingRow

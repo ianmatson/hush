@@ -1,4 +1,3 @@
-import type { FeedFilter } from '../src/lib/shared/types';
 import type { Env } from './db';
 import { factsOf } from './poller/schema';
 
@@ -6,15 +5,16 @@ const esc = (s: string) =>
 	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export async function renderFeed(env: Env, token: string, origin: string): Promise<Response> {
-	const feed = await env.DB.prepare('SELECT id, user_id, name, filter FROM feeds WHERE token = ?')
+	const feed = await env.DB.prepare('SELECT user_id, view FROM feeds WHERE token = ?')
 		.bind(token)
-		.first<{ id: string; user_id: number; name: string; filter: string }>();
+		.first<{ user_id: number; view: string }>();
 	if (!feed) return new Response('Not found', { status: 404 });
-	const filter = JSON.parse(feed.filter) as FeedFilter;
-
-	const rows = await env.POLLER.get(env.POLLER.idFromName(String(feed.user_id))).feedThreads(
-		filter
+	const tab = await env.POLLER.get(env.POLLER.idFromName(String(feed.user_id))).feedThreads(
+		feed.view
 	);
+	// The saved view was deleted.
+	if (!tab) return new Response('Not found', { status: 404 });
+	const { name, rows } = tab;
 
 	const self = `${origin}/feeds/${token}`;
 	const updated = rows[0]?.gh_updated_at ?? new Date(0).toISOString();
@@ -36,8 +36,8 @@ export async function renderFeed(env: Env, token: string, origin: string): Promi
 
 	const xml = `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <id>tag:hush,feed:${feed.id}</id>
-  <title>${esc(`Hush · ${feed.name}`)}</title>
+  <id>tag:hush,feed:${feed.user_id}:${esc(feed.view)}</id>
+  <title>${esc(`Hush · ${name}`)}</title>
   <link rel="self" href="${esc(self)}"/>
   <link href="${esc(origin)}/"/>
   <updated>${esc(updated)}</updated>

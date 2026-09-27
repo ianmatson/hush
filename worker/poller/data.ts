@@ -6,10 +6,14 @@ import {
 	ruleTriage,
 	validateRules
 } from '../../src/lib/shared/classify';
-import { validateDash } from '../../src/lib/shared/dashboard';
-import { MENUS_VERSION, validateMenus } from '../../src/lib/shared/menus';
-import { validateQuietHours } from '../../src/lib/shared/quiet';
-import { validateViews } from '../../src/lib/shared/views';
+import { MENUS_VERSION } from '../../src/lib/shared/menus';
+import { FEED_TABS, threadMatches } from '../../src/lib/shared/views';
+import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
+import {
+	RECLASSIFY_KEYS,
+	mergeSettings,
+	validateSettings
+} from '../../src/lib/shared/settings-schema';
 import {
 	SNOOZE_EVENT_MAX_MS,
 	snoozeEvent,
@@ -22,7 +26,6 @@ import type {
 	DashItem,
 	DashKind,
 	DashResponse,
-	FeedFilter,
 	Rule,
 	Settings,
 	ThreadDTO,
@@ -246,15 +249,22 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true, updated: threads.length, counts: this.counts() };
 	}
 
-	/** The threads for an Atom feed (see worker/feeds.ts), newest first. */
-	feedThreads(filter: FeedFilter): ThreadWithFacts[] {
-		const view =
-			filter.view === 'action' || filter.view === 'fyi' ? `category = '${filter.view}'` : '1';
-		const rows = this.threads(
-			`category != 'muted' AND ${view} ORDER BY gh_updated_at DESC LIMIT 200`
-		);
-		const repoRe = filter.repo ? globToRegExp(filter.repo) : null;
-		return rows.filter((r) => !repoRe || repoRe.test(r.repo)).slice(0, 50);
+	/**
+	 * An Atom feed of one inbox tab (see worker/feeds.ts): its name and its threads, newest first.
+	 * Null when the tab is gone (a deleted saved view).
+	 */
+	async feedThreads(view: string): Promise<{ name: string; rows: ThreadWithFacts[] } | null> {
+		const tab = FEED_TABS.find((t) => t.id === view);
+		const saved = tab ? null : (await this.settings()).views.find((v) => `v:${v.id}` === view);
+		if (!tab && !saved) return null;
+		const { where, args } = viewWhere(saved?.base ?? view);
+		const rows = this.threads(`${where} ORDER BY gh_updated_at DESC LIMIT 300`, ...args);
+		if (!saved) return { name: tab!.label, rows: rows.slice(0, 50) };
+		const me = await this.login();
+		return {
+			name: saved.name,
+			rows: rows.filter((r) => threadMatches(saved.when, toDTO(r), me)).slice(0, 50)
+		};
 	}
 
 	// --- Settings -------------------------------------------------------------------------
@@ -333,63 +343,25 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/** Change some settings (each one checked), and re-classify the threads if it matters. */
+	/**
+	 * Save a settings patch. With `replace`, the patch is all your changes (settings.json, an
+	 * imported file): every setting it does not have goes back to its default.
+	 */
 	async updateSettings(
-		body: Partial<Settings>
+		body: Partial<Settings>,
+		replace = false
 	): Promise<Refusal | { settings: Settings; reclassified: number }> {
-		const next: Settings = { ...(await this.settings()) };
-		for (const k of [
-			'pushAction',
-			'pushFyi',
-			'pushTurnChanges',
-			'pushResolved',
-			'peekMarksRead',
-			'botsAreFyi',
-			'teamReviewsAreAction'
-		] as const)
-			if (typeof body[k] === 'boolean') next[k] = body[k];
-		if (body.quietHours !== undefined) {
-			const err = validateQuietHours(body.quietHours);
-			if (err) return { error: err, status: 400 };
-			next.quietHours = body.quietHours;
-		}
-		if (body.dash !== undefined) {
-			const dash = { ...next.dash, ...body.dash };
-			const err = validateDash(dash);
-			if (err) return { error: err, status: 400 };
-			next.dash = dash;
-		}
-		if (body.reviewResolution !== undefined) {
-			if (body.reviewResolution !== 'strict' && body.reviewResolution !== 'any_review')
-				return { error: 'reviewResolution must be "strict" or "any_review".', status: 400 };
-			next.reviewResolution = body.reviewResolution;
-		}
-		if (body.views !== undefined) {
-			// A view's conditions are checked like a rule's (a rule with a no-op result).
-			const whenError = (when: unknown) =>
-				validateRules([{ when, then: { category: 'fyi' } }])?.replace(/^Rule 1: /, '') ?? null;
-			const err = validateViews(body.views, whenError);
-			if (err) return { error: err, status: 400 };
-			next.views = body.views;
-		}
-		if (body.menus !== undefined) {
-			const menus = { ...next.menus, ...body.menus, v: MENUS_VERSION };
-			const err = validateMenus(menus);
-			if (err) return { error: err, status: 400 };
-			next.menus = menus;
-		}
-		if (body.rules !== undefined) {
-			const err = validateRules(body.rules);
-			if (err) return { error: err, status: 400 };
-			next.rules = body.rules;
-		}
+		if (typeof body !== 'object' || body === null || Array.isArray(body))
+			return { error: 'Settings must be an object.', status: 400 };
+		const old = await this.settings();
+		const next = mergeSettings(replace ? structuredClone(DEFAULT_SETTINGS) : old, body);
+		if (next.menus) next.menus = { ...next.menus, v: MENUS_VERSION };
+		const err = validateSettings(next, Object.keys(body));
+		if (err) return { error: err, status: 400 };
 		await this.saveSettings(next);
-		// Only these settings change how threads are classified; the rest (menus, dashboards, push)
+		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
 		// must not rewrite every thread.
-		const affects =
-			body.rules !== undefined ||
-			typeof body.botsAreFyi === 'boolean' ||
-			body.reviewResolution !== undefined ||
-			typeof body.teamReviewsAreAction === 'boolean';
+		const affects = RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
 		const reclassified = affects ? await this.reclassify(next) : 0;
 		return { settings: next, reclassified };
 	}

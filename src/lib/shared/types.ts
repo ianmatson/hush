@@ -334,15 +334,9 @@ export interface Counts {
 	snoozed: number;
 }
 
-export interface FeedFilter {
-	view: 'action' | 'fyi' | 'all';
-	repo?: string;
-}
-
+/** A feed: one inbox tab as Atom. `view` is 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
 export interface FeedDTO {
-	id: string;
-	name: string;
-	filter: FeedFilter;
+	view: string;
 	url: string;
 	createdAt: number;
 }

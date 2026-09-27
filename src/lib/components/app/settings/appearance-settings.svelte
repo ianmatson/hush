@@ -40,11 +40,9 @@
 	</span>
 {/snippet}
 
-<svelte:head><title>Appearance · Settings · Hush</title></svelte:head>
-
 <div class="grid gap-6">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">Appearance</h1>
+		<h2 class="text-base font-semibold tracking-tight">Appearance</h2>
 		<p class="text-sm text-muted-foreground">These settings apply to this browser only.</p>
 	</div>
 

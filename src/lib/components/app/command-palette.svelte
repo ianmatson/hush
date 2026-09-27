@@ -161,19 +161,16 @@
 		},
 		...(
 			[
-				['notifications', 'Notifications'],
-				['inbox', 'Inbox and rules'],
-				['dashboards', 'PR and issue dashboards'],
-				['menus', 'Menus'],
-				['feeds', 'Feeds'],
-				['appearance', 'Appearance'],
-				['account', 'Account']
+				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
+				['dashboards', 'PR and issue dashboards', 'sections teams'],
+				['notifications', 'Notifications', 'push quiet'],
+				['general', 'General', 'appearance menus account json export import']
 			] as const
-		).map(([slug, name]) => ({
+		).map(([slug, name, more]) => ({
 			id: `go:settings/${slug}`,
 			label: `Settings: ${name}`,
 			icon: Settings,
-			keywords: ['settings', 'preferences', slug],
+			keywords: ['settings', 'preferences', slug, ...more.split(' ')],
 			run: () => goto(`/settings/${slug}`)
 		}))
 	]);

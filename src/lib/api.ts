@@ -2,7 +2,7 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
-import type { DashKind, FeedFilter, Rule, Settings, Turn, View } from '$lib/shared/types';
+import type { DashKind, Rule, Settings, Turn, View } from '$lib/shared/types';
 
 export class ApiError extends Error {
 	constructor(
@@ -79,6 +79,8 @@ export const api = {
 	sync: () => ok(client.api.sync.$post()),
 	previewRules: (rules: Rule[]) => ok(client.api.rules.preview.$post({ json: { rules } })),
 	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
+	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */
+	replaceSettings: (s: Partial<Settings>) => ok(client.api.settings.all.$put({ json: s })),
 	vapidKey: () => ok(client.api.push['vapid-key'].$get()),
 	subscriptions: () => ok(client.api.push.subscriptions.$get()),
 	subscribe: (sub: PushSubscriptionJSON, label: string) =>
@@ -114,7 +116,7 @@ export const api = {
 	},
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),
-	createFeed: (name: string, filter: FeedFilter) =>
-		ok(client.api.feeds.$post({ json: { name, filter } })),
-	deleteFeed: (id: string) => ok(client.api.feeds[':id'].$delete({ param: { id } }))
+	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
+	feedOn: (view: string) => ok(client.api.feeds[':view'].$put({ param: { view } })),
+	feedOff: (view: string) => ok(client.api.feeds[':view'].$delete({ param: { view } }))
 };
