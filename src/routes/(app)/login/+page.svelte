@@ -1,13 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import * as Alert from '$lib/components/ui/alert';
-	import ThemeToggle from '$lib/components/app/theme-toggle.svelte';
 
 	// The callback sends you back here with ?error= when GitHub or the org check says no.
 	const error = $derived(page.url.searchParams.get('error'));
 </script>
-
-<div class="absolute top-3 right-3"><ThemeToggle /></div>
 
 <main class="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-8 px-4 py-12">
 	<div class="flex items-center gap-3">

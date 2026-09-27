@@ -627,7 +627,7 @@
 			<Alert.Title>{help?.title ?? 'A search failed'}</Alert.Title>
 			<Alert.Description>
 				{help?.body ?? err}
-				{#if help}<a class="underline" href="/settings/general">Change token</a>{/if}
+				{#if help}<a class="underline" href="/settings/general#token">Change token</a>{/if}
 			</Alert.Description>
 		</Alert.Root>
 	{/each}

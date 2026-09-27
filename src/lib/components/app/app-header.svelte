@@ -10,6 +10,7 @@
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import Settings from '@lucide/svelte/icons/settings';
+	import KeyRound from '@lucide/svelte/icons/key-round';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Search from '@lucide/svelte/icons/search';
 	import Bell from '@lucide/svelte/icons/bell';
@@ -147,6 +148,11 @@
 							<div class="text-sm font-medium text-foreground">{me.data.name ?? me.data.login}</div>
 							<div class="text-xs font-normal text-muted-foreground">@{me.data.login}</div>
 						</DropdownMenu.Label>
+						{#if me.data.tokenSource === 'own'}
+							<DropdownMenu.Item onclick={() => goto('/settings/general#token')}
+								><KeyRound class="text-signal-warn" /> Using a custom token</DropdownMenu.Item
+							>
+						{/if}
 						<DropdownMenu.Separator />
 						<DropdownMenu.Item onclick={() => goto('/settings')}
 							><Settings /> Settings</DropdownMenu.Item
