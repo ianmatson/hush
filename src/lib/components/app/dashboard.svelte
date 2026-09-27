@@ -34,7 +34,7 @@
 	import AppMenu from './app-menu.svelte';
 	import { meQuery } from '$lib/queries';
 	import { openOnGitHub } from '$lib/recheck';
-	import Peek from './peek.svelte';
+	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
@@ -145,28 +145,53 @@
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
 	const byId = (id: string) => data?.items.find((i) => i.id === id);
 
-	// --- Peek: follows the cursor while open ----------------------------------------------
-	let peekOpen = $state(false);
-	// Read the cursor row even while closed: a derived whose dependencies change between runs
-	// (only `peekOpen` while closed) missed later cursor moves.
+	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this page
+	// owns it ------------------------------------------------------------------------------
+	const peekOwner = $derived(kind === 'pr' ? 'pulls' : 'issues');
+	const owns = $derived(peek.owner === peekOwner);
+	const peekOpen = $derived(peek.owner !== null);
+	// Read the cursor row even while not owned: a derived whose dependencies change between runs
+	// (only `owns` while not owned) missed later cursor moves.
 	const peekItem = $derived.by(() => {
 		const row = navigable[selectedIndex] ?? null;
-		return peekOpen ? row : null;
+		return owns ? row : null;
 	});
-	const peekTarget = $derived(
-		peekItem && {
-			repo: peekItem.repo,
-			number: peekItem.number,
-			title: peekItem.title,
-			url: peekItem.url
-		}
-	);
+	// Back on the page that owns the peek (after another tab): the cursor goes to the item it
+	// shows. Not when this page just took the peek over: then the cursor is where you chose.
+	let restoredFor: string | null = null;
 	$effect(() => {
-		if (peekOpen && !peekItem) peekOpen = false;
+		const id = untrack(() => peek.target?.id);
+		if (!owns) return void (restoredFor = null);
+		if (restoredFor === peekOwner || !data) return;
+		restoredFor = peekOwner;
+		if (id && navigable.some((i) => i.id === id)) untrack(() => (selectedId = id));
 	});
-	function peek(i: DashItem) {
+	/** This page takes the peek over, on the cursor row. */
+	function take() {
+		restoredFor = peekOwner;
+		claimPeek(peekOwner);
+	}
+	// While this page owns it, the peek shows the cursor row, with this page's actions. It closes
+	// when no row is left.
+	$effect(() => {
+		const i = peekItem;
+		if (!owns || !data) return;
+		untrack(() => {
+			if (!i) return closePeek();
+			peek.target = { id: i.id, repo: i.repo, number: i.number, title: i.title, url: i.url };
+		});
+	});
+	$effect(() => {
+		if (!owns) return;
+		peek.footer = peekFooter;
+		return () => {
+			if (peek.footer === peekFooter) peek.footer = null;
+		};
+	});
+	/** Show an item in the peek (this page takes it over). */
+	function peekThis(i: DashItem) {
 		selectedId = i.id;
-		peekOpen = true;
+		take();
 	}
 
 	/** `index` counts the visible rows left in the group once the dragged rows are out. */
@@ -324,7 +349,6 @@
 			section = null;
 			selectedId = null;
 			sel.clear();
-			peekOpen = false;
 			const saved = localStorage.getItem(`hush:collapsed:${k}`);
 			if (saved) collapsed = JSON.parse(saved);
 		});
@@ -345,7 +369,7 @@
 			collapsed[item.turn] = false;
 			sel.clear();
 			selectedId = item.id;
-			peekOpen = true;
+			take();
 		});
 	});
 
@@ -424,7 +448,7 @@
 		// A click on the card peeks it.
 		sel.clear();
 		selectedId = i.id;
-		peekOpen = true;
+		take();
 	}
 
 	function onToggle(e: MouseEvent, i: DashItem) {
@@ -440,6 +464,8 @@
 			selectedIndex < 0 ? 0 : Math.min(Math.max(selectedIndex + delta, 0), navigable.length - 1);
 		selectedId = navigable[n].id;
 		if (extend) sel.ids.add(selectedId);
+		// Moving with the peek open shows the new row there (this page takes the peek over).
+		if (peekOpen && !owns) take();
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -467,8 +493,8 @@
 			J: () => move(1, true),
 			K: () => move(-1, true),
 			x: () => i && sel.toggle(i.id),
-			' ': () => i && (peekOpen = !peekOpen),
-			Escape: () => (peekOpen ? (peekOpen = false) : sel.clear()),
+			' ': () => i && (owns ? closePeek() : take()),
+			Escape: () => (peekOpen ? closePeek() : sel.clear()),
 			o: () => i && open(i, i.actionUrl),
 			Enter: () => i && open(i, i.actionUrl),
 			O: () => i && open(i, i.url),
@@ -522,7 +548,7 @@
 		},
 		sel,
 		byId,
-		peek,
+		peek: peekThis,
 		open,
 		moveTo,
 		arrange,
@@ -613,7 +639,6 @@
 	<p class="mt-2 mb-2 px-1 text-xs text-muted-foreground">
 		{#if data}
 			Updated {ago(data.fetchedAt)}
-			{#if data.teams.length}· Teams: {data.teams.map((t) => t.slug).join(', ')}{/if}
 		{:else}Loading from GitHub…{/if}
 	</p>
 
@@ -880,7 +905,5 @@
 		>
 	{/if}
 {/snippet}
-
-<Peek target={peekTarget} onclose={() => (peekOpen = false)} footer={peekFooter} />
 
 <ShortcutsDialog bind:open={helpOpen} shortcuts={DASH_SHORTCUTS} />

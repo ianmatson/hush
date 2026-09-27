@@ -33,7 +33,7 @@
 	import BulkBar from '$lib/components/app/bulk-bar.svelte';
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
-	import Peek from '$lib/components/app/peek.svelte';
+	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
 	import AppMenu from '$lib/components/app/app-menu.svelte';
 	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
 	import { palette } from '$lib/palette.svelte';
@@ -133,28 +133,56 @@
 		if (!visible.some((t) => t.id === selectedId)) selectedId = visible[0]?.id ?? null;
 		untrack(() => sel.prune(order));
 	});
-	// --- Peek: follows the cursor while open ----------------------------------------------
-	let peekOpen = $state(false);
+	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this view
+	// owns it ------------------------------------------------------------------------------
+	const peekOwner = $derived(`inbox:${view}`);
+	const owns = $derived(peek.owner === peekOwner);
+	const peekOpen = $derived(peek.owner !== null);
 	let peekSnoozeOpen = $state(false);
 	const wide = new MediaQuery('min-width: 1024px');
-	// Read the cursor row even while closed: a derived whose dependencies change between runs
-	// (only `peekOpen` while closed) missed later cursor moves.
+	// Read the cursor row even while not owned: a derived whose dependencies change between runs
+	// (only `owns` while not owned) missed later cursor moves.
 	const peekThread = $derived.by(() => {
 		const row = visible[selectedIndex] ?? null;
-		return peekOpen ? row : null;
+		return owns ? row : null;
 	});
-	const peekTarget = $derived(
-		peekThread && {
-			repo: peekThread.repo,
-			number: peekThread.number,
-			title: peekThread.title,
-			url: peekThread.htmlUrl
-		}
-	);
-	// The list became empty (or changed view) while peeking.
+	// Back on the view that owns the peek (after another tab): the cursor goes to the item it
+	// shows. Not when this view just took the peek over: then the cursor is where you chose.
+	let restoredFor: string | null = null;
 	$effect(() => {
-		if (peekOpen && !peekThread) peekOpen = false;
+		const id = untrack(() => peek.target?.id);
+		if (!owns) return void (restoredFor = null);
+		if (restoredFor === peekOwner || !threadsQ.data) return;
+		restoredFor = peekOwner;
+		if (id && visible.some((t) => t.id === id)) untrack(() => (selectedId = id));
 	});
+	/** This view takes the peek over, on the cursor row. */
+	function take() {
+		restoredFor = peekOwner;
+		claimPeek(peekOwner);
+	}
+	// While this view owns it, the peek shows the cursor row, with this view's actions. It closes
+	// when the list has no row left (for example, after Done on the last one).
+	$effect(() => {
+		const t = peekThread;
+		if (!owns || !threadsQ.data) return;
+		untrack(() => {
+			if (!t) return closePeek();
+			peek.target = { id: t.id, repo: t.repo, number: t.number, title: t.title, url: t.htmlUrl };
+		});
+	});
+	$effect(() => {
+		if (!owns) return;
+		peek.footer = peekFooter;
+		return () => {
+			if (peek.footer === peekFooter) peek.footer = null;
+		};
+	});
+	/** Show a thread in the peek (this view takes it over). */
+	function peekThis(t: ThreadDTO) {
+		selectedId = t.id;
+		take();
+	}
 	// Reading it in the peek counts as reading it, once it stays open for a moment.
 	$effect(() => {
 		const t = peekThread;
@@ -162,18 +190,11 @@
 		const timer = setTimeout(() => act([t.id], 'read'), 1500);
 		return () => clearTimeout(timer);
 	});
-	function peek(t: ThreadDTO) {
-		selectedId = t.id;
-		peekOpen = true;
-	}
 
-	// A new view starts with nothing selected.
+	// A new view starts with nothing selected. (The peek stays: it is independent of the view.)
 	$effect(() => {
 		void view;
-		untrack(() => {
-			sel.clear();
-			peekOpen = false;
-		});
+		untrack(() => sel.clear());
 	});
 	// The command palette chose a thread in this view: peek it. (After the view effect above,
 	// which closes the peek.)
@@ -187,7 +208,7 @@
 			query = '';
 			sel.clear();
 			selectedId = r.id;
-			peekOpen = true;
+			take();
 		});
 	});
 
@@ -307,7 +328,7 @@
 		// A click on the card peeks it (PRs and issues; other threads only get the cursor).
 		sel.clear();
 		selectedId = t.id;
-		if (t.number) peekOpen = true;
+		if (t.number) take();
 	}
 
 	function onToggle(e: MouseEvent, t: ThreadDTO) {
@@ -323,6 +344,8 @@
 			selectedIndex < 0 ? 0 : Math.min(Math.max(selectedIndex + delta, 0), visible.length - 1);
 		selectedId = visible[i].id;
 		if (extend) sel.ids.add(selectedId);
+		// Moving with the peek open shows the new row there (this view takes the peek over).
+		if (peekOpen && !owns) take();
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -349,8 +372,8 @@
 			J: () => move(1, true),
 			K: () => move(-1, true),
 			x: () => t && sel.toggle(t.id),
-			' ': () => t && (peekOpen = !peekOpen),
-			Escape: () => (peekOpen ? (peekOpen = false) : sel.clear()),
+			' ': () => t && (owns ? closePeek() : take()),
+			Escape: () => (peekOpen ? closePeek() : sel.clear()),
 			o: () => t && open(t, t.actionUrl),
 			Enter: () => t && open(t, t.actionUrl),
 			O: () => t && open(t, t.htmlUrl),
@@ -412,7 +435,7 @@
 		},
 		sel,
 		byId,
-		peek,
+		peek: peekThis,
 		open,
 		act,
 		copyLinks,
@@ -803,8 +826,6 @@
 		>
 	{/if}
 {/snippet}
-
-<Peek target={peekTarget} onclose={() => (peekOpen = false)} footer={peekFooter} />
 
 <SnoozeSheet
 	bind:open={menuSnoozeOpen}
