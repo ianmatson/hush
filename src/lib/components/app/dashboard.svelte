@@ -16,6 +16,7 @@
 	import { ListDrag } from '$lib/drag.svelte';
 	import { api } from '$lib/api';
 	import { dashQuery, keys, queryClient } from '$lib/queries';
+	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
 	import { arrangeGroup, orderAfterDrop } from '$lib/shared/dashboard';
@@ -623,15 +624,28 @@
 	{/if}
 	{#each data?.errors ?? [] as err (err)}
 		{@const help = tokenHelp(err)}
-		<!-- A known token limit is advice, not a failure: the other results are all here. -->
-		<Alert.Root variant={help ? 'default' : 'destructive'} class="mb-3">
-			<Alert.Title>{help?.title ?? 'A search failed'}</Alert.Title>
-			<Alert.Description>
-				{help?.body ?? err}
-				{#if help}<a class="underline" href="/settings/general#token">GitHub access settings</a
-					>{/if}
-			</Alert.Description>
-		</Alert.Root>
+		<!-- A known token limit is advice, not a failure: the other results are all here. You can
+		     hide advice for good (per note); a failed search always shows. -->
+		{#if !help || !dismissedNotes.keys.includes(help.title)}
+			<Alert.Root variant={help ? 'default' : 'destructive'} class="mb-3">
+				<Alert.Title>{help?.title ?? 'A search failed'}</Alert.Title>
+				<Alert.Description>
+					{help?.body ?? err}
+					{#if help}
+						<span class="mt-1 flex flex-wrap gap-x-3">
+							<a class="underline underline-offset-2" href="/settings/general#token"
+								>GitHub access settings</a
+							>
+							<button
+								type="button"
+								class="underline underline-offset-2 hover:text-foreground"
+								onclick={() => dismissNote(help.title)}>Don't show again</button
+							>
+						</span>
+					{/if}
+				</Alert.Description>
+			</Alert.Root>
+		{/if}
 	{/each}
 	{#each data?.sections.filter((s) => s.skipped) ?? [] as s (s.id)}
 		<p class="mb-2 px-1 text-xs text-signal-warn">{s.name}: {s.skipped}</p>
