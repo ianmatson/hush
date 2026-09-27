@@ -18,7 +18,8 @@
 		"format": "prettier --write .",
 		"db:migrate:local": "wrangler d1 migrations apply hush --local",
 		"db:migrate:remote": "wrangler d1 migrations apply hush --remote",
-		"deploy": "pnpm build && wrangler d1 migrations apply hush --remote && wrangler deploy && wrangler deploy -c wrangler.site.jsonc",
+		"deploy": "wrangler whoami > /dev/null && pnpm build && pnpm migrate:remote && wrangler deploy && wrangler deploy -c wrangler.site.jsonc",
+		"migrate:remote": "wrangler d1 migrations apply hush --remote || (sleep 5 && wrangler d1 migrations apply hush --remote)",
 		"keys": "node scripts/gen-keys.mjs",
 		"cf-typegen": "wrangler types"
 	},

@@ -57,6 +57,8 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 
+`deploy` refreshes the wrangler login first and retries the migration step once: right after a token refresh, the D1 API can refuse the new token for a few seconds (error 7403).
+
 Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users must sign in again). Changing the VAPID keys breaks existing push subscriptions.
 
 ### Free-tier budget (per user, approx.)
