@@ -11,10 +11,21 @@
 	import AlertsPanel from './alerts-panel.svelte';
 	import { watchReturns } from '$lib/recheck';
 	import { connectLive } from '$lib/live.svelte';
+	import { checkOrgAccess, orgWarning } from '$lib/org-warning.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
 	$effect(() => watchReturns());
+
+	// Just signed in (?signed_in=1 from the callback): check once which orgs hide their data from
+	// the sign-in, unless this browser said "Don't show again".
+	$effect(() => {
+		const url = page.url;
+		if (url.searchParams.get('signed_in') !== '1') return;
+		url.searchParams.delete('signed_in');
+		goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true });
+		if (!orgWarning.off) checkOrgAccess().catch(() => {});
+	});
 
 	const isRestoring = useIsRestoring();
 	const me = createQuery(meQuery);

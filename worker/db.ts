@@ -36,12 +36,15 @@ export interface UserRow {
 	scopes: string;
 	/** 'app': the token from Sign in with GitHub. 'own': a token the user added in Settings. */
 	token_source: 'app' | 'own';
+	/** The token from Sign in with GitHub, also while a custom token is in use (null before). */
+	app_token_ct: string | null;
+	app_token_iv: string | null;
 	access_checked_at: number | null;
 }
 
 export function getUser(env: Env, id: number) {
 	return env.DB.prepare(
-		'SELECT id, login, name, avatar_url, token_ct, token_iv, scopes, token_source, access_checked_at FROM users WHERE id = ?'
+		'SELECT id, login, name, avatar_url, token_ct, token_iv, scopes, token_source, app_token_ct, app_token_iv, access_checked_at FROM users WHERE id = ?'
 	)
 		.bind(id)
 		.first<UserRow>();
@@ -49,4 +52,11 @@ export function getUser(env: Env, id: number) {
 
 export function userToken(env: Env, u: UserRow): Promise<string> {
 	return decryptSecret(u.token_ct, u.token_iv, env.TOKEN_ENC_KEY);
+}
+
+/** The token from Sign in with GitHub, or null (signed in before it was kept). */
+export function appToken(env: Env, u: UserRow): Promise<string | null> {
+	if (u.app_token_ct && u.app_token_iv)
+		return decryptSecret(u.app_token_ct, u.app_token_iv, env.TOKEN_ENC_KEY);
+	return Promise.resolve(u.token_source === 'app' ? userToken(env, u) : null);
 }

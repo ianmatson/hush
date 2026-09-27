@@ -11,6 +11,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import Settings from '@lucide/svelte/icons/settings';
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { orgWarning } from '$lib/org-warning.svelte';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Search from '@lucide/svelte/icons/search';
 	import Bell from '@lucide/svelte/icons/bell';
@@ -148,6 +150,14 @@
 							<div class="text-sm font-medium text-foreground">{me.data.name ?? me.data.login}</div>
 							<div class="text-xs font-normal text-muted-foreground">@{me.data.login}</div>
 						</DropdownMenu.Label>
+						{#if me.data.tokenSource === 'app' && me.data.orgGaps.length && !orgWarning.off}
+							<DropdownMenu.Item onclick={() => goto('/settings/general#token')}
+								><TriangleAlert class="text-signal-warn" />
+								{me.data.orgGaps.length === 1
+									? '1 org hides its repositories'
+									: `${me.data.orgGaps.length} orgs hide their repositories`}</DropdownMenu.Item
+							>
+						{/if}
 						{#if me.data.tokenSource === 'own'}
 							<DropdownMenu.Item onclick={() => goto('/settings/general#token')}
 								><KeyRound class="text-signal-warn" /> Using a custom token</DropdownMenu.Item

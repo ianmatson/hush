@@ -355,7 +355,21 @@ export interface MeDTO {
 	scopes: string[];
 	/** 'app': the token from Sign in with GitHub. 'own': a token you added in Settings. */
 	tokenSource: 'app' | 'own';
+	/** Orgs that hide their data from your sign-in, from the last check (after sign-in, or Settings). */
+	orgGaps: OrgGap[];
 }
+
+/** An org that hides its data from the sign-in token, and why. */
+export interface OrgGap {
+	org: string;
+	/** not_approved: the org has not approved Hush. sso: authorize Hush for its single sign-on. */
+	reason: 'not_approved' | 'sso' | 'other';
+	message?: string;
+}
+
+/** The result of an org access check (Settings → General → GitHub access). */
+export type OrgAccess =
+	{ available: false } | { available: true; gaps: OrgGap[]; checkedAt: number; approveUrl: string };
 
 // --- Peek: a read-only view of one PR or issue --------------------------------------
 

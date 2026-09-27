@@ -1,9 +1,10 @@
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import type { MeDTO } from '../../src/lib/shared/types';
+import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
 import { allowedOrgs, checkAccess } from '../access';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
-import { getUser, userToken, type Env } from '../db';
+import { appToken, getUser, userToken, type Env } from '../db';
+import { orgGaps } from '../org-access';
 import { getViewer, type GhUser } from '../github';
 import { routes, SESSION_COOKIE, SESSION_DAYS, poller, json, type AppEnv } from '../app';
 
@@ -32,42 +33,49 @@ async function inspect(
 	return viewer;
 }
 
-/** Save the user's GitHub profile, and a token when there is one to store. */
+/**
+ * Save the user's GitHub profile; the token Hush uses, when there is one to store; and the
+ * sign-in token, kept also while a custom token is in use (the org access check uses it).
+ */
 async function saveUser(
 	env: Env,
 	user: GhUser,
-	token: { value: string; scopes: string[]; source: 'app' | 'own' } | null
+	token: { value: string; scopes: string[]; source: 'app' | 'own' } | null,
+	signIn: string | null = null
 ) {
 	const now = Date.now();
-	if (!token) {
-		await env.DB.prepare(
-			'UPDATE users SET login = ?, name = ?, avatar_url = ?, updated_at = ? WHERE id = ?'
-		)
-			.bind(user.login, user.name, user.avatar_url, now, user.id)
-			.run();
-		return;
+	const db = env.DB;
+	const writes = [
+		db
+			.prepare(
+				`INSERT INTO users (id, login, name, avatar_url, token_ct, token_iv, scopes, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, '', '', '', ?5, ?5)
+       ON CONFLICT (id) DO UPDATE SET login = excluded.login, name = excluded.name,
+         avatar_url = excluded.avatar_url, updated_at = excluded.updated_at`
+			)
+			.bind(user.id, user.login, user.name, user.avatar_url, now)
+	];
+	if (token) {
+		const { ct, iv } = await encryptSecret(token.value, env.TOKEN_ENC_KEY);
+		writes.push(
+			db
+				.prepare(
+					`UPDATE users SET token_ct = ?, token_iv = ?, scopes = ?, token_source = ?, access_checked_at = ?
+         WHERE id = ?`
+				)
+				.bind(ct, iv, token.scopes.join(','), token.source, now, user.id)
+		);
 	}
-	const { ct, iv } = await encryptSecret(token.value, env.TOKEN_ENC_KEY);
-	await env.DB.prepare(
-		`INSERT INTO users (id, login, name, avatar_url, token_ct, token_iv, scopes, token_source, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
-     ON CONFLICT (id) DO UPDATE SET login = excluded.login, name = excluded.name, avatar_url = excluded.avatar_url,
-       token_ct = excluded.token_ct, token_iv = excluded.token_iv, scopes = excluded.scopes,
-       token_source = excluded.token_source, updated_at = excluded.updated_at,
-       access_checked_at = excluded.updated_at`
-	)
-		.bind(
-			user.id,
-			user.login,
-			user.name,
-			user.avatar_url,
-			ct,
-			iv,
-			token.scopes.join(','),
-			token.source,
-			now
-		)
-		.run();
+	if (signIn) {
+		const { ct, iv } = await encryptSecret(signIn, env.TOKEN_ENC_KEY);
+		writes.push(
+			db
+				.prepare('UPDATE users SET app_token_ct = ?, app_token_iv = ? WHERE id = ?')
+				.bind(ct, iv, user.id)
+		);
+	}
+	// One transaction: a new user never exists without a token.
+	await db.batch(writes);
 }
 
 async function startSession(c: Context<AppEnv>, userId: number) {
@@ -163,11 +171,13 @@ const app = routes()
 		await saveUser(
 			c.env,
 			viewer.user,
-			keepOwn ? null : { value: token, scopes: viewer.scopes, source: 'app' }
+			keepOwn ? null : { value: token, scopes: viewer.scopes, source: 'app' },
+			token
 		);
 		await startSession(c, viewer.user.id);
 		await poller(c.env, viewer.user.id).start(viewer.user.id, c.env.APP_URL);
-		return c.redirect(`${c.env.APP_URL}/inbox`);
+		// The app then runs the org access check once, unless this browser said "Don't show again".
+		return c.redirect(`${c.env.APP_URL}/inbox?signed_in=1`);
 	})
 	/**
 	 * Use your own token in place of the app's: for an org that has not approved Hush, or one that
@@ -207,9 +217,29 @@ const app = routes()
 		deleteCookie(c, SESSION_COOKIE, { path: '/' });
 		return c.json({ ok: true });
 	})
+	/**
+	 * Check now which orgs hide their data from your sign-in (Settings → General → GitHub access).
+	 * A check from the last minute is reused, so opening the page often costs nothing.
+	 */
+	.get('/api/account/org-access', async (c) => {
+		const u = c.get('user');
+		const token = await appToken(c.env, u);
+		if (!token) return c.json({ available: false } satisfies OrgAccess);
+		const dobj = poller(c.env, u.id);
+		const last = await dobj.orgAccess();
+		const fresh = last && Date.now() - last.checkedAt < 60_000;
+		if (!fresh) await dobj.setOrgAccess(await orgGaps(token));
+		const now = fresh ? last : (await dobj.orgAccess())!;
+		return c.json({
+			available: true,
+			gaps: now.gaps,
+			checkedAt: now.checkedAt,
+			approveUrl: `https://github.com/settings/connections/applications/${c.env.GITHUB_CLIENT_ID}`
+		} satisfies OrgAccess);
+	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status } = await poller(c.env, u.id).me();
+		const { settings, status, orgGaps: gaps } = await poller(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,
@@ -220,7 +250,8 @@ const app = routes()
 			lastPollError: status.lastError,
 			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
 			scopes: u.scopes ? u.scopes.split(',') : [],
-			tokenSource: u.token_source
+			tokenSource: u.token_source,
+			orgGaps: gaps
 		};
 		return c.json(me);
 	});
