@@ -4,7 +4,7 @@ import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
 import { appToken, getUser, type Env } from '../db';
 import { orgGaps } from '../org-access';
-import { getViewer, type GhUser } from '../github';
+import { getViewer, gh, type GhUser } from '../github';
 import { routes, SESSION_COOKIE, SESSION_DAYS, poller, json, type AppEnv } from '../app';
 
 // --- Auth: Sign in with GitHub (an OAuth app), and your own token as an option ------------
@@ -229,6 +229,27 @@ const app = routes()
 			checkedAt: now.checkedAt,
 			approveUrl: `https://github.com/settings/connections/applications/${c.env.GITHUB_CLIENT_ID}`
 		} satisfies OrgAccess);
+	})
+	/**
+	 * TEMP (2026-09-27): what GitHub shows the sign-in token about your orgs (GraphQL, and the
+	 * public profile), to learn if orgs that restrict the app can be detected. Org names and
+	 * errors only. Remove after the test.
+	 */
+	.get('/api/debug/orgs', async (c) => {
+		const u = c.get('user');
+		const token = await appToken(c.env, u);
+		if (!token) return c.json({ error: 'No sign-in token stored. Sign in with GitHub again.' });
+		const query = `{ viewer { organizations(first: 100) { totalCount nodes { login } } } }`;
+		const gql = await gh(token, '/graphql', { method: 'POST', body: JSON.stringify({ query }) });
+		const pub = await gh(token, `/users/${encodeURIComponent(u.login)}/orgs?per_page=100`);
+		const rest = await gh(token, '/user/orgs?per_page=100');
+		const logins = async (r: Response) =>
+			r.ok ? ((await r.json()) as { login: string }[]).map((o) => o.login) : `HTTP ${r.status}`;
+		return c.json({
+			graphql: { status: gql.status, body: await gql.json().catch(() => null) },
+			publicProfileOrgs: await logins(pub),
+			userOrgs: await logins(rest)
+		});
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
