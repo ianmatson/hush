@@ -17,9 +17,9 @@ describe('parseSsoHeader', () => {
 describe('tokenHelp', () => {
 	it('explains an org that blocks classic tokens', () => {
 		const h = tokenHelp(
-			'`PostHog` forbids access via a personal access token (classic). Please use a GitHub App, OAuth App, or a personal access token with fine-grained permissions.'
+			'`acme` forbids access via a personal access token (classic). Please use a GitHub App, OAuth App, or a personal access token with fine-grained permissions.'
 		);
-		expect(h?.title).toBe('PostHog blocks classic tokens');
+		expect(h?.title).toBe('acme blocks classic tokens');
 	});
 	it('ignores other errors', () => {
 		expect(tokenHelp('Something else')).toBeNull();

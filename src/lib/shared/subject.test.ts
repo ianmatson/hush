@@ -19,10 +19,10 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 	return {
 		id: 'PR_1',
 		kind: 'pr',
-		repo: 'PostHog/posthog.com',
+		repo: 'acme/website',
 		number: 1,
 		title: 'Fix it',
-		url: 'https://github.com/PostHog/posthog.com/pull/1',
+		url: 'https://github.com/acme/website/pull/1',
 		author: 'alice',
 		authorAvatar: null,
 		authorIsBot: false,
@@ -80,7 +80,7 @@ describe('views of one subject', () => {
 			pr({
 				reviewRequests: [
 					{ team: false, name: 'Ian' },
-					{ team: true, name: 'PostHog/website' }
+					{ team: true, name: 'acme/website' }
 				],
 				myReview: { at: T1, state: 'COMMENTED' },
 				assignees: ['IAN']
@@ -99,16 +99,16 @@ describe('views of one subject', () => {
 	it('the dashboards count only your teams, and wait since the request for you', () => {
 		const s = pr({
 			reviewRequests: [
-				{ team: true, name: 'PostHog/website' },
-				{ team: true, name: 'PostHog/other' }
+				{ team: true, name: 'acme/website' },
+				{ team: true, name: 'acme/other' }
 			],
 			requestEvents: [
-				{ at: T0, team: true, name: 'PostHog/website' },
-				{ at: T1, team: true, name: 'PostHog/other' }
+				{ at: T0, team: true, name: 'acme/website' },
+				{ at: T1, team: true, name: 'acme/other' }
 			]
 		});
-		const d = dashFactsOf(s, ME, new Set(['PostHog/website']));
-		expect(d.requestedTeams).toEqual(['PostHog/website']);
+		const d = dashFactsOf(s, ME, new Set(['acme/website']));
+		expect(d.requestedTeams).toEqual(['acme/website']);
 		expect(d.requestedAt).toBe(T0);
 		expect(dashFactsOf(s, ME, new Set()).requestedAt).toBeNull();
 	});
@@ -125,14 +125,14 @@ describe('views of one subject', () => {
 });
 
 describe('the inbox and the dashboards agree about one stored subject', () => {
-	const teams = ['PostHog/website'];
+	const teams = ['acme/website'];
 	const cases: [string, Partial<SubjectFacts>][] = [
 		['review requested', { reviewRequests: [{ team: false, name: ME }] }],
 		[
 			're-review requested',
 			{ reviewRequests: [{ team: false, name: ME }], myReview: { at: T0, state: 'COMMENTED' } }
 		],
-		['team request', { reviewRequests: [{ team: true, name: 'PostHog/website' }] }],
+		['team request', { reviewRequests: [{ team: true, name: 'acme/website' }] }],
 		['closed', { state: 'closed', reviewRequests: [{ team: false, name: ME }] }],
 		['merged', { state: 'merged' }],
 		['my PR, CI failed', { author: ME, ci: 'FAILURE' }],
@@ -163,8 +163,8 @@ describe('the inbox and the dashboards agree about one stored subject', () => {
 					verdicts: [{ by: 'bob', at: T2, state: 'APPROVED' }],
 					url:
 						over.kind === 'issue'
-							? 'https://github.com/PostHog/posthog.com/issues/1'
-							: 'https://github.com/PostHog/posthog.com/pull/1'
+							? 'https://github.com/acme/website/issues/1'
+							: 'https://github.com/acme/website/pull/1'
 				});
 				const opts = { botsAreFyi: true, reviewResolution };
 				const dash = computeTurn(dashFactsOf(s, ME, new Set(teams)), ME, [], opts);

@@ -89,7 +89,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'dash.scope',
 		page: 'dashboards',
-		description: 'Added to every search, for example "org:PostHog archived:false".'
+		description: 'Added to every search, for example "org:acme archived:false".'
 	},
 	{
 		key: 'dash.excludedTeams',

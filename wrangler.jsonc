@@ -45,7 +45,10 @@
 	"routes": [{ "pattern": "app.hush-gh.com", "custom_domain": true }],
 	// Only members of these GitHub orgs can sign in (comma-separated). Empty = anyone with a token.
 	"vars": {
-		"ALLOWED_ORGS": "PostHog"
+		// Sign in with GitHub (OAuth app; its secret is GITHUB_CLIENT_SECRET). .dev.vars sets the
+		// development app and APP_URL=http://localhost:5173.
+		"GITHUB_CLIENT_ID": "",
+		"APP_URL": "https://app.hush-gh.com"
 	},
 	// Approximate, per-location limits against floods (period must be 10 or 60 seconds).
 	"ratelimits": [
@@ -55,6 +58,8 @@
 	],
 	// Secrets (wrangler secret put …; locally in .dev.vars):
 	//   TOKEN_ENC_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY — generate with `pnpm keys`.
+	//   GITHUB_CLIENT_SECRET — from the GitHub OAuth app.
+	//   ALLOWED_ORGS (optional) — comma-separated orgs whose members may sign in.
 	//   VAPID_SUBJECT (optional) — push contact; defaults to the app's own URL.
 	"observability": {
 		"enabled": true

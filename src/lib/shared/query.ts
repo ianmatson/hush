@@ -6,7 +6,7 @@ import type { RuleMatch } from './types';
  * One small query language for rules, saved views, and the Filter box. It compiles to RuleMatch,
  * the stored form, and back:
  *
- *   repo:PostHog/* kind:review -is:bot label:"good first issue" login bug
+ *   repo:acme/* kind:review -is:bot label:"good first issue" login bug
  *
  * - `key:value` is a condition; `key:a,b` (or the key twice) matches any of the values.
  * - `is:bot`, `is:draft` and `is:open|closed|merged`; `-is:bot` and `-is:draft` are the opposite.

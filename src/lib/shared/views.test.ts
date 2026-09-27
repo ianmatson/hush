@@ -6,13 +6,13 @@ import { validateRules } from './classify';
 const t = (over: Partial<ThreadDTO> = {}): ThreadDTO =>
 	({
 		id: '1',
-		repo: 'PostHog/posthog.com',
+		repo: 'acme/website',
 		subjectType: 'CheckSuite',
 		title: 'HogFM workflow run failed for master branch',
 		reason: 'ci_activity',
 		unread: false,
 		updatedAt: '2026-09-20T00:00:00Z',
-		htmlUrl: 'https://github.com/PostHog/posthog.com/actions',
+		htmlUrl: 'https://github.com/acme/website/actions',
 		category: 'action',
 		kind: 'fix_ci',
 		summary: 'A workflow run failed',
@@ -45,13 +45,13 @@ const view = (over: Partial<SavedView> = {}): SavedView => ({
 describe('saved views', () => {
 	it('match on text, like the Filter box', () => {
 		expect(threadMatches({ text: 'hogfm' }, t(), 'ian')).toBe(true);
-		expect(threadMatches({ text: 'failed posthog.com' }, t(), 'ian')).toBe(true);
+		expect(threadMatches({ text: 'failed website' }, t(), 'ian')).toBe(true);
 		expect(threadMatches({ text: 'nope' }, t(), 'ian')).toBe(false);
 		expect(threadMatches({ state: ['open'] }, t({ state: 'open' }), 'ian')).toBe(true);
 	});
 
 	it('match on the same conditions as rules', () => {
-		expect(threadMatches({ repo: 'PostHog/*' }, t(), 'ian')).toBe(true);
+		expect(threadMatches({ repo: 'acme/*' }, t(), 'ian')).toBe(true);
 		expect(threadMatches({ repo: 'other/*' }, t(), 'ian')).toBe(false);
 		expect(threadMatches({ type: ['PullRequest'] }, t(), 'ian')).toBe(false);
 		expect(threadMatches({ kind: ['fix_ci'] }, t(), 'ian')).toBe(true);

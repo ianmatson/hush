@@ -16,7 +16,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('allowedOrgs', () => {
 	it('parses a comma list and treats empty as open', () => {
-		expect(allowedOrgs({ ALLOWED_ORGS: ' PostHog , Other ' })).toEqual(['PostHog', 'Other']);
+		expect(allowedOrgs({ ALLOWED_ORGS: ' acme , Other ' })).toEqual(['acme', 'Other']);
 		expect(allowedOrgs({})).toEqual([]);
 	});
 });
@@ -27,25 +27,25 @@ describe('checkAccess', () => {
 	});
 
 	it('allows an active member', async () => {
-		mockGitHub({ PostHog: { status: 200, body: { state: 'active' } } });
-		expect(await checkAccess('t', ['PostHog'])).toEqual({ ok: true });
+		mockGitHub({ acme: { status: 200, body: { state: 'active' } } });
+		expect(await checkAccess('t', ['acme'])).toEqual({ ok: true });
 	});
 
 	it('rejects a pending invite and a non-member', async () => {
-		mockGitHub({ PostHog: { status: 200, body: { state: 'pending' } } });
-		expect(await checkAccess('t', ['PostHog'])).toMatchObject({ ok: false, reason: 'not_member' });
+		mockGitHub({ acme: { status: 200, body: { state: 'pending' } } });
+		expect(await checkAccess('t', ['acme'])).toMatchObject({ ok: false, reason: 'not_member' });
 		mockGitHub({});
-		expect(await checkAccess('t', ['PostHog'])).toMatchObject({ ok: false, reason: 'not_member' });
+		expect(await checkAccess('t', ['acme'])).toMatchObject({ ok: false, reason: 'not_member' });
 	});
 
 	it('reports a blocked token as an error, not as "not a member"', async () => {
 		mockGitHub({
-			PostHog: {
+			acme: {
 				status: 403,
-				body: { message: '`PostHog` forbids access via a personal access token (classic).' }
+				body: { message: '`acme` forbids access via a personal access token (classic).' }
 			}
 		});
-		const r = await checkAccess('t', ['PostHog']);
+		const r = await checkAccess('t', ['acme']);
 		expect(r).toMatchObject({ ok: false, reason: 'error' });
 		expect(!r.ok && r.message).toMatch(/forbids access/);
 	});

@@ -13,7 +13,7 @@ const pr = (e: Partial<Enrichment> = {}): Enrichment => ({
 });
 
 const facts = (over: Partial<ThreadFacts> = {}): ThreadFacts => ({
-	repo: 'PostHog/posthog',
+	repo: 'acme/web',
 	subjectType: 'PullRequest',
 	title: 'Add thing',
 	reason: 'subscribed',
@@ -151,17 +151,17 @@ describe('rules', () => {
 			facts({ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) }),
 			{
 				rules: [
-					{ name: 'mute docs', when: { repo: 'PostHog/posthog.com' }, then: { category: 'muted' } },
+					{ name: 'mute docs', when: { repo: 'acme/website' }, then: { category: 'muted' } },
 					{
-						name: 'quiet posthog',
-						when: { repo: 'PostHog/*', kind: ['review'] },
+						name: 'quiet acme',
+						when: { repo: 'acme/*', kind: ['review'] },
 						then: { push: false }
 					},
 					{ name: 'never reached', when: {}, then: { category: 'muted' } }
 				]
 			}
 		);
-		expect(c).toMatchObject({ category: 'action', rule: 'quiet posthog', push: false });
+		expect(c).toMatchObject({ category: 'action', rule: 'quiet acme', push: false });
 		expect(shouldPush(c, DEFAULT_SETTINGS)).toBe(false);
 	});
 
@@ -223,17 +223,17 @@ describe('rules', () => {
 	});
 
 	it('globs match owner/repo case-insensitively', () => {
-		expect(globToRegExp('posthog/*').test('PostHog/posthog')).toBe(true);
-		expect(globToRegExp('PostHog/posthog').test('PostHog/posthog.com')).toBe(false);
+		expect(globToRegExp('ACME/*').test('acme/web')).toBe(true);
+		expect(globToRegExp('acme/web').test('acme/website')).toBe(false);
 	});
 });
 
 describe('team review requests', () => {
 	const f = facts({
-		repo: 'PostHog/posthog',
+		repo: 'acme/web',
 		reason: 'review_requested',
 		enrichment: pr({ requestedTeams: ['web'] }),
-		myTeams: ['PostHog/web']
+		myTeams: ['acme/web']
 	});
 	it('are FYI by default and "Needs you" when the setting is on', () => {
 		expect(run(f).category).toBe('fyi');

@@ -48,7 +48,7 @@ export const RULE_FIELDS: RuleFieldInfo[] = [
 		key: 'repo',
 		label: 'Repository',
 		input: 'globs',
-		help: 'owner/repo. * matches anything, for example PostHog/*.'
+		help: 'owner/repo. * matches anything, for example acme/*.'
 	},
 	{
 		key: 'author',

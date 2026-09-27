@@ -15,10 +15,10 @@ describe('viewWhere', () => {
 
 describe('subject keys on threads', () => {
 	it('reads owner, repo, and number from the key', () => {
-		expect(subjectRefOf({ id: 't', subject_key: 'PostHog/posthog.com#20481' })).toEqual({
+		expect(subjectRefOf({ id: 't', subject_key: 'acme/website#20481' })).toEqual({
 			key: 't',
-			owner: 'PostHog',
-			repo: 'posthog.com',
+			owner: 'acme',
+			repo: 'website',
 			number: 20481
 		});
 		expect(subjectRefOf({ id: 't', subject_key: null })).toBeNull();

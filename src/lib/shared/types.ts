@@ -119,7 +119,7 @@ export interface Classification {
 }
 
 export interface RuleMatch {
-	/** Glob(s) on "owner/repo", e.g. "PostHog/*". */
+	/** Glob(s) on "owner/repo", e.g. "acme/*". */
 	repo?: string | string[];
 	reason?: Reason[];
 	/** GitHub subject types: PullRequest, Issue, Release, Discussion, CheckSuite, Commit… */
@@ -206,7 +206,7 @@ export interface DashSection {
 export interface DashSettings {
 	pr: DashSection[];
 	issue: DashSection[];
-	/** Appended to every query, e.g. "org:PostHog archived:false". */
+	/** Appended to every query, e.g. "org:acme archived:false". */
 	scope: string;
 	/** "org/team" slugs that `@team` must skip. */
 	excludedTeams: string[];
@@ -353,6 +353,8 @@ export interface MeDTO {
 	/** Orgs whose notifications GitHub hides from this token (SAML SSO not authorized). */
 	ssoHiddenOrgs: number;
 	scopes: string[];
+	/** 'app': the token from Sign in with GitHub. 'own': a token you added in Settings. */
+	tokenSource: 'app' | 'own';
 }
 
 // --- Peek: a read-only view of one PR or issue --------------------------------------

@@ -147,12 +147,12 @@
 						id="scope"
 						bind:value={draft.scope}
 						class="h-8 font-mono text-xs"
-						placeholder="org:PostHog archived:false"
+						placeholder="org:acme archived:false"
 					/>
 					<p class="text-xs text-muted-foreground">
-						Added to every search. For example <code>org:PostHog</code>, or
-						<code>-repo:PostHog/posthog.com</code>. Drafts, bots, and “stale after” are in
-						settings.json (General).
+						Added to every search. For example <code>org:acme</code>, or
+						<code>-repo:acme/website</code>. Drafts, bots, and “stale after” are in settings.json
+						(General).
 					</p>
 				</div>
 			</Card.Content>

@@ -4,10 +4,10 @@ import { formatQuery, parseQuery } from './query';
 describe('query language', () => {
 	it('parses conditions and words', () => {
 		expect(
-			parseQuery('repo:PostHog/* kind:review -is:bot label:"good first issue" login bug')
+			parseQuery('repo:acme/* kind:review -is:bot label:"good first issue" login bug')
 		).toEqual({
 			when: {
-				repo: 'PostHog/*',
+				repo: 'acme/*',
 				kind: ['review'],
 				bot: false,
 				label: ['good first issue'],
@@ -48,7 +48,7 @@ describe('query language', () => {
 
 	it('round-trips', () => {
 		for (const s of [
-			'repo:PostHog/* author:dependabot* type:pr,ci reason:mention kind:review category:action is:open is:merged label:"good first issue" -is:bot is:draft fix login',
+			'repo:acme/* author:dependabot* type:pr,ci reason:mention kind:review category:action is:open is:merged label:"good first issue" -is:bot is:draft fix login',
 			'"a:b" word'
 		])
 			expect(formatQuery(parseQuery(s).when)).toBe(

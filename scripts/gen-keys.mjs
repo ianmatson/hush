@@ -2,7 +2,9 @@
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 
 const tokenKey = crypto.getRandomValues(new Uint8Array(32));
-const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign']);
+const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+	'sign'
+]);
 const pub = await crypto.subtle.exportKey('raw', vapid.publicKey);
 const { d } = await crypto.subtle.exportKey('jwk', vapid.privateKey);
 

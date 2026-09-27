@@ -18,7 +18,7 @@ export { Poller } from './poller';
 
 const app = new Hono<AppEnv>();
 
-app.use('/api/auth/login', async (c, next) => {
+app.use('/api/auth/*', async (c, next) => {
 	if (await overLimit(c.env.AUTH_LIMIT, `login:${clientIp(c)}`)) return tooMany(c);
 	await next();
 });
@@ -39,7 +39,7 @@ app.use('/api/*', async (c, next) => {
 });
 
 app.use('/api/*', async (c, next) => {
-	const open = ['/api/auth/login', '/api/push/vapid-key', '/api/health'];
+	const open = ['/api/auth/github', '/api/auth/callback', '/api/push/vapid-key', '/api/health'];
 	if (open.includes(c.req.path)) return next();
 	const sid = getCookie(c, SESSION_COOKIE);
 	if (!sid) {

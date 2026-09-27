@@ -53,7 +53,8 @@ export type ActionBody = { until?: number; event?: SnoozeEvent };
 
 export const api = {
 	me: () => ok(client.api.me.$get()),
-	login: (token: string) => ok(client.api.auth.login.$post({ json: { token } })),
+	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
+	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	logout: () => ok(client.api.auth.logout.$post()),
 	deleteAccount: () => ok(client.api.account.$delete()),
 	/** Returns null when the server says nothing changed since `etag` (304). */

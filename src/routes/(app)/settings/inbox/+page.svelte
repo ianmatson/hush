@@ -30,7 +30,7 @@
 	const settings = $derived(me.data?.settings);
 
 	const EXAMPLE: Rule[] = [
-		{ name: 'Docs repo is FYI', when: { repo: 'PostHog/posthog.com' }, then: { category: 'fyi' } },
+		{ name: 'Docs repo is FYI', when: { repo: 'acme/website' }, then: { category: 'fyi' } },
 		{ name: 'Mute dependabot', when: { author: 'dependabot*' }, then: { category: 'muted' } },
 		{
 			name: 'Quiet reviews on drafts',

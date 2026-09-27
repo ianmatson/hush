@@ -13,7 +13,7 @@
 		when = $bindable(),
 		id,
 		label = 'As text',
-		placeholder = 'repo:PostHog/* kind:review -is:bot'
+		placeholder = 'repo:acme/* kind:review -is:bot'
 	}: { when: RuleMatch; id: string; label?: string; placeholder?: string } = $props();
 
 	let text = $state(formatQuery(when ?? {}));

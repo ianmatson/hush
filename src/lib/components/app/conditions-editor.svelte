@@ -148,7 +148,7 @@
 							placeholder={list.length
 								? 'Add another…'
 								: key === 'repo'
-									? 'PostHog/*'
+									? 'acme/*'
 									: 'Type, then Enter'}
 							aria-label="Add {f.label}"
 							bind:value={drafts[key]}

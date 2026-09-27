@@ -6,12 +6,12 @@ export function tokenHelp(message: string): { title: string; body: string } | nu
 	if (org)
 		return {
 			title: `${org} blocks classic tokens`,
-			body: `GitHub hides ${org} notifications and search results from this token. Sign in again with a token that ${org} allows (see the sign-in page).`
+			body: `GitHub hides ${org} notifications and search results from this token. Add a token that ${org} allows in Settings → General → GitHub token.`
 		};
 	if (/SAML|single sign-on|SSO/i.test(message))
 		return {
 			title: 'Your token is not authorized for SAML single sign-on',
-			body: 'On github.com/settings/tokens, choose "Configure SSO" next to the token and authorize the org. Then sign in again.'
+			body: 'Sign in again and authorize the org when GitHub asks. For your own token: on github.com/settings/tokens, choose "Configure SSO" next to it and authorize the org.'
 		};
 	return null;
 }

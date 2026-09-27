@@ -1,42 +1,16 @@
 <script lang="ts">
-	import { api } from '$lib/api';
-	import { leaveTo } from '$lib/queries';
-	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import * as Card from '$lib/components/ui/card';
+	import { page } from '$app/state';
 	import * as Alert from '$lib/components/ui/alert';
 	import ThemeToggle from '$lib/components/app/theme-toggle.svelte';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
 
-	const createUrl =
-		'https://github.com/settings/tokens/new?scopes=notifications,repo,read:org&description=Hush%20notifications';
-
-	let token = $state('');
-	let error = $state<string | null>(null);
-	let busy = $state(false);
-
-	async function submit(e: SubmitEvent) {
-		e.preventDefault();
-		error = null;
-		busy = true;
-		try {
-			await api.login(token.trim());
-			// Full page load: nothing from a previous account may stay in memory or in the cache.
-			leaveTo('/inbox');
-		} catch (err) {
-			error = (err as Error).message;
-		} finally {
-			busy = false;
-		}
-	}
+	// The callback sends you back here with ?error= when GitHub or the org check says no.
+	const error = $derived(page.url.searchParams.get('error'));
 </script>
 
 <div class="absolute top-3 right-3"><ThemeToggle /></div>
 
-<main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-12">
-	<div class="mb-8 flex items-center gap-3">
+<main class="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-8 px-4 py-12">
+	<div class="flex items-center gap-3">
 		<img src="/icon.svg" alt="" class="size-10 rounded-xl" />
 		<div>
 			<h1 class="text-xl font-semibold tracking-tight">hush</h1>
@@ -46,60 +20,29 @@
 		</div>
 	</div>
 
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>Sign in with a GitHub token</Card.Title>
-			<Card.Description>
-				Hush reads your notifications with a GitHub token. The server encrypts the token and never
-				shows it again.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<form class="grid gap-4" onsubmit={submit}>
-				<div class="grid gap-2">
-					<Label for="token">GitHub token</Label>
-					<Input
-						id="token"
-						type="password"
-						autocomplete="off"
-						spellcheck={false}
-						placeholder="ghp_… or gho_…"
-						bind:value={token}
-						required
-					/>
-					<p class="text-xs text-muted-foreground">
-						A classic token needs <code>notifications</code>, <code>repo</code>, and
-						<code>read:org</code>. Fine-grained tokens cannot read notifications.
-					</p>
-					<details class="text-xs text-muted-foreground">
-						<summary class="cursor-pointer select-none">My org blocks classic tokens</summary>
-						<p class="mt-1.5 leading-relaxed">
-							Some orgs allow only OAuth apps. If you use the GitHub CLI and your org approved it,
-							run
-							<code>gh auth token</code> and paste the result here (it starts with
-							<code>gho_</code>). Hush stores it encrypted. To revoke it later, run
-							<code>gh auth logout</code> and log in again.
-						</p>
-					</details>
-				</div>
-				{#if error}
-					<Alert.Root variant="destructive">
-						<Alert.Description>{error}</Alert.Description>
-					</Alert.Root>
-				{/if}
-				<div class="flex items-center justify-between gap-2">
-					<Button variant="link" class="px-0" href={createUrl} target="_blank" rel="noreferrer">
-						Create a token <ExternalLink />
-					</Button>
-					<Button type="submit" disabled={busy || token.trim().length < 20}>
-						{#if busy}<LoaderCircle class="animate-spin" />{/if}
-						Sign in
-					</Button>
-				</div>
-			</form>
-		</Card.Content>
-	</Card.Root>
-	<p class="mt-4 text-center text-xs text-muted-foreground">
-		If your org uses SAML SSO, authorize the token for that org on GitHub.
+	{#if error}
+		<Alert.Root variant="destructive">
+			<Alert.Description>{error}</Alert.Description>
+		</Alert.Root>
+	{/if}
+
+	<!-- A full page load: the Worker sends you on to GitHub. -->
+	<a
+		href="/api/auth/github"
+		data-sveltekit-reload
+		class="inline-flex h-11 items-center justify-center gap-2.5 rounded-lg bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
+	>
+		<svg viewBox="0 0 16 16" class="size-4.5" aria-hidden="true" fill="currentColor"
+			><path
+				d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+			/></svg
+		>
+		Sign in with GitHub
+	</a>
+
+	<p class="text-xs leading-relaxed text-muted-foreground">
+		Hush asks for read access to your notifications, your repositories, and your teams. It stores
+		the token encrypted and changes nothing on GitHub except what you choose: Done, Read, and Mute.
+		If your org uses SAML SSO, GitHub asks you to authorize Hush for it.
 	</p>
 </main>
