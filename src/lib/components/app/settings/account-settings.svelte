@@ -2,6 +2,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import type { OrgAccess } from '$lib/shared/types';
 	import { checkOrgAccess, orgWarning, setOrgWarningOff } from '$lib/org-warning.svelte';
@@ -37,8 +38,20 @@
 			checking = false;
 		}
 	}
+	// A switch back to GitHub sign-in that failed comes back here with ?token_error=.
+	let switchError = $state<string | null>(null);
 	onMount(() => {
 		if (!orgWarning.off) runCheck();
+		const url = new URL(location.href);
+		switchError = url.searchParams.get('token_error');
+		if (switchError) {
+			url.searchParams.delete('token_error');
+			goto(url.pathname + url.search + url.hash, {
+				replaceState: true,
+				noScroll: true,
+				keepFocus: true
+			});
+		}
 	});
 
 	// A custom token, in place of the one from your GitHub sign-in.
@@ -132,6 +145,13 @@
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="grid gap-4 text-sm">
+				{#if switchError}
+					<Alert.Root variant="destructive">
+						<Alert.Description
+							>Hush could not switch back to GitHub sign-in: {switchError}</Alert.Description
+						>
+					</Alert.Root>
+				{/if}
 				{#if !editing}
 					<div class="flex flex-wrap items-center gap-2">
 						<Button variant="outline" size="sm" onclick={() => (editing = true)}

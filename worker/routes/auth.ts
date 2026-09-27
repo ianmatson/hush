@@ -120,9 +120,15 @@ const app = routes()
 	})
 	/** GitHub sends you back here: check the state, get the token, and start the session. */
 	.get('/api/auth/callback', async (c) => {
-		const fail = (message: string) =>
-			c.redirect(`${c.env.APP_URL}/login?error=${encodeURIComponent(message)}`);
 		const [state, use] = (getCookie(c, STATE_COOKIE) ?? '').split('.');
+		// A switch back from a custom token starts in Settings, while you are signed in: its errors
+		// go there (the sign-in page would send a signed-in user on to the inbox).
+		const fail = (message: string) =>
+			c.redirect(
+				use === 'app'
+					? `${c.env.APP_URL}/settings/general?token_error=${encodeURIComponent(message)}#token`
+					: `${c.env.APP_URL}/login?error=${encodeURIComponent(message)}`
+			);
 		deleteCookie(c, STATE_COOKIE, { path: '/api/auth' });
 		if (c.req.query('error'))
 			return fail(c.req.query('error_description') ?? 'The sign-in was cancelled.');
@@ -157,9 +163,9 @@ const app = routes()
 		const keepOwn = existing?.token_source === 'own' && use !== 'app';
 		const orgs = allowedOrgs(c.env);
 		let access = await checkAccess(token, orgs);
-		// An org that has not approved the app hides your membership from its token: then your own
-		// token decides.
-		if (!access.ok && access.reason === 'error' && keepOwn)
+		// An org that has not approved the app hides your membership from its token: then the
+		// custom token you already have decides (also when you switch back from it).
+		if (!access.ok && access.reason === 'error' && existing?.token_source === 'own')
 			access = await checkAccess(await userToken(c.env, existing), orgs);
 		if (!access.ok)
 			return fail(
@@ -177,7 +183,11 @@ const app = routes()
 		await startSession(c, viewer.user.id);
 		await poller(c.env, viewer.user.id).start(viewer.user.id, c.env.APP_URL);
 		// The app then runs the org access check once, unless this browser said "Don't show again".
-		return c.redirect(`${c.env.APP_URL}/inbox?signed_in=1`);
+		return c.redirect(
+			use === 'app'
+				? `${c.env.APP_URL}/settings/general?signed_in=1#token`
+				: `${c.env.APP_URL}/inbox?signed_in=1`
+		);
 	})
 	/**
 	 * Use your own token in place of the app's: for an org that has not approved Hush, or one that
