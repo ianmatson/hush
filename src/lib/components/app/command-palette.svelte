@@ -161,10 +161,10 @@
 		},
 		...(
 			[
+				['general', 'General', 'appearance menus account json export import'],
 				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
 				['dashboards', 'PR and issue dashboards', 'sections teams'],
-				['notifications', 'Notifications', 'push quiet'],
-				['general', 'General', 'appearance menus account json export import']
+				['notifications', 'Notifications', 'push quiet']
 			] as const
 		).map(([slug, name, more]) => ({
 			id: `go:settings/${slug}`,

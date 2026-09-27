@@ -9,10 +9,10 @@
 	let { children } = $props();
 
 	const sections = [
+		{ href: '/settings/general', label: 'General', icon: Settings2 },
 		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
 		{ href: '/settings/dashboards', label: 'PRs & issues', icon: GitPullRequest },
-		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
-		{ href: '/settings/general', label: 'General', icon: Settings2 }
+		{ href: '/settings/notifications', label: 'Notifications', icon: Bell }
 	];
 </script>
 
