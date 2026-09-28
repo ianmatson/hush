@@ -59,6 +59,7 @@ export const keys = {
 	dashAll: ['dash'] as const,
 	dash: (kind: DashKind) => ['dash', kind] as const,
 	feeds: ['feeds'] as const,
+	sessions: ['sessions'] as const,
 	pushDevices: ['push-devices'] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
@@ -139,6 +140,7 @@ export const dashQuery = (kind: DashKind) =>
 
 export const feedsQuery = () =>
 	queryOptions({ queryKey: keys.feeds, queryFn: api.feeds, staleTime: 5 * MIN });
+export const sessionsQuery = () => queryOptions({ queryKey: keys.sessions, queryFn: api.sessions });
 export const pushDevicesQuery = () =>
 	queryOptions({ queryKey: keys.pushDevices, queryFn: api.subscriptions });
 export const teamsQuery = () =>

@@ -1,4 +1,5 @@
 import { api } from '$lib/api';
+import { deviceLabel } from '$lib/shared/session';
 
 export type PushSupport = 'supported' | 'unsupported' | 'needs-install';
 
@@ -25,32 +26,6 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
 	return (await reg?.pushManager.getSubscription()) ?? null;
 }
 
-function deviceLabel(): string {
-	const ua = navigator.userAgent;
-	const browser = /Edg\//.test(ua)
-		? 'Edge'
-		: /Firefox\//.test(ua)
-			? 'Firefox'
-			: /Chrome\//.test(ua)
-				? 'Chrome'
-				: /Safari\//.test(ua)
-					? 'Safari'
-					: 'Browser';
-	const os =
-		/Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua)
-			? 'macOS'
-			: /iPhone|iPad/.test(ua)
-				? 'iOS'
-				: /Android/.test(ua)
-					? 'Android'
-					: /Windows/.test(ua)
-						? 'Windows'
-						: /Linux/.test(ua)
-							? 'Linux'
-							: '';
-	return [browser, os].filter(Boolean).join(' on ');
-}
-
 export async function enablePush(): Promise<void> {
 	const { publicKey } = await api.vapidKey();
 	if (!publicKey)
@@ -65,7 +40,7 @@ export async function enablePush(): Promise<void> {
 			userVisibleOnly: true,
 			applicationServerKey: keyToBytes(publicKey)
 		});
-	await api.subscribe(sub.toJSON(), deviceLabel());
+	await api.subscribe(sub.toJSON(), deviceLabel(navigator.userAgent));
 }
 
 export async function disablePush(): Promise<void> {

@@ -7,26 +7,38 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import Rss from '@lucide/svelte/icons/rss';
-	import Copy from '@lucide/svelte/icons/copy';
+	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import X from '@lucide/svelte/icons/x';
 
-	/** The Atom feed of one inbox tab: turn it on (and copy its secret URL), copy, or turn off. */
+	/**
+	 * The Atom feed of one inbox tab: make it (and copy its secret URL), get a new address, or turn
+	 * it off. Hush keeps only a hash of the address, so it can show the URL only when it makes it.
+	 */
 	let { view, name, feeds }: { view: string; name: string; feeds: FeedDTO[] | undefined } =
 		$props();
 	const feed = $derived(feeds?.find((f) => f.view === view));
 
-	async function copy(url: string) {
-		await navigator.clipboard.writeText(url).catch(() => {});
-		toast.success(`Feed URL for “${name}” copied. Keep it secret: anyone with it can read it.`);
-	}
-	async function on() {
+	/** A new address for the tab (the old one, if any, stops working). */
+	async function make(renew: boolean) {
 		try {
 			const f = await api.feedOn(view);
 			queryClient.setQueryData<FeedDTO[]>(keys.feeds, (old) => [
 				...(old ?? []).filter((x) => x.view !== view),
-				f
+				{ view: f.view, createdAt: f.createdAt }
 			]);
-			await copy(f.url);
+			const url = f.url!;
+			const copied = await navigator.clipboard.writeText(url).then(
+				() => true,
+				() => false
+			);
+			toast.success(
+				`${renew ? 'New feed URL' : 'Feed URL'} for “${name}” ${copied ? 'copied' : 'made'}`,
+				{
+					description: `${url}\nHush shows it only this once. Keep it secret: anyone with it can read the feed.${renew ? ' The old URL no longer works.' : ''}`,
+					duration: 30_000,
+					action: { label: 'Copy', onClick: () => navigator.clipboard.writeText(url) }
+				}
+			);
 		} catch (err) {
 			toast.error((err as Error).message);
 		}
@@ -52,7 +64,7 @@
 			{/snippet}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="end">
-			<DropdownMenu.Item onclick={() => copy(feed.url)}><Copy />Copy feed URL</DropdownMenu.Item>
+			<DropdownMenu.Item onclick={() => make(true)}><RefreshCw />New feed URL</DropdownMenu.Item>
 			<DropdownMenu.Item variant="destructive" onclick={off}><X />Turn off feed</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
@@ -63,6 +75,6 @@
 		aria-label="Make a feed of {name}"
 		title="Make a feed"
 		class={cn(!feeds && 'invisible')}
-		onclick={on}><Rss class="opacity-50" /></Button
+		onclick={() => make(false)}><Rss class="opacity-50" /></Button
 	>
 {/if}

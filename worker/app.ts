@@ -3,9 +3,9 @@ import { validator } from 'hono/validator';
 import type { Env, UserRow } from './db';
 
 export const SESSION_COOKIE = 'hush_sid';
-export const SESSION_DAYS = 30;
 
-export type Vars = { user: UserRow };
+/** The signed-in user, and the hash of this browser's session id (sessions.id_hash). */
+export type Vars = { user: UserRow; session: string };
 export type AppEnv = { Bindings: Env; Variables: Vars };
 export type Ctx = Context<AppEnv>;
 

@@ -1,44 +1,42 @@
 import type { FeedDTO } from '../../src/lib/shared/types';
 import { feedViewOk } from '../../src/lib/shared/views';
-import { randomToken } from '../crypto';
+import { randomToken, sha256 } from '../crypto';
 import { renderFeed } from '../feeds';
 import { routes } from '../app';
 
 // --- Feeds: one inbox tab as Atom, at a secret URL ----------------------------------------
 
-type FeedRow = { token: string; view: string; created_at: number };
-const feedDTO = (origin: string, r: FeedRow): FeedDTO => ({
+type FeedRow = { view: string; created_at: number };
+const feedDTO = (r: FeedRow, url?: string): FeedDTO => ({
 	view: r.view,
-	url: `${origin}/feeds/${r.token}`,
-	createdAt: r.created_at
+	createdAt: r.created_at,
+	...(url ? { url } : {})
 });
 
+// Only the hash of a feed's secret is stored, so its address is known only when it is made: the
+// response to PUT is the one time it is sent.
 const app = routes()
 	.get('/api/feeds', async (c) => {
 		const { results } = await c.env.DB.prepare(
-			'SELECT token, view, created_at FROM feeds WHERE user_id = ? ORDER BY created_at'
+			'SELECT view, created_at FROM feeds WHERE user_id = ? ORDER BY created_at'
 		)
 			.bind(c.get('user').id)
 			.all<FeedRow>();
-		const origin = new URL(c.req.url).origin;
-		return c.json(results.map((r) => feedDTO(origin, r)));
+		return c.json(results.map((r) => feedDTO(r)));
 	})
-	/** Turn on the feed of a tab (or get the one it has). */
+	/** Make the feed of a tab, with a new address (an old address of that tab stops working). */
 	.put('/api/feeds/:view', async (c) => {
 		const view = c.req.param('view');
 		if (!feedViewOk(view)) return c.json({ error: 'Unknown tab.' }, 400);
-		const user = c.get('user').id;
+		const token = randomToken(24);
+		const row: FeedRow = { view, created_at: Date.now() };
 		await c.env.DB.prepare(
-			'INSERT INTO feeds (token, user_id, view, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (user_id, view) DO NOTHING'
+			`INSERT INTO feeds (token_hash, user_id, view, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (user_id, view) DO UPDATE SET token_hash = excluded.token_hash, created_at = excluded.created_at`
 		)
-			.bind(randomToken(24), user, view, Date.now())
+			.bind(await sha256(token), c.get('user').id, view, row.created_at)
 			.run();
-		const row = await c.env.DB.prepare(
-			'SELECT token, view, created_at FROM feeds WHERE user_id = ? AND view = ?'
-		)
-			.bind(user, view)
-			.first<FeedRow>();
-		return c.json(feedDTO(new URL(c.req.url).origin, row!));
+		return c.json(feedDTO(row, `${new URL(c.req.url).origin}/feeds/${token}`));
 	})
 	/** Turn off a feed: its URL stops working. */
 	.delete('/api/feeds/:view', async (c) => {

@@ -17,7 +17,7 @@ Hush sees what GitHub puts in your notifications, and the facts of the pull requ
 
 - **Your account**: your GitHub login, name, and avatar, and your token, encrypted.
 - **Your data**, in storage of its own for each user: your threads and their state, the facts of each PR and issue (CI, reviews, the newest comment), your settings, your alert history, your push devices, and your hidden and moved dashboard items.
-- **Sessions and feeds**: a hash of each sign-in session, and your feed addresses.
+- **Sessions and feeds**: a hash of each sign-in session (with its browser and when it was last used), and a hash of each feed address.
 
 Hush keeps Done threads until they have had no activity for 30 days, and alerts for 30 days. **Delete account** (Settings → General → Account) deletes all of it at once. Nothing is shared with anyone, and Hush has no analytics.
 

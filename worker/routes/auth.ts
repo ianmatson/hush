@@ -2,9 +2,11 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
-import { appToken, getUser, type Env } from '../db';
+import { appToken, getUser, tokenContext, userToken, type Env } from '../db';
 import { getViewer, gh, type GhUser } from '../github';
-import { routes, SESSION_COOKIE, SESSION_DAYS, poller, json, type AppEnv } from '../app';
+import { routes, SESSION_COOKIE, poller, json, type AppEnv } from '../app';
+import { SESSION_DAYS, SESSION_IDLE_DAYS, deviceLabel } from '../../src/lib/shared/session';
+import type { SessionDTO } from '../../src/lib/shared/types';
 
 // --- Auth: Sign in with GitHub (an OAuth app), and your own token as an option ------------
 
@@ -54,7 +56,11 @@ async function saveUser(
 			.bind(user.id, user.login, user.name, user.avatar_url, now)
 	];
 	if (token) {
-		const { ct, iv } = await encryptSecret(token.value, env.TOKEN_ENC_KEY);
+		const { ct, iv } = await encryptSecret(
+			token.value,
+			env.TOKEN_ENC_KEY,
+			tokenContext(user.id, 'token')
+		);
 		writes.push(
 			db
 				.prepare(
@@ -64,7 +70,11 @@ async function saveUser(
 		);
 	}
 	if (signIn) {
-		const { ct, iv } = await encryptSecret(signIn, env.TOKEN_ENC_KEY);
+		const { ct, iv } = await encryptSecret(
+			signIn,
+			env.TOKEN_ENC_KEY,
+			tokenContext(user.id, 'app_token')
+		);
 		writes.push(
 			db
 				.prepare('UPDATE users SET app_token_ct = ?, app_token_iv = ? WHERE id = ?')
@@ -75,14 +85,21 @@ async function saveUser(
 	await db.batch(writes);
 }
 
+const DAY = 86_400_000;
+
 async function startSession(c: Context<AppEnv>, userId: number) {
 	const now = Date.now();
 	const sid = randomToken();
-	await c.env.DB.prepare(
-		'INSERT INTO sessions (id_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'
-	)
-		.bind(await sha256(sid), userId, now, now + SESSION_DAYS * 86_400_000)
-		.run();
+	const label = deviceLabel(c.req.header('User-Agent') ?? '');
+	await c.env.DB.batch([
+		// Sessions that ended stay in the table until the user signs in again.
+		c.env.DB.prepare(
+			'DELETE FROM sessions WHERE user_id = ? AND (expires_at <= ? OR last_seen_at <= ?)'
+		).bind(userId, now, now - SESSION_IDLE_DAYS * DAY),
+		c.env.DB.prepare(
+			'INSERT INTO sessions (id_hash, user_id, created_at, expires_at, last_seen_at, label) VALUES (?, ?, ?, ?, ?, ?)'
+		).bind(await sha256(sid), userId, now, now + SESSION_DAYS * DAY, now, label)
+	]);
 	setCookie(c, SESSION_COOKIE, sid, {
 		httpOnly: true,
 		secure: true,
@@ -156,8 +173,12 @@ const app = routes()
 		if ('error' in viewer) return fail(viewer.error);
 
 		// Your own token stays in use, unless you asked for the app's token again.
+		// A custom token that GitHub no longer accepts is replaced (else signing in would not help).
 		const existing = await getUser(c.env, viewer.user.id);
-		const keepOwn = existing?.token_source === 'own' && use !== 'app';
+		const keepOwn =
+			existing?.token_source === 'own' &&
+			use !== 'app' &&
+			!('error' in (await inspect(await userToken(c.env, existing).catch(() => ''))));
 		await saveUser(
 			c.env,
 			viewer.user,
@@ -201,6 +222,39 @@ const app = routes()
 				.run();
 		deleteCookie(c, SESSION_COOKIE, { path: '/' });
 		return c.json({ ok: true });
+	})
+	/** Your sign-in sessions: one for each browser, newest use first. */
+	.get('/api/account/sessions', async (c) => {
+		const { results } = await c.env.DB.prepare(
+			`SELECT id_hash, label, created_at, last_seen_at FROM sessions
+       WHERE user_id = ? AND expires_at > ? AND last_seen_at > ?
+       ORDER BY last_seen_at DESC`
+		)
+			.bind(c.get('user').id, Date.now(), Date.now() - SESSION_IDLE_DAYS * DAY)
+			.all<{ id_hash: string; label: string | null; created_at: number; last_seen_at: number }>();
+		return c.json(
+			results.map((r): SessionDTO => ({
+				id: r.id_hash,
+				label: r.label,
+				createdAt: r.created_at,
+				lastSeenAt: r.last_seen_at,
+				current: r.id_hash === c.get('session')
+			}))
+		);
+	})
+	/** Sign out one session (another browser). */
+	.delete('/api/account/sessions/:id', async (c) => {
+		await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id_hash = ?')
+			.bind(c.get('user').id, c.req.param('id'))
+			.run();
+		return c.json({ ok: true });
+	})
+	/** Sign out everywhere else: every session but this one. */
+	.delete('/api/account/sessions', async (c) => {
+		const r = await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id_hash != ?')
+			.bind(c.get('user').id, c.get('session'))
+			.run();
+		return c.json({ ended: r.meta.changes ?? 0 });
 	})
 	.delete('/api/account', async (c) => {
 		const u = c.get('user');

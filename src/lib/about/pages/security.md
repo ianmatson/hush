@@ -24,15 +24,15 @@ You can deny or revoke the approval at any time in your org's settings, under **
 
 ## How Hush protects your access
 
-- **Your token is encrypted** with AES-256-GCM before Hush stores it. The key is a secret of the server, not in the database. Hush decrypts the token only on the server, to call GitHub, and never sends it to your browser.
-- **Sessions:** your browser keeps a random 256-bit session id in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. The server stores only its SHA-256 hash. A session ends after 30 days, or when you sign out.
+- **Your token is encrypted** with AES-256-GCM before Hush stores it. The key is a secret of the server, not in the database. Each encrypted token is bound to your account, so it cannot be moved to another account and used there. Hush decrypts the token only on the server, to call GitHub, and never sends it to your browser.
+- **Sessions:** your browser keeps a random 256-bit session id in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. The server stores only its SHA-256 hash. A session ends after 7 days with no use, 30 days after sign-in, or when you sign out. **Settings → General → Signed in** lists every browser where you are signed in, with **Sign out everywhere else**. When GitHub stops accepting your token (you revoked Hush, for example), Hush signs you out everywhere.
 - **Sign-in** uses a random `state` value, so that another site cannot finish a sign-in for you.
 - **Requests that change things** must come from Hush's own address; others are refused.
 - **Your data is separate:** each account has a database of its own (a Cloudflare Durable Object).
-- **Feeds** have a random secret address of 192 bits. Turning a feed off makes its address stop working at once.
+- **Feeds** have a random secret address of 192 bits. Hush stores only its hash, so it shows the address only once, when it makes it. A new address, or turning the feed off, makes the old address stop working at once.
 - **Push messages** are encrypted for your device (Web Push, with VAPID keys), so the push services that carry them cannot read them.
 - **Limits** on the number of requests protect sign-in, feeds, and the API against floods.
-- **The public site** is static HTML, with a strict Content Security Policy: it runs no scripts from other sites.
+- **The app and the public site** send a strict Content Security Policy: they run only their own scripts, connect only to their own server, and cannot be put in a frame on another site. The public site is static HTML.
 
 ## Open source
 

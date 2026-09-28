@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { loadOrgs, orgNote, setOrgNoteOff } from '$lib/org-note.svelte';
-	import { keys, leaveTo, meQuery, queryClient } from '$lib/queries';
+	import { keys, leaveTo, meQuery, queryClient, sessionsQuery } from '$lib/queries';
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -15,6 +15,28 @@
 	import KeyRound from '@lucide/svelte/icons/key-round';
 
 	const me = createQuery(meQuery);
+	const sessions = createQuery(sessionsQuery);
+	const others = $derived((sessions.data ?? []).filter((x) => !x.current).length);
+
+	async function endSession(id: string) {
+		try {
+			await api.endSession(id);
+			await queryClient.invalidateQueries({ queryKey: keys.sessions });
+		} catch (err) {
+			toast.error((err as Error).message);
+		}
+	}
+	async function endOthers() {
+		try {
+			const { ended } = await api.endOtherSessions();
+			await queryClient.invalidateQueries({ queryKey: keys.sessions });
+			toast.success(
+				ended === 1 ? 'Signed out 1 other browser' : `Signed out ${ended} other browsers`
+			);
+		} catch (err) {
+			toast.error((err as Error).message);
+		}
+	}
 
 	async function signOut() {
 		await api.logout().catch(() => {});
@@ -116,6 +138,51 @@
 				<p class="text-xs text-muted-foreground">
 					Signing out also clears Hush data cached in this browser.
 				</p>
+			</Card.Content>
+		</Card.Root>
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Signed in</Card.Title>
+				<Card.Description
+					>Each browser where you are signed in. A session ends after 7 days with no use, and 30
+					days after sign-in.</Card.Description
+				>
+			</Card.Header>
+			<Card.Content class="grid gap-3 text-sm">
+				{#if sessions.data}
+					<ul class="divide-y rounded-md border" aria-label="Sessions">
+						{#each sessions.data as x (x.id)}
+							<li class="flex items-center justify-between gap-3 px-3 py-2">
+								<span class="min-w-0">
+									<span class="block truncate"
+										>{x.label ?? 'Browser'}
+										{#if x.current}<span class="text-muted-foreground">(this browser)</span
+											>{/if}</span
+									>
+									<span class="text-xs text-muted-foreground"
+										>{x.current ? 'In use now' : `Last used ${ago(x.lastSeenAt)}`} · signed in {ago(
+											x.createdAt
+										)}</span
+									>
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => (x.current ? signOut() : endSession(x.id))}>Sign out</Button
+								>
+							</li>
+						{/each}
+					</ul>
+					{#if others}
+						<div>
+							<Button variant="outline" size="sm" onclick={endOthers}
+								>Sign out everywhere else</Button
+							>
+						</div>
+					{/if}
+				{:else if sessions.isPending}
+					<p class="text-xs text-muted-foreground">Loading…</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 

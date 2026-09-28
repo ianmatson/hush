@@ -35,9 +35,9 @@ Hush does not read code. The [peek](/docs/peek) shows a PR's description and com
 
 - Your alert history: the title and text of each push, for 30 days.
 - Each device that gets push: the address that its browser's push service gave it, its encryption keys, and a label such as “Chrome on macOS”.
-- The secret address of each [feed](/docs/feeds) that you made.
+- A hash of the secret address of each [feed](/docs/feeds) that you made, not the address itself.
 
-**To keep you signed in:** a hash of your session id, and when the session started and ends. The session id itself is only in your browser's cookie.
+**To keep you signed in:** a hash of your session id, when the session started and was last used, and a label for its browser, such as “Chrome on macOS”. The session id itself is only in your browser's cookie.
 
 ## Where it is kept
 
@@ -53,7 +53,7 @@ That is all. There are no analytics, tracking, or advertising services, and no t
 
 ## Your browser
 
-- One cookie: your session. It is `HttpOnly` and `Secure`, and it lasts 30 days.
+- One cookie: your session. It is `HttpOnly` and `Secure`. It ends after 7 days with no use, or 30 days after sign-in.
 - Local storage: a copy of your lists (so that Hush opens at once), and the choices that are for this browser only: theme and mode, start page, tab counts, and notes that you chose not to see again. **Sign out** clears the copy of your lists.
 
 ## How long it is kept

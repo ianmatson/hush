@@ -8,6 +8,7 @@ import { RULE_FIELDS } from '$lib/shared/rule-fields';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
+import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
 import { MAX_VIEWS, VIEW_BASES } from '$lib/shared/views';
 import { THEMES } from '$lib/themes/list';
 import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
@@ -454,7 +455,10 @@ function limitsReference(): string {
 			['Keys per command', '4'],
 			['Push devices', '10'],
 			['Rule snooze (snoozeHours)', '1 to 720 hours'],
-			['Session', '30 days; then sign in again']
+			[
+				'Session',
+				`${SESSION_IDLE_DAYS} days with no use, or ${SESSION_DAYS} days after sign-in; then sign in again`
+			]
 		]
 	);
 }

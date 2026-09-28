@@ -47,13 +47,22 @@ export function getUser(env: Env, id: number) {
 		.first<UserRow>();
 }
 
+/** What each stored token is bound to (see encryptSecret): the user, and the column. */
+export const tokenContext = (userId: number, which: 'token' | 'app_token') =>
+	`user:${userId}:${which}`;
+
 export function userToken(env: Env, u: UserRow): Promise<string> {
-	return decryptSecret(u.token_ct, u.token_iv, env.TOKEN_ENC_KEY);
+	return decryptSecret(u.token_ct, u.token_iv, env.TOKEN_ENC_KEY, tokenContext(u.id, 'token'));
 }
 
 /** The token from Sign in with GitHub, or null (signed in before it was kept). */
 export function appToken(env: Env, u: UserRow): Promise<string | null> {
 	if (u.app_token_ct && u.app_token_iv)
-		return decryptSecret(u.app_token_ct, u.app_token_iv, env.TOKEN_ENC_KEY);
+		return decryptSecret(
+			u.app_token_ct,
+			u.app_token_iv,
+			env.TOKEN_ENC_KEY,
+			tokenContext(u.id, 'app_token')
+		);
 	return Promise.resolve(u.token_source === 'app' ? userToken(env, u) : null);
 }

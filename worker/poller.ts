@@ -178,6 +178,11 @@ export class Poller extends PollerData {
 		await this.putChanged({ pollGap: at - now });
 	}
 
+	/** Sign the user out everywhere: Hush cannot use their token any more. */
+	private async endSessions(userId: number) {
+		await this.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+	}
+
 	private async fail(message: string, opts: { stop?: boolean; retryAt?: number } = {}) {
 		const errorCount = ((await this.ctx.storage.get<number>('errorCount')) ?? 0) + 1;
 		await this.ctx.storage.put({
@@ -196,6 +201,7 @@ export class Poller extends PollerData {
 		try {
 			who = await this.who();
 		} catch {
+			await this.endSessions(user.id);
 			return this.fail('Could not decrypt the stored token. Sign in again.', { stop: true });
 		}
 		if (!who) return;
@@ -218,10 +224,13 @@ export class Poller extends PollerData {
 			return this.fail(`Network error: ${(err as Error).message}`);
 		}
 
-		if (page.status === 401)
+		if (page.status === 401) {
+			// The token was revoked or expired: no browser should stay signed in with it.
+			await this.endSessions(user.id);
 			return this.fail('GitHub rejected the token. Sign in again with a new token.', {
 				stop: true
 			});
+		}
 		if (page.status === 403 || page.status === 429)
 			return this.fail('GitHub rate limit or permission error. Hush will retry later.', {
 				retryAt: page.resetAt

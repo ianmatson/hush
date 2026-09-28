@@ -133,5 +133,9 @@ export const api = {
 	feeds: () => ok(client.api.feeds.$get()),
 	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
 	feedOn: (view: string) => ok(client.api.feeds[':view'].$put({ param: { view } })),
-	feedOff: (view: string) => ok(client.api.feeds[':view'].$delete({ param: { view } }))
+	feedOff: (view: string) => ok(client.api.feeds[':view'].$delete({ param: { view } })),
+	sessions: () => ok(client.api.account.sessions.$get()),
+	endSession: (id: string) => ok(client.api.account.sessions[':id'].$delete({ param: { id } })),
+	/** Sign out every other browser. */
+	endOtherSessions: () => ok(client.api.account.sessions.$delete())
 };

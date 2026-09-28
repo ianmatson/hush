@@ -36,23 +36,33 @@ async function tokenKey(secret: string): Promise<CryptoKey> {
 	return key;
 }
 
-/** Encrypt a GitHub token at rest with AES-256-GCM. */
+/**
+ * Encrypt a GitHub token at rest with AES-256-GCM. `context` says whose token it is and which one
+ * ("user:42:token"); it is bound to the ciphertext as additional data, so a ciphertext copied to
+ * another user or column does not decrypt.
+ */
 export async function encryptSecret(
 	plain: string,
-	secret: string
+	secret: string,
+	context: string
 ): Promise<{ ct: string; iv: string }> {
 	const iv = crypto.getRandomValues(new Uint8Array(12));
 	const ct = await crypto.subtle.encrypt(
-		{ name: 'AES-GCM', iv },
+		{ name: 'AES-GCM', iv, additionalData: enc.encode(context) },
 		await tokenKey(secret),
 		enc.encode(plain)
 	);
 	return { ct: b64urlEncode(ct), iv: b64urlEncode(iv) };
 }
 
-export async function decryptSecret(ct: string, iv: string, secret: string): Promise<string> {
+export async function decryptSecret(
+	ct: string,
+	iv: string,
+	secret: string,
+	context: string
+): Promise<string> {
 	const pt = await crypto.subtle.decrypt(
-		{ name: 'AES-GCM', iv: b64urlDecode(iv) },
+		{ name: 'AES-GCM', iv: b64urlDecode(iv), additionalData: enc.encode(context) },
 		await tokenKey(secret),
 		b64urlDecode(ct)
 	);

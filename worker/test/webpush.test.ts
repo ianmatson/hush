@@ -63,8 +63,15 @@ describe('vapidAuthHeader (RFC 8292)', () => {
 describe('token encryption', () => {
 	it('round-trips', async () => {
 		const key = randomToken(32);
-		const { ct, iv } = await encryptSecret('ghp_example', key);
+		const { ct, iv } = await encryptSecret('ghp_example', key, 'user:1:token');
 		expect(ct).not.toContain('ghp_');
-		expect(await decryptSecret(ct, iv, key)).toBe('ghp_example');
+		expect(await decryptSecret(ct, iv, key, 'user:1:token')).toBe('ghp_example');
+	});
+
+	it('does not decrypt for another user or column', async () => {
+		const key = randomToken(32);
+		const { ct, iv } = await encryptSecret('ghp_example', key, 'user:1:token');
+		await expect(decryptSecret(ct, iv, key, 'user:2:token')).rejects.toThrow();
+		await expect(decryptSecret(ct, iv, key, 'user:1:app_token')).rejects.toThrow();
 	});
 });

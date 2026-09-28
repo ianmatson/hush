@@ -64,4 +64,8 @@ Both are in **Settings → General → Account**, and **Sign out** is also in th
 - **Sign out** ends the session in this browser and clears the Hush data cached in it. Hush keeps polling for your other devices.
 - **Delete account** stops polling and deletes everything Hush stores about you: your token, threads, settings, alert history, push devices, and feeds. It does not change anything on GitHub. To remove Hush's access on GitHub too, revoke it in GitHub's settings (Applications → Authorized OAuth Apps).
 
-A session lasts 30 days. After that, sign in again.
+### Where you are signed in
+
+**Settings → General → Signed in** lists each browser where you are signed in, with when it was last used. **Sign out** next to one ends that session; **Sign out everywhere else** ends all but this one. Use it if you lose a device.
+
+A session ends after 7 days with no use, or 30 days after sign-in; then sign in again. When GitHub stops accepting your token (for example, you revoked Hush on GitHub), Hush signs you out everywhere.

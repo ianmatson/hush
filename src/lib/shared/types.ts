@@ -348,8 +348,20 @@ export interface Counts {
 /** A feed: one inbox tab as Atom. `view` is 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
 export interface FeedDTO {
 	view: string;
-	url: string;
+	/** Only when the feed was just made: Hush keeps only a hash of the address. */
+	url?: string;
 	createdAt: number;
+}
+
+/** One sign-in session (Settings → General → Account). `id` is the hash of its cookie. */
+export interface SessionDTO {
+	id: string;
+	/** "Chrome on macOS", from the browser that signed in. */
+	label: string | null;
+	createdAt: number;
+	lastSeenAt: number;
+	/** This browser. */
+	current: boolean;
 }
 
 export interface MeDTO {

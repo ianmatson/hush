@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { getCookie } from 'hono/cookie';
 import { sha256 } from './crypto';
 import type { UserRow } from './db';
+import { SESSION_IDLE_DAYS, SESSION_TOUCH_MS } from '../src/lib/shared/session';
 import { clientIp, overLimit, SESSION_COOKIE, tooMany, type AppEnv, type Ctx } from './app';
 import alerts from './routes/alerts';
 import auth from './routes/auth';
@@ -18,6 +19,7 @@ import threads from './routes/threads';
 export { Poller } from './poller';
 
 const app = new Hono<AppEnv>();
+const DAY = 86_400_000;
 
 app.use('/api/auth/*', async (c, next) => {
 	if (await overLimit(c.env.AUTH_LIMIT, `login:${clientIp(c)}`)) return tooMany(c);
@@ -47,14 +49,27 @@ app.use('/api/*', async (c, next) => {
 		if (await overLimit(c.env.API_LIMIT, `ip:${clientIp(c)}`)) return tooMany(c);
 		return c.json({ error: 'Not signed in' }, 401);
 	}
+	// A session ends 30 days after sign-in, or after 7 days with no use.
+	const now = Date.now();
+	const hash = await sha256(sid);
 	const row = await c.env.DB.prepare(
-		'SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ? AND s.expires_at > ?'
+		`SELECT u.*, s.last_seen_at AS session_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.id_hash = ? AND s.expires_at > ? AND s.last_seen_at > ?`
 	)
-		.bind(await sha256(sid), Date.now())
-		.first<UserRow>();
+		.bind(hash, now, now - SESSION_IDLE_DAYS * DAY)
+		.first<UserRow & { session_seen_at: number }>();
 	if (!row) return c.json({ error: 'Not signed in' }, 401);
 	if (await overLimit(c.env.API_LIMIT, `user:${row.id}`)) return tooMany(c);
-	c.set('user', row);
+	// The last use, at most once an hour: enough for the 7-day limit, and few writes.
+	if (now - row.session_seen_at > SESSION_TOUCH_MS)
+		c.executionCtx.waitUntil(
+			c.env.DB.prepare('UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?')
+				.bind(now, hash)
+				.run()
+		);
+	const { session_seen_at: _, ...user } = row;
+	c.set('user', user);
+	c.set('session', hash);
 	await next();
 });
 

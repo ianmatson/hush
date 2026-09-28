@@ -11,9 +11,11 @@ Any inbox tab can be an Atom feed: Needs you, FYI, Needs you + FYI, or one of yo
 2. Choose the feed button (the RSS icon) next to a tab. Hush makes the feed and copies its address.
 3. Paste the address in your feed reader.
 
-The feed button of a tab with a feed has a menu: **Copy feed URL** and **Turn off feed**.
+Hush shows the address **only this once**: it keeps only a hash of it. Copy it from the message if the copy did not work. If you lose it, make a new one.
 
-**Keep the address secret.** Anyone who has it can read the feed, with no sign-in. If it leaks, choose **Turn off feed**: the old address stops working at once. Make a new feed to get a new address.
+The feed button of a tab with a feed has a menu: **New feed URL** and **Turn off feed**.
+
+**Keep the address secret.** Anyone who has it can read the feed, with no sign-in. If it leaks, choose **New feed URL** or **Turn off feed**: the old address stops working at once.
 
 ## What is in a feed
 

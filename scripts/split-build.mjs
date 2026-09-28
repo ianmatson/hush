@@ -48,7 +48,34 @@ writeFileSync(
 const appDir = readdirSync(BUILD).find((d) => existsSync(join(BUILD, d, 'immutable')));
 if (!appDir) throw new Error(`split: no immutable folder in ${BUILD}/`);
 const IMMUTABLE = `/${appDir}/immutable/*\n  Cache-Control: public, max-age=31536000, immutable\n`;
-writeFileSync(join(app, '_headers'), IMMUTABLE);
+// Security headers for the app. Scripts: its own files, and the app shell's inline start-up
+// script by its hash. Images: GitHub's servers (avatars, and images and emoji in comments, which
+// the peek shows). Connections (the API and the live socket): the app itself only.
+const inlineHashes = (html) =>
+	[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+		(m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`
+	);
+const GITHUB_MEDIA =
+	'https://github.com https://*.githubusercontent.com https://github.githubassets.com';
+const appCsp = [
+	"default-src 'self'",
+	`script-src 'self' ${inlineHashes(readFileSync(join(BUILD, shell), 'utf8')).join(' ')}`,
+	"style-src 'self' 'unsafe-inline'",
+	`img-src 'self' data: ${GITHUB_MEDIA}`,
+	`media-src 'self' ${GITHUB_MEDIA}`,
+	"font-src 'self' data:",
+	"connect-src 'self'",
+	"worker-src 'self'",
+	"manifest-src 'self'",
+	"frame-src 'none'",
+	"object-src 'none'",
+	"base-uri 'none'",
+	"form-action 'self'",
+	"frame-ancestors 'none'"
+].join('; ');
+const SECURITY = (csp) =>
+	`  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n`;
+writeFileSync(join(app, '_headers'), `/*\n${SECURITY(appCsp)}${IMMUTABLE}`);
 writeFileSync(
 	join(app, 'robots.txt'),
 	'# The app is private: nothing here to index.\nUser-agent: *\nDisallow: /\n'
@@ -60,29 +87,20 @@ const appOnly = [shell, 'service-worker.js', 'manifest.webmanifest'];
 cpSync(BUILD, site, { recursive: true, filter: (src) => !appOnly.includes(relative(BUILD, src)) });
 // Security headers. The site loads only its own code: scripts from this origin, and the inline
 // scripts of the built pages by their hash (so an added or third-party script does not run).
-const hashes = new Set(
-	pages.flatMap((f) =>
-		[...readFileSync(join(BUILD, f), 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
-			(m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`
-		)
-	)
-);
+const hashes = new Set(pages.flatMap((f) => inlineHashes(readFileSync(join(BUILD, f), 'utf8'))));
 const csp = [
 	"default-src 'self'",
 	`script-src 'self' ${[...hashes].join(' ')}`,
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data:",
-	"font-src 'self'",
+	"font-src 'self' data:",
 	"connect-src 'self'",
 	"object-src 'none'",
 	"base-uri 'self'",
 	"form-action 'self'",
 	"frame-ancestors 'none'"
 ].join('; ');
-writeFileSync(
-	join(site, '_headers'),
-	`/*\n  Content-Security-Policy: ${csp}\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n${IMMUTABLE}`
-);
+writeFileSync(join(site, '_headers'), `/*\n${SECURITY(csp)}${IMMUTABLE}`);
 console.log(
 	`split: ${pages.length} site pages → dist/site (${hashes.size} inline scripts in the CSP), app shell → dist/app`
 );
