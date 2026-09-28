@@ -47,20 +47,20 @@ describe('keymap', () => {
 
 	it('finds the command for a key in the active scopes', () => {
 		const map = bindings();
-		expect(commandIn(map, 'e', ['list', 'item'])).toBe('item.done');
-		expect(commandIn(map, '2', ['global', 'list'])).toBe('nav.waiting');
+		expect(commandIn(map, 'e', ['list', 'inbox'])).toBe('inbox.done');
+		expect(commandIn(map, 'e', ['list', 'dash'])).toBe('dash.hide');
 		expect(commandIn(map, 'Mod+k', ['global'])).toBe('palette');
-		expect(commandIn(map, 'q', ['list', 'item'])).toBeNull();
+		expect(commandIn(map, 'q', ['list', 'inbox'])).toBeNull();
 	});
 
 	it('applies your changes and sees conflicts', () => {
-		const map = bindings({ 'item.done': ['d'], 'list.copy': [] });
-		expect(commandIn(map, 'd', ['item'])).toBe('item.done');
-		expect(commandIn(map, 'e', ['item'])).toBeNull();
+		const map = bindings({ 'inbox.done': ['d'], 'list.copy': [] });
+		expect(commandIn(map, 'd', ['inbox'])).toBe('inbox.done');
+		expect(commandIn(map, 'e', ['inbox'])).toBeNull();
 		expect(commandIn(map, 'c', ['list'])).toBeNull();
 		expect(conflicts(map, 'peek.approve', 'j').map((c) => c.id)).toEqual(['list.next']);
-		// Text boxes are never active with the lists.
-		expect(conflicts(map, 'editor.save', 'd')).toEqual([]);
+		// The inbox and the dashboards are never active together.
+		expect(conflicts(map, 'dash.hide', 'd')).toEqual([]);
 	});
 
 	it('shows keys for people', () => {
@@ -70,11 +70,11 @@ describe('keymap', () => {
 	});
 
 	it('checks the setting', () => {
-		expect(validateKeys({ 'item.done': ['d', 'Shift+d'] })).toBeNull();
+		expect(validateKeys({ 'inbox.done': ['d', 'Shift+d'] })).toBeNull();
 		expect(validateKeys({ nope: ['d'] })).toMatch(/unknown command/);
-		expect(validateKeys({ 'item.done': ['D'] })).toMatch(/not a key/);
-		expect(validateKeys({ 'item.done': ['Shift+Mod+d'] })).toMatch(/not a key/);
-		expect(validateKeys({ 'item.done': 'd' })).toMatch(/list/);
+		expect(validateKeys({ 'inbox.done': ['D'] })).toMatch(/not a key/);
+		expect(validateKeys({ 'inbox.done': ['Shift+Mod+d'] })).toMatch(/not a key/);
+		expect(validateKeys({ 'inbox.done': 'd' })).toMatch(/list/);
 		expect(validateKeys([])).toMatch(/object/);
 	});
 });

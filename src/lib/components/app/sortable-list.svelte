@@ -10,8 +10,8 @@
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 
 	/**
-	 * A list you reorder by drag (mouse and pen, with a lift and spring) or with the
-	 * ↑ ↓ buttons (every device). Used by Settings → Advanced → Menu.
+	 * A list you reorder by drag (mouse and pen, with the dashboards' lift and spring) or with the
+	 * ↑ ↓ buttons (every device). Used by Settings → Menus and the saved views.
 	 */
 	let {
 		items,

@@ -23,18 +23,14 @@ export const INBOX_CHECK_GAP = MIN;
 /** The alert history (the bell) keeps this long. */
 export const ALERT_LOG_KEEP = 30 * DAY;
 
-/** Push tags that are not an item key. */
+/** Push tags that are not a thread id. */
 export const NON_THREAD_TAGS = new Set(['digest', 'test']);
 // Poll every 5 minutes while someone can see the result (push on, or Hush open lately), else
 // every 15. Push arrives a few minutes late, but each user costs a fifth of the Cloudflare budget.
 export const POLL_ACTIVE = 5 * MIN;
 export const POLL_IDLE = 15 * MIN;
-/** Tracked searches run again after this long (while Hush is open, or push is on). */
-export const SEARCH_EVERY = 15 * MIN;
-/** Updates keep this long; older ones leave the lane (Search still finds them). */
-export const UPDATES_KEEP = 14 * DAY;
-/** "Hush finished these for you": items that left Your turn by themselves in this time. */
-export const FINISHED_SHOW = 24 * 60 * MIN;
+export const DASH_TTL = 15 * MIN;
+export const MUTED_BY_USER = 'Muted by you';
 
 export interface PollStatus {
 	lastPollAt: number | null;
@@ -42,9 +38,9 @@ export interface PollStatus {
 	nextPollAt: number | null;
 	/** Orgs whose notifications GitHub hides until the token is SAML-authorized. */
 	ssoHiddenOrgs: number;
-	/** The first sync after sign-in has not finished: the lanes are still filling. */
+	/** The first sync after sign-in has not finished: the inbox is still filling. */
 	firstSync: boolean;
-	/** Items a manual refresh took out of Your turn (see checkTurn). */
+	/** Threads a manual refresh moved to Done (see checkInbox). */
 	resolved?: { title: string; note: string }[];
 }
 
@@ -54,8 +50,8 @@ export interface Who {
 	me: string;
 	token: string;
 	settings: Settings;
-	/** Your teams ("org/team"), minus the ones you excluded: their review requests are yours. */
-	myTeams: string[];
+	/** Team slugs whose review requests count in the inbox (Settings → Inbox). */
+	inboxTeams: string[];
 }
 
 export type Resolved = { id: string; title: string; note: string };

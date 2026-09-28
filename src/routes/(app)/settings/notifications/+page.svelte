@@ -192,35 +192,36 @@
 			<Card.Header>
 				<Card.Title>What to push</Card.Title>
 				<Card.Description
-					>Only what comes into Your turn: Waiting and Updates never push. A rule can push more or
-					less for some repos, people, or kinds of activity (Advanced).</Card.Description
+					>Inbox rules can override this for specific repos, people, or kinds of activity. More in
+					settings.json (General).</Card.Description
 				>
 			</Card.Header>
 			<Card.Content class="divide-y">
 				<SettingRow
-					id="push"
-					label="When something becomes your turn"
-					description="A review request, a reply to you, CI that fails on your PR, a PR ready to merge."
+					id="push-action"
+					label="“Needs you” items"
+					description="Review requests, failed CI on your PRs, replies, direct mentions."
 				>
 					<Switch
-						id="push"
-						checked={settings.push}
-						onCheckedChange={(v) => saveSettings({ push: v })}
+						id="push-action"
+						checked={settings.pushAction}
+						onCheckedChange={(v) => saveSettings({ pushAction: v })}
 					/>
 				</SettingRow>
 				<SettingRow
-					id="push-resolved"
-					label="Update an alert when it is resolved"
-					description="An alert from the last day changes to a quiet “✓ You approved” (or “CI passes now”) and closes itself."
+					id="push-fyi"
+					label="FYI items"
+					description="Usually noisy. Use a rule for the repos you care about instead."
 				>
 					<Switch
-						id="push-resolved"
-						checked={settings.pushResolved}
-						onCheckedChange={(v) => saveSettings({ pushResolved: v })}
+						id="push-fyi"
+						checked={settings.pushFyi}
+						onCheckedChange={(v) => saveSettings({ pushFyi: v })}
 					/>
 				</SettingRow>
 			</Card.Content>
 		</Card.Root>
+
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Quiet hours</Card.Title>

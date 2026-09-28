@@ -33,7 +33,7 @@
 					>
 					<a
 						class="underline underline-offset-2"
-						href="/settings/account#token"
+						href="/settings/general#token"
 						onclick={() => (orgNote.open = false)}>Use a custom token</a
 					>
 					<button

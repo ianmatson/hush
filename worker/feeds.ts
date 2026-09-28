@@ -1,5 +1,6 @@
 import { sha256 } from './crypto';
 import type { Env } from './db';
+import { factsOf } from './poller/schema';
 
 const esc = (s: string) =>
 	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -9,27 +10,27 @@ export async function renderFeed(env: Env, token: string, origin: string): Promi
 		.bind(await sha256(token))
 		.first<{ user_id: number; view: string }>();
 	if (!feed) return new Response('Not found', { status: 404 });
-	const tab = await env.POLLER.get(env.POLLER.idFromName(String(feed.user_id))).feedItems(
+	const tab = await env.POLLER.get(env.POLLER.idFromName(String(feed.user_id))).feedThreads(
 		feed.view
 	);
-	// The saved search was deleted.
+	// The saved view was deleted.
 	if (!tab) return new Response('Not found', { status: 404 });
-	const { name, items } = tab;
+	const { name, rows } = tab;
 
 	const self = `${origin}/feeds/${token}`;
-	const updated = items[0]?.activityAt ?? new Date(0).toISOString();
-	const entries = items
-		.map((i) => {
-			const num = i.number ? `#${i.number}` : '';
-			const comment = i.activity?.what === 'commented' ? `\n\n@${i.activity.by} commented` : '';
+	const updated = rows[0]?.gh_updated_at ?? new Date(0).toISOString();
+	const entries = rows
+		.map((r) => {
+			const e = factsOf(r);
+			const num = e?.number ? `#${e.number}` : '';
 			return `  <entry>
-    <id>tag:hush,${esc(i.key)}:${esc(i.activityAt)}</id>
-    <title>${esc(`${i.summary}: ${i.title}`)}</title>
-    <link href="${esc(i.actionUrl)}"/>
-    <updated>${esc(i.activityAt)}</updated>
-    <author><name>${esc(i.author ?? i.repo)}</name></author>
-    <category term="${esc(i.lane)}"/>
-    <summary>${esc(`${i.repo}${num} · ${i.reason}${i.event ? ` · ${i.event}` : ''}${comment}`)}</summary>
+    <id>tag:hush,${r.id}:${esc(r.gh_updated_at)}</id>
+    <title>${esc(`${r.summary}: ${r.title}`)}</title>
+    <link href="${esc(r.action_url)}"/>
+    <updated>${esc(r.gh_updated_at)}</updated>
+    <author><name>${esc(e?.author ?? r.repo)}</name></author>
+    <category term="${esc(r.category)}"/>
+    <summary>${esc(`${r.repo}${num} · ${r.why}${e?.lastComment?.body ? `\n\n${e.lastComment.body}` : ''}`)}</summary>
   </entry>`;
 		})
 		.join('\n');

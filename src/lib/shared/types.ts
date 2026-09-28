@@ -1,17 +1,21 @@
 import type { Activity } from './activity';
-import type { SubjectFacts } from './subject';
 // Types shared by the Worker (worker/) and the SPA (src/).
 
-/**
- * Where an item shows. "turn": you are the next person who must act. "waiting": you did your
- * part and someone else must act. "updates": everything else GitHub told you. "muted": a rule
- * hides it.
- */
-export type Lane = 'turn' | 'waiting' | 'updates' | 'muted';
-/** In Your turn: someone else waits on you, or your own work needs you. */
-export type Section = 'others' | 'work';
-/** What you did with an item: nothing yet, Done (until its turn changes), snoozed, or muted. */
-export type ItemState = 'active' | 'done' | 'snoozed' | 'muted';
+export type Category = 'action' | 'fyi' | 'muted';
+export type Triage = 'inbox' | 'done' | 'snoozed';
+export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all' | 'inbox';
+
+/** What a saved view starts from. "inbox" is Needs you and FYI together. */
+export type ViewBase = 'inbox' | 'action' | 'fyi' | 'snoozed' | 'done';
+
+/** A named filter on the inbox, shown as a tab (see shared/views.ts). */
+export interface SavedView {
+	id: string;
+	name: string;
+	base: ViewBase;
+	/** The same conditions as rules (and the Filter box). All must match. */
+	when: RuleMatch;
+}
 
 export type ActionKind =
 	| 'review'
@@ -84,55 +88,39 @@ export interface Enrichment {
 	lastVerdict?: { by: string; at: string } | null;
 }
 
-/** Everything the placement needs to know about one item. */
-export interface ItemFacts {
+/** Everything the classifier needs to know about one notification thread. */
+export interface ThreadFacts {
 	repo: string;
 	subjectType: string;
 	title: string;
-	/** The newest notification's reason, or '' for an item that only a search found. */
 	reason: Reason;
 	htmlUrl: string;
 	enrichment: Enrichment | null;
-	/** The full facts of a PR or issue, when Hush has them (for "waiting since" and "on whom"). */
-	subject?: SubjectFacts | null;
 	me: string;
-	/** "org/team" slugs of your teams whose review requests count (the teamReviewsAreMine setting). */
+	/** "org/team" slugs of the teams you are in. */
 	myTeams?: string[];
-	/** Already known (from the DTO); otherwise read from `enrichment`. */
+	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
 }
 
-/** Where an item goes, and what the row says about it (shared/place.ts). */
-export interface Placement {
-	lane: Lane;
-	section: Section | null;
-	needs: ActionKind;
+export interface Classification {
+	category: Category;
+	kind: ActionKind;
 	/** One line that says what happened, e.g. "CI failed on your PR". */
 	summary: string;
-	/** A few words: why it is in its lane ("Review requested", "Waiting for review"). */
-	reason: string;
-	/** Why GitHub notified you ("Review requested", "You opened this"), or ''. */
-	event: string;
+	/** Short "why you see this" tag. */
+	why: string;
 	actionLabel: string;
 	actionUrl: string;
-	/** Waiting: on whom ("@dave", "acme/web-core", "CI"). */
-	waitingOn: string | null;
-	/** When the current turn started, best estimate. */
-	waitingSince: string | null;
-	/** Lower sorts first inside a section. */
-	priority: number;
-	/** Set by a rule: push or not, in place of the push setting. */
+	/** Set by a rule; overrides the default push decision. */
 	push?: boolean;
-	/** Set by a rule: snooze a new arrival in Your turn for this many hours. */
+	/** Set by a rule: move the thread to Done, or snooze it for `snoozeHours`. */
+	triage?: 'done' | 'snooze';
 	snoozeHours?: number;
 	/** Name of the rule that matched, if any. */
 	rule?: string;
 }
 
-/**
- * The conditions of a rule or a saved search, compiled from the query language (shared/query.ts).
- * People and files write them as a query string; this is the parsed form.
- */
 export interface RuleMatch {
 	/** Glob(s) on "owner/repo", e.g. "acme/*". */
 	repo?: string | string[];
@@ -144,8 +132,7 @@ export interface RuleMatch {
 	/** Words that must all be in the title, repo, or author (not case-sensitive). */
 	text?: string;
 	kind?: ActionKind[];
-	/** In rules: the lane before your rules. In searches: the lane now. */
-	lane?: Lane[];
+	category?: Category[];
 	bot?: boolean;
 	label?: string[];
 	draft?: boolean;
@@ -155,40 +142,19 @@ export interface RuleMatch {
 	by?: string | string[];
 	/** The latest activity is by a bot (true) or by a person (false). */
 	byBot?: boolean;
-	/** Your state: done, snoozed, muted (searches only). */
-	itemState?: ItemState[];
 }
 
 export interface Rule {
 	name?: string;
 	enabled?: boolean;
-	/** A query, such as "repo:acme/website" or "author:dependabot*" (shared/query.ts). */
-	when: string;
+	when: RuleMatch;
 	then: {
-		/** Put it in Your turn, or in Updates. */
-		lane?: 'turn' | 'updates';
-		/** Push or not, in place of the push setting. */
+		category?: Category;
 		push?: boolean;
-		/** Hide it: it shows in no lane (it stays in Search, with is:muted). */
-		mute?: boolean;
-		/** When it arrives in Your turn, snooze it for this many hours (1 to 720). */
+		/** Also move the thread: to Done, or snoozed for `snoozeHours` (see ruleTriage). */
+		triage?: 'done' | 'snooze';
 		snoozeHours?: number;
 	};
-}
-
-/** A saved search: a named query, pinned as a tab after the lanes. */
-export interface SavedSearch {
-	id: string;
-	name: string;
-	query: string;
-}
-
-/** A GitHub search Hush runs to find items with no notification. `@team` runs once per team. */
-export interface TrackedSearch {
-	id: string;
-	name: string;
-	query: string;
-	enabled: boolean;
 }
 
 /** Minutes after midnight, in `timeZone`. `from` after `to` crosses midnight. */
@@ -201,46 +167,65 @@ export interface QuietHours {
 }
 
 export interface Settings {
-	// What counts as your turn.
-	/** A review request to one of your teams is your turn (off: it waits on the team). */
-	teamReviewsAreMine: boolean;
+	/** Send Web Push for Action items. */
+	pushAction: boolean;
+	/** Send Web Push for FYI items too. */
+	pushFyi: boolean;
+	/** Push when a thread becomes your turn with no new notification (the inbox watcher). */
+	pushTurnChanges: boolean;
+	/** Replace an alert already shown with a quiet "✓ resolved" one when its thread is resolved. */
+	pushResolved: boolean;
+	/** No pushes during these hours (they still go in the alert history). Null: off. */
+	quietHours: QuietHours | null;
+	/** A thread open in the peek for a moment is marked as read. */
+	peekMarksRead: boolean;
 	/**
 	 * When a review request stops being your turn. "strict": when GitHub no longer asks you.
 	 * "any_review": also when someone else approves or asks for changes after the last push.
 	 */
 	reviewResolution: 'strict' | 'any_review';
-	/** Bots' PRs and comments are updates (a review request to you by name still counts). */
-	botsAreUpdates: boolean;
-	/** An item whose turn is older than this many days is stale. */
-	staleDays: number;
-	/** Checked top to bottom after Hush's own placement; the first match wins. */
+	/** Treat activity by bots (dependabot, renovate…) as FYI. */
+	botsAreFyi: boolean;
+	/** A review request to one of your teams is "Needs you", not FYI. */
+	teamReviewsAreAction: boolean;
+	/** Evaluated top to bottom after the defaults; the first match wins. */
 	rules: Rule[];
-	// Push.
-	/** Push when something becomes your turn. */
-	push: boolean;
-	/** Replace a recent alert with a quiet "✓ You approved" one when its item is resolved. */
-	pushResolved: boolean;
-	/** No pushes during these hours (they still go in the alert history). Null: off. */
-	quietHours: QuietHours | null;
-	/** When you see or finish an item in Hush, mark its notification read or done on GitHub too. */
-	markReadOnGitHub: boolean;
-	// Where Hush looks.
-	/** GitHub searches that find items with no notification. */
-	searches: TrackedSearch[];
-	/** Added to every tracked search, e.g. "org:acme archived:false". */
-	searchScope: string;
-	/** "org/team" slugs that `@team` skips. */
-	excludedTeams: string[];
-	// Your lists and keys.
-	/** Saved searches: tabs after the lanes, in order. */
-	saved: SavedSearch[];
+	dash: DashSettings;
+	/** Saved views: extra inbox tabs, in order. */
+	views: SavedView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
 	keys: Record<string, string[]>;
-	/** The right-click and "⋯" menu of an item: item ids in order (see shared/menus.ts). */
-	menu: string[];
+	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
+	menus: { inbox: string[]; dash: string[]; v?: number };
 }
 
+// --- Pull request and issue dashboards ------------------------------------------
+
+export type DashKind = 'pr' | 'issue';
 export type Turn = 'you' | 'team' | 'them' | 'none';
+
+/** A saved GitHub search. `@me` is you; `@team` runs the query once per tracked team. */
+export interface DashSection {
+	id: string;
+	name: string;
+	query: string;
+	enabled: boolean;
+}
+
+export interface DashSettings {
+	pr: DashSection[];
+	issue: DashSection[];
+	/** Appended to every query, e.g. "org:acme archived:false". */
+	scope: string;
+	/** "org/team" slugs that `@team` must skip. */
+	excludedTeams: string[];
+	/** An item that waits longer than this is marked stale. */
+	staleDays: number;
+	/** Hide draft PRs that you did not open. */
+	hideOthersDrafts: boolean;
+	/** Hide PRs and issues that bots opened (dependabot, renovate…). */
+	hideBots: boolean;
+}
 
 export interface TeamDTO {
 	slug: string; // "org/team"
@@ -248,73 +233,119 @@ export interface TeamDTO {
 	org: string;
 }
 
-/** What changed on an item since you last saw it (shared/changes.ts). */
-export interface Change {
-	kind: 'commits' | 'ci' | 'review' | 'comments' | 'state' | 'draft' | 'requested' | 'labels';
-	text: string;
-	tone: 'good' | 'bad' | null;
+export interface DashLabel {
+	name: string;
+	color: string;
 }
 
-/** One item as the API returns it to the app. */
-export interface ItemDTO {
-	/** "owner/repo#123" for a PR or issue, "t:<thread id>" for anything else. */
-	key: string;
-	repo: string;
-	number: number | null;
-	subjectType: string;
+export interface DashItem {
+	id: string;
+	kind: DashKind;
+	number: number;
 	title: string;
-	/** The item on GitHub. */
 	url: string;
-	lane: Lane;
-	section: Section | null;
-	needs: ActionKind;
-	summary: string;
-	reason: string;
-	/** Why GitHub notified you, or ''. */
-	event: string;
-	/** The notification reason (review_requested…), for queries. */
-	eventKey: Reason | null;
-	actionLabel: string;
-	actionUrl: string;
-	waitingOn: string | null;
-	waitingSince: string | null;
-	stale: boolean;
-	state: ItemState;
-	snoozedUntil: number | null;
-	snoozeEvent: string | null;
-	rule: string | null;
-	/** Hush took it out of Your turn by itself: when, and why ("You approved"). */
-	finished: { at: number; note: string } | null;
-	/** You said it is (or is not) your turn, until it changes. */
-	override: 'turn' | 'updates' | null;
-	author: string | null;
+	repo: string;
+	author: string;
 	authorAvatar: string | null;
 	authorIsBot: boolean;
-	labels: string[];
+	createdAt: string;
+	updatedAt: string;
+	state: 'open' | 'closed' | 'merged';
 	draft: boolean;
+	labels: DashLabel[];
+	comments: number;
+	lastCommentBy: string | null;
+	lastCommentAt: string | null;
+	lastCommentIsBot: boolean;
+	assignees: string[];
+	// Pull requests only.
 	ci: CiState | null;
-	prState: 'open' | 'closed' | 'merged' | null;
+	reviewDecision: Enrichment['reviewDecision'];
+	mergeable: Enrichment['mergeable'] | null;
 	additions: number;
 	deletions: number;
+	requestedMe: boolean;
+	/** Your teams whose review is requested. */
+	requestedTeams: string[];
+	requestedAt: string | null;
+	myLastReviewAt: string | null;
+	/** Review threads nobody resolved yet (up to 50). */
+	openThreads: number;
+	/** Newest approval or change request by someone else (not you, not the author). */
+	lastVerdictBy: string | null;
+	lastVerdictAt: string | null;
+	myLastReviewState: string | null;
+	lastCommitAt: string | null;
+	// Computed.
+	sections: string[];
+	turn: Turn;
+	turnReason: string;
+	/** When the current turn started, best estimate. */
+	waitingSince: string;
+	stale: boolean;
+	actionLabel: string;
+	actionUrl: string;
+	/** Lower sorts first inside a turn group. */
+	priority: number;
+	dismissed: boolean;
+	/** The turn Hush computed, before any move by you. */
+	autoTurn: Turn;
+	/** You dragged this into its group; lasts until the item changes. */
+	movedByYou: boolean;
+	/** Your manual position inside the group, or null (new items go on top). */
+	rank: number | null;
+}
+
+export interface DashResponse {
+	kind: DashKind;
+	items: DashItem[];
+	sections: { id: string; name: string; count: number; skipped?: string }[];
+	teams: TeamDTO[];
+	fetchedAt: number;
+	errors: string[];
+}
+
+/** A thread as the API returns it to the SPA. */
+export interface ThreadDTO {
+	id: string;
+	repo: string;
+	subjectType: string;
+	title: string;
+	reason: Reason;
+	unread: boolean;
+	updatedAt: string;
+	htmlUrl: string;
+	category: Category;
+	kind: ActionKind;
+	summary: string;
+	why: string;
+	actionLabel: string;
+	actionUrl: string;
+	triage: Triage;
+	snoozedUntil: number | null;
+	/** Snoozed until something happens (e.g. "ci_pass"); `snoozedUntil` is then the deadline. */
+	snoozeEvent: string | null;
+	/** Set when Hush moved the thread to Done by itself, e.g. "You approved". */
+	resolvedNote: string | null;
+	number: number | null;
+	state: Enrichment['state'] | null;
+	draft: boolean;
+	ci: CiState | null;
+	author: string | null;
+	authorIsBot: boolean;
+	labels: string[];
+	rule: string | null;
 	/** The newest comment, review, or push (who, and whether a bot): shared/activity.ts. */
 	activity: Activity | null;
-	/** The newest activity on it, for ordering. */
-	activityAt: string;
-	/** You have not seen its newest activity. */
-	unseen: boolean;
-	seenAt: number | null;
-	/** What changed since you last saw it; null when you never saw it. */
-	changes: Change[] | null;
 }
 
-/** The lanes' counts: Your turn and Waiting (Updates has no count). */
 export interface Counts {
-	turn: number;
-	waiting: number;
-	updates: number;
+	action: number;
+	fyi: number;
+	snoozed: number;
 }
 
-/** A feed: one lane or saved search as Atom. `view` is 'turn', 'waiting', 'updates', or 's:<id>'. */
+/** A feed: one inbox tab as Atom. `view` is 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
 export interface FeedDTO {
 	view: string;
 	/** Only when the feed was just made: Hush keeps only a hash of the address. */
@@ -347,9 +378,7 @@ export interface MeDTO {
 	scopes: string[];
 	/** 'app': the token from Sign in with GitHub. 'own': a token you added in Settings. */
 	tokenSource: 'app' | 'own';
-	/** The first-run questions were answered (or skipped). */
-	onboarded: boolean;
-	/** The first sync after sign-in has not finished: the lanes are still filling. */
+	/** The first sync after sign-in has not finished: the inbox is still filling. */
 	firstSync: boolean;
 }
 
@@ -391,14 +420,13 @@ export interface AlertDTO {
 	body: string;
 	/** Where the alert went (the main action). */
 	url: string;
-	/** The item, while Hush still has it. PRs and issues have a number and can be peeked. */
-	item: {
-		key: string;
+	/** The thread, while Hush still has it. PRs and issues have a number and can be peeked. */
+	thread: {
 		repo: string;
 		number: number | null;
 		title: string;
-		url: string;
-		/** What happened to it since: "Done", "Muted", "Snoozed", or the note ("You approved"). */
+		htmlUrl: string;
+		/** What happened to it since: "Done", "Muted", "Snoozed", or the resolved note. */
 		state: string | null;
 	} | null;
 }
@@ -472,8 +500,9 @@ export interface PeekCan {
  * the tab refetches only that (or, for `status`, uses the values in the message).
  */
 export type LiveMessage =
-	| { type: 'items' }
+	| { type: 'threads' }
 	| { type: 'alerts' }
+	| { type: 'dash'; kind: DashKind }
 	| { type: 'settings' }
 	/** A poll started (on) or ended: open tabs show "Syncing…". */
 	| { type: 'syncing'; on: boolean }

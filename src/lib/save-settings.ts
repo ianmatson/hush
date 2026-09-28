@@ -10,9 +10,12 @@ import type { Settings } from '$lib/shared/types';
 export async function applySettings(patch: Partial<Settings>, replace = false): Promise<string> {
 	const res = await (replace ? api.replaceSettings(patch) : api.saveSettings(patch));
 	setSettings(res.settings);
-	// Rules and the turn settings place items again; new searches find more.
-	queryClient.invalidateQueries({ queryKey: keys.itemsAll });
-	return res.replaced ? ` ${res.replaced} ${res.replaced === 1 ? 'item' : 'items'} moved.` : '';
+	// Rules and team settings re-sort stored threads; dashboard settings change the searches.
+	if (res.reclassified) queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+	if (patch.dash || replace) queryClient.invalidateQueries({ queryKey: keys.dashAll });
+	return res.reclassified
+		? ` ${res.reclassified} ${res.reclassified === 1 ? 'thread' : 'threads'} updated.`
+		: '';
 }
 
 /** Save a settings patch and report the result in a toast. */

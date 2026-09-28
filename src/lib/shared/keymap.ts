@@ -1,7 +1,7 @@
 /**
  * Every keyboard shortcut in Hush, in one table. Handlers ask "which command is this key?"
- * (commandFor in lib/keys.svelte.ts); the help dialog, the palette, and Settings → Keybinds read
- * the keys from here. Your changes are the `keys` setting: for each command id,
+ * (commandFor in lib/keys.svelte.ts); the help dialogs, the palette, and Settings → Keyboard
+ * shortcuts read the keys from here. Your changes are the `keys` setting: for each command id,
  * the keys that replace its defaults ([] turns it off).
  *
  * How a key is written: letters are lower case, with Shift as a modifier ("Shift+j", not "J").
@@ -10,7 +10,7 @@
  */
 
 /** Where a command works. Scopes that are active together must not share a key. */
-export type KeyScope = 'global' | 'list' | 'item' | 'peek' | 'editor';
+export type KeyScope = 'global' | 'list' | 'inbox' | 'dash' | 'peek' | 'editor';
 
 export interface KeyCommand {
 	id: string;
@@ -21,18 +21,20 @@ export interface KeyCommand {
 
 export const SCOPE_LABEL: Record<KeyScope, string> = {
 	global: 'Everywhere',
-	list: 'Lists',
-	item: 'Items: Done, Snooze, Mute…',
+	list: 'Lists (inbox and dashboards)',
+	inbox: 'Inbox',
+	dash: 'Pull requests and issues',
 	peek: 'Peek: actions on GitHub',
 	editor: 'Text boxes'
 };
 
 /** The scopes that are active at the same time as each scope (a key must be unique there). */
 const TOGETHER: Record<KeyScope, KeyScope[]> = {
-	global: ['global', 'list', 'item', 'peek'],
-	list: ['global', 'list', 'item', 'peek'],
-	item: ['global', 'list', 'item', 'peek'],
-	peek: ['global', 'list', 'item', 'peek'],
+	global: ['global', 'list', 'inbox', 'dash', 'peek'],
+	list: ['global', 'list', 'inbox', 'dash', 'peek'],
+	inbox: ['global', 'list', 'inbox', 'peek'],
+	dash: ['global', 'list', 'dash', 'peek'],
+	peek: ['global', 'list', 'inbox', 'dash', 'peek'],
 	editor: ['editor']
 };
 
@@ -41,15 +43,6 @@ const range = (from: number, to: number) =>
 
 export const COMMANDS: KeyCommand[] = [
 	{ id: 'palette', label: 'Search and commands', scope: 'global', keys: ['Mod+k'] },
-	{ id: 'nav.turn', label: 'Go to Your turn', scope: 'global', keys: ['1'] },
-	{ id: 'nav.waiting', label: 'Go to Waiting', scope: 'global', keys: ['2'] },
-	{ id: 'nav.updates', label: 'Go to Updates', scope: 'global', keys: ['3'] },
-	...range(1, 6).map((n) => ({
-		id: `nav.saved.${n}`,
-		label: `Saved search ${n}`,
-		scope: 'global' as const,
-		keys: [String(n + 3)]
-	})),
 
 	{ id: 'list.next', label: 'Next', scope: 'list', keys: ['j', 'ArrowDown'] },
 	{ id: 'list.prev', label: 'Previous', scope: 'list', keys: ['k', 'ArrowUp'] },
@@ -76,17 +69,25 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'list.search', label: 'Search', scope: 'list', keys: ['/'] },
 	{ id: 'list.help', label: 'Show shortcuts', scope: 'list', keys: ['?'] },
 
-	{ id: 'item.done', label: 'Done (until it is your turn again)', scope: 'item', keys: ['e'] },
-	{ id: 'item.snooze', label: 'Snooze…', scope: 'item', keys: ['s'] },
-	{ id: 'item.mute', label: 'Mute', scope: 'item', keys: ['m'] },
-	{ id: 'item.notMine', label: 'Not my turn…', scope: 'item', keys: ['n'] },
-	{ id: 'item.myTurn', label: 'It is my turn', scope: 'item', keys: ['Shift+n'] },
-	{
-		id: 'item.restore',
-		label: 'Move back (undo Done, Snooze, or Mute)',
-		scope: 'item',
-		keys: ['u']
-	},
+	{ id: 'inbox.done', label: 'Done', scope: 'inbox', keys: ['e'] },
+	{ id: 'inbox.snooze', label: 'Snooze until tomorrow 9:00', scope: 'inbox', keys: ['s'] },
+	{ id: 'inbox.mute', label: 'Mute the thread', scope: 'inbox', keys: ['m'] },
+	{ id: 'inbox.read', label: 'Mark as read / unread', scope: 'inbox', keys: ['u'] },
+	...range(1, 9).map((n) => ({
+		id: `inbox.view.${n}`,
+		label: `View ${n} (${n <= 5 ? 'built-in' : 'your saved views'})`,
+		scope: 'inbox' as const,
+		keys: [String(n)]
+	})),
+
+	{ id: 'dash.hide', label: 'Hide until it changes (or show again)', scope: 'dash', keys: ['e'] },
+	{ id: 'dash.showHidden', label: 'Show hidden items', scope: 'dash', keys: ['h'] },
+	...range(0, 9).map((n) => ({
+		id: `dash.section.${n}`,
+		label: n === 0 ? 'Section: all' : `Section ${n}`,
+		scope: 'dash' as const,
+		keys: [String(n)]
+	})),
 
 	{ id: 'peek.approve', label: 'Approve', scope: 'peek', keys: ['a'] },
 	{ id: 'peek.requestChanges', label: 'Request changes', scope: 'peek', keys: ['Shift+a'] },

@@ -11,7 +11,9 @@
 		<img src="/icon.svg" alt="" class="size-10 rounded-xl" />
 		<div>
 			<h1 class="text-xl font-semibold tracking-tight">hush</h1>
-			<p class="text-sm text-muted-foreground">What is your turn on GitHub, and nothing else.</p>
+			<p class="text-sm text-muted-foreground">
+				GitHub notifications, only the ones that need you.
+			</p>
 		</div>
 	</div>
 

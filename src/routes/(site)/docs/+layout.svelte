@@ -37,7 +37,7 @@
 		<a href="/docs" class="section">Docs</a>
 		<nav>
 			<a class="source" href={REPO_URL} rel="noreferrer">Source</a>
-			<a class="open" href="{APP_URL}/turn">Open Hush</a>
+			<a class="open" href="{APP_URL}/inbox">Open Hush</a>
 		</nav>
 	</header>
 

@@ -1,9 +1,16 @@
-import { compileRules, place, validateRules } from '../../src/lib/shared/place';
-import { snapshotOf } from '../../src/lib/shared/changes';
-import { FEED_LANES, searchItems } from '../../src/lib/shared/search';
+import {
+	classify,
+	classifyDefault,
+	firstMatchingRule,
+	globToRegExp,
+	ruleTriage,
+	validateRules
+} from '../../src/lib/shared/classify';
+import { MENUS_VERSION } from '../../src/lib/shared/menus';
+import { FEED_TABS, threadMatches } from '../../src/lib/shared/views';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import {
-	REPLACE_KEYS,
+	RECLASSIFY_KEYS,
 	mergeSettings,
 	validateSettings
 } from '../../src/lib/shared/settings-schema';
@@ -13,67 +20,71 @@ import {
 	snoozeOutcome,
 	type SnoozeEvent
 } from '../../src/lib/shared/snooze';
-import { enrichmentOf } from '../../src/lib/shared/subject';
-import type { AlertDTO, Counts, ItemDTO, Lane, Rule, Settings } from '../../src/lib/shared/types';
+import type {
+	AlertDTO,
+	Counts,
+	DashItem,
+	DashKind,
+	DashResponse,
+	Rule,
+	Settings,
+	ThreadDTO,
+	Turn,
+	View
+} from '../../src/lib/shared/types';
 import { userToken } from '../db';
+import { markThreadDone, markThreadRead, muteThread } from '../github';
 import { sendPush, vapidFromEnv } from '../webpush';
-import { PollerSearches } from './searches';
+import { PollerDashboard } from './dashboard';
 import {
-	factsOf,
-	itemFactsOf,
-	laneOf,
+	enrichmentFor,
+	factsFromRow,
 	subjectRefOf,
 	toDTO,
 	viewWhere,
-	type ItemWithFacts,
-	type ListView
+	type ThreadWithFacts
 } from './schema';
-import { FINISHED_SHOW, MIN, type PollStatus } from './shared';
+import { MIN, MUTED_BY_USER, type PollStatus } from './shared';
 
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
 
-export type ItemAction = 'done' | 'restore' | 'snooze' | 'mute' | 'seen' | 'my-turn' | 'not-mine';
-const ITEM_ACTIONS = new Set<ItemAction>([
+export type ThreadAction =
+	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+const THREAD_ACTIONS = new Set<ThreadAction>([
 	'done',
-	'restore',
+	'undone',
+	'read',
+	'unread',
 	'snooze',
+	'unsnooze',
 	'mute',
-	'seen',
-	'my-turn',
-	'not-mine'
+	'unmute'
 ]);
-/** Why an item is not your turn: each answer changes what would have been right. */
-export type NotMineAnswer = 'once' | 'others-reviewed' | 'team' | 'bots' | 'repo';
-const ANSWERS = new Set<NotMineAnswer>(['once', 'others-reviewed', 'team', 'bots', 'repo']);
-
 // Mute makes 2 GitHub calls per thread; 20 × 2 stays under the Free plan's 50 subrequests.
 const BULK_MAX = 20;
 const MAX_DEVICES = 10;
-const VIEWS = new Set<ListView>(['turn', 'waiting', 'updates', 'done', 'snoozed', 'muted', 'all']);
-/** An open app records a visit (and brings the next poll forward) at most this often. */
+const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all', 'inbox']);
+/** An open inbox records a visit (and brings the next poll forward) at most this often. */
 const SEEN_EVERY = 5 * MIN;
 
+type ItemRef = { id: string; updatedAt: string };
 const marks = (n: number) => Array(n).fill('?').join(',');
 
 /**
  * The user's data, for the API routes: the routes check the request's shape and answer; the
  * reads and writes happen here, next to the poller that also writes them.
  */
-export abstract class PollerData extends PollerSearches {
+export abstract class PollerData extends PollerDashboard {
 	// In the top class (worker/poller.ts), with the poll schedule.
 	abstract touch(origin?: string): Promise<void>;
 	abstract setHasPush(hasPush: boolean): Promise<void>;
 	abstract status(): Promise<PollStatus>;
 
 	/** For /api/me: your settings and the poll status, in one call. */
-	async me(): Promise<{ settings: Settings; status: PollStatus; onboarded: boolean }> {
-		const [settings, status, onboarded] = await Promise.all([
-			this.checkedSettings(),
-			this.status(),
-			this.ctx.storage.get<boolean>('onboarded')
-		]);
-		return { settings, status, onboarded: !!onboarded };
+	async me(): Promise<{ settings: Settings; status: PollStatus }> {
+		const [settings, status] = await Promise.all([this.settings(), this.status()]);
+		return { settings, status };
 	}
 
 	/** Your GitHub login; the routes call only after the session check, so the account exists. */
@@ -83,116 +94,52 @@ export abstract class PollerData extends PollerSearches {
 		return user.login;
 	}
 
-	// --- Items ----------------------------------------------------------------------------
+	// --- Threads --------------------------------------------------------------------------
 
 	counts(): Counts {
-		const turn = viewWhere('turn');
-		const waiting = viewWhere('waiting');
-		const updates = viewWhere('updates');
+		const views = (['action', 'fyi', 'snoozed'] as const).map((v) => ({ v, ...viewWhere(v) }));
 		const row = this.one<Counts>(
-			`SELECT SUM(CASE WHEN ${turn.where} THEN 1 ELSE 0 END) AS turn,
-         SUM(CASE WHEN ${waiting.where} THEN 1 ELSE 0 END) AS waiting,
-         SUM(CASE WHEN ${updates.where} AND (seen_at IS NULL OR activity_at > strftime('%Y-%m-%dT%H:%M:%SZ', seen_at / 1000, 'unixepoch')) THEN 1 ELSE 0 END) AS updates
-       FROM items`,
-			...turn.args,
-			...waiting.args,
-			...updates.args
+			`SELECT ${views.map(({ v, where }) => `SUM(CASE WHEN ${where} THEN 1 ELSE 0 END) AS ${v}`).join(', ')}
+       FROM threads`,
+			...views.flatMap((x) => x.args)
 		);
-		return { turn: row?.turn ?? 0, waiting: row?.waiting ?? 0, updates: row?.updates ?? 0 };
+		return { action: row?.action ?? 0, fyi: row?.fyi ?? 0, snoozed: row?.snoozed ?? 0 };
 	}
 
 	/**
-	 * One list. `ifNoneMatch` is the client's ETag: when nothing changed, answer without reading
-	 * any items. Opening the app also counts as a visit (see SEEN_EVERY).
+	 * One inbox view. `ifNoneMatch` is the client's ETag: when nothing changed, answer without
+	 * reading any threads. Opening the inbox also counts as a visit (see SEEN_EVERY).
 	 */
-	async listItems(
-		view: ListView,
+	async listThreads(
+		view: View,
 		ifNoneMatch: string | null,
 		origin: string
 	): Promise<
 		| Refusal
 		| { notModified: true; etag: string }
-		| { items: ItemDTO[]; counts: Counts; finished: ItemDTO[]; etag: string }
+		| { threads: ThreadDTO[]; counts: Counts; etag: string }
 	> {
-		if (!VIEWS.has(view)) return { error: 'Unknown list', status: 400 };
+		if (!VIEWS.has(view)) return { error: 'Unknown view', status: 400 };
 		const seen = (await this.ctx.storage.get<number>('lastActive')) ?? 0;
 		if (Date.now() - seen >= SEEN_EVERY) this.ctx.waitUntil(this.touch(origin));
-		const version = (await this.ctx.storage.get<number>('itemsVersion')) ?? 0;
+		const version = (await this.ctx.storage.get<number>('threadsVersion')) ?? 0;
 		const etag = `W/"${version}.${view}"`;
 		if (ifNoneMatch === etag) return { notModified: true, etag };
-		const me = await this.login();
-		const { staleDays } = await this.checkedSettings();
 		const { where, args } = viewWhere(view);
-		const order =
-			view === 'turn' || view === 'waiting'
-				? 'priority ASC, waiting_since ASC'
-				: view === 'snoozed'
-					? 'snoozed_until ASC'
-					: 'activity_at DESC';
-		const dto = (r: ItemWithFacts) => toDTO(r, me, staleDays);
-		const items = this.items(`${where} ORDER BY ${order} LIMIT 300`, ...args).map(dto);
-		// "Hush finished these for you": only with Your turn.
-		const finishedSeen = (await this.ctx.storage.get<number>('finishedSeenAt')) ?? 0;
-		const finished =
-			view === 'turn'
-				? this.items(
-						`finished_at > ? AND state = 'active' AND COALESCE(override, lane) != 'turn'
-             ORDER BY finished_at DESC LIMIT 10`,
-						Math.max(Date.now() - FINISHED_SHOW, finishedSeen)
-					).map(dto)
-				: [];
-		return { items, counts: this.counts(), finished, etag };
+		const order = view === 'snoozed' ? 'snoozed_until ASC' : 'gh_updated_at DESC';
+		const rows = this.threads(`${where} ORDER BY ${order} LIMIT 300`, ...args);
+		return { threads: rows.map(toDTO), counts: this.counts(), etag };
 	}
 
-	/** One item (the item page, a link from a push). */
-	async item(key: string): Promise<Refusal | ItemDTO> {
-		const me = await this.login();
-		const r = this.items('items.key = ?', key)[0];
-		if (!r) return { error: 'Not found', status: 404 };
-		return toDTO(r, me, (await this.checkedSettings()).staleDays);
-	}
-
-	/** The strip "Hush finished these for you" was read: hide the ones it showed. */
-	async finishedSeen(): Promise<{ ok: true }> {
-		await this.ctx.storage.put('finishedSeenAt', Date.now());
-		await this.bumpVersion();
-		return { ok: true };
-	}
-
-	/** The first-run numbers: what is waiting on you, and how much went to Updates. */
-	async summary(): Promise<{
-		counts: Counts;
-		notifications: number;
-		updates: number;
-		noisyRepos: { repo: string; count: number }[];
-	}> {
-		const notifications = this.one<{ n: number }>('SELECT COUNT(*) AS n FROM threads')?.n ?? 0;
-		const updates =
-			this.one<{ n: number }>(
-				`SELECT COUNT(*) AS n FROM items WHERE COALESCE(override, lane) = 'updates'`
-			)?.n ?? 0;
-		const noisyRepos = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) AS count FROM items WHERE COALESCE(override, lane) = 'updates'
-       GROUP BY repo ORDER BY count DESC LIMIT 6`
-		);
-		return { counts: this.counts(), notifications, updates, noisyRepos };
-	}
-
-	async setOnboarded(): Promise<{ ok: true }> {
-		await this.ctx.storage.put('onboarded', true);
-		return { ok: true };
-	}
-
-	/** Apply one action to up to BULK_MAX items, in one transaction. */
-	async itemAction(
-		keys: string[],
-		action: ItemAction,
+	/** Apply one triage action to up to BULK_MAX threads, in one transaction. */
+	async threadAction(
+		ids: string[],
+		action: ThreadAction,
 		body: { until?: number; event?: SnoozeEvent }
 	): Promise<Refusal | { ok: true; updated: number; counts: Counts }> {
-		if (!ITEM_ACTIONS.has(action) || action === 'not-mine')
-			return { error: 'Unknown action', status: 400 };
-		if (!keys.length || keys.length > BULK_MAX || keys.some((k) => typeof k !== 'string'))
-			return { error: `Select 1 to ${BULK_MAX} items.`, status: 400 };
+		if (!THREAD_ACTIONS.has(action)) return { error: 'Unknown action', status: 400 };
+		if (!ids.length || ids.length > BULK_MAX || ids.some((id) => typeof id !== 'string'))
+			return { error: `Select 1 to ${BULK_MAX} threads.`, status: 400 };
 		// "Until something happens": the time is only a deadline (default 7 days).
 		const event = action === 'snooze' ? (body.event ?? null) : null;
 		if (event && !snoozeEvent(event)) return { error: 'Unknown snooze condition.', status: 400 };
@@ -202,225 +149,201 @@ export abstract class PollerData extends PollerSearches {
 			return { error: 'Snooze time must be in the future.', status: 400 };
 
 		const me = await this.login();
-		let items = this.items(`items.key IN (${marks(keys.length)})`, ...keys);
-		if (!items.length) return { error: 'Not found', status: 404 };
-		// A state that is already true would end the snooze at once: refuse it with a reason.
+		let threads = this.threads(`id IN (${marks(ids.length)})`, ...ids);
+		if (!threads.length) return { error: 'Not found', status: 404 };
+		// A state that is already true would wake the thread at once: refuse it with a clear reason.
 		if (event) {
 			const ev = snoozeEvent(event)!;
 			const now = Date.now();
-			const kindOf = (t: ItemWithFacts) => factsOf(t)?.kind ?? 'other';
-			if (items.some((t) => !ev.kinds.includes(kindOf(t) as 'pr' | 'issue')))
+			// Only PRs and issues have the data these conditions read.
+			const kindOf = (t: ThreadWithFacts) => enrichmentFor(t, me)?.kind ?? 'other';
+			if (threads.some((t) => !ev.kinds.includes(kindOf(t) as 'pr' | 'issue')))
 				return {
 					error: `"${ev.label}" works only for ${ev.kinds.map((k) => (k === 'pr' ? 'pull requests' : 'issues')).join(' and ')}.`,
 					status: 400
 				};
-			const endsNow = (t: ItemWithFacts) => {
-				const f = factsOf(t);
-				return snoozeOutcome(ev.id, f ? enrichmentOf(f, me) : null, now, me);
-			};
-			const already = items.filter((t) => endsNow(t).wake);
-			if (already.length === items.length) {
+			// Refuse what would end at once: the event already happened, or the PR is already closed.
+			const endsNow = (t: ThreadWithFacts) => snoozeOutcome(ev.id, enrichmentFor(t, me), now, me);
+			const already = threads.filter((t) => endsNow(t).wake);
+			if (already.length === threads.length) {
 				const o = endsNow(already[0]);
 				return {
 					error: `${o.wake ? o.reason : 'Done'} already. Pick another condition.`,
 					status: 400
 				};
 			}
-			items = items.filter((t) => !already.includes(t));
+			threads = threads.filter((t) => !already.includes(t));
 		}
 
-		const set = (t: ItemWithFacts, sql: string, ...args: (string | number | null)[]) =>
-			this.run(`UPDATE items SET ${sql} WHERE key = ?`, ...args, t.key);
+		// Your own triage choice replaces an automatic one (see the inbox watcher).
+		const NOT_AUTO = `resolved_at = NULL, resolved_note = NULL`;
+		const set = (t: ThreadWithFacts, sql: string, ...args: (string | number | null)[]) =>
+			this.run(`UPDATE threads SET ${sql} WHERE id = ?`, ...args, t.id);
+		const settings = action === 'unmute' ? await this.settings() : null;
 		const now = Date.now();
-		const snapshot = (t: ItemWithFacts) => {
-			const f = factsOf(t);
-			return f ? JSON.stringify(snapshotOf(f, me)) : t.seen_snapshot;
-		};
 		this.transaction(() => {
-			for (const t of items)
+			for (const t of threads)
 				switch (action) {
 					case 'done':
 						set(
 							t,
-							`state = 'done', done_sig = sig, snoozed_until = NULL, snooze_event = NULL,
-               finished_at = NULL, finished_note = NULL, seen_at = ?, seen_snapshot = ?`,
-							now,
-							snapshot(t)
+							`triage = 'done', snoozed_until = NULL, snooze_event = NULL, unread = 0, ${NOT_AUTO}`
 						);
 						break;
-					case 'restore':
-						set(
-							t,
-							`state = 'active', done_sig = NULL, snoozed_until = NULL, snooze_event = NULL,
-               snoozed_at = NULL, override = NULL, override_sig = NULL, finished_at = NULL, finished_note = NULL`
-						);
+					case 'undone':
+					case 'unsnooze':
+						set(t, `triage = 'inbox', snoozed_until = NULL, snooze_event = NULL, ${NOT_AUTO}`);
+						break;
+					case 'read':
+						set(t, `unread = 0, marked_unread_at = NULL`);
+						break;
+					// GitHub has no "mark as unread" API, so this one stays in Hush (and the read sync from
+					// GitHub leaves it alone until you read the thread there again).
+					case 'unread':
+						set(t, `unread = 1, marked_unread_at = ?`, now);
 						break;
 					case 'snooze':
 						set(
 							t,
-							`state = 'snoozed', snoozed_until = ?, snooze_event = ?, snoozed_at = ?`,
+							`triage = 'snoozed', snoozed_until = ?, snooze_event = ?, snoozed_at = ?`,
 							until,
 							event,
 							now
 						);
 						break;
 					case 'mute':
-						set(t, `state = 'muted', snoozed_until = NULL, snooze_event = NULL`);
-						break;
-					case 'seen':
-						set(t, `seen_at = ?, seen_snapshot = ?`, now, snapshot(t));
-						break;
-					case 'my-turn':
 						set(
 							t,
-							`override = 'turn', override_sig = sig, state = 'active', done_sig = NULL,
-               finished_at = NULL, finished_note = NULL`
+							`category = 'muted', rule = ?, triage = 'done', snoozed_until = NULL, snooze_event = NULL`,
+							MUTED_BY_USER
 						);
 						break;
+					case 'unmute': {
+						const cls = classify(factsFromRow(t, me), settings!);
+						set(t, `category = ?, rule = ?, triage = 'inbox'`, cls.category, cls.rule ?? null);
+						break;
+					}
 				}
 		});
 		await this.bumpVersion();
 
-		// Mirror the change on GitHub in the background.
-		const settings = await this.checkedSettings();
-		const mirror =
-			action === 'mute'
-				? 'mute'
-				: settings.markReadOnGitHub && (action === 'done' || action === 'seen')
-					? action === 'done'
-						? 'done'
-						: 'read'
-					: null;
-		if (mirror) {
+		// Mirror the change on GitHub in the background (not from a local test copy).
+		const writes = this.env.GITHUB_WRITES !== 'off';
+		if (writes && (action === 'done' || action === 'read' || action === 'mute')) {
 			const token = await userToken(this.env, (await this.account())!);
-			this.mirrorOnGitHub(
-				token,
-				items.map((t) => t.key),
-				mirror
-			);
+			const mirror = (id: string) =>
+				action === 'done'
+					? markThreadDone(token, id)
+					: action === 'read'
+						? markThreadRead(token, id)
+						: muteThread(token, id).then(() => markThreadDone(token, id));
+			this.ctx.waitUntil(Promise.allSettled(threads.map((t) => mirror(t.id))));
 		}
-		// Alerts for these items on your other devices: replace them with a quiet note.
-		const NOTE: Partial<Record<ItemAction, string>> = {
+		// Alerts for these threads on your other devices: replace them with a quiet note.
+		const RESOLVED_NOTE: Partial<Record<ThreadAction, string>> = {
 			done: 'Done',
 			mute: 'Muted',
 			snooze: 'Snoozed'
 		};
-		const note = NOTE[action];
-		if (note) this.ctx.waitUntil(this.notifyResolved(items.map((t) => ({ id: t.key, note }))));
-		return { ok: true, updated: items.length, counts: this.counts() };
+		const note = RESOLVED_NOTE[action];
+		if (note) this.ctx.waitUntil(this.notifyResolved(threads.map((t) => ({ id: t.id, note }))));
+		return { ok: true, updated: threads.length, counts: this.counts() };
 	}
 
 	/**
-	 * "Not my turn": Hush was wrong about an item. Each answer changes what would have been right
-	 * (a setting, or a rule), or only moves this item (`once`). Returns how to undo it.
+	 * An Atom feed of one inbox tab (see worker/feeds.ts): its name and its threads, newest first.
+	 * Null when the tab is gone (a deleted saved view).
 	 */
-	async notMine(
-		key: string,
-		answer: NotMineAnswer
-	): Promise<
-		Refusal | { undo: { settings?: Partial<Settings>; restore?: string }; settings?: Settings }
-	> {
-		if (!ANSWERS.has(answer)) return { error: 'Unknown answer', status: 400 };
-		const t = this.items('items.key = ?', key)[0];
-		if (!t) return { error: 'Not found', status: 404 };
-		if (answer === 'once') {
-			this.run(
-				`UPDATE items SET override = 'updates', override_sig = sig, finished_at = NULL, finished_note = NULL
-         WHERE key = ?`,
-				key
-			);
-			await this.bumpVersion();
-			return { undo: { restore: key } };
-		}
-		const old = await this.checkedSettings();
-		const patch: Partial<Settings> =
-			answer === 'others-reviewed'
-				? { reviewResolution: 'any_review' }
-				: answer === 'team'
-					? { teamReviewsAreMine: false }
-					: answer === 'bots'
-						? { botsAreUpdates: true }
-						: {
-								rules: [
-									{
-										name: `${t.repo} is updates`,
-										when: `repo:${t.repo}`,
-										then: { lane: 'updates' }
-									},
-									...old.rules
-								]
-							};
-		const undo = Object.fromEntries(
-			Object.keys(patch).map((k) => [k, old[k as keyof Settings]])
-		) as Partial<Settings>;
-		const r = await this.updateSettings(patch);
-		if ('error' in r) return r;
-		return { undo: { settings: undo }, settings: r.settings };
-	}
-
-	/**
-	 * An Atom feed of one lane or saved search (see worker/feeds.ts): its name and its items,
-	 * newest first. Null when the saved search is gone.
-	 */
-	async feedItems(view: string): Promise<{ name: string; items: ItemDTO[] } | null> {
-		const lane = FEED_LANES.find((t) => t.id === view);
-		const settings = await this.checkedSettings();
-		const saved = lane ? null : settings.saved.find((v) => `s:${v.id}` === view);
-		if (!lane && !saved) return null;
+	async feedThreads(view: string): Promise<{ name: string; rows: ThreadWithFacts[] } | null> {
+		const tab = FEED_TABS.find((t) => t.id === view);
+		const saved = tab ? null : (await this.settings()).views.find((v) => `v:${v.id}` === view);
+		if (!tab && !saved) return null;
+		const { where, args } = viewWhere(saved?.base ?? view);
+		const rows = this.threads(`${where} ORDER BY gh_updated_at DESC LIMIT 300`, ...args);
+		if (!saved) return { name: tab!.label, rows: rows.slice(0, 50) };
 		const me = await this.login();
-		const { where, args } = viewWhere((lane?.id as ListView) ?? 'all');
-		const rows = this.items(`${where} ORDER BY activity_at DESC LIMIT 300`, ...args).map((r) =>
-			toDTO(r, me, settings.staleDays)
-		);
-		const items = saved ? searchItems(rows, saved.query, me) : rows;
-		return { name: lane?.label ?? saved!.name, items: items.slice(0, 50) };
+		return {
+			name: saved.name,
+			rows: rows.filter((r) => threadMatches(saved.when, toDTO(r), me)).slice(0, 50)
+		};
 	}
 
 	// --- Settings -------------------------------------------------------------------------
 
+	/** Team slugs whose review requests count in the inbox (Settings → Inbox). */
+	private async inboxTeamsFor(settings: Settings): Promise<string[]> {
+		return settings.teamReviewsAreAction ? (await this.teams()).teams.map((t) => t.slug) : [];
+	}
+
 	/**
-	 * Try rules on your items without saving them: how many items each rule would catch (first
-	 * match wins), a few examples, and how many items would change lane compared with the saved
-	 * rules.
+	 * Try rules on your stored threads without saving them: how many threads each rule would catch
+	 * (first match wins), a few examples, and how many threads would change category compared with
+	 * the saved rules.
 	 */
 	async previewRules(rules: unknown): Promise<
 		| Refusal
 		| {
-				perRule: { matches: number; examples: { title: string; repo: string; lane: string }[] }[];
-				moves: Record<Lane, number>;
+				perRule: {
+					matches: number;
+					inInbox: number;
+					examples: { title: string; repo: string; category: string }[];
+				}[];
+				moves: { action: number; fyi: number; muted: number; done: number; snoozed: number };
 				total: number;
 		  }
 	> {
 		const err = validateRules(rules);
 		if (err) return { error: err, status: 400 };
-		const who = await this.who();
-		if (!who) return { error: 'Not signed in.', status: 400 };
-		const draft = { ...who.settings, rules: rules as Rule[] };
-		const compiledDraft = compileRules(draft.rules);
-		const compiledSaved = compileRules(who.settings.rules);
-		const rows = this.items('1');
-		const perRule = draft.rules.map(() => ({
+		const me = await this.login();
+		const saved = await this.settings();
+		const settings: Settings = { ...saved, rules: rules as Rule[] };
+		const myTeams = await this.inboxTeamsFor(settings);
+		const rows = this.threads('1');
+		type Example = { title: string; repo: string; category: string };
+		const perRule = settings.rules.map(() => ({
 			matches: 0,
-			examples: [] as { title: string; repo: string; lane: string }[]
+			inInbox: 0,
+			open: [] as Example[],
+			other: [] as Example[]
 		}));
-		const moves: Record<Lane, number> = { turn: 0, waiting: 0, updates: 0, muted: 0 };
+		const moves = { action: 0, fyi: 0, muted: 0, done: 0, snoozed: 0 };
 		for (const r of rows) {
-			const f = itemFactsOf(r, factsOf(r), who.me, who.myTeams);
-			const next = place(f, draft, compiledDraft);
-			const now = place(f, who.settings, compiledSaved);
-			const i = next.rule
-				? draft.rules.findIndex((x, k) => (x.name || `Rule ${k + 1}`) === next.rule)
-				: -1;
+			if (r.rule === MUTED_BY_USER) continue;
+			const facts = factsFromRow(r, me, myTeams);
+			const base = classifyDefault(facts, settings);
+			const i = firstMatchingRule(facts, settings.rules, base);
+			const categoryWith = (list: Rule[], k: number) =>
+				k < 0 ? base.category : (list[k].then.category ?? base.category);
+			const category = categoryWith(settings.rules, i);
 			if (i >= 0) {
-				perRule[i].matches++;
-				if (perRule[i].examples.length < 3)
-					perRule[i].examples.push({ title: r.title, repo: r.repo, lane: next.lane });
+				const p = perRule[i];
+				p.matches++;
+				const open = r.triage === 'inbox' || r.triage === 'snoozed';
+				if (open) p.inInbox++;
+				const list = open ? p.open : p.other;
+				if (list.length < 3) list.push({ title: r.title, repo: r.repo, category });
 			}
-			if (next.lane !== now.lane) moves[next.lane]++;
+			// The effect of your edits: compare with the rules you have saved now.
+			const before = categoryWith(saved.rules, firstMatchingRule(facts, saved.rules, base));
+			if (category !== before) moves[category as keyof typeof moves]++;
+			// A rule that moves threads acts on the inbox threads it starts to match (see reclassify).
+			const then = i >= 0 ? settings.rules[i].then : null;
+			const name = i >= 0 ? settings.rules[i].name || `Rule ${i + 1}` : null;
+			if (then?.triage && r.triage === 'inbox' && name !== r.rule)
+				moves[then.triage === 'done' ? 'done' : 'snoozed']++;
 		}
-		return { perRule, moves, total: rows.length };
+		return {
+			// Examples: threads in the inbox first.
+			perRule: perRule.map(({ open, other, ...p }) => ({
+				...p,
+				examples: [...open, ...other].slice(0, 3)
+			})),
+			moves,
+			total: rows.length
+		};
 	}
 
+	/** Change some settings (each one checked), and re-classify the threads if it matters. */
 	/**
 	 * Save a settings patch. With `replace`, the patch is all your changes (settings.json, an
 	 * imported file): every setting it does not have goes back to its default.
@@ -428,47 +351,73 @@ export abstract class PollerData extends PollerSearches {
 	async updateSettings(
 		body: Partial<Settings>,
 		replace = false
-	): Promise<Refusal | { settings: Settings; replaced: number }> {
+	): Promise<Refusal | { settings: Settings; reclassified: number }> {
 		if (typeof body !== 'object' || body === null || Array.isArray(body))
 			return { error: 'Settings must be an object.', status: 400 };
-		const old = await this.checkedSettings();
+		const old = await this.settings();
 		const next = mergeSettings(replace ? structuredClone(DEFAULT_SETTINGS) : old, body);
+		if (next.menus) next.menus = { ...next.menus, v: MENUS_VERSION };
 		const err = validateSettings(next, Object.keys(body));
 		if (err) return { error: err, status: 400 };
 		await this.saveSettings(next);
-		// Only these settings change where items go; the rest (menus, searches, push) must not
-		// rewrite every item. New searches run at once.
-		const affects = REPLACE_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
-		const replaced = affects ? await this.placeAll() : 0;
-		const searchesChanged = ['searches', 'searchScope', 'excludedTeams'].some(
-			(k) => JSON.stringify(old[k as keyof Settings]) !== JSON.stringify(next[k as keyof Settings])
-		);
-		if (searchesChanged) {
-			const who = await this.who();
-			if (who) this.ctx.waitUntil(this.runSearches(who, true).then(() => undefined));
-		}
-		return { settings: next, replaced };
+		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
+		// must not rewrite every thread.
+		const affects = RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
+		const reclassified = affects ? await this.reclassify(next) : 0;
+		return { settings: next, reclassified };
 	}
 
-	/** Place every stored item again, after a change to the rules or the turn settings. */
-	private async placeAll(): Promise<number> {
-		const who = await this.who();
-		if (!who) return 0;
-		const rows = this.items('1');
-		const out = await this.upsertItems(
-			who,
-			rows.map((r) => ({
-				key: r.key,
-				repo: r.repo,
-				number: r.number,
-				subjectType: r.subject_type,
-				title: r.title,
-				url: r.url,
-				create: false
-			})),
-			{ quiet: true, userAction: true }
-		);
-		return out.wrote;
+	/**
+	 * Re-run the classifier on stored threads after the settings change. A rule that moves threads
+	 * acts on the inbox threads it starts to match.
+	 */
+	private async reclassify(settings: Settings): Promise<number> {
+		const me = await this.login();
+		const myTeams = await this.inboxTeamsFor(settings);
+		const now = Date.now();
+		const changes: (() => void)[] = [];
+		const done: { id: string; note: string }[] = [];
+		for (const r of this.threads('1')) {
+			if (r.rule === MUTED_BY_USER) continue;
+			const c = classify(factsFromRow(r, me, myTeams), settings);
+			const moved =
+				r.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
+			const same =
+				!moved &&
+				c.category === r.category &&
+				c.kind === r.kind &&
+				c.summary === r.summary &&
+				(c.rule ?? null) === r.rule &&
+				c.actionUrl === r.action_url;
+			if (same) continue;
+			if (moved?.triage === 'done') done.push({ id: r.id, note: moved.note });
+			changes.push(() =>
+				this.run(
+					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
+             rule = ?, triage = ?, resolved_at = ?, resolved_note = ?, snoozed_until = ?, snoozed_at = ?
+           WHERE id = ?`,
+					c.category,
+					c.kind,
+					c.summary,
+					c.why,
+					c.actionLabel,
+					c.actionUrl,
+					c.rule ?? null,
+					moved?.triage ?? r.triage,
+					moved ? null : r.resolved_at,
+					moved?.triage === 'done' ? moved.note : r.resolved_note,
+					moved?.triage === 'snoozed' ? moved.until : r.snoozed_until,
+					moved?.triage === 'snoozed' ? now : r.snoozed_at,
+					r.id
+				)
+			);
+		}
+		if (changes.length) {
+			this.transaction(() => changes.forEach((change) => change()));
+			await this.bumpVersion();
+		}
+		await this.notifyResolved(done);
+		return changes.length;
 	}
 
 	// --- Push devices ---------------------------------------------------------------------
@@ -537,7 +486,7 @@ export abstract class PollerData extends PollerSearches {
 					{
 						title: 'Hush is connected',
 						body: 'Push notifications work on this device.',
-						url: `${origin}/turn`,
+						url: `${origin}/inbox`,
 						tag: 'test'
 					},
 					vapid
@@ -556,48 +505,117 @@ export abstract class PollerData extends PollerSearches {
 			title: string;
 			body: string;
 			url: string;
-			key: string | null;
+			tid: string | null;
 			repo: string;
-			ititle: string;
-			iurl: string;
-			state: string;
-			lane: string;
-			override: string | null;
+			ttitle: string;
+			html_url: string;
+			triage: string;
 			snoozed_until: number | null;
-			finished_note: string | null;
+			resolved_note: string | null;
+			subject_key: string | null;
 		}>(
-			`SELECT a.id, a.sent_at, a.title, a.body, a.url, i.key, i.repo, i.title AS ititle,
-         i.url AS iurl, i.state, i.lane, i.override, i.snoozed_until, i.finished_note
-       FROM alerts a LEFT JOIN items i ON i.key = a.item_key
+			`SELECT a.id, a.sent_at, a.title, a.body, a.url, t.id AS tid, t.repo, t.title AS ttitle,
+         t.html_url, t.triage, t.snoozed_until, t.resolved_note, t.subject_key
+       FROM alerts a LEFT JOIN threads t ON t.id = a.thread_id
        ORDER BY a.sent_at DESC, a.id DESC LIMIT 100`
 		);
 		const now = Date.now();
 		const state = (r: (typeof rows)[number]) =>
-			r.state === 'done'
-				? 'Done'
-				: r.state === 'muted'
+			r.triage === 'done'
+				? (r.resolved_note ?? 'Done')
+				: r.triage === 'muted'
 					? 'Muted'
-					: r.state === 'snoozed' && (r.snoozed_until ?? 0) > now
+					: r.triage === 'snoozed' && (r.snoozed_until ?? 0) > now
 						? 'Snoozed'
-						: laneOf({ lane: r.lane, override: r.override }) !== 'turn'
-							? (r.finished_note ?? 'No longer your turn')
-							: null;
+						: null;
 		return rows.map((r) => ({
 			id: r.id,
 			sentAt: r.sent_at,
 			title: r.title,
 			body: r.body,
 			url: r.url,
-			item: r.key
+			thread: r.tid
 				? {
-						key: r.key,
 						repo: r.repo,
-						number: subjectRefOf(r.key)?.number ?? null,
-						title: r.ititle,
-						url: r.iurl,
+						number: subjectRefOf({ id: r.tid, subject_key: r.subject_key })?.number ?? null,
+						title: r.ttitle,
+						htmlUrl: r.html_url,
 						state: state(r)
 					}
 				: null
 		}));
+	}
+
+	// --- Dashboard marks: hidden, moved, and your order -----------------------------------
+
+	/** A dashboard with your marks applied (hidden and moved last until the item changes). */
+	async dashboardView(kind: DashKind, force: boolean): Promise<DashResponse> {
+		const data = await this.dashboard(kind, force);
+		const hidden = this.all<{ item_id: string; updated_at: string }>('SELECT * FROM dash_hidden');
+		const moves = this.all<{ item_id: string; turn: Turn; updated_at: string }>(
+			'SELECT * FROM dash_moves'
+		);
+		const order = this.all<{ item_id: string; rank: number }>('SELECT * FROM dash_order');
+		// Hidden and moved last "until it changes": a newer updatedAt undoes them.
+		const unchanged = (i: DashItem, at: string | undefined) =>
+			!!at && Date.parse(i.updatedAt) <= Date.parse(at);
+		const hiddenAt = new Map(hidden.map((h) => [h.item_id, h.updated_at]));
+		const moved = new Map(moves.map((m) => [m.item_id, m]));
+		const ranks = new Map(order.map((o) => [o.item_id, o.rank]));
+		for (const i of data.items) {
+			i.dismissed = unchanged(i, hiddenAt.get(i.id));
+			const m = moved.get(i.id);
+			i.autoTurn = i.turn;
+			i.movedByYou = !!m && unchanged(i, m.updated_at) && m.turn !== i.turn;
+			if (i.movedByYou) i.turn = m!.turn;
+			i.rank = ranks.get(i.id) ?? null;
+		}
+		return data;
+	}
+
+	/** Save a drop: moves to another group (`turn`, or null to undo a move) and the new order. */
+	arrange(items: (ItemRef & { turn?: Turn | null })[], order: string[]): { ok: true } {
+		this.transaction(() => {
+			for (const item of items) {
+				if (item.turn === null) this.run('DELETE FROM dash_moves WHERE item_id = ?', item.id);
+				else if (item.turn)
+					this.run(
+						`INSERT INTO dash_moves (item_id, turn, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT (item_id) DO UPDATE SET turn = excluded.turn, updated_at = excluded.updated_at`,
+						item.id,
+						item.turn,
+						item.updatedAt
+					);
+			}
+			order.forEach((id, rank) =>
+				this.run(
+					`INSERT INTO dash_order (item_id, rank) VALUES (?, ?)
+           ON CONFLICT (item_id) DO UPDATE SET rank = excluded.rank`,
+					id,
+					rank
+				)
+			);
+		});
+		return { ok: true };
+	}
+
+	hide(items: ItemRef[]): { ok: true } {
+		this.transaction(() => {
+			for (const i of items)
+				this.run(
+					`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
+           ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
+					i.id,
+					i.updatedAt
+				);
+		});
+		return { ok: true };
+	}
+
+	unhide(ids: string[]): { ok: true } {
+		this.transaction(() => {
+			for (const id of ids) this.run('DELETE FROM dash_hidden WHERE item_id = ?', id);
+		});
+		return { ok: true };
 	}
 }

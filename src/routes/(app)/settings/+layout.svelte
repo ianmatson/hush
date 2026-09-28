@@ -3,17 +3,17 @@
 	import { cn } from '$lib/utils';
 	import Bell from '@lucide/svelte/icons/bell';
 	import Inbox from '@lucide/svelte/icons/inbox';
-	import CircleUser from '@lucide/svelte/icons/circle-user';
-	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
+	import Settings2 from '@lucide/svelte/icons/settings-2';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 
 	let { children } = $props();
 
 	const sections = [
-		{ href: '/settings/turn', label: 'Your turn', icon: Inbox },
+		{ href: '/settings/general', label: 'General', icon: Settings2 },
+		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
+		{ href: '/settings/dashboards', label: 'PRs & issues', icon: GitPullRequest },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
-		{ href: '/settings/account', label: 'Account', icon: CircleUser },
-		{ href: '/settings/advanced', label: 'Advanced', icon: SlidersHorizontal },
 		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard }
 	];
 </script>

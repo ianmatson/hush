@@ -41,12 +41,12 @@ renameSync(join(app, shell), join(app, 'index.html'));
 writeFileSync(
 	join(app, '_redirects'),
 	[
-		'# The app starts at Your turn; every other path gets the app shell (SPA fallback).',
-		'/ /turn 302',
-		'# Pages from before the lanes.',
-		'/inbox /turn 301',
-		'/pulls /turn 301',
-		'/issues /turn 301',
+		'# The app starts at the inbox; every other path gets the app shell (SPA fallback).',
+		'/ /inbox 302',
+		'# Pages of the reverted "lanes" layout.',
+		'/turn /inbox 301',
+		'/waiting /inbox 301',
+		'/updates /inbox 301',
 		''
 	].join('\n')
 );
@@ -109,20 +109,16 @@ const csp = [
 	"frame-ancestors 'none'"
 ].join('; ');
 writeFileSync(join(site, '_headers'), `/*\n${SECURITY(csp)}${IMMUTABLE}`);
-// Docs pages that were renamed or merged.
-const MOVED_DOCS = {
-	inbox: 'your-turn',
-	'pull-requests-and-issues': 'your-turn',
-	views: 'search'
-};
+// Docs pages of the reverted "lanes" layout.
 writeFileSync(
 	join(site, '_redirects'),
-	Object.entries(MOVED_DOCS)
-		.flatMap(([from, to]) => [
-			`/docs/${from} /docs/${to} 301`,
-			`/docs/${from}.md /docs/${to}.md 301`
-		])
-		.join('\n') + '\n'
+	[
+		'/docs/your-turn /docs/inbox 301',
+		'/docs/your-turn.md /docs/inbox.md 301',
+		'/docs/where-hush-looks /docs/pull-requests-and-issues 301',
+		'/docs/where-hush-looks.md /docs/pull-requests-and-issues.md 301',
+		''
+	].join('\n')
 );
 console.log(
 	`split: ${pages.length} site pages → dist/site (${hashes.size} inline scripts in the CSP), app shell → dist/app`

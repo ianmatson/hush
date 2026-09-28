@@ -1,27 +1,27 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
-import { MAX_QUERIES } from '$lib/shared/turn';
+import { WHY } from '$lib/shared/classify';
+import { DEFAULT_ISSUE_SECTIONS, DEFAULT_PR_SECTIONS, MAX_QUERIES } from '$lib/shared/dashboard';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
-import { DEFAULT_MENU, MENU_ITEMS, SEP } from '$lib/shared/menus';
+import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import { IS_VALUES, WORDS } from '$lib/shared/query';
-import { DEFAULT_SEARCHES, DEFAULT_SETTINGS } from '$lib/shared/settings';
+import { RULE_FIELDS } from '$lib/shared/rule-fields';
+import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
-import { MAX_SAVED } from '$lib/shared/search';
+import { MAX_VIEWS, VIEW_BASES } from '$lib/shared/views';
 import { THEMES } from '$lib/themes/list';
-import type { Settings } from '$lib/shared/types';
+import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
 import {
 	ALERT_LOG_KEEP,
-	FINISHED_SHOW,
+	DASH_TTL,
 	FIRST_SYNC_DAYS,
 	MAX_INDIVIDUAL_PUSHES,
 	PAUSE_AFTER_NO_PUSH,
 	PAUSE_AFTER_WITH_PUSH,
 	POLL_ACTIVE,
 	POLL_IDLE,
-	SEARCH_EVERY,
 	TEAMS_TTL,
-	UPDATES_KEEP,
 	WATCH_EVERY
 } from '../../../worker/poller/shared';
 
@@ -48,74 +48,40 @@ const table = (head: string[], rows: string[][]) =>
 	].join('\n');
 
 const PAGE: Record<SettingsPage, string> = {
-	turn: 'Settings → Your turn',
+	general: 'Settings → General',
+	inbox: 'Settings → Inbox',
+	dashboards: 'Settings → PRs & issues',
 	notifications: 'Settings → Notifications',
-	advanced: 'Settings → Advanced',
 	keys: 'Settings → Keybinds'
 };
 
-export const defaultOf = (key: keyof Settings): unknown => DEFAULT_SETTINGS[key];
+/** The default of a setting key, also of a group key such as "dash.pr". */
+export function defaultOf(key: string): unknown {
+	const [group, sub] = key.split('.');
+	const v = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[group];
+	return sub ? (v as Record<string, unknown>)[sub] : v;
+}
 
 /**
  * What the docs add to each setting: its type, and what it controls in more depth than the
  * one-line description in SETTINGS_DOCS. A test checks that every setting has an entry.
  */
-export const SETTING_DETAILS: Record<keyof Settings, { type: string; body: string }> = {
-	teamReviewsAreMine: {
+export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
+	pushAction: {
 		type: 'boolean',
-		body: `A review request to a team you are in is **your turn** (and is pushed). Off, the request waits on the team: it shows in **Waiting**, under “Waiting on acme/web-core”. Teams that you exclude ([\`excludedTeams\`](#excludedteams)) do not count at all.`
+		body: `When a thread arrives in **Needs you**, Hush sends a push to every device that has push on. A rule with \`"push": false\` stops the push for the threads it matches; with \`"push": true\` it sends one even when this is off.`
 	},
-	reviewResolution: {
-		type: '"strict" or "any_review"',
-		body: `When a review request stops being your turn.
-
-- \`"strict"\`: when GitHub no longer asks you: you reviewed, or the request was removed.
-- \`"any_review"\`: also when someone other than you and the author approves or requests changes after the newest push. Useful on teams where one review is enough.
-
-This also applies to team review requests. **Not my turn → “Someone else already reviewed it”** sets \`"any_review"\`.`
-	},
-	botsAreUpdates: {
+	pushFyi: {
 		type: 'boolean',
-		body: `PRs that bots open (dependabot, renovate, the Copilot coding agent…) are updates, and comments and mentions by bots do not count as replies. A review request to **you by name** still makes a bot's PR your turn. A bot is a login that ends in \`[bot]\`, or starts with dependabot, renovate, github-actions, or codecov.`
+		body: `Also push FYI threads. Most people leave this off and write a rule with \`"push": true\` for the few repositories or people they care about.`
 	},
-	staleDays: {
-		type: 'whole number, 1 to 60',
-		body: `An item in Your turn or Waiting whose turn started more than this many days ago is **stale**: how long it waited shows in amber (“13d”).`
-	},
-	rules: {
-		type: 'array of rules',
-		body: `Your rules. Hush checks them from top to bottom, after its own placement. The first enabled rule that matches an item wins. A change to the rules places every stored item again. See [Rules](/docs/rules).
-
-A rule:
-
-- \`name\` (text, optional, up to 60 characters): shown on the item as “rule: …”.
-- \`enabled\` (boolean, optional): \`false\` turns the rule off. Missing means on.
-- \`when\` (text): a [query](/docs/query-language). \`""\` matches every item. \`is:done\`, \`is:snoozed\`, and \`is:muted\` work only in searches.
-- \`then\` (object): what to do. It needs at least one of:
-  - \`lane\`: \`"turn"\` (Your turn) or \`"updates"\`.
-  - \`push\`: \`true\` or \`false\`, in place of the [\`push\`](#push) setting, when the item comes into Your turn.
-  - \`mute\`: \`true\` hides the item from every lane (Search finds it with \`is:muted\`).
-  - \`snoozeHours\`: a whole number from 1 to 720. When the item comes into Your turn, Hush snoozes it for this long.
-
-Up to 100 rules.
-
-\`\`\`json settings
-{
-  "rules": [
-    { "name": "Docs repo is updates", "when": "repo:acme/website", "then": { "lane": "updates" } },
-    { "name": "Mute dependabot", "when": "author:dependabot*", "then": { "mute": true } },
-    { "name": "Nightly CI can wait", "when": "type:ci repo:acme/nightly", "then": { "snoozeHours": 12, "push": false } }
-  ]
-}
-\`\`\``
-	},
-	push: {
+	pushTurnChanges: {
 		type: 'boolean',
-		body: `When an item comes into **Your turn**, Hush pushes it to every device that has push on: once for each change of its turn. Waiting and Updates never push. A rule with \`"push": false\` stops the push for the items it matches, and \`"push": true\` pushes them with this setting off. To hear about something that is not your turn, give its rule \`"lane": "turn"\` too.`
+		body: `GitHub sends no notification for some changes that make a thread your turn: new commits after your review, CI that fails later, a snooze that ends. The inbox watcher looks at open threads every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, Hush moves it to Needs you and, with this on, pushes it.`
 	},
 	pushResolved: {
 		type: 'boolean',
-		body: `When an alert from the last day is resolved (you approved, CI passes now, you chose Done on another device), Hush replaces it with a quiet alert such as “✓ You approved”, which then closes itself. Off: the old alert stays until you close it.`
+		body: `When an alert from the last day is resolved (you approved, CI passes now, you marked it Done on another device), Hush replaces it with a quiet alert such as “✓ You approved”, which then closes itself. Off: the old alert stays until you close it.`
 	},
 	quietHours: {
 		type: 'object or null',
@@ -129,51 +95,137 @@ Up to 100 rules.
 { "quietHours": { "from": 1320, "to": 420, "weekends": true, "timeZone": "Europe/London" } }
 \`\`\``
 	},
-	markReadOnGitHub: {
+	peekMarksRead: {
 		type: 'boolean',
-		body: `Keep GitHub in step with Hush: when you see an item (open it in the peek for a moment, open it on GitHub, or mark all Updates seen), Hush marks its notification **read** on GitHub; when you choose **Done**, it marks it **done** there. Off: Hush changes nothing on GitHub for these. Mute always unsubscribes you on GitHub.`
+		body: `A PR or issue that stays open in the peek for 1.5 seconds is marked as read, in Hush and on GitHub. Off: only **Read** (or opening it on GitHub) marks it.`
 	},
-	searches: {
-		type: 'array of searches',
-		body: `The GitHub searches Hush runs every ${SEARCH_EVERY / MIN} minutes, to find items with no recent notification (an old review request, your open PR). Each is a source of items, like your notifications; where an item goes still depends only on its turn. Up to 20.
+	reviewResolution: {
+		type: '"strict" or "any_review"',
+		body: `When a review request stops being your turn.
 
-- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
-- \`name\`: up to 60 characters.
-- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track (15 at most).
-- \`enabled\`: \`false\` skips the search.
+- \`"strict"\`: when GitHub no longer asks you: you reviewed, or the request was removed.
+- \`"any_review"\`: also when someone other than you and the author approves or requests changes after the newest push. Useful on teams where one review is enough.
 
-A change replaces the whole list. The defaults:
-
-${searchesReference()}`
+This also applies to team review requests.`
 	},
-	searchScope: {
-		type: 'string',
-		body: `Added to the end of every tracked search, up to 200 characters. Use it to keep Hush to your work: \`"org:acme archived:false"\`, or \`"-repo:acme/website"\`.`
+	botsAreFyi: {
+		type: 'boolean',
+		body: `PRs that bots open (dependabot, renovate…) are FYI, and they show in Other on the Pull requests tab, unless they ask for your review by name. Comments and mentions by bots do not count as replies. A bot is a login that ends in \`[bot]\`, or starts with dependabot, renovate, github-actions, or codecov.`
 	},
-	excludedTeams: {
-		type: 'array of strings',
-		body: `Teams to leave out, as \`"org/team"\` slugs: \`@team\` searches skip them, and their review requests do not count as yours or your team's. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR} hours); leave out big ones, such as “everyone”. One pass runs up to ${MAX_QUERIES} searches.
-
-\`\`\`json settings
-{ "excludedTeams": ["acme/everyone", "acme/contractors"] }
-\`\`\``
+	teamReviewsAreAction: {
+		type: 'boolean',
+		body: `A review request to a team you are in goes to **Needs you** (and is pushed). Off, it is FYI in the inbox, and it shows under “Your team's turn” on the Pull requests tab.`
 	},
-	saved: {
-		type: 'array of saved searches',
-		body: `Saved searches: tabs after the lanes, in this order. Up to ${MAX_SAVED}. Make them in [Search](/docs/search).
+	rules: {
+		type: 'array of rules',
+		body: `Your inbox rules. Hush checks them from top to bottom, after its own defaults. The first enabled rule that matches a thread wins. A change to the rules sorts your stored threads again. See [Rules](/docs/rules) for the editor, and [the query language](/docs/query-language) for the conditions.
 
-- \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds use it.
-- \`name\`: up to 40 characters. The tab label.
-- \`query\`: a [query](/docs/query-language), up to 300 characters. Here \`in:\` is the lane now, and \`is:done\`, \`is:snoozed\`, and \`is:muted\` find what you finished.
+A rule:
+
+- \`name\` (text, optional): shown on the thread as “rule: …”.
+- \`enabled\` (boolean, optional): \`false\` turns the rule off. Missing means on.
+- \`when\` (object): the conditions. All must match. \`{}\` matches every thread.
+- \`then\` (object): what to do. It needs at least one of \`category\`, \`push\`, or \`triage\`.
+  - \`category\`: \`"action"\` (Needs you), \`"fyi"\`, or \`"muted"\`.
+  - \`push\`: \`true\` or \`false\`, in place of the push settings.
+  - \`triage\`: \`"done"\` moves the thread to Done, \`"snooze"\` snoozes it for \`snoozeHours\` (a whole number from 1 to 720). Hush moves a thread only when it has new activity or when the rule starts to match, so a thread that you move back stays where you put it.
 
 \`\`\`json settings
 {
-  "saved": [
-    { "id": "web", "name": "Web reviews", "query": "repo:acme/web-* needs:review" },
-    { "id": "alice", "name": "From Alice", "query": "from:alice" }
+  "rules": [
+    { "name": "Docs repo is FYI", "when": { "repo": "acme/website" }, "then": { "category": "fyi" } },
+    { "name": "Mute dependabot", "when": { "author": "dependabot*" }, "then": { "category": "muted" } },
+    {
+      "name": "Nightly CI can wait",
+      "when": { "type": ["CheckSuite"], "repo": "acme/nightly" },
+      "then": { "triage": "snooze", "snoozeHours": 12, "push": false }
+    }
   ]
 }
 \`\`\``
+	},
+	views: {
+		type: 'array of views',
+		body: `Saved views: extra tabs after the built-in inbox tabs, in this order. Up to ${MAX_VIEWS}.
+
+- \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
+- \`name\`: up to 40 characters. The tab label.
+- \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
+- \`when\`: the same conditions as rules. \`category\` here is the thread's list now, after your rules.
+
+\`\`\`json settings
+{
+  "views": [
+    { "id": "web", "name": "Web team", "base": "inbox", "when": { "repo": "acme/web-*" } },
+    { "id": "ci", "name": "Broken CI", "base": "action", "when": { "kind": ["fix_ci"] } }
+  ]
+}
+\`\`\``
+	},
+	'dash.pr': {
+		type: 'array of sections',
+		body: `The sections of the Pull requests tab. Each is a saved GitHub search. Up to 20.
+
+- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
+- \`name\`: up to 60 characters.
+- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track.
+- \`enabled\`: \`false\` hides the section and skips its search.
+
+A change to \`dash.pr\` replaces the whole list. To add a section, write the defaults below and your new one.
+
+The defaults:
+
+${table(
+	['id', 'name', 'query', 'enabled'],
+	DEFAULT_PR_SECTIONS.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
+)}`
+	},
+	'dash.issue': {
+		type: 'array of sections',
+		body: `The sections of the Issues tab, the same as \`dash.pr\`. The defaults:
+
+${table(
+	['id', 'name', 'query', 'enabled'],
+	DEFAULT_ISSUE_SECTIONS.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
+)}`
+	},
+	'dash.scope': {
+		type: 'string',
+		body: `Added to the end of every section's search, up to 200 characters. Use it to keep the tabs to your work: \`"org:acme archived:false"\`, or \`"-repo:acme/website"\`.`
+	},
+	'dash.excludedTeams': {
+		type: 'array of strings',
+		body: `Teams that \`@team\` sections skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR} hours); turn off big ones, such as “everyone”, to cut noise. A section searches the first 15 teams at most, and one tab runs up to ${MAX_QUERIES} searches.
+
+\`\`\`json settings
+{ "dash": { "excludedTeams": ["acme/everyone", "acme/contractors"] } }
+\`\`\``
+	},
+	'dash.staleDays': {
+		type: 'whole number, 1 to 60',
+		body: `An item whose turn started more than this many days ago is **stale**: it shows how long it waited (“waiting 5d”) in amber. Items in the Other group are never stale.`
+	},
+	'dash.hideOthersDrafts': {
+		type: 'boolean',
+		body: `Leave out draft PRs that someone else opened. Your own drafts always show (in Other).`
+	},
+	'dash.hideBots': {
+		type: 'boolean',
+		body: `Leave out PRs and issues that bots opened, unless your review is requested from you by name.`
+	},
+	'menus.inbox': {
+		type: 'array of menu item ids',
+		body: `The items of the right-click menu (and the “⋯” menu on phones) of inbox threads, in order. \`"${SEP}"\` is a separator line. Items that you leave out are hidden. Items that do not apply to a thread, such as Done in the Done tab, are left out when the menu opens. See the item ids in [Menus](/docs/appearance-and-menus#menu-items).
+
+\`\`\`json settings
+{ "menus": { "inbox": ["peek", "main", "sep", "done", "snooze:tomorrow", "until:ci_pass", "mute", "sep", "copy"] } }
+\`\`\`
+
+Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush which new items you have already seen.`
+	},
+	'menus.dash': {
+		type: 'array of menu item ids',
+		body: `The menu of pull requests and issues on the dashboards, the same way as \`menus.inbox\`.`
 	},
 	keys: {
 		type: 'object: command id → array of keys',
@@ -187,25 +239,10 @@ How to write a key:
 - Other characters are themselves, with no Shift: \`"?"\`, \`"/"\`, \`"1"\`.
 
 \`\`\`json settings
-{ "keys": { "item.done": ["d", "e"], "item.mute": [], "palette": ["Mod+k", "Mod+p"] } }
-\`\`\``
-	},
-	menu: {
-		type: 'array of menu item ids',
-		body: `The items of an item's right-click menu (and its “⋯” menu on phones), in order. \`"${SEP}"\` is a separator line. Items that you leave out are hidden. Items that do not apply to an item, such as Done for an item that is done, are left out when the menu opens. The ids are in [Menu items](/docs/appearance-and-menus#menu-items).
-
-\`\`\`json settings
-{ "menu": ["peek", "main", "sep", "done", "snooze:tomorrow", "until:ci_pass", "not-mine", "sep", "copy"] }
+{ "keys": { "inbox.done": ["d", "e"], "inbox.mute": [], "palette": ["Mod+k", "Mod+p"] } }
 \`\`\``
 	}
 };
-
-function searchesReference(): string {
-	return table(
-		['id', 'name', 'query', 'enabled'],
-		DEFAULT_SEARCHES.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
-	);
-}
 
 function settingsReference(): string {
 	const overview = table(
@@ -229,7 +266,7 @@ function settingsReference(): string {
 			`**Type:** ${detail?.type ?? ''} · **Default:** ${text.length > 60 ? 'below' : code(text)} · **In the app:** ${d.page ? PAGE[d.page] : 'none (settings.json only)'}`,
 			d.description,
 			detail?.body ?? '',
-			text.length > 60 && d.key !== 'searches' ? `The default:\n\n${pretty(def)}` : ''
+			text.length > 60 && !d.key.startsWith('dash.') ? `The default:\n\n${pretty(def)}` : ''
 		]
 			.filter(Boolean)
 			.join('\n\n');
@@ -253,7 +290,7 @@ export function keyMention(id: string, where = 'docs'): string {
 	return c.keys.length ? c.keys.map(one).join(' or ') : '(no key)';
 }
 
-/** Some commands and their keys, in this order: {{ref:keys list.next item.done}}. */
+/** Some commands and their keys, in this order: {{ref:keys list.next inbox.done}}. */
 function someKeys(ids: string[]): string {
 	return table(
 		['Key', 'What it does'],
@@ -277,42 +314,85 @@ function keybindsReference(): string {
 
 function queryReference(): string {
 	const words = table(
-		['Word', 'Filters on', 'Example'],
+		['Word', 'Filters on', 'Example', 'JSON condition'],
 		[
-			...WORDS.map((w) => [code(`${w.key}:`), w.help, code(w.example)]),
+			...WORDS.map((w) => [
+				code(`${w.key}:`),
+				w.help,
+				code(w.example),
+				w.bots ? `${code(w.field)}; ${code(`${w.key}:bots`)} sets ${code(w.bots)}` : code(w.field)
+			]),
 			[
 				code('is:'),
-				'Draft, open, closed, merged; in searches also done, snoozed, muted',
-				code('is:draft')
+				'Draft, open, closed, or merged',
+				code('is:draft'),
+				`${code('draft')}, ${code('state')}`
 			],
 			[
 				'other words',
 				'Words that must all be in the title, repository, or author',
-				code('login bug')
+				code('login bug'),
+				code('text')
 			]
 		]
 	);
 	const values = WORDS.filter((w) => w.values)
 		.map((w) => {
-			const rows = Object.entries(w.values!).map(([word, v]) => [code(word), v.help]);
-			return `### ${w.key}:\n\n${w.help}.\n\n${table(['Value', 'Means'], rows)}`;
+			const rows = Object.entries(w.values!).map(([word, v]) => [
+				code(word),
+				v.help,
+				code(json(v.stored))
+			]);
+			return `### ${w.key}:\n\n${w.help}.\n\n${table(['Value', 'Means', 'In JSON'], rows)}`;
 		})
 		.join('\n\n');
 	const is = table(
-		['Value', 'Means'],
-		Object.entries(IS_VALUES).map(([k, help]) => [code(`is:${k}`), help])
+		['Value', 'Means', 'In JSON'],
+		Object.entries(IS_VALUES).map(([k, help]) => [
+			code(`is:${k}`),
+			help,
+			code(k === 'draft' ? '"draft": true' : `"state": ["${k}"]`)
+		])
 	);
-	return `${words}\n\n## Values\n\n${values}\n\n### is:\n\n${is}\n\n${code('-is:draft')} is “not a draft”.`;
+	return `${words}\n\n## Values\n\n${values}\n\n### is:\n\n${is}\n\n${code('-is:draft')} is \`"draft": false\`.`;
+}
+
+function conditionsReference(): string {
+	const input: Record<string, string> = {
+		globs: 'text or list of texts; `*` and `?` are wildcards',
+		options: 'list of values',
+		text: 'text',
+		yesno: 'true or false'
+	};
+	return table(
+		['JSON key', 'In the editor', 'Value', 'Notes'],
+		RULE_FIELDS.map((f) => [
+			code(f.key),
+			f.label,
+			f.key === 'label' ? 'list of label names (not wildcards)' : input[f.input],
+			f.key === 'reason'
+				? `Values: ${Object.keys(WHY).map(code).join(', ')}`
+				: f.options
+					? `Values: ${f.options.map((o) => code(o.value)).join(', ')}${f.help ? `. ${f.help}` : ''}`
+					: (f.help ?? '')
+		])
+	);
 }
 
 function menusReference(): string {
-	const rows = MENU_ITEMS.map((i) => [
-		code(i.id),
-		i.label,
-		i.note ?? '',
-		DEFAULT_MENU.includes(i.id) ? 'yes' : 'no'
-	]);
-	return `${table(['Id', 'Item', 'Shows', 'In the default menu'], rows)}\n\nThe default order: ${code(json(DEFAULT_MENU))}`;
+	return (['inbox', 'dash'] as MenuKind[])
+		.map((kind) => {
+			const rows = MENU_ITEMS[kind].map((i) => [
+				code(i.id),
+				i.label,
+				i.note ?? '',
+				DEFAULT_MENUS[kind].includes(i.id) ? 'yes' : 'no'
+			]);
+			const title =
+				kind === 'inbox' ? 'Inbox threads (menus.inbox)' : 'PRs and issues (menus.dash)';
+			return `### ${title}\n\n${table(['Id', 'Item', 'Shows', 'In the default menu'], rows)}\n\nThe default order: ${code(json(DEFAULT_MENUS[kind]))}`;
+		})
+		.join('\n\n');
 }
 
 function snoozeReference(): string {
@@ -350,32 +430,27 @@ function limitsReference(): string {
 	return table(
 		['What', 'Limit'],
 		[
-			['Check for new notifications, when Hush is open or push is on', `every ${dur(POLL_ACTIVE)}`],
-			['Check when idle (no open tab for 15 minutes, no push devices)', `every ${dur(POLL_IDLE)}`],
-			[
-				'First sync after sign-in',
-				`the tracked searches, then notifications from the last ${FIRST_SYNC_DAYS} days`
-			],
-			['The watcher (turn changes with no notification)', `every ${dur(WATCH_EVERY)}`],
-			['Tracked searches', `every ${dur(SEARCH_EVERY)}`],
+			['Poll for new notifications, when Hush is open or push is on', `every ${dur(POLL_ACTIVE)}`],
+			['Poll when idle (no open tab for 15 minutes, no push devices)', `every ${dur(POLL_IDLE)}`],
+			['First sync after sign-in', `notifications from the last ${FIRST_SYNC_DAYS} days`],
+			['Inbox watcher (turn changes with no notification)', `every ${dur(WATCH_EVERY)}`],
+			['Pull requests and Issues tabs', `cached for ${dur(DASH_TTL)}; refresh any time`],
 			['Your teams', `looked up again every ${dur(TEAMS_TTL)}`],
 			[
-				'Checks stop with no visit for',
-				`${dur(PAUSE_AFTER_NO_PUSH)} (${dur(PAUSE_AFTER_WITH_PUSH)} with push devices); opening Hush starts them again`
+				'Polling stops with no visit for',
+				`${dur(PAUSE_AFTER_NO_PUSH)} (${dur(PAUSE_AFTER_WITH_PUSH)} with push devices); opening Hush starts it again`
 			],
-			['Updates show', `the last ${dur(UPDATES_KEEP)}`],
-			['“Hush finished these for you”', `items from the last ${dur(FINISHED_SHOW)}`],
+			['A Done thread comes back when it needs you again, within', dur(REOPEN_WINDOW_MS)],
 			['A snooze “until something happens” also ends after', dur(SNOOZE_EVENT_MAX_MS)],
 			[
-				'Pushes at once before they become one push (“5 things are your turn”)',
+				'Pushes per poll before they become one push (“5 things need you”)',
 				String(MAX_INDIVIDUAL_PUSHES)
 			],
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
-			['Updates, and Done or muted items, with no activity are deleted after', '30 days'],
-			['Saved searches', String(MAX_SAVED)],
-			['Rules', '100'],
-			['Tracked searches', '20'],
-			['GitHub searches in one pass', String(MAX_QUERIES)],
+			['Done threads with no activity are forgotten after', '30 days'],
+			['Saved views', String(MAX_VIEWS)],
+			['Sections per tab (dash.pr, dash.issue)', '20'],
+			['GitHub searches per tab', String(MAX_QUERIES)],
 			['Items per menu', '60'],
 			['Keys per command', '4'],
 			['Push devices', '10'],
@@ -392,9 +467,9 @@ export const REFERENCES: Record<string, (args: string[]) => string> = {
 	keys: someKeys,
 	themes: () => ['Default', ...THEMES.map((t) => t.label)].map((l) => `- ${l}`).join('\n'),
 	settings: settingsReference,
-	searches: searchesReference,
 	keybinds: keybindsReference,
 	query: queryReference,
+	conditions: conditionsReference,
 	menus: menusReference,
 	snooze: snoozeReference,
 	actions: actionsReference,

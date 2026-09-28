@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * The hero: sound to silence. On the left, everything GitHub sends, as a loud waveform. At the
-	 * hush line it goes almost flat; only three peaks stay: your turn. CSS only.
+	 * hush line it goes almost flat; only three peaks stay: what needs you. CSS only.
 	 */
 	const N = 88;
 	const HUSH = 0.5;
@@ -53,7 +53,7 @@
 	</div>
 	<figcaption aria-hidden="true">
 		<span>Everything GitHub sends</span>
-		<span>Your turn</span>
+		<span>What needs you</span>
 	</figcaption>
 </figure>
 

@@ -1,11 +1,11 @@
-import type { TurnFacts } from './turn';
+import type { DashFacts } from './dashboard';
 import type { CiState, Enrichment, LastComment } from './types';
 
 /**
  * Everything Hush knows about one PR or issue, as GitHub last returned it. The one record that
- * every item derives from (enrichmentOf for the placement, turnFactsOf for whose turn it is).
- * Every GitHub read of a PR or issue (poll, watcher, tracked search, peek, quick check) stores one
- * of these in the `subjects` table, and a change updates its item at once.
+ * every view derives from: inbox threads (enrichmentOf), dashboard items (dashFactsOf), and the
+ * alert history. Every GitHub read of a PR or issue (poll, watcher, dashboard search, peek, quick
+ * check) stores one of these in the `subjects` table, and a change updates every view at once.
  *
  * It is per user: `myReview` is your own review, and nothing here depends on your settings or
  * teams (views apply those when they derive).
@@ -28,8 +28,6 @@ export interface SubjectFacts {
 	labels: { name: string; color: string }[];
 	assignees: string[];
 	comments: number;
-	/** PRs: the number of commits (0 for issues). */
-	commits: number;
 	lastComment: LastComment | null;
 	// PRs only (empty or null for issues).
 	ci: CiState | null;
@@ -114,8 +112,8 @@ export function enrichmentOf(s: SubjectFacts, me: string): Enrichment {
 	};
 }
 
-/** Whose turn it is, from a subject. `myTeams` are the "org/team" slugs whose requests count. */
-export function turnFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): TurnFacts {
+/** The dashboards' view of a subject. `myTeams` are the "org/team" slugs whose requests count. */
+export function dashFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): DashFacts {
 	const meL = me.toLowerCase();
 	const pr = s.kind === 'pr';
 	const isMe = (r: { team: boolean; name: string }) => !r.team && r.name.toLowerCase() === meL;
@@ -128,14 +126,20 @@ export function turnFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): 
 	const ev = [...s.requestEvents].reverse().find(isMine);
 	const verdict = pr ? lastVerdictOf(s, me) : null;
 	return {
+		id: s.id,
 		kind: s.kind,
+		number: s.number,
+		title: s.title,
 		url: s.url,
+		repo: s.repo,
 		author: s.author,
+		authorAvatar: s.authorAvatar,
 		authorIsBot: s.authorIsBot,
 		createdAt: s.createdAt,
 		updatedAt: s.updatedAt,
 		state: s.state,
 		draft: s.draft,
+		labels: s.labels,
 		comments: s.comments,
 		lastCommentBy: s.lastComment?.author ?? null,
 		lastCommentAt: s.lastComment?.createdAt ?? null,
@@ -144,6 +148,8 @@ export function turnFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): 
 		ci: pr ? s.ci : null,
 		reviewDecision: pr ? s.reviewDecision : null,
 		mergeable: pr ? s.mergeable : null,
+		additions: s.additions,
+		deletions: s.deletions,
 		requestedMe,
 		requestedTeams,
 		requestedAt: requestedMe || requestedTeams.length ? (ev?.at ?? null) : null,

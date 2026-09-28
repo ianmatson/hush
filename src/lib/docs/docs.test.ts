@@ -22,7 +22,13 @@ describe('docs', () => {
 	it('describe every setting, and only real ones', () => {
 		const keys = SETTINGS_DOCS.map((d) => d.key);
 		expect(Object.keys(SETTING_DETAILS).sort()).toEqual([...keys].sort());
-		expect(Object.keys(DEFAULT_SETTINGS).sort()).toEqual([...keys].sort());
+		const groups = ['dash', 'menus'];
+		for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
+			if (!groups.includes(k)) expect(keys).toContain(k);
+			else
+				for (const sub of Object.keys(v as object))
+					if (sub !== 'v') expect(keys).toContain(`${k}.${sub}`);
+		}
 	});
 
 	it('have settings examples that Hush accepts', () => {

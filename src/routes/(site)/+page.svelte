@@ -24,13 +24,13 @@
 			text: 'What Hush can do with your GitHub access, for you and your org’s owners.'
 		},
 		{ href: '/pricing', title: 'Pricing', text: `Free during the beta. Later, ${price}.` },
-		{ href: '/docs', title: 'Docs', text: 'Every lane, rule, key, and setting, explained.' }
+		{ href: '/docs', title: 'Docs', text: 'Every tab, rule, key, and setting, explained.' }
 	];
 </script>
 
 <SiteMeta
-	title="Hush · What is your turn on GitHub, and nothing else"
-	description="Hush reads your GitHub notifications and tells you whose turn it is: what waits on you, what waits on others, and the rest as a quiet feed. It pushes only when something becomes your turn."
+	title="Hush · GitHub notifications that only show what needs you"
+	description="Hush sorts your GitHub notifications into what needs you and what is only FYI, shows whose turn it is on every pull request, and pushes only what waits on you."
 	path="/"
 />
 
@@ -43,11 +43,11 @@
 				GitHub sends you everything. Hush keeps <em>quiet</em> about most of it.
 			</h1>
 			<p class="lede in" style:--d="1">
-				It follows whose turn it is on every pull request and issue that involves you, shows what
-				waits on you first, and sends a push only when something becomes your turn.
+				It sorts your notifications into what needs you and what is only FYI, follows whose turn it
+				is on every pull request, and sends a push only when something waits on you.
 			</p>
 			<p class="links in" style:--d="2">
-				<a class="open big" href="{APP_URL}/turn">Open Hush</a>
+				<a class="open big" href="{APP_URL}/inbox">Open Hush</a>
 				<a class="quiet" href={REPO_URL} rel="noreferrer">Read the source <span>→</span></a>
 			</p>
 			<div class="in" style:--d="3">
@@ -59,22 +59,22 @@
 			<article class="reveal">
 				<TurnLanes />
 				<p>
-					<b>Whose turn it is.</b> Hush follows each pull request as it moves between you and others:
-					Your turn, Waiting, or a quiet update. When you approve, it moves on by itself.
+					<b>Whose turn it is.</b> Hush follows each pull request as it moves between you and your team,
+					and puts your turn on top. Work that waits too long turns amber.
 				</p>
 			</article>
 			<article class="reveal">
 				<DayDial />
 				<p>
-					<b>A push only when it matters.</b> What becomes your turn buzzes; updates stay silent. At night,
-					quiet hours hold everything, and one push brings it in the morning.
+					<b>A push only when it matters.</b> What needs you buzzes; FYI stays silent. At night, quiet
+					hours hold everything, and one push brings it in the morning.
 				</p>
 			</article>
 			<article class="reveal">
 				<RuleTyper />
 				<p>
-					<b>Wrong? Say so once.</b> “Not my turn” asks why, and fixes the cause. For the rest, one short
-					syntax searches everything and writes rules.
+					<b>Rules in one line.</b> One short syntax filters the inbox, saves views, and writes rules
+					that clean up by themselves.
 				</p>
 			</article>
 		</section>
@@ -96,10 +96,10 @@
 		<section class="close reveal">
 			<p>
 				Hush acts on GitHub only when you do: <em>approve</em>, <em>comment</em>,
-				<em>merge</em>, or mark it <em>Done</em>, without leaving Hush. It is open source, and it
-				takes a minute to set up.
+				<em>merge</em>, or mark it <em>Done</em>, without leaving your inbox. It is open source, and
+				it takes a minute to set up.
 			</p>
-			<a class="quiet" href="{APP_URL}/turn">Open Hush <span>→</span></a>
+			<a class="quiet" href="{APP_URL}/inbox">Open Hush <span>→</span></a>
 		</section>
 	</main>
 

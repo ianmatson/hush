@@ -1,14 +1,11 @@
 import { redirect } from '@sveltejs/kit';
 
-/** Pages that moved: the old names still open the right page. */
+/** Pages that were merged: Appearance, Menus, and Account are on General; Feeds is on Inbox. */
 const MOVED: Record<string, string> = {
-	general: '/settings/account',
-	appearance: '/settings/account',
-	account: '/settings/account',
-	inbox: '/settings/advanced#rules',
-	dashboards: '/settings/advanced#searches',
-	menus: '/settings/advanced#menu',
-	feeds: '/settings/advanced#feeds'
+	appearance: '/settings/general',
+	menus: '/settings/general',
+	account: '/settings/general',
+	feeds: '/settings/inbox#views'
 };
 
 export const load = ({ params }) => redirect(307, MOVED[params.rest] ?? '/settings');

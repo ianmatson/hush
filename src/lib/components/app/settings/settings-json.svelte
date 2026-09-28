@@ -4,7 +4,7 @@
 	import { meQuery } from '$lib/queries';
 	import { applySettings } from '$lib/save-settings';
 	import { DEFAULT_SETTINGS } from '$lib/shared/settings';
-	import { SETTINGS_DOCS, settingsOverrides, type SettingsPage } from '$lib/shared/settings-schema';
+	import { SETTINGS_DOCS, settingsOverrides } from '$lib/shared/settings-schema';
 	import type { Settings } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { commandFor } from '$lib/keys.svelte';
@@ -52,14 +52,17 @@
 		}
 	}
 
-	const PAGE_LABEL: Record<SettingsPage, string> = {
-		turn: 'Your turn',
+	const PAGE_LABEL: Record<string, string> = {
+		inbox: 'Inbox',
+		dashboards: 'PRs & issues',
 		notifications: 'Notifications',
-		advanced: 'Advanced',
+		general: 'General',
 		keys: 'Keybinds'
 	};
-	function defaultOf(key: keyof typeof DEFAULT_SETTINGS): string {
-		const v = DEFAULT_SETTINGS[key];
+	function defaultOf(key: string): string {
+		const [top, sub] = key.split('.');
+		const d = (DEFAULT_SETTINGS as unknown as Record<string, Record<string, unknown>>)[top];
+		const v = sub ? d[sub] : d;
 		const s = JSON.stringify(v);
 		return Array.isArray(v) && v.length && s.length > 40 ? `[${v.length} items]` : s;
 	}

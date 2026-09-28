@@ -2,7 +2,7 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
-import type { MergeMethod, Rule, Settings } from '$lib/shared/types';
+import type { DashKind, MergeMethod, Rule, Settings, Turn, View } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 
 export class ApiError extends Error {
@@ -41,19 +41,16 @@ async function ok<R extends ClientResponse<unknown, number, string>>(
 	return data as Success<R>;
 }
 
-type ItemsBody = Success<Awaited<ReturnType<typeof client.api.items.$get>>>;
-export type ItemsResponse = ItemsBody & {
+type ThreadsBody = Success<Awaited<ReturnType<typeof client.api.threads.$get>>>;
+export type ThreadsResponse = ThreadsBody & {
 	/** Send back as If-None-Match; the server answers 304 while nothing changes. */
 	etag?: string;
 };
 
-/** The lists the app shows: a lane, or what you did with items (Search). */
-export type ListView = 'turn' | 'waiting' | 'updates' | 'done' | 'snoozed' | 'muted' | 'all';
-export type ItemAction = 'done' | 'restore' | 'snooze' | 'mute' | 'seen' | 'my-turn';
-/** The body of an item action: snooze takes a time or a condition. */
+export type ThreadAction =
+	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+/** The body of a thread action: snooze takes a time or a condition. */
 export type ActionBody = { until?: number; event?: SnoozeEvent };
-/** Why an item is not your turn. */
-export type NotMineAnswer = 'once' | 'others-reviewed' | 'team' | 'bots' | 'repo';
 
 export const api = {
 	me: () => ok(client.api.me.$get()),
@@ -75,8 +72,8 @@ export const api = {
 	logout: () => ok(client.api.auth.logout.$post()),
 	deleteAccount: () => ok(client.api.account.$delete()),
 	/** Returns null when the server says nothing changed since `etag` (304). */
-	items: async (view: ListView, etag?: string): Promise<ItemsResponse | null> => {
-		const res = await client.api.items.$get(
+	threads: async (view: View, etag?: string): Promise<ThreadsResponse | null> => {
+		const res = await client.api.threads.$get(
 			{ query: { view } },
 			{ headers: etag ? { 'If-None-Match': etag } : {} }
 		);
@@ -84,14 +81,16 @@ export const api = {
 		const data = await ok(Promise.resolve(res));
 		return { ...data, etag: res.headers.get('ETag') ?? undefined };
 	},
-	item: (key: string) => ok(client.api.item.$get({ query: { key } })),
-	summary: () => ok(client.api.items.summary.$get()),
-	act: (keys: string[], action: ItemAction, body: ActionBody = {}) =>
-		ok(client.api.items.action.$post({ json: { keys, action, ...body } })),
-	notMine: (key: string, answer: NotMineAnswer) =>
-		ok(client.api.items['not-mine'].$post({ json: { key, answer } })),
-	finishedSeen: () => ok(client.api.items['finished-seen'].$post()),
-	onboarded: () => ok(client.api.onboarded.$post()),
+	actMany: (ids: string[], action: ThreadAction, body?: ActionBody) =>
+		ok(
+			client.api.threads.bulk[':action'].$post({
+				param: { action },
+				query: { ids: ids.join(',') },
+				json: body ?? {}
+			})
+		),
+	act: (id: string, action: ThreadAction, body?: ActionBody) =>
+		ok(client.api.threads[':id'][':action'].$post({ param: { id, action }, json: body ?? {} })),
 	sync: () => ok(client.api.sync.$post()),
 	previewRules: (rules: Rule[]) => ok(client.api.rules.preview.$post({ json: { rules } })),
 	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
@@ -107,6 +106,18 @@ export const api = {
 		),
 	unsubscribe: (endpoint: string) => ok(client.api.push.unsubscribe.$post({ json: { endpoint } })),
 	testPush: () => ok(client.api.push.test.$post()),
+	dashboard: (kind: DashKind, refresh = false) =>
+		ok(
+			client.api.dashboard[':kind'].$get({
+				param: { kind },
+				query: refresh ? { refresh: '1' } : {}
+			})
+		),
+	hide: (items: { id: string; updatedAt: string }[]) =>
+		ok(client.api.dashboard.hide.$post({ json: { items } })),
+	unhide: (ids: string[]) => ok(client.api.dashboard.unhide.$post({ json: { ids } })),
+	arrange: (items: { id: string; updatedAt: string; turn?: Turn | null }[], order: string[]) =>
+		ok(client.api.dashboard.arrange.$post({ json: { items, order } })),
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),
@@ -120,7 +131,7 @@ export const api = {
 	},
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),
-	/** Make the feed of a lane or saved search: 'turn', 'waiting', 'updates', or 's:<id>'. */
+	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
 	feedOn: (view: string) => ok(client.api.feeds[':view'].$put({ param: { view } })),
 	feedOff: (view: string) => ok(client.api.feeds[':view'].$delete({ param: { view } })),
 	sessions: () => ok(client.api.account.sessions.$get()),

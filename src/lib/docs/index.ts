@@ -8,7 +8,7 @@ import { REFERENCES, keyMention, slug } from './reference';
  *
  *   ---
  *   title: Rules
- *   description: Put items where you want them…
+ *   description: Sort threads your way…
  *   ---
  *
  * A line `{{ref:name}}` (or `{{ref:name args…}}`) is replaced by a table made from the app's own
@@ -29,10 +29,13 @@ export interface DocPage {
 
 export const NAV: { group: string; pages: string[] }[] = [
 	{ group: 'Start', pages: ['', 'getting-started', 'github-access'] },
-	{ group: 'Use Hush', pages: ['your-turn', 'peek', 'search', 'notifications', 'feeds'] },
+	{
+		group: 'Use Hush',
+		pages: ['inbox', 'pull-requests-and-issues', 'peek', 'notifications', 'feeds']
+	},
 	{
 		group: 'Make it yours',
-		pages: ['rules', 'query-language', 'where-hush-looks', 'keybinds', 'appearance-and-menus']
+		pages: ['rules', 'views', 'query-language', 'keybinds', 'appearance-and-menus']
 	},
 	{ group: 'Reference', pages: ['settings', 'limits', 'agents', 'troubleshooting'] }
 ];

@@ -191,7 +191,7 @@ const app = routes()
 		return c.redirect(
 			use === 'app'
 				? `${c.env.APP_URL}/settings/general?signed_in=1#token`
-				: `${c.env.APP_URL}/turn?signed_in=1`
+				: `${c.env.APP_URL}/inbox?signed_in=1`
 		);
 	})
 	/**
@@ -281,7 +281,7 @@ const app = routes()
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status, onboarded } = await poller(c.env, u.id).me();
+		const { settings, status } = await poller(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,
@@ -293,8 +293,7 @@ const app = routes()
 			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
 			firstSync: status.firstSync,
 			scopes: u.scopes ? u.scopes.split(',') : [],
-			tokenSource: u.token_source,
-			onboarded
+			tokenSource: u.token_source
 		};
 		return c.json(me);
 	});

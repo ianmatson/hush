@@ -21,7 +21,7 @@ sw.addEventListener('install', () => sw.skipWaiting());
 sw.addEventListener('activate', (event) => event.waitUntil(sw.clients.claim()));
 
 sw.addEventListener('push', (event) => {
-	let data: PushPayload = { title: 'Hush', body: 'Something needs you.', url: '/turn' };
+	let data: PushPayload = { title: 'Hush', body: 'Something needs you.', url: '/inbox' };
 	try {
 		if (event.data) data = event.data.json() as PushPayload;
 	} catch {
@@ -52,7 +52,7 @@ sw.addEventListener('push', (event) => {
 
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
-	const url: string = event.notification.data?.url ?? '/turn';
+	const url: string = event.notification.data?.url ?? '/inbox';
 	event.waitUntil(
 		(async () => {
 			const windows = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });

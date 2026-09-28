@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeTurn, turnFactsFromEnrichment } from './turn';
+import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 import {
-	turnFactsOf,
+	dashFactsOf,
 	enrichmentOf,
 	lastVerdictOf,
 	subjectKey,
@@ -33,7 +33,6 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 		labels: [{ name: 'website', color: 'ededed' }],
 		assignees: [],
 		comments: 0,
-		commits: 1,
 		lastComment: null,
 		ci: 'SUCCESS',
 		reviewDecision: 'REVIEW_REQUIRED',
@@ -108,10 +107,10 @@ describe('views of one subject', () => {
 				{ at: T1, team: true, name: 'acme/other' }
 			]
 		});
-		const d = turnFactsOf(s, ME, new Set(['acme/website']));
+		const d = dashFactsOf(s, ME, new Set(['acme/website']));
 		expect(d.requestedTeams).toEqual(['acme/website']);
 		expect(d.requestedAt).toBe(T0);
-		expect(turnFactsOf(s, ME, new Set()).requestedAt).toBeNull();
+		expect(dashFactsOf(s, ME, new Set()).requestedAt).toBeNull();
 	});
 
 	it('an issue keeps only issue facts in the inbox', () => {
@@ -168,7 +167,7 @@ describe('the inbox and the dashboards agree about one stored subject', () => {
 							: 'https://github.com/acme/website/pull/1'
 				});
 				const opts = { botsAreFyi: true, reviewResolution };
-				const dash = computeTurn(turnFactsOf(s, ME, new Set(teams)), ME, [], opts);
+				const dash = computeTurn(dashFactsOf(s, ME, new Set(teams)), ME, [], opts);
 				const inbox = computeTurn(
 					turnFactsFromEnrichment(enrichmentOf(s, ME), s.repo, ME, teams),
 					ME,

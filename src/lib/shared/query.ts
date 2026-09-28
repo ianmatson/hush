@@ -2,15 +2,14 @@ import { tokens } from './text-match';
 import type { RuleMatch } from './types';
 
 /**
- * One small query language for rules, saved searches, and the search box. Rules and saved searches
- * store the query itself; it compiles to RuleMatch to run, and back:
+ * One small query language for rules, saved views, and the Filter box. It compiles to RuleMatch,
+ * the stored form, and back:
  *
  *   repo:acme/* needs:review -author:bots label:"good first issue" login bug
  *
  * - `word:value` is a condition; `word:a,b` (or the word twice) matches any of the values.
  * - `author:bots` and `from:bots` mean any bot; `-author:bots` and `-from:bots` mean a person.
- * - `is:draft` (or `-is:draft`); `is:open`, `is:closed`, `is:merged`; and, in searches,
- *   `is:done`, `is:snoozed`, `is:muted` (what you did with it).
+ * - `is:draft` (or `-is:draft`), and `is:open`, `is:closed`, `is:merged`.
  * - Other words must all be in the title, repo, or author (`text`).
  * - Quote a value that has spaces or commas.
  *
@@ -104,33 +103,29 @@ export const WORDS: QueryWord[] = [
 			reply: v('reply', 'Reply'),
 			triage: v('triage', 'Triage it'),
 			security: v('security', 'Handle a security alert'),
-			nothing: v('none', 'Nothing: an update')
+			nothing: v('none', 'Nothing: FYI')
 		}
 	},
 	{
 		key: 'in',
-		field: 'lane',
-		help: 'Its lane (in rules: before your rules)',
-		example: 'in:waiting',
+		field: 'category',
+		help: "Hush's list for it, before your rules",
+		example: 'in:fyi',
 		values: {
-			turn: v('turn', 'Your turn'),
-			waiting: v('waiting', 'Waiting on others'),
-			updates: v('updates', 'Updates')
+			'needs-you': v('action', 'Needs you'),
+			fyi: v('fyi', 'FYI'),
+			muted: v('muted', 'Muted')
 		}
 	}
 ];
 
-/** `is:` (not a field of its own): draft, the state of a PR or issue, and what you did with it. */
+/** `is:` (not a field of its own): draft, and the state of a PR or issue. */
 export const IS_VALUES: Record<string, string> = {
 	draft: 'A draft pull request',
 	open: 'Open',
 	closed: 'Closed',
-	merged: 'Merged',
-	done: 'You marked it Done (searches only)',
-	snoozed: 'You snoozed it (searches only)',
-	muted: 'Muted by you or a rule (searches only)'
+	merged: 'Merged'
 };
-const ITEM_STATES = new Set(['done', 'snoozed', 'muted']);
 
 /** Words that were renamed: a clear error, not a silent miss. */
 const RENAMED: Record<string, string> = {
@@ -163,7 +158,6 @@ export function parseQuery(query: string): ParsedQuery {
 	const words: string[] = [];
 	const lists = new Map<Field, string[]>();
 	const states: ('open' | 'closed' | 'merged')[] = [];
-	const itemStates: ('done' | 'snoozed' | 'muted')[] = [];
 	const add = (field: Field, value: string) => {
 		const list = lists.get(field) ?? [];
 		if (!list.includes(value)) list.push(value);
@@ -193,10 +187,8 @@ export function parseQuery(query: string): ParsedQuery {
 				else if (!(x in IS_VALUES))
 					errors.push(`Unknown “is:${x}”. Use ${Object.keys(IS_VALUES).join(', ')}.`);
 				else if (x === 'draft') when.draft = !not;
-				else if (not) errors.push(`“-is:${x}” is not supported. Only -is:draft.`);
-				else if (ITEM_STATES.has(x)) {
-					if (!itemStates.includes(x as 'done')) itemStates.push(x as 'done');
-				} else if (!states.includes(x as 'open')) states.push(x as 'open');
+				else if (not) errors.push(`“-is:${x}” is not supported. Use is:open, closed, or merged.`);
+				else if (!states.includes(x as 'open')) states.push(x as 'open');
 			}
 			continue;
 		}
@@ -235,7 +227,6 @@ export function parseQuery(query: string): ParsedQuery {
 		(when as Record<string, unknown>)[w.field] = one && list.length === 1 ? list[0] : list;
 	}
 	if (states.length) when.state = states;
-	if (itemStates.length) when.itemState = itemStates;
 	if (words.length) when.text = words.join(' ');
 	return { when, errors };
 }
@@ -257,7 +248,6 @@ export function formatQuery(when: RuleMatch): string {
 	}
 	if (when.draft !== undefined) parts.push(`${when.draft ? '' : '-'}is:draft`);
 	for (const s of when.state ?? []) parts.push(`is:${s}`);
-	for (const s of when.itemState ?? []) parts.push(`is:${s}`);
 	// Free words last, as people type them.
 	if (when.text) parts.push(...tokens(when.text).map(quote));
 	return parts.join(' ');
@@ -291,11 +281,7 @@ export function suggest(
 		if (/["]/.test(prefix)) return none;
 		const keys = [
 			...WORDS.map((w) => ({ key: w.key, help: w.help, example: w.example })),
-			{
-				key: 'is',
-				help: 'Draft, open, closed, merged, done, snoozed, or muted',
-				example: 'is:draft'
-			}
+			{ key: 'is', help: 'Draft, open, closed, or merged', example: 'is:draft' }
 		].filter((w) => w.key.startsWith(prefix) && w.key !== prefix);
 		return {
 			from: start + neg,

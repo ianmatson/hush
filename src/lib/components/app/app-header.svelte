@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { alertsQuery, itemsQuery, leaveTo, meQuery } from '$lib/queries';
+	import { alertsQuery, dashQuery, leaveTo, meQuery, threadsQuery, turnCount } from '$lib/queries';
 	import { alertsSeen } from '$lib/alerts.svelte';
 	import { ui } from '$lib/ui.svelte';
 	import { cn } from '$lib/utils';
@@ -21,28 +21,27 @@
 	import { palette } from '$lib/palette.svelte';
 
 	const me = createQuery(meQuery);
-	// Every items response carries the counts of all lanes.
-	const counts = createQuery(() => ({ ...itemsQuery('turn'), select: (d) => d.counts }));
+	const inboxCount = createQuery(() => ({
+		...threadsQuery('action'),
+		select: (d) => d.counts.action
+	}));
+	const prTurns = createQuery(() => ({ ...dashQuery('pr'), select: turnCount }));
+	const issueTurns = createQuery(() => ({ ...dashQuery('issue'), select: turnCount }));
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);
 	const newAlerts = $derived(alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0);
 
-	type Link = { href: string; label: string; badge?: number | null; dot?: boolean };
-	const links = $derived<Link[]>([
-		{ href: '/turn', label: 'Your turn', badge: counts.data?.turn },
-		{ href: '/waiting', label: 'Waiting', badge: counts.data?.waiting, dot: false },
-		{ href: '/updates', label: 'Updates', dot: (counts.data?.updates ?? 0) > 0 },
-		...(me.data?.settings.saved ?? []).map((v) => ({ href: `/search?s=${v.id}`, label: v.name }))
+	const links = $derived([
+		{ href: '/inbox', label: 'Inbox', badge: inboxCount.data },
+		{ href: '/pulls', label: 'Pull requests', badge: prTurns.data },
+		{ href: '/issues', label: 'Issues', badge: issueTurns.data }
 	]);
-	const active = (href: string) => {
-		const [path, q] = href.split('?');
-		if (q) return page.url.pathname === path && page.url.search === `?${q}`;
-		return page.url.pathname === path || page.url.pathname.startsWith(`${path}/`);
-	};
+	const active = (href: string) =>
+		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	// Phones: one menu instead of three tabs. On settings pages it reads "Go to".
 	const current = $derived(links.find((l) => active(l.href)));
-	const othersWaiting = $derived(current?.href !== '/turn' && !!counts.data?.turn);
+	const othersWaiting = $derived(links.some((l) => l !== current && l.badge));
 
 	async function signOut() {
 		await api.logout().catch(() => {});
@@ -52,7 +51,7 @@
 
 <header class="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
 	<div class="mx-auto flex h-12 max-w-4xl items-center gap-4 px-4">
-		<a href="/turn" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
+		<a href="/inbox" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
@@ -98,15 +97,9 @@
 					{l.label}
 					{#if l.badge}
 						<span
-							class={cn(
-								'min-w-4.5 rounded-full px-1 text-center text-[0.68rem] leading-4 tabular-nums',
-								l.href === '/turn'
-									? 'bg-primary text-primary-foreground'
-									: 'bg-muted-foreground/15 text-muted-foreground'
-							)}>{l.badge}</span
+							class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
+							>{l.badge}</span
 						>
-					{:else if l.dot}
-						<span class="size-1.5 rounded-full bg-signal-review" aria-label="New updates"></span>
 					{/if}
 				</a>
 			{/each}
@@ -160,7 +153,7 @@
 							<div class="text-xs font-normal text-muted-foreground">@{me.data.login}</div>
 						</DropdownMenu.Label>
 						{#if me.data.tokenSource === 'own'}
-							<DropdownMenu.Item onclick={() => goto('/settings/account#token')}
+							<DropdownMenu.Item onclick={() => goto('/settings/general#token')}
 								><KeyRound class="text-signal-warn" /> Using a custom token</DropdownMenu.Item
 							>
 						{/if}
