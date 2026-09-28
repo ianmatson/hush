@@ -7,6 +7,7 @@
 </script>
 
 <script lang="ts">
+	import { formatQuery, parseQuery } from '$lib/shared/query';
 	import type { Category, Rule } from '$lib/shared/types';
 	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
 	import ConditionsEditor from './conditions-editor.svelte';
@@ -187,14 +188,17 @@
 	</header>
 
 	<ConditionsEditor
-		bind:when={() => rule.when ?? {}, (when) => (rule = { ...rule, when })}
+		bind:when={
+			() => parseQuery(rule.when ?? '').when,
+			(when) => (rule = { ...rule, when: formatQuery(when) })
+		}
 		fields={RULE_FIELDS}
 		{suggest}
 		idPrefix="rule-{index}"
 		emptyNote="No conditions: this rule matches every thread."
 	/>
 	<QueryInput
-		bind:when={() => rule.when ?? {}, (when) => (rule = { ...rule, when })}
+		bind:value={() => rule.when ?? '', (when) => (rule = { ...rule, when })}
 		id="rule-{index}-query"
 	/>
 

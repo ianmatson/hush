@@ -30,16 +30,12 @@
 	const settings = $derived(me.data?.settings);
 
 	const EXAMPLE: Rule[] = [
-		{ name: 'Docs repo is FYI', when: { repo: 'acme/website' }, then: { category: 'fyi' } },
-		{ name: 'Mute dependabot', when: { author: 'dependabot*' }, then: { category: 'muted' } },
-		{
-			name: 'Quiet reviews on drafts',
-			when: { kind: ['review'], draft: true },
-			then: { push: false }
-		},
+		{ name: 'Docs repo is FYI', when: 'repo:acme/website', then: { category: 'fyi' } },
+		{ name: 'Mute dependabot', when: 'author:dependabot*', then: { category: 'muted' } },
+		{ name: 'Quiet reviews on drafts', when: 'needs:review is:draft', then: { push: false } },
 		{
 			name: 'Releases I watch need me',
-			when: { type: ['Release'], repo: 'sveltejs/*' },
+			when: 'type:release repo:sveltejs/*',
 			then: { category: 'action', push: true }
 		}
 	];
@@ -56,18 +52,13 @@
 		});
 	});
 
-	/** A rule from a thread's right-click menu ("Make a rule…"): /settings/inbox?rule={when}. */
+	/** A rule from a thread's right-click menu ("Make a rule…"): /settings/inbox?rule=<query>. */
 	$effect(() => {
-		const raw = page.url.searchParams.get('rule');
-		if (!raw || !settings) return;
+		const when = page.url.searchParams.get('rule');
+		if (when === null || !settings) return;
 		untrack(() => {
-			try {
-				const when = JSON.parse(raw) as Rule['when'];
-				draft = [...draft, { name: '', when, then: { category: 'fyi' } }];
-				dirty = true;
-			} catch {
-				/* A bad link adds nothing. */
-			}
+			draft = [...draft, { name: '', when, then: { category: 'fyi' } }];
+			dirty = true;
 			goto('/settings/inbox', { replaceState: true, noScroll: true });
 			tick().then(() =>
 				document
@@ -139,7 +130,7 @@
 	// Saved views, for reordering here (they are made and edited on the inbox).
 	const viewRows = $derived((settings?.views ?? []).map((view) => ({ key: view.id, view })));
 	function describeView(v: SavedView) {
-		return [VIEW_BASES.find((b) => b.id === v.base)?.label, formatQuery(v.when ?? {}) || null]
+		return [VIEW_BASES.find((b) => b.id === v.base)?.label, v.query || null]
 			.filter(Boolean)
 			.join(', ');
 	}
@@ -288,7 +279,7 @@
 					<Button
 						variant="outline"
 						size="sm"
-						onclick={() => change([...draft, { name: '', when: {}, then: { category: 'fyi' } }])}
+						onclick={() => change([...draft, { name: '', when: '', then: { category: 'fyi' } }])}
 						><Plus />New rule</Button
 					>
 					<DropdownMenu.Root>

@@ -28,31 +28,31 @@ In **Settings → Inbox → Rules**:
 - **New rule** adds an empty rule. **From a template** adds a finished example.
 - Or right-click a thread in the inbox and choose **Make a rule…**: the new rule has that thread's repository and type.
 
-Each rule is a card. Give it a name (it shows on the threads it sorts, as “rule: Docs repo is FYI”), add conditions, and choose what it does. You can write the conditions as a [query](/docs/query-language), such as `repo:acme/website type:pr`, or pick them one by one. Turn a rule off with its switch; move, duplicate, or delete it from its buttons.
+Each rule is a card. Give it a name (it shows on the threads it sorts, as “rule: Docs repo is FYI”), add conditions, and choose what it does. The conditions are a [query](/docs/query-language), such as `repo:acme/website type:pr`: write it as text, or pick the conditions one by one. The rule stores the text. Turn a rule off with its switch; move, duplicate, or delete it from its buttons.
 
 While you edit, each card shows how many of your stored threads it would catch, and the footer says what would change if you save: “If you save: 4 to FYI, 2 to Muted.” Nothing changes until you choose **Save rules**.
 
 ## Conditions
 
-| Query word                     | JSON                      | Matches                                                   |
-| ------------------------------ | ------------------------- | --------------------------------------------------------- |
-| `repo:acme/*`                  | `"repo": "acme/*"`        | The repository. `*` matches anything.                     |
-| `author:dependabot*`           | `"author": "dependabot*"` | Who opened the PR or issue.                               |
-| `author:bots` / `-author:bots` | `"bot": true` / `false`   | The author is a bot, or a person.                         |
-| `from:alice`                   | `"by": "alice"`           | Who did the newest activity: a comment or a review.       |
-| `from:bots` / `-from:bots`     | `"byBot": true` / `false` | The newest activity is by a bot, or by a person.          |
-| `label:bug`                    | `"label": ["bug"]`        | Has this label (the exact name, any case).                |
-| `type:pr`                      | `"type": ["PullRequest"]` | What it is: pr, issue, ci, release, discussion…           |
-| `event:mentioned`              | `"reason": ["mention"]`   | Why GitHub notified you.                                  |
-| `needs:review`                 | `"kind": ["review"]`      | What Hush thinks you must do, before your rules.          |
-| `in:fyi`                       | `"category": ["fyi"]`     | Where Hush's defaults put it, before your rules.          |
-| `is:draft` / `-is:draft`       | `"draft": true` / `false` | A draft PR, or not.                                       |
-| `is:open`                      | `"state": ["open"]`       | Open, closed, or merged.                                  |
-| words                          | `"text": "login bug"`     | Each word is in the title, the repository, or the author. |
+A rule's conditions are one [query](/docs/query-language). All of its conditions must match.
 
-Every value is in the [query language](/docs/query-language) reference. The complete list of JSON conditions:
+| Query word                     | Matches                                                   |
+| ------------------------------ | --------------------------------------------------------- |
+| `repo:acme/*`                  | The repository. `*` matches anything.                     |
+| `author:dependabot*`           | Who opened the PR or issue.                               |
+| `author:bots` / `-author:bots` | The author is a bot, or a person.                         |
+| `from:alice`                   | Who did the newest activity: a comment or a review.       |
+| `from:bots` / `-from:bots`     | The newest activity is by a bot, or by a person.          |
+| `label:bug`                    | Has this label (the exact name, any case).                |
+| `type:pr`                      | What it is: pr, issue, ci, release, discussion…           |
+| `event:mentioned`              | Why GitHub notified you.                                  |
+| `needs:review`                 | What Hush thinks you must do, before your rules.          |
+| `in:fyi`                       | Where Hush's defaults put it, before your rules.          |
+| `is:draft` / `-is:draft`       | A draft PR, or not.                                       |
+| `is:open`                      | Open, closed, or merged.                                  |
+| words                          | Each word is in the title, the repository, or the author. |
 
-{{ref:conditions}}
+Every word and value is in the [query language](/docs/query-language) reference.
 
 ## Examples
 
@@ -72,30 +72,26 @@ The same rules in [settings.json](/docs/settings#rules):
 ```json settings
 {
 	"rules": [
-		{ "name": "Website is FYI", "when": { "repo": "acme/website" }, "then": { "category": "fyi" } },
-		{
-			"name": "Mute dependabot",
-			"when": { "author": "dependabot*" },
-			"then": { "category": "muted" }
-		},
+		{ "name": "Website is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
+		{ "name": "Mute dependabot", "when": "author:dependabot*", "then": { "category": "muted" } },
 		{
 			"name": "Quiet reviews on drafts",
-			"when": { "kind": ["review"], "draft": true },
+			"when": "needs:review is:draft",
 			"then": { "push": false }
 		},
 		{
 			"name": "Svelte releases need me",
-			"when": { "type": ["Release"], "repo": "sveltejs/*" },
+			"when": "type:release repo:sveltejs/*",
 			"then": { "category": "action", "push": true }
 		},
 		{
 			"name": "Bot comments are done",
-			"when": { "by": "github-actions", "category": ["fyi"] },
+			"when": "from:github-actions in:fyi",
 			"then": { "triage": "done" }
 		},
 		{
 			"name": "Nightly CI can wait",
-			"when": { "type": ["CheckSuite"], "repo": "acme/nightly" },
+			"when": "type:ci repo:acme/nightly",
 			"then": { "triage": "snooze", "snoozeHours": 12, "push": false }
 		}
 	]

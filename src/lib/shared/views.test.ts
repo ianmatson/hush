@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedView, ThreadDTO } from './types';
 import { threadMatches, validateViews } from './views';
-import { validateRules } from './classify';
 
 const t = (over: Partial<ThreadDTO> = {}): ThreadDTO =>
 	({
@@ -38,7 +37,7 @@ const view = (over: Partial<SavedView> = {}): SavedView => ({
 	id: 'v1',
 	name: 'CI',
 	base: 'inbox',
-	when: {},
+	query: '',
 	...over
 });
 
@@ -48,6 +47,12 @@ describe('saved views', () => {
 		expect(threadMatches({ text: 'failed website' }, t(), 'ian')).toBe(true);
 		expect(threadMatches({ text: 'nope' }, t(), 'ian')).toBe(false);
 		expect(threadMatches({ state: ['open'] }, t({ state: 'open' }), 'ian')).toBe(true);
+	});
+
+	it('match a stored query', () => {
+		expect(threadMatches('repo:acme/* needs:fix-ci', t(), 'ian')).toBe(true);
+		expect(threadMatches('type:pr', t(), 'ian')).toBe(false);
+		expect(threadMatches('', t(), 'ian')).toBe(true);
 	});
 
 	it('match on the same conditions as rules', () => {
@@ -60,11 +65,11 @@ describe('saved views', () => {
 	});
 
 	it('refuses bad views', () => {
-		const when = (w: unknown) => validateRules([{ when: w, then: { category: 'fyi' } }] as never);
-		expect(validateViews([view()], when)).toBeNull();
-		expect(validateViews([view({ name: ' ' })], when)).toMatch(/name/);
-		expect(validateViews([view({ base: 'muted' as never })], when)).toMatch(/base/);
-		expect(validateViews([view(), view()], when)).toMatch(/same id/);
-		expect(validateViews([view({ when: { repo: [] } })], when)).toMatch(/value/);
+		expect(validateViews([view()])).toBeNull();
+		expect(validateViews([view({ name: ' ' })])).toMatch(/name/);
+		expect(validateViews([view({ base: 'muted' as never })])).toMatch(/base/);
+		expect(validateViews([view(), view()])).toMatch(/same id/);
+		expect(validateViews([view({ query: 'nope:1' })])).toMatch(/nope/);
+		expect(validateViews([view({ query: { repo: 'x' } as never })])).toMatch(/must be a query/);
 	});
 });

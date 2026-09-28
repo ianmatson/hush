@@ -2,9 +2,10 @@ import { validateRules } from './classify';
 import { validateDash } from './dashboard';
 import { MENUS_VERSION, validateMenus } from './menus';
 import { validateKeys } from './keymap';
+import { formatQuery } from './query';
 import { validateQuietHours } from './quiet';
 import { DEFAULT_SETTINGS } from './settings';
-import type { Settings } from './types';
+import type { RuleMatch, Settings } from './types';
 import { validateViews } from './views';
 
 /**
@@ -173,8 +174,6 @@ export function mergeSettings(base: Settings, patch: Partial<Settings>): Setting
 
 const bool = (k: string) => (v: unknown) =>
 	typeof v === 'boolean' ? null : `"${k}" must be true or false.`;
-const whenError = (when: unknown) =>
-	validateRules([{ when, then: { category: 'fyi' } }])?.replace(/^Rule 1: /, '') ?? null;
 const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	pushAction: bool('pushAction'),
 	pushFyi: bool('pushFyi'),
@@ -189,7 +188,7 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 			? null
 			: '"reviewResolution" must be "strict" or "any_review".',
 	rules: validateRules,
-	views: (v) => validateViews(v, whenError),
+	views: validateViews,
 	dash: validateDash,
 	menus: validateMenus,
 	keys: validateKeys
@@ -213,15 +212,18 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 	return null;
 }
 
-/** The settings file: `hush` is the format version; `settings` has only your changes. */
+/**
+ * The settings file: `hush` is the format version; `settings` has only your changes. Version 2
+ * stores the conditions of rules and views as query text; version 1 had JSON conditions.
+ */
 export interface SettingsFile {
-	hush: 1;
+	hush: 2;
 	exportedAt: string;
 	settings: Partial<Settings>;
 }
 
 export function settingsFile(settings: Settings, now = new Date()): SettingsFile {
-	return { hush: 1, exportedAt: now.toISOString(), settings: settingsOverrides(settings) };
+	return { hush: 2, exportedAt: now.toISOString(), settings: settingsOverrides(settings) };
 }
 
 /**
@@ -235,14 +237,36 @@ export function settingsFromFile(text: string): Partial<Settings> | string {
 	} catch {
 		return 'This file is not JSON.';
 	}
-	const file = data as Partial<SettingsFile> | null;
-	if (!file || typeof file !== 'object' || file.hush !== 1 || typeof file.settings !== 'object')
+	const file = data as { hush?: unknown; settings?: unknown } | null;
+	if (!file || typeof file !== 'object' || typeof file.settings !== 'object')
 		return 'This is not a Hush settings file.';
-	const raw = (file.settings ?? {}) as unknown as Record<string, unknown>;
+	if (file.hush !== 1 && file.hush !== 2) return 'This settings file is from a newer Hush.';
+	const raw = (file.hush === 1 ? fromVersion1(file.settings) : (file.settings ?? {})) as Record<
+		string,
+		unknown
+	>;
 	const patch = Object.fromEntries(
 		Object.keys(DEFAULT_SETTINGS)
 			.filter((k) => raw[k] !== undefined)
 			.map((k) => [k, raw[k]])
 	) as Partial<Settings>;
 	return Object.keys(patch).length ? patch : 'The file has no settings.';
+}
+
+/** A version 1 file: the JSON conditions of rules and views as query text. */
+function fromVersion1(settings: unknown): Record<string, unknown> {
+	const s = { ...(settings as Record<string, unknown>) };
+	const asQuery = (when: unknown) =>
+		when && typeof when === 'object' ? formatQuery(when as RuleMatch) : when;
+	if (Array.isArray(s.rules))
+		s.rules = s.rules.map((r) =>
+			r && typeof r === 'object' ? { ...r, when: asQuery(r.when) } : r
+		);
+	if (Array.isArray(s.views))
+		s.views = s.views.map((v) => {
+			if (!v || typeof v !== 'object' || !('when' in v)) return v;
+			const { when, ...rest } = v as { when: unknown };
+			return { ...rest, query: asQuery(when) };
+		});
+	return s;
 }

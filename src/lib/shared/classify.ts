@@ -11,6 +11,7 @@ import { isBot } from './bots';
 import { textMatches } from './text-match';
 import { activityText, latestActivity } from './activity';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
+import { compileQuery, queryError } from './query';
 
 /** Notification reasons, as Hush shows them. */
 export const WHY: Record<string, string> = {
@@ -197,7 +198,9 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 
 /** Index of the first enabled rule that matches (the one that wins), or -1. */
 export function firstMatchingRule(t: ThreadFacts, rules: Rule[], base: Classification): number {
-	return rules.findIndex((r) => r.enabled !== false && ruleMatches(r.when ?? {}, t, base));
+	return rules.findIndex(
+		(r) => r.enabled !== false && ruleMatches(compileQuery(r.when ?? ''), t, base)
+	);
 }
 
 export function classify(t: ThreadFacts, settings: Settings): Classification {
@@ -233,22 +236,6 @@ export function shouldPush(c: Classification, settings: Settings): boolean {
 }
 
 const CATEGORIES = new Set(['action', 'fyi', 'muted']);
-const MATCH_KEYS = new Set([
-	'repo',
-	'reason',
-	'type',
-	'author',
-	'text',
-	'kind',
-	'category',
-	'bot',
-	'label',
-	'draft',
-	'state',
-	'by',
-	'byBot'
-]);
-const STATES = new Set(['open', 'closed', 'merged']);
 /** A rule may snooze for 1 hour to 30 days. */
 const MAX_SNOOZE_HOURS = 30 * 24;
 
@@ -259,20 +246,13 @@ export function validateRules(rules: unknown): string | null {
 		const at = `Rule ${i + 1}`;
 		if (typeof r !== 'object' || r === null) return `${at}: must be an object.`;
 		const { when, then } = r as Rule;
-		if (typeof when !== 'object' || when === null) return `${at}: "when" must be an object.`;
+		const err = queryError(when);
+		if (err) return `${at}: ${typeof when === 'string' ? err : `"when" ${err}`}`;
 		if (typeof then !== 'object' || then === null) return `${at}: "then" must be an object.`;
-		for (const [k, v] of Object.entries(when)) {
-			if (!MATCH_KEYS.has(k)) return `${at}: unknown condition "${k}".`;
-			// An empty list or text never matches, so the rule would do nothing.
-			if ((Array.isArray(v) && !v.length) || (typeof v === 'string' && !v.trim()))
-				return `${at}: "${k}" needs a value.`;
-		}
 		if (then.category !== undefined && !CATEGORIES.has(then.category))
 			return `${at}: "then.category" must be action, fyi, or muted.`;
 		if (then.push !== undefined && typeof then.push !== 'boolean')
 			return `${at}: "then.push" must be true or false.`;
-		if (when.state && (!Array.isArray(when.state) || when.state.some((x) => !STATES.has(x))))
-			return `${at}: "state" must be a list of open, closed, merged.`;
 		if (then.triage !== undefined && then.triage !== 'done' && then.triage !== 'snooze')
 			return `${at}: "then.triage" must be done or snooze.`;
 		if (

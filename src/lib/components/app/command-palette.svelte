@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { commandFor } from '$lib/keys.svelte';
-	import { formatQuery } from '$lib/shared/query';
 	import type { Component } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -143,7 +142,7 @@
 			label: v.name,
 			where: 'Saved view',
 			icon: Bookmark as Component,
-			keywords: ['view', 'saved', formatQuery(v.when ?? {})],
+			keywords: ['view', 'saved', v.query],
 			run: () => goto(`/inbox?view=v:${v.id}`)
 		})),
 		{

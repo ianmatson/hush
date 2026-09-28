@@ -1,44 +1,23 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import type { RuleMatch } from '$lib/shared/types';
-	import { formatQuery, parseQuery } from '$lib/shared/query';
+	import { parseQuery } from '$lib/shared/query';
 	import { Input } from '$lib/components/ui/input';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import QuerySuggest from './query-suggest.svelte';
 
 	/**
-	 * The conditions as one line of text, in the query language (shared/query.ts). Edits apply
-	 * when the text has no errors; changes from the visual editor show here at once.
+	 * A query as one line of text (shared/query.ts): the form rules and views store. The parts
+	 * that Hush does not understand show as errors, and the settings refuse to save them.
 	 */
 	let {
-		when = $bindable(),
+		value = $bindable(''),
 		id,
 		label = 'As text',
 		placeholder = 'repo:acme/* needs:review -author:bots'
-	}: { when: RuleMatch; id: string; label?: string; placeholder?: string } = $props();
+	}: { value: string; id: string; label?: string; placeholder?: string } = $props();
 
-	let text = $state(formatQuery(when ?? {}));
-	let errors = $state<string[]>([]);
 	let el = $state<HTMLInputElement | null>(null);
-	const same = (a: RuleMatch, b: RuleMatch) => JSON.stringify(a) === JSON.stringify(b);
-
-	// The visual editor changed the conditions: show them (unless the text already says that).
-	$effect(() => {
-		const w = when ?? {};
-		untrack(() => {
-			if (!same(parseQuery(text).when, w)) {
-				text = formatQuery(w);
-				errors = [];
-			}
-		});
-	});
-
-	function oninput(value: string) {
-		text = value;
-		const parsed = parseQuery(value);
-		errors = parsed.errors;
-		if (!parsed.errors.length && !same(parsed.when, when ?? {})) when = parsed.when;
-	}
+	const errors = $derived(parseQuery(value ?? '').errors);
+	const oninput = (v: string) => (value = v);
 </script>
 
 <div class="grid gap-1">
@@ -51,11 +30,11 @@
 			{placeholder}
 			spellcheck={false}
 			autocomplete="off"
-			value={text}
+			value={value ?? ''}
 			oninput={(e) => oninput(e.currentTarget.value)}
 			aria-invalid={errors.length > 0}
 		/>
-		<QuerySuggest input={el} value={text} onpick={oninput} />
+		<QuerySuggest input={el} value={value ?? ''} onpick={oninput} />
 	</div>
 	{#each errors as e (e)}
 		<p class="flex items-center gap-1.5 text-xs text-destructive">

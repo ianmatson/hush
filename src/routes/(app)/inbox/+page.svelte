@@ -98,7 +98,7 @@
 	const lastViewCounts: Record<string, number> = {};
 	const viewCount = (v: SavedView) => {
 		const n = baseThreads[v.base]?.filter((t) =>
-			threadMatches(v.when, t, me.data?.login ?? '')
+			threadMatches(v.query, t, me.data?.login ?? '')
 		).length;
 		if (n !== undefined) lastViewCounts[v.id] = n;
 		return lastViewCounts[v.id] ?? null;
@@ -123,7 +123,7 @@
 		return (threadsQ.data?.threads ?? []).filter(
 			(t) =>
 				!pending.has(t.id) &&
-				(!saved || threadMatches(saved.when, t, login)) &&
+				(!saved || threadMatches(saved.query, t, login)) &&
 				threadMatches(filter.when, t, login)
 		);
 	});
@@ -485,7 +485,7 @@
 	let viewEditing = $state<Omit<SavedView, 'id'> & { id?: string }>({
 		name: '',
 		base: 'inbox',
-		when: {}
+		query: ''
 	});
 	/** Open the editor: a view to edit, or a new one (from the current tab and filter text). */
 	function editView(v: SavedView | null, from?: ParsedQuery) {
@@ -497,7 +497,7 @@
 						view === 'action' || view === 'fyi' || view === 'snoozed' || view === 'done'
 							? view
 							: 'inbox',
-					when: from?.when ?? {}
+					query: from ? formatQuery(from.when) : ''
 				};
 		viewEditorOpen = true;
 	}
@@ -640,9 +640,8 @@
 			>{:else if syncing || live.syncing}<span class="inline-flex items-center gap-1"
 				><RefreshCw class="size-3 animate-spin" />Syncing…</span
 			>{:else if me.data?.lastPollAt}Synced {ago(me.data.lastPollAt)}{/if}
-		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{Object.keys(saved.when ?? {})
-				.length
-				? `, ${formatQuery(saved.when)}`
+		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{saved.query
+				? `, ${saved.query}`
 				: ''}{:else if view === 'fyi'}· Activity you may want to know about, but that does not need
 			you.{/if}
 	</p>

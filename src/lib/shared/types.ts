@@ -13,8 +13,8 @@ export interface SavedView {
 	id: string;
 	name: string;
 	base: ViewBase;
-	/** The same conditions as rules (and the Filter box). All must match. */
-	when: RuleMatch;
+	/** A query: the same words as rules and the Filter box. "" shows every thread of the base. */
+	query: string;
 }
 
 export type ActionKind =
@@ -147,7 +147,8 @@ export interface RuleMatch {
 export interface Rule {
 	name?: string;
 	enabled?: boolean;
-	when: RuleMatch;
+	/** A query (shared/query.ts), such as "repo:acme/* needs:review". "" matches every thread. */
+	when: string;
 	then: {
 		category?: Category;
 		push?: boolean;

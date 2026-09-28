@@ -151,13 +151,13 @@ describe('rules', () => {
 			facts({ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) }),
 			{
 				rules: [
-					{ name: 'mute docs', when: { repo: 'acme/website' }, then: { category: 'muted' } },
+					{ name: 'mute docs', when: 'repo:acme/website', then: { category: 'muted' } },
 					{
 						name: 'quiet acme',
-						when: { repo: 'acme/*', kind: ['review'] },
+						when: 'repo:acme/* needs:review',
 						then: { push: false }
 					},
-					{ name: 'never reached', when: {}, then: { category: 'muted' } }
+					{ name: 'never reached', when: '', then: { category: 'muted' } }
 				]
 			}
 		);
@@ -166,37 +166,31 @@ describe('rules', () => {
 	});
 
 	it('skips disabled rules', () => {
-		const c = run(facts(), { rules: [{ enabled: false, when: {}, then: { category: 'muted' } }] });
+		const c = run(facts(), { rules: [{ enabled: false, when: '', then: { category: 'muted' } }] });
 		expect(c.category).toBe('fyi');
 	});
 
 	it('validates rule shape', () => {
-		expect(validateRules([{ when: {}, then: { category: 'action' } }])).toBeNull();
+		expect(validateRules([{ when: '', then: { category: 'action' } }])).toBeNull();
 		expect(validateRules({})).toMatch(/array/);
-		// Empty values never match, so the rule would do nothing.
-		expect(validateRules([{ when: { repo: [] }, then: { category: 'fyi' } }])).toMatch(
-			/needs a value/
+		// The query is text; a part that Hush does not understand is an error, not a silent miss.
+		expect(validateRules([{ when: { repo: 'acme/*' }, then: { category: 'fyi' } }])).toMatch(
+			/"when" must be a query/
 		);
-		expect(validateRules([{ when: { text: ' ' }, then: { category: 'fyi' } }])).toMatch(
-			/needs a value/
-		);
-		expect(validateRules([{ when: { bot: false }, then: { category: 'fyi' } }])).toBeNull();
-		expect(validateRules([{ when: { nope: 1 }, then: { push: true } }])).toMatch(
-			/unknown condition/
-		);
-		expect(validateRules([{ when: {}, then: {} }])).toMatch(/needs category, push, or triage/);
-		expect(validateRules([{ when: { state: ['merged'] }, then: { triage: 'done' } }])).toBeNull();
-		expect(validateRules([{ when: { state: ['gone'] }, then: { triage: 'done' } }])).toBeTruthy();
-		expect(validateRules([{ when: {}, then: { triage: 'snooze', snoozeHours: 4 } }])).toBeNull();
-		expect(validateRules([{ when: {}, then: { triage: 'later' } }])).toBeTruthy();
+		expect(validateRules([{ when: 'nope:1', then: { push: true } }])).toMatch(/nope/);
+		expect(validateRules([{ when: 'x'.repeat(301), then: { push: true } }])).toMatch(/300/);
+		expect(validateRules([{ when: '-author:bots', then: { category: 'fyi' } }])).toBeNull();
+		expect(validateRules([{ when: '', then: {} }])).toMatch(/needs category, push, or triage/);
+		expect(validateRules([{ when: 'is:merged', then: { triage: 'done' } }])).toBeNull();
+		expect(validateRules([{ when: 'is:gone', then: { triage: 'done' } }])).toBeTruthy();
+		expect(validateRules([{ when: '', then: { triage: 'snooze', snoozeHours: 4 } }])).toBeNull();
+		expect(validateRules([{ when: '', then: { triage: 'later' } }])).toBeTruthy();
 		for (const snoozeHours of [0, 1.5, 721])
-			expect(validateRules([{ when: {}, then: { triage: 'snooze', snoozeHours } }])).toBeTruthy();
+			expect(validateRules([{ when: '', then: { triage: 'snooze', snoozeHours } }])).toBeTruthy();
 	});
 
 	it('matches on state', () => {
-		const rules = [
-			{ name: 'merged', when: { state: ['merged' as const] }, then: { triage: 'done' as const } }
-		];
+		const rules = [{ name: 'merged', when: 'is:merged', then: { triage: 'done' as const } }];
 		expect(run(facts({ enrichment: pr({ state: 'merged' }) }), { rules }).rule).toBe('merged');
 		expect(run(facts(), { rules }).rule).toBeUndefined();
 		expect(run(facts({ enrichment: null }), { rules }).rule).toBeUndefined();
@@ -204,20 +198,20 @@ describe('rules', () => {
 
 	it('ruleTriage moves only for rules that ask', () => {
 		const now = 1_000_000;
-		const done = run(facts(), { rules: [{ name: 'x', when: {}, then: { triage: 'done' } }] });
+		const done = run(facts(), { rules: [{ name: 'x', when: '', then: { triage: 'done' } }] });
 		expect(ruleTriage(done, now)).toEqual({ triage: 'done', note: 'Rule: x' });
 		const snooze = run(facts(), {
-			rules: [{ when: {}, then: { triage: 'snooze', snoozeHours: 4 } }]
+			rules: [{ when: '', then: { triage: 'snooze', snoozeHours: 4 } }]
 		});
 		expect(ruleTriage(snooze, now)).toEqual({
 			triage: 'snoozed',
 			until: now + 4 * 3_600_000,
 			note: 'Rule: Rule 1'
 		});
-		const day = run(facts(), { rules: [{ when: {}, then: { triage: 'snooze' } }] });
+		const day = run(facts(), { rules: [{ when: '', then: { triage: 'snooze' } }] });
 		expect(ruleTriage(day, now)).toMatchObject({ until: now + 24 * 3_600_000 });
 		expect(
-			ruleTriage(run(facts(), { rules: [{ when: {}, then: { push: true } }] }), now)
+			ruleTriage(run(facts(), { rules: [{ when: '', then: { push: true } }] }), now)
 		).toBeNull();
 		expect(ruleTriage(run(facts()), now)).toBeNull();
 	});
@@ -264,13 +258,9 @@ describe('latest activity', () => {
 	});
 
 	it('matches who did it', () => {
-		const rules = [
-			{ name: 'ci bots', when: { by: 'github-*' }, then: { triage: 'done' as const } }
-		];
+		const rules = [{ name: 'ci bots', when: 'from:github-*', then: { triage: 'done' as const } }];
 		expect(run(mine({ lastComment: bot }), { rules }).rule).toBe('ci bots');
-		const people = [
-			{ name: 'people', when: { byBot: false }, then: { category: 'action' as const } }
-		];
+		const people = [{ name: 'people', when: '-from:bots', then: { category: 'action' as const } }];
 		expect(run(mine({ lastComment: bot }), { rules: people }).rule).toBeUndefined();
 		expect(
 			run(mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }), { rules: people })

@@ -264,7 +264,7 @@ export abstract class PollerData extends PollerDashboard {
 		const me = await this.login();
 		return {
 			name: saved.name,
-			rows: rows.filter((r) => threadMatches(saved.when, toDTO(r), me)).slice(0, 50)
+			rows: rows.filter((r) => threadMatches(saved.query, toDTO(r), me)).slice(0, 50)
 		};
 	}
 

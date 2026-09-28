@@ -47,12 +47,10 @@ For example, `from:github-actions` finds the threads where the newest thing is a
 | `type:release,discussion`          | Releases and discussions.                                            |
 | `login timeout`                    | Threads with both words in the title, the repository, or the author. |
 
-## In JSON
+## In settings.json
 
-A query is stored as a JSON object of conditions: the `when` of a rule or a view. Each word is one key; the tables above show the key and the stored values. `repo:acme/* needs:review -author:bots is:draft login` is:
+Rules and saved views store the query as text: the `when` of a [rule](/docs/settings#rules) and the `query` of a [view](/docs/settings#views). Hush checks it when you save: a query with a part that it does not understand is refused, with the error.
 
-```json
-{ "repo": "acme/*", "kind": ["review"], "bot": false, "draft": true, "text": "login" }
+```json settings
+{ "rules": [{ "when": "repo:acme/* needs:review -author:bots", "then": { "push": true } }] }
 ```
-
-`repo`, `author`, and `from` (`by`) are text when they have one value, and lists when they have more. The other words are always lists.

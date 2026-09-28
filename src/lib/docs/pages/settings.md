@@ -25,11 +25,11 @@ A complete example:
 	"reviewResolution": "any_review",
 	"teamReviewsAreAction": true,
 	"rules": [
-		{ "name": "Website is FYI", "when": { "repo": "acme/website" }, "then": { "category": "fyi" } },
-		{ "name": "Mute renovate", "when": { "author": "renovate*" }, "then": { "category": "muted" } },
-		{ "name": "Always push Alice", "when": { "by": "alice" }, "then": { "push": true } }
+		{ "name": "Website is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
+		{ "name": "Mute renovate", "when": "author:renovate*", "then": { "category": "muted" } },
+		{ "name": "Always push Alice", "when": "from:alice", "then": { "push": true } }
 	],
-	"views": [{ "id": "web", "name": "Web", "base": "inbox", "when": { "repo": "acme/web-*" } }],
+	"views": [{ "id": "web", "name": "Web", "base": "inbox", "query": "repo:acme/web-*" }],
 	"dash": {
 		"scope": "org:acme archived:false",
 		"excludedTeams": ["acme/everyone"],
@@ -55,13 +55,13 @@ The file is your settings.json in a small wrapper:
 
 ```json
 {
-	"hush": 1,
+	"hush": 2,
 	"exportedAt": "2026-09-28T09:00:00.000Z",
-	"settings": { "rules": [{ "when": { "repo": "acme/website" }, "then": { "category": "fyi" } }] }
+	"settings": { "rules": [{ "when": "repo:acme/website", "then": { "category": "fyi" } }] }
 }
 ```
 
-- `hush` is the file format version: `1`.
+- `hush` is the file format version: `2`. A version `1` file (conditions as JSON objects) still imports: Hush writes its conditions as queries.
 - `settings` has only the changes, the same as settings.json.
 - **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many rules and views the file has. Settings that Hush no longer has are left out.
 

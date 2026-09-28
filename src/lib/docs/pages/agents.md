@@ -28,21 +28,21 @@ Hush checks the JSON and shows an error if something is wrong; nothing is saved 
 - **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their rules deletes their rules.
 - `rules`, `views`, `dash.pr`, `dash.issue`, and the menus are lists: write the whole list. `dash` and `menus` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
-- Every key, type, default, and limit is in [settings.json](/docs/settings). The conditions of rules and views are in [Rules](/docs/rules#conditions) and the [query language](/docs/query-language#in-json).
+- Every key, type, default, and limit is in [settings.json](/docs/settings). The conditions of rules and views are queries (text): every word is in the [query language](/docs/query-language#words).
 
 To make a settings file to import, put the settings in this wrapper:
 
 ```json
-{ "hush": 1, "exportedAt": "2026-09-28T09:00:00.000Z", "settings": { "botsAreFyi": true } }
+{ "hush": 2, "exportedAt": "2026-09-28T09:00:00.000Z", "settings": { "botsAreFyi": true } }
 ```
 
 ### Check it before the user saves it
 
 Check these, or Hush refuses the file:
 
-- Every rule has `when` (an object) and `then` with at least one of `category`, `push`, or `triage`.
+- Every rule has `when` (a query, as text; `""` matches every thread) and `then` with at least one of `category`, `push`, or `triage`.
 - `category` is `"action"`, `"fyi"`, or `"muted"`. `triage: "snooze"` has `snoozeHours`, a whole number from 1 to 720.
-- Conditions are only the keys in the [conditions table](/docs/rules#conditions), and no list or text is empty. Values of `kind`, `reason`, `type`, `category`, and `state` are the stored values (`"fix_ci"`, `"review_requested"`, `"PullRequest"`), not the query words (`fix-ci`, `review-requested`, `pr`).
+- Queries (a rule's `when`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
 - View ids are 1 to 16 lower-case letters or digits, and unique; names are 1 to 40 characters; at most 12 views.
 - Section ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters; at most 20 sections for each tab.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
@@ -57,10 +57,10 @@ Check these, or Hush refuses the file:
 	"rules": [
 		{
 			"name": "My repos can need me",
-			"when": { "repo": ["acme/web", "acme/api"], "category": ["action"] },
+			"when": "repo:acme/web,acme/api in:needs-you",
 			"then": { "category": "action" }
 		},
-		{ "name": "Everything else is FYI", "when": {}, "then": { "category": "fyi" } }
+		{ "name": "Everything else is FYI", "when": "", "then": { "category": "fyi" } }
 	]
 }
 ```
@@ -75,11 +75,7 @@ A thread that needs you in acme/web or acme/api matches the first rule and stays
 	"rules": [
 		{
 			"name": "Reviews on my PRs",
-			"when": {
-				"type": ["PullRequest"],
-				"reason": ["author"],
-				"kind": ["address_review", "merge"]
-			},
+			"when": "type:pr event:you-opened needs:changes,merge",
 			"then": { "push": true }
 		}
 	]

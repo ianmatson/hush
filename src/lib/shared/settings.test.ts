@@ -32,6 +32,28 @@ describe('settings file', () => {
 		expect(settingsFromFile('nope')).toMatch(/not JSON/);
 		expect(settingsFromFile('{"rules":[]}')).toMatch(/not a Hush settings file/);
 		expect(settingsFromFile('{"hush":1,"settings":{}}')).toMatch(/no settings/);
+		expect(settingsFromFile('{"hush":3,"settings":{"pushFyi":true}}')).toMatch(/newer Hush/);
+	});
+
+	it('reads a version 1 file: JSON conditions become query text', () => {
+		const v1 = {
+			hush: 1,
+			settings: {
+				rules: [
+					{
+						name: 'Docs',
+						when: { repo: 'acme/website', kind: ['review'] },
+						then: { category: 'fyi' }
+					}
+				],
+				views: [{ id: 'web', name: 'Web', base: 'inbox', when: { repo: 'acme/web-*' } }]
+			}
+		};
+		expect(settingsFromFile(JSON.stringify(v1))).toEqual({
+			rules: [{ name: 'Docs', when: 'repo:acme/website needs:review', then: { category: 'fyi' } }],
+			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
+		});
+		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
 
@@ -66,8 +88,9 @@ describe('settings schema', () => {
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);
 		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
-		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', when: { repo: [] } }] })).toMatch(
-			/value/
+		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
+			/"A"/
 		);
+		expect(check({ rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }] })).toBeNull();
 	});
 });

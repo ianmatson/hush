@@ -3,6 +3,7 @@
 	import type { SavedView, ThreadDTO, ViewBase } from '$lib/shared/types';
 	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
 	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
+	import { formatQuery, parseQuery } from '$lib/shared/query';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -38,7 +39,7 @@
 	let draft = $state<Omit<SavedView, 'id'> & { id?: string }>({
 		name: '',
 		base: 'inbox',
-		when: {}
+		query: ''
 	});
 	// Start from `initial` each time the dialog opens.
 	$effect(() => {
@@ -48,7 +49,7 @@
 	// "Category" is the base's job; "Hush's default" means little outside rules.
 	const FIELDS = RULE_FIELDS.filter((f) => f.key !== 'category');
 	const list = $derived(threads[draft.base]);
-	const count = $derived(list?.filter((t) => threadMatches(draft.when, t, me)).length);
+	const count = $derived(list?.filter((t) => threadMatches(draft.query, t, me)).length);
 	const nameOk = $derived(!!draft.name.trim());
 </script>
 
@@ -89,14 +90,14 @@
 		</div>
 
 		<ConditionsEditor
-			bind:when={draft.when}
+			bind:when={() => parseQuery(draft.query).when, (when) => (draft.query = formatQuery(when))}
 			fields={FIELDS}
 			{suggest}
 			idPrefix="view"
 			title="Only threads where"
 			emptyNote="No conditions: the view shows every thread of its base."
 		/>
-		<QueryInput bind:when={draft.when} id="view-query" />
+		<QueryInput bind:value={draft.query} id="view-query" />
 
 		<p class="text-xs text-muted-foreground" aria-live="polite">
 			{#if count !== undefined}

@@ -14,7 +14,7 @@ In the view editor:
 
 - **Name**: the tab's label, up to 40 characters.
 - **Show threads from**: the base list. Needs you + FYI, Needs you, FYI, Snoozed, or Done.
-- **Only threads where**: the conditions, as a [query](/docs/query-language) or one by one. They are the same conditions as [rules](/docs/rules#conditions). No conditions: the view shows every thread of its base.
+- **Only threads where**: a [query](/docs/query-language), as text or picked one by one. It is the same language as [rules](/docs/rules#conditions). No query: the view shows every thread of its base.
 
 Choose **Save view**. The new tab opens, with its count.
 
@@ -37,11 +37,11 @@ Views are the [`views`](/docs/settings#views) setting:
 			"id": "webreviews",
 			"name": "Web reviews",
 			"base": "action",
-			"when": { "repo": "acme/web-*", "kind": ["review"] }
+			"query": "repo:acme/web-* needs:review"
 		},
-		{ "id": "alice", "name": "From Alice", "base": "inbox", "when": { "by": "alice" } }
+		{ "id": "alice", "name": "From Alice", "base": "inbox", "query": "from:alice" }
 	]
 }
 ```
 
-In a view, `in:` (`category`) is the thread's list now, after your rules. In a rule, it is where Hush's defaults put it.
+In a view, `in:` is the thread's list now, after your rules. In a rule, it is where Hush's defaults put it.

@@ -2,8 +2,8 @@ import { tokens } from './text-match';
 import type { RuleMatch } from './types';
 
 /**
- * One small query language for rules, saved views, and the Filter box. It compiles to RuleMatch,
- * the stored form, and back:
+ * One small query language for rules, saved views, and the Filter box. Rules and views store the
+ * text; it compiles to RuleMatch, the form the matcher reads (and back, for the visual editor):
  *
  *   repo:acme/* needs:review -author:bots label:"good first issue" login bug
  *
@@ -236,6 +236,31 @@ const asList = (x: unknown): string[] =>
 	x === undefined ? [] : Array.isArray(x) ? x.map(String) : [String(x)];
 
 /** Write conditions as a query, in the order of WORDS (then is:, then the free words). */
+/** The longest query that a rule or a view can store. */
+export const MAX_QUERY = 300;
+
+const compiled = new Map<string, RuleMatch>();
+/**
+ * A stored query as conditions, cached (rules are matched against every thread). A part with an
+ * error is left out; validation refuses such a query before it is saved.
+ */
+export function compileQuery(query: string): RuleMatch {
+	let when = compiled.get(query);
+	if (!when) {
+		when = parseQuery(query).when;
+		if (compiled.size > 500) compiled.clear();
+		compiled.set(query, when);
+	}
+	return when;
+}
+
+/** Why a stored query cannot be saved, or null. */
+export function queryError(query: unknown): string | null {
+	if (typeof query !== 'string') return 'must be a query (text), such as "repo:acme/*".';
+	if (query.length > MAX_QUERY) return `the query must be ${MAX_QUERY} characters or fewer.`;
+	return parseQuery(query).errors[0] ?? null;
+}
+
 export function formatQuery(when: RuleMatch): string {
 	const parts: string[] = [];
 	for (const w of WORDS) {

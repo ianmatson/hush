@@ -7,6 +7,7 @@ import type { PaletteCommand } from '$lib/palette.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS, MENU_ITEMS } from '$lib/shared/menus';
 import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
+import { formatQuery } from '$lib/shared/query';
 import type { ThreadDTO, View } from '$lib/shared/types';
 import { snoozeOptions } from '$lib/time';
 import Check from '@lucide/svelte/icons/check';
@@ -148,7 +149,7 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 				return one
 					? item(id, 'Make a rule…', ListFilter, () =>
 							goto(
-								`/settings/inbox?rule=${encodeURIComponent(JSON.stringify({ repo: one.repo, type: [one.subjectType] }))}`
+								`/settings/inbox?rule=${encodeURIComponent(formatQuery({ repo: one.repo, type: [one.subjectType] }))}`
 							)
 						)
 					: null;

@@ -1,10 +1,8 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
-import { WHY } from '$lib/shared/classify';
 import { DEFAULT_ISSUE_SECTIONS, DEFAULT_PR_SECTIONS, MAX_QUERIES } from '$lib/shared/dashboard';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import { IS_VALUES, WORDS } from '$lib/shared/query';
-import { RULE_FIELDS } from '$lib/shared/rule-fields';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
@@ -124,7 +122,7 @@ A rule:
 
 - \`name\` (text, optional): shown on the thread as “rule: …”.
 - \`enabled\` (boolean, optional): \`false\` turns the rule off. Missing means on.
-- \`when\` (object): the conditions. All must match. \`{}\` matches every thread.
+- \`when\` (text): a [query](/docs/query-language), such as \`"repo:acme/* needs:review"\`. All of its conditions must match. \`""\` matches every thread. A query with a part that Hush does not understand is refused.
 - \`then\` (object): what to do. It needs at least one of \`category\`, \`push\`, or \`triage\`.
   - \`category\`: \`"action"\` (Needs you), \`"fyi"\`, or \`"muted"\`.
   - \`push\`: \`true\` or \`false\`, in place of the push settings.
@@ -133,11 +131,11 @@ A rule:
 \`\`\`json settings
 {
   "rules": [
-    { "name": "Docs repo is FYI", "when": { "repo": "acme/website" }, "then": { "category": "fyi" } },
-    { "name": "Mute dependabot", "when": { "author": "dependabot*" }, "then": { "category": "muted" } },
+    { "name": "Docs repo is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
+    { "name": "Mute dependabot", "when": "author:dependabot*", "then": { "category": "muted" } },
     {
       "name": "Nightly CI can wait",
-      "when": { "type": ["CheckSuite"], "repo": "acme/nightly" },
+      "when": "type:ci repo:acme/nightly",
       "then": { "triage": "snooze", "snoozeHours": 12, "push": false }
     }
   ]
@@ -151,13 +149,13 @@ A rule:
 - \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
 - \`name\`: up to 40 characters. The tab label.
 - \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
-- \`when\`: the same conditions as rules. \`category\` here is the thread's list now, after your rules.
+- \`query\`: a [query](/docs/query-language), the same words as rules. \`in:\` here is the thread's list now, after your rules. \`""\` shows every thread of the base.
 
 \`\`\`json settings
 {
   "views": [
-    { "id": "web", "name": "Web team", "base": "inbox", "when": { "repo": "acme/web-*" } },
-    { "id": "ci", "name": "Broken CI", "base": "action", "when": { "kind": ["fix_ci"] } }
+    { "id": "web", "name": "Web team", "base": "inbox", "query": "repo:acme/web-*" },
+    { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" }
   ]
 }
 \`\`\``
@@ -357,28 +355,6 @@ function queryReference(): string {
 	return `${words}\n\n## Values\n\n${values}\n\n### is:\n\n${is}\n\n${code('-is:draft')} is \`"draft": false\`.`;
 }
 
-function conditionsReference(): string {
-	const input: Record<string, string> = {
-		globs: 'text or list of texts; `*` and `?` are wildcards',
-		options: 'list of values',
-		text: 'text',
-		yesno: 'true or false'
-	};
-	return table(
-		['JSON key', 'In the editor', 'Value', 'Notes'],
-		RULE_FIELDS.map((f) => [
-			code(f.key),
-			f.label,
-			f.key === 'label' ? 'list of label names (not wildcards)' : input[f.input],
-			f.key === 'reason'
-				? `Values: ${Object.keys(WHY).map(code).join(', ')}`
-				: f.options
-					? `Values: ${f.options.map((o) => code(o.value)).join(', ')}${f.help ? `. ${f.help}` : ''}`
-					: (f.help ?? '')
-		])
-	);
-}
-
 function menusReference(): string {
 	return (['inbox', 'dash'] as MenuKind[])
 		.map((kind) => {
@@ -469,7 +445,6 @@ export const REFERENCES: Record<string, (args: string[]) => string> = {
 	settings: settingsReference,
 	keybinds: keybindsReference,
 	query: queryReference,
-	conditions: conditionsReference,
 	menus: menusReference,
 	snooze: snoozeReference,
 	actions: actionsReference,

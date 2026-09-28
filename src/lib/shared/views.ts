@@ -1,4 +1,5 @@
 import { ruleMatches } from './classify';
+import { compileQuery, queryError } from './query';
 import type { Classification, RuleMatch, SavedView, ThreadDTO, ViewBase } from './types';
 
 export const VIEW_BASES: { id: ViewBase; label: string }[] = [
@@ -20,10 +21,11 @@ export const feedViewOk = (view: string) =>
 	FEED_TABS.some((t) => t.id === view) || /^v:[a-z0-9]{1,16}$/.test(view);
 
 /**
- * Does a thread belong in a saved view (or match the Filter box)? The conditions mean the same as
- * in rules; "category" is the thread's category now (the view's base already picks it).
+ * Does a thread match a query (a saved view, or the Filter box)? The words mean the same as in
+ * rules; "in:" is the thread's list now (the view's base already picks it).
  */
-export function threadMatches(when: RuleMatch, t: ThreadDTO, me: string): boolean {
+export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: string): boolean {
+	const when = typeof query === 'string' ? compileQuery(query) : query;
 	const c = { category: t.category, kind: t.kind } as Classification;
 	return ruleMatches(
 		when,
@@ -49,7 +51,7 @@ export function threadMatches(when: RuleMatch, t: ThreadDTO, me: string): boolea
 }
 
 /** Validate saved views from the client. Returns an error message, or null. */
-export function validateViews(views: unknown, validateWhen: (when: unknown) => string | null) {
+export function validateViews(views: unknown) {
 	if (!Array.isArray(views)) return 'Views must be a list.';
 	if (views.length > MAX_VIEWS) return `Up to ${MAX_VIEWS} views are allowed.`;
 	const ids = new Set<string>();
@@ -61,8 +63,8 @@ export function validateViews(views: unknown, validateWhen: (when: unknown) => s
 		if (typeof v.name !== 'string' || !v.name.trim() || v.name.length > 40)
 			return 'Each view needs a name (40 characters or fewer).';
 		if (!VIEW_BASES.some((b) => b.id === v.base)) return `"${v.name}": unknown base.`;
-		const err = validateWhen(v.when);
-		if (err) return `"${v.name}": ${err}`;
+		const err = queryError(v.query);
+		if (err) return `"${v.name}": ${typeof v.query === 'string' ? err : `"query" ${err}`}`;
 	}
 	return null;
 }
