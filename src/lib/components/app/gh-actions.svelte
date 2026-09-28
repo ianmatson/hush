@@ -9,12 +9,12 @@
 		GH_ACTIONS,
 		MERGE_LABEL,
 		ghActions,
-		keyLabel,
 		mainAction,
 		type GhActionId
 	} from '$lib/shared/actions';
 	import type { ActionKind, MergeMethod, PeekDTO } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
+	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -130,13 +130,13 @@
 	// Keys (shared/actions.ts), while the peek shows this PR or issue and you are not typing.
 	function onKey(e: KeyboardEvent) {
 		const t = e.target;
-		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		if (
 			t instanceof Element &&
 			t.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
 		)
 			return;
-		const s = states.find((x) => GH_ACTIONS[x.id].key === e.key);
+		const cmd = commandFor(e, ['peek']);
+		const s = cmd ? states.find((x) => GH_ACTIONS[x.id].command === cmd) : undefined;
 		if (!s) return;
 		e.preventDefault();
 		e.stopPropagation();
@@ -153,20 +153,24 @@
 					label: label(s.id),
 					detail: `${p.repo}#${p.number}`,
 					keywords: ['github', p.kind === 'pr' ? 'pull request' : 'issue'],
-					shortcut: GH_ACTIONS[s.id].key ? keyLabel(GH_ACTIONS[s.id].key!) : undefined,
+					shortcut: hint(s.id),
 					run: () => run(s.id)
 				}))
 		)
 	);
 
 	const others = $derived(states.filter((s) => s.id !== main?.id));
+	/** The first key of an action's command, for hints. */
+	const hint = (id: GhActionId) => {
+		const c = GH_ACTIONS[id].command;
+		return c ? keysOf(c)[0] : undefined;
+	};
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 {#snippet keyHint(id: GhActionId)}
-	{#if GH_ACTIONS[id].key}<kbd class="ml-auto pl-3 font-sans text-xs text-muted-foreground"
-			>{keyLabel(GH_ACTIONS[id].key!)}</kbd
+	{#if hint(id)}<kbd class="ml-auto pl-3 font-sans text-xs text-muted-foreground">{hint(id)}</kbd
 		>{/if}
 {/snippet}
 
@@ -256,7 +260,7 @@
 							: 'Leave a comment'}
 					aria-label="Comment"
 					onkeydown={(e) => {
-						if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+						if (commandFor(e, ['editor']) === 'editor.send') {
 							e.preventDefault();
 							submit();
 						} else if (e.key === 'Escape') {
@@ -282,7 +286,9 @@
 					<Button type="button" size="sm" variant="ghost" onclick={() => (composer = null)}
 						>Cancel</Button
 					>
-					<span class="ml-auto text-xs text-muted-foreground">⌘ Enter to send · Markdown</span>
+					<span class="ml-auto text-xs text-muted-foreground"
+						>{keysOf('editor.send')[0] ?? ''} to send · Markdown</span
+					>
 				</div>
 			</form>
 		{/if}

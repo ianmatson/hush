@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import { keysOf } from '$lib/keys.svelte';
 	import type { ActionKind } from '$lib/shared/types';
 
 	export interface PeekTarget {
@@ -49,8 +50,9 @@
 	{#snippet start(wide)}
 		{#if wide}
 			<span class="px-2 text-xs text-muted-foreground"
-				><kbd class="font-sans">Space</kbd> to close · <kbd class="font-sans">J</kbd>/<kbd
-					class="font-sans">K</kbd
+				><kbd class="font-sans">{keysOf('list.peek')[0] ?? ''}</kbd> to close ·
+				<kbd class="font-sans">{keysOf('list.next')[0] ?? ''}</kbd>/<kbd class="font-sans"
+					>{keysOf('list.prev')[0] ?? ''}</kbd
 				> to move</span
 			>
 		{/if}

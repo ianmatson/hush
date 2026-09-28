@@ -15,7 +15,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	rules: [],
 	dash: DEFAULT_DASH,
 	views: [],
-	menus: DEFAULT_MENUS
+	menus: DEFAULT_MENUS,
+	keys: {}
 };
 
 /**

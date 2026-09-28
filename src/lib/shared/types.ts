@@ -186,6 +186,8 @@ export interface Settings {
 	dash: DashSettings;
 	/** Saved views: extra inbox tabs, in order. */
 	views: SavedView[];
+	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
+	keys: Record<string, string[]>;
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
 	menus: { inbox: string[]; dash: string[]; v?: number };
 }

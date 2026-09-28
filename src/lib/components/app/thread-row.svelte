@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { keysOf } from '$lib/keys.svelte';
 	import type { ThreadDTO } from '$lib/shared/types';
 	import type { ActionBody, ThreadAction } from '$lib/api';
 	import { ago } from '$lib/time';
@@ -183,7 +184,10 @@
 							</Button>
 						{/snippet}
 					</Tooltip.Trigger>
-					<Tooltip.Content>Done <kbd class="ml-1 opacity-60">E</kbd></Tooltip.Content>
+					<Tooltip.Content
+						>Done <kbd class="ml-1 opacity-60">{keysOf('inbox.done')[0] ?? ''}</kbd
+						></Tooltip.Content
+					>
 				</Tooltip.Root>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
@@ -221,7 +225,10 @@
 							</Button>
 						{/snippet}
 					</Tooltip.Trigger>
-					<Tooltip.Content>Mute thread <kbd class="ml-1 opacity-60">M</kbd></Tooltip.Content>
+					<Tooltip.Content
+						>Mute thread <kbd class="ml-1 opacity-60">{keysOf('inbox.mute')[0] ?? ''}</kbd
+						></Tooltip.Content
+					>
 				</Tooltip.Root>
 			{:else}
 				<Button

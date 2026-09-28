@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
-	import { INBOX_SHORTCUTS, PEEK_ACTION_SHORTCUTS } from '$lib/shortcuts';
+	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
+	import { commandFor } from '$lib/keys.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -366,42 +367,38 @@
 			if (e.key === 'Escape' && target === searchEl) searchEl?.blur();
 			return;
 		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
-			e.preventDefault();
-			sel.all(order);
-			return;
-		}
-		if (e.metaKey || e.ctrlKey || e.altKey) return;
+		const cmd = commandFor(e, ['list', 'inbox']);
+		if (!cmd) return;
 		const t = visible[selectedIndex];
-		const keys: Record<string, () => void> = {
-			j: () => move(1),
-			ArrowDown: () => move(1),
-			k: () => move(-1),
-			ArrowUp: () => move(-1),
-			J: () => move(1, true),
-			K: () => move(-1, true),
-			x: () => t && sel.toggle(t.id),
-			' ': () => t && (owns ? closePeek() : take()),
-			Escape: () => (peekOpen ? closePeek() : sel.clear()),
-			o: () => t && open(t, t.actionUrl),
-			Enter: () => t && open(t, t.actionUrl),
-			O: () => t && open(t, t.htmlUrl),
-			e: () => inInbox && act(targets(), 'done'),
-			s: () => inInbox && act(targets(), 'snooze', { until: snoozeOptions()[2].until }),
-			m: () => inInbox && act(targets(), 'mute'),
-			c: () => copyLinks(targets()),
-			u: () => toggleRead(targets()),
-			r: () => sync(),
-			'/': () => searchEl?.focus(),
-			'?': () => (helpOpen = true)
+		// Each command's keys: shared/keymap.ts (and Settings → Keyboard shortcuts).
+		const run: Record<string, () => void> = {
+			'list.next': () => move(1),
+			'list.prev': () => move(-1),
+			'list.extendNext': () => move(1, true),
+			'list.extendPrev': () => move(-1, true),
+			'list.select': () => t && sel.toggle(t.id),
+			'list.selectAll': () => sel.all(order),
+			'list.peek': () => t && (owns ? closePeek() : take()),
+			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
+			'list.open': () => t && open(t, t.actionUrl),
+			'list.openGitHub': () => t && open(t, t.htmlUrl),
+			'list.copy': () => copyLinks(targets()),
+			'list.refresh': () => sync(),
+			'list.search': () => searchEl?.focus(),
+			'list.help': () => (helpOpen = true),
+			'inbox.done': () => inInbox && act(targets(), 'done'),
+			'inbox.snooze': () =>
+				inInbox && act(targets(), 'snooze', { until: snoozeOptions()[2].until }),
+			'inbox.mute': () => inInbox && act(targets(), 'mute'),
+			'inbox.read': () => toggleRead(targets())
 		};
-		VIEWS.forEach((v, i) => (keys[String(i + 1)] = () => goto(`/inbox?view=${v.id}`)));
+		VIEWS.forEach((v, i) => (run[`inbox.view.${i + 1}`] = () => goto(`/inbox?view=${v.id}`)));
 		savedViews
 			.slice(0, 4)
 			.forEach(
-				(v, i) => (keys[String(VIEWS.length + i + 1)] = () => goto(`/inbox?view=v:${v.id}`))
+				(v, i) => (run[`inbox.view.${VIEWS.length + i + 1}`] = () => goto(`/inbox?view=v:${v.id}`))
 			);
-		const fn = keys[e.key];
+		const fn = run[cmd];
 		if (fn) {
 			e.preventDefault();
 			fn();
@@ -871,4 +868,7 @@
 	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
 />
 
-<ShortcutsDialog bind:open={helpOpen} shortcuts={[...INBOX_SHORTCUTS, ...PEEK_ACTION_SHORTCUTS]} />
+<ShortcutsDialog
+	bind:open={helpOpen}
+	shortcuts={shortcutsFor(['global', 'list', 'inbox', 'peek'], LIST_MOUSE)}
+/>

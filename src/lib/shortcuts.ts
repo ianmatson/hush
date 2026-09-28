@@ -1,63 +1,43 @@
-import { GH_ACTIONS, keyLabel } from './shared/actions';
+import { COMMANDS, type KeyScope } from './shared/keymap';
+import { keysOf } from './keys.svelte';
 
 /** Keyboard shortcuts, as [keys, what they do], for the "?" dialog. */
 export type Shortcut = [keys: string, does: string];
 
-export const INBOX_SHORTCUTS: Shortcut[] = [
-	['J / K', 'Next / previous'],
-	['Shift + J / K', 'Extend the selection'],
-	['Space', 'Peek (J / K move while it is open)'],
-	['X', 'Select or deselect'],
-	['⌘ / Ctrl + A', 'Select all'],
+/** Numbered commands (views, sections) show as one line: "1 – 9". */
+const NUMBERED: Record<string, string> = {
+	'inbox.view': 'Change view (6 – 9: your saved views)',
+	'dash.section': 'All, or one section'
+};
+
+/** Mouse actions next to the keys (not keyboard shortcuts, so not editable). */
+export const LIST_MOUSE: Shortcut[] = [
 	['⌘ / Ctrl + click', 'Add to selection'],
-	['Shift + click', 'Select a range'],
-	['Enter / O', 'Main action (review, fix CI, reply…)'],
-	['Shift + O', 'Open the thread on GitHub'],
-	['E', 'Done'],
-	['S', 'Snooze until tomorrow 9:00'],
-	['M', 'Mute the thread'],
-	['U', 'Mark as read / unread'],
-	['C', 'Copy link'],
-	['Esc', 'Clear the selection'],
-	['R', 'Sync with GitHub now'],
-	['/', 'Search'],
-	['1 – 9', 'Change view (6 – 9: your saved views)'],
-	['⌘ / Ctrl + K', 'Search and commands'],
-	['?', 'Show shortcuts']
+	['Shift + click', 'Select a range']
+];
+export const DASH_MOUSE: Shortcut[] = [
+	...LIST_MOUSE,
+	['Drag ⋮⋮', 'Move to another group or position']
 ];
 
-export const DASH_SHORTCUTS: Shortcut[] = [
-	['J / K', 'Next / previous'],
-	['Shift + J / K', 'Extend the selection'],
-	['Space', 'Peek (J / K move while it is open)'],
-	['X', 'Select or deselect'],
-	['⌘ / Ctrl + A', 'Select all'],
-	['⌘ / Ctrl + click', 'Add to selection'],
-	['Shift + click', 'Select a range'],
-	['Drag ⋮⋮', 'Move to another group or position'],
-	['Enter / O', 'Main action (review, fix CI…)'],
-	['Shift + O', 'Open on GitHub'],
-	['E', 'Hide until it changes (or show again)'],
-	['C', 'Copy link'],
-	['H', 'Show hidden items'],
-	['Esc', 'Clear the selection'],
-	['0 – 9', 'All, or one section'],
-	['R', 'Refresh from GitHub'],
-	['/', 'Filter'],
-	['⌘ / Ctrl + K', 'Search and commands'],
-	['?', 'Show shortcuts']
-];
-
-/**
- * Keys for actions on GitHub, while the peek shows a PR or issue. From the action table, so
- * custom keys (later) show here too. One line per key (Close and Reopen share X).
- */
-export const PEEK_ACTION_SHORTCUTS: Shortcut[] = Object.values(
-	Object.values(GH_ACTIONS).reduce<Record<string, string[]>>((byKey, a) => {
-		if (a.key) (byKey[a.key] ??= []).push(a.label);
-		return byKey;
-	}, {})
-).map((labels) => {
-	const key = Object.values(GH_ACTIONS).find((a) => a.label === labels[0])!.key!;
-	return [keyLabel(key), `In the peek: ${labels.join(' / ')}`];
-});
+/** The shortcuts of these scopes, with your keys (Settings → Keyboard shortcuts). */
+export function shortcutsFor(scopes: KeyScope[], extra: Shortcut[] = []): Shortcut[] {
+	const out: Shortcut[] = [];
+	const done = new Set<string>();
+	for (const c of COMMANDS) {
+		if (!scopes.includes(c.scope)) continue;
+		const group = c.id.match(/^(inbox\.view|dash\.section)\.\d+$/)?.[1];
+		if (group) {
+			if (done.has(group)) continue;
+			done.add(group);
+			const keys = COMMANDS.filter((x) => x.id.startsWith(`${group}.`))
+				.map((x) => keysOf(x.id)[0])
+				.filter(Boolean);
+			if (keys.length) out.push([`${keys[0]} – ${keys.at(-1)}`, NUMBERED[group]]);
+			continue;
+		}
+		const keys = keysOf(c.id);
+		if (keys.length) out.push([keys.join(' / '), c.label]);
+	}
+	return [...out, ...extra];
+}

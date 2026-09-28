@@ -1,6 +1,7 @@
 import { validateRules } from './classify';
 import { validateDash } from './dashboard';
 import { MENUS_VERSION, validateMenus } from './menus';
+import { validateKeys } from './keymap';
 import { validateQuietHours } from './quiet';
 import { DEFAULT_SETTINGS } from './settings';
 import type { Settings } from './types';
@@ -10,7 +11,7 @@ import { validateViews } from './views';
  * Every setting, for the settings.json editor and the docs: one entry per key (and per key of
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
-export type SettingsPage = 'inbox' | 'dashboards' | 'notifications' | 'general';
+export type SettingsPage = 'inbox' | 'dashboards' | 'notifications' | 'general' | 'keys';
 export interface SettingInfo {
 	key: string;
 	page: SettingsPage | null;
@@ -116,7 +117,13 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		page: 'general',
 		description: 'The right-click and “⋯” menu of inbox threads: item ids in order, "-" is a line.'
 	},
-	{ key: 'menus.dash', page: 'general', description: 'The menu of PRs and issues, the same way.' }
+	{ key: 'menus.dash', page: 'general', description: 'The menu of PRs and issues, the same way.' },
+	{
+		key: 'keys',
+		page: 'keys',
+		description:
+			'Keyboard shortcuts you changed: { "command id": ["key", …] }, for example { "inbox.done": ["d"] }. [] turns a shortcut off. Keys: "j", "Shift+j", "Mod+k" (⌘ or Ctrl), "Enter", "Space", "?".'
+	}
 ];
 
 /** Settings that are objects of their own settings (a change to one key keeps the others). */
@@ -183,7 +190,8 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	rules: validateRules,
 	views: (v) => validateViews(v, whenError),
 	dash: validateDash,
-	menus: validateMenus
+	menus: validateMenus,
+	keys: validateKeys
 };
 
 /**

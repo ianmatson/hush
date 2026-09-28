@@ -6,7 +6,8 @@
 		type TurnGroup
 	} from '$lib/dash-actions';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
-	import { DASH_SHORTCUTS, PEEK_ACTION_SHORTCUTS } from '$lib/shortcuts';
+	import { DASH_MOUSE, shortcutsFor } from '$lib/shortcuts';
+	import { commandFor } from '$lib/keys.svelte';
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
@@ -490,36 +491,31 @@
 			if (e.key === 'Escape' && target === searchEl) searchEl?.blur();
 			return;
 		}
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
-			e.preventDefault();
-			sel.all(order);
-			return;
-		}
-		if (e.metaKey || e.ctrlKey || e.altKey) return;
+		const cmd = commandFor(e, ['list', 'dash']);
+		if (!cmd) return;
 		const i = navigable[selectedIndex];
 		const chips = [null, ...(data?.sections ?? []).map((s) => s.id)];
-		const keys: Record<string, () => void> = {
-			j: () => move(1),
-			ArrowDown: () => move(1),
-			k: () => move(-1),
-			ArrowUp: () => move(-1),
-			J: () => move(1, true),
-			K: () => move(-1, true),
-			x: () => i && sel.toggle(i.id),
-			' ': () => i && (owns ? closePeek() : take()),
-			Escape: () => (peekOpen ? closePeek() : sel.clear()),
-			o: () => i && open(i, i.actionUrl),
-			Enter: () => i && open(i, i.actionUrl),
-			O: () => i && open(i, i.url),
-			e: () => toggleHide(targets()),
-			c: () => copyLinks(targets()),
-			h: () => (showHidden = !showHidden),
-			r: () => refresh(),
-			'/': () => searchEl?.focus(),
-			'?': () => (helpOpen = true)
+		// Each command's keys: shared/keymap.ts (and Settings → Keyboard shortcuts).
+		const run: Record<string, () => void> = {
+			'list.next': () => move(1),
+			'list.prev': () => move(-1),
+			'list.extendNext': () => move(1, true),
+			'list.extendPrev': () => move(-1, true),
+			'list.select': () => i && sel.toggle(i.id),
+			'list.selectAll': () => sel.all(order),
+			'list.peek': () => i && (owns ? closePeek() : take()),
+			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
+			'list.open': () => i && open(i, i.actionUrl),
+			'list.openGitHub': () => i && open(i, i.url),
+			'list.copy': () => copyLinks(targets()),
+			'list.refresh': () => refresh(),
+			'list.search': () => searchEl?.focus(),
+			'list.help': () => (helpOpen = true),
+			'dash.hide': () => toggleHide(targets()),
+			'dash.showHidden': () => (showHidden = !showHidden)
 		};
-		chips.slice(0, 10).forEach((id, n) => (keys[String(n)] = () => (section = id)));
-		const fn = keys[e.key];
+		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
+		const fn = run[cmd];
 		if (fn) {
 			e.preventDefault();
 			fn();
@@ -927,4 +923,7 @@
 	{/if}
 {/snippet}
 
-<ShortcutsDialog bind:open={helpOpen} shortcuts={[...DASH_SHORTCUTS, ...PEEK_ACTION_SHORTCUTS]} />
+<ShortcutsDialog
+	bind:open={helpOpen}
+	shortcuts={shortcutsFor(['global', 'list', 'dash', 'peek'], DASH_MOUSE)}
+/>

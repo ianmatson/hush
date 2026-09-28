@@ -7,6 +7,7 @@
 	import { SETTINGS_DOCS, settingsOverrides } from '$lib/shared/settings-schema';
 	import type { Settings } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
+	import { commandFor } from '$lib/keys.svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Card from '$lib/components/ui/card';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -54,7 +55,8 @@
 		inbox: 'Inbox',
 		dashboards: 'PRs & issues',
 		notifications: 'Notifications',
-		general: 'General'
+		general: 'General',
+		keys: 'Keyboard shortcuts'
 	};
 	function defaultOf(key: string): string {
 		const [top, sub] = key.split('.');
@@ -84,7 +86,7 @@
 				error = null;
 			}}
 			onkeydown={(e) => {
-				if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+				if (commandFor(e, ['editor']) === 'editor.save') {
 					e.preventDefault();
 					if (dirty) save();
 				}

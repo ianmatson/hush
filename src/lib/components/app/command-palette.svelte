@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { commandFor } from '$lib/keys.svelte';
 	import { formatQuery } from '$lib/shared/query';
 	import type { Component } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -162,6 +163,7 @@
 		...(
 			[
 				['general', 'General', 'appearance menus account export import'],
+				['keys', 'Keyboard shortcuts', 'shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
 				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
 				['dashboards', 'PR and issue dashboards', 'sections teams'],
@@ -269,7 +271,7 @@
 	}
 
 	function onGlobalKey(e: KeyboardEvent) {
-		if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+		if (commandFor(e, ['global']) === 'palette') {
 			e.preventDefault();
 			palette.open = !palette.open;
 		}

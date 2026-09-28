@@ -12,6 +12,7 @@
 	import { watchReturns } from '$lib/recheck';
 	import { connectLive } from '$lib/live.svelte';
 	import { openOrgNote } from '$lib/org-note.svelte';
+	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
 	import Peek from './peek.svelte';
 	import { closePeek, peek } from '$lib/peek.svelte';
@@ -19,6 +20,9 @@
 	let { children }: { children: Snippet } = $props();
 
 	$effect(() => watchReturns());
+
+	// Your keyboard shortcuts (the `keys` setting) over the defaults: every handler reads them.
+	$effect(() => setKeyChanges(me.data?.settings.keys ?? {}));
 
 	// Just signed in (?signed_in=1 from the callback): once the profile is here, show which orgs
 	// the sign-in can see (only when Hush uses it, not a custom token).

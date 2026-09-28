@@ -1,3 +1,4 @@
+import { keysOf } from '$lib/keys.svelte';
 import type { Component } from 'svelte';
 import { buildMenu, type MenuEntry } from '$lib/menu';
 import type { PaletteCommand } from '$lib/palette.svelte';
@@ -13,6 +14,9 @@ import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 import ExternalLink from '@lucide/svelte/icons/external-link';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import SquareCheck from '@lucide/svelte/icons/square-check';
+
+/** A command's first key, for the hints in menus and the palette (Settings → Keyboard shortcuts). */
+const key = (id: string) => keysOf(id)[0];
 
 export interface TurnGroup {
 	turn: Turn;
@@ -53,14 +57,14 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 			id: 'act:refresh',
 			label: `Refresh ${ctx.noun} from GitHub`,
 			icon: RefreshCw,
-			shortcut: 'R',
+			shortcut: key('list.refresh'),
 			run: () => ctx.refresh()
 		},
 		{
 			id: 'act:hidden',
 			label: ctx.showHidden ? `Show ${ctx.noun}` : 'Show hidden items',
 			icon: ctx.showHidden ? Eye : EyeOff,
-			shortcut: 'H',
+			shortcut: key('dash.showHidden'),
 			run: () => ctx.toggleShowHidden()
 		}
 	];
@@ -73,14 +77,14 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 		id: 'act:copy',
 		label: ids.length > 1 ? 'Copy links' : 'Copy link',
 		icon: Link,
-		shortcut: 'C',
+		shortcut: key('list.copy'),
 		run: () => ctx.copyLinks(ids)
 	});
 	add({
 		id: 'act:hide',
 		label: ctx.showHidden ? 'Show again' : 'Hide until it changes',
 		icon: ctx.showHidden ? Eye : EyeOff,
-		shortcut: 'E',
+		shortcut: key('dash.hide'),
 		run: () => ctx.toggleHide(ids)
 	});
 	if (ids.some((id) => ctx.byId(id)?.movedByYou))
@@ -98,14 +102,14 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 			id: 'act:open',
 			label: one.actionLabel,
 			icon: ExternalLink,
-			shortcut: '↵',
+			shortcut: key('list.open'),
 			run: () => ctx.open(one, one.actionUrl)
 		});
 		add({
 			id: 'act:peek',
 			label: 'Peek',
 			icon: PanelRightOpen,
-			shortcut: 'Space',
+			shortcut: key('list.peek'),
 			run: () => ctx.peek(one)
 		});
 	}
@@ -136,10 +140,16 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 	const make = (id: string): MenuEntry | null => {
 		switch (id) {
 			case 'peek':
-				return one ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), 'Space') : null;
+				return one ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek')) : null;
 			case 'main':
 				return one
-					? item(id, one.actionLabel, ExternalLink, () => ctx.open(one, one.actionUrl), '↵')
+					? item(
+							id,
+							one.actionLabel,
+							ExternalLink,
+							() => ctx.open(one, one.actionUrl),
+							key('list.open')
+						)
 					: null;
 			case 'github':
 				return one && one.url !== one.actionUrl
@@ -159,8 +169,14 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					: null;
 			case 'hide':
 				return ctx.showHidden
-					? item(id, n('Show again'), Eye, () => ctx.toggleHide(ids), 'E')
-					: item(id, n('Hide until it changes'), EyeOff, () => ctx.toggleHide(ids), 'E');
+					? item(id, n('Show again'), Eye, () => ctx.toggleHide(ids), key('dash.hide'))
+					: item(
+							id,
+							n('Hide until it changes'),
+							EyeOff,
+							() => ctx.toggleHide(ids),
+							key('dash.hide')
+						);
 			case 'copy':
 				return item(
 					id,
@@ -180,7 +196,13 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 						)
 					: null;
 			case 'selectAll':
-				return item(id, 'Select all', SquareCheck, () => ctx.sel.all(ctx.order), '⌘A');
+				return item(
+					id,
+					'Select all',
+					SquareCheck,
+					() => ctx.sel.all(ctx.order),
+					key('list.selectAll')
+				);
 		}
 		const g = ctx.groups.find((x) => `move:${x.turn}` === id);
 		return g ? moveItem(g, id, n(`Move to ${g.label}`)) : null;

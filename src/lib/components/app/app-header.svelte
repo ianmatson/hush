@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { keysOf } from '$lib/keys.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -104,13 +105,14 @@
 		<div class="ml-auto flex items-center gap-1">
 			<button
 				type="button"
-				aria-label="Search and commands (⌘K)"
-				title="Search and commands (⌘K)"
+				aria-label="Search and commands ({keysOf('palette')[0] ?? ''})"
+				title="Search and commands ({keysOf('palette')[0] ?? ''})"
 				class="flex h-7 items-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-md:w-7 max-md:justify-center md:border md:pr-1 md:pl-2 md:text-xs"
 				onclick={() => (palette.open = true)}
 			>
 				<Search class="size-4 md:size-3.5" /><span class="hidden md:inline">Search</span><kbd
-					class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline">⌘K</kbd
+					class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline"
+					>{keysOf('palette')[0] ?? ''}</kbd
 				>
 			</button>
 			<button

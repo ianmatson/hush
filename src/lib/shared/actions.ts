@@ -2,8 +2,7 @@ import type { ActionKind, MergeMethod, PeekDTO } from './types';
 
 /**
  * Actions on GitHub from Hush (the peek, its keys, and the command palette). One table: the
- * label, the default key, and how each action is made safe. Keys live only here, so a future
- * "custom keys" setting has one place to change.
+ * label, its keyboard command (keys: shared/keymap.ts), and how each action is made safe.
  */
 export type GhActionId =
 	| 'approve'
@@ -21,8 +20,8 @@ export interface GhActionInfo {
 	label: string;
 	/** The toast when it worked. */
 	done: string;
-	/** The default key in the peek (KeyboardEvent.key; capitals mean Shift). */
-	key?: string;
+	/** Its keyboard shortcut: a command in shared/keymap.ts (keys are set there). */
+	command?: string;
 	/** Needs text: the comment box opens (optional for approve). */
 	body?: 'required' | 'optional';
 	/** Cannot be undone: the button (or key) asks once more ("Confirm merge"). */
@@ -35,25 +34,35 @@ export interface GhActionInfo {
 }
 
 export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
-	approve: { label: 'Approve', done: 'Approved', key: 'a', body: 'optional', undo: 'delay' },
+	approve: {
+		label: 'Approve',
+		done: 'Approved',
+		command: 'peek.approve',
+		body: 'optional',
+		undo: 'delay'
+	},
 	request_changes: {
 		label: 'Request changes',
 		done: 'Changes requested',
-		key: 'A',
+		command: 'peek.requestChanges',
 		body: 'required'
 	},
-	comment: { label: 'Comment', done: 'Comment posted', key: 'C', body: 'required' },
-	rerun: { label: 'Re-run failed jobs', done: 'Failed jobs are running again', key: 'R' },
-	merge: { label: 'Merge', done: 'Merged', key: 'M', confirm: true },
+	comment: { label: 'Comment', done: 'Comment posted', command: 'peek.comment', body: 'required' },
+	rerun: {
+		label: 'Re-run failed jobs',
+		done: 'Failed jobs are running again',
+		command: 'peek.rerun'
+	},
+	merge: { label: 'Merge', done: 'Merged', command: 'peek.merge', confirm: true },
 	auto_merge: { label: 'Enable auto-merge', done: 'Auto-merge is on', undo: 'auto_merge_off' },
 	auto_merge_off: { label: 'Turn off auto-merge', done: 'Auto-merge is off', undo: 'auto_merge' },
-	close: { label: 'Close', done: 'Closed', key: 'X', undo: 'reopen' },
+	close: { label: 'Close', done: 'Closed', command: 'peek.closeReopen', undo: 'reopen' },
 	close_not_planned: {
 		label: 'Close as not planned',
 		done: 'Closed as not planned',
 		undo: 'reopen'
 	},
-	reopen: { label: 'Reopen', done: 'Reopened', key: 'X', undo: 'close' }
+	reopen: { label: 'Reopen', done: 'Reopened', command: 'peek.closeReopen', undo: 'close' }
 };
 
 export const MERGE_LABEL: Record<MergeMethod, string> = {
@@ -131,9 +140,4 @@ export function mainAction(kind: ActionKind | null, states: GhActionState[]): Gh
 		states.find((s) => s.id === 'comment') ??
 		null
 	);
-}
-
-/** A key as the help dialog shows it: "A", or "Shift + A" for a capital. */
-export function keyLabel(key: string): string {
-	return /^[A-Z]$/.test(key) ? `Shift + ${key}` : key.toUpperCase();
 }

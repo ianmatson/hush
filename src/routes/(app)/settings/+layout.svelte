@@ -5,6 +5,7 @@
 	import Inbox from '@lucide/svelte/icons/inbox';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import Settings2 from '@lucide/svelte/icons/settings-2';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 
 	let { children } = $props();
 
@@ -12,7 +13,8 @@
 		{ href: '/settings/general', label: 'General', icon: Settings2 },
 		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
 		{ href: '/settings/dashboards', label: 'PRs & issues', icon: GitPullRequest },
-		{ href: '/settings/notifications', label: 'Notifications', icon: Bell }
+		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
+		{ href: '/settings/keys', label: 'Keyboard shortcuts', icon: Keyboard }
 	];
 </script>
 

@@ -1,3 +1,4 @@
+import { keysOf } from '$lib/keys.svelte';
 import type { Component } from 'svelte';
 import { goto } from '$app/navigation';
 import type { ActionBody, ThreadAction } from '$lib/api';
@@ -20,6 +21,9 @@ import SquareCheck from '@lucide/svelte/icons/square-check';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import Zap from '@lucide/svelte/icons/zap';
 import ListFilter from '@lucide/svelte/icons/list-filter';
+
+/** A command's first key, for the hints in menus and the palette (Settings → Keyboard shortcuts). */
+const key = (id: string) => keysOf(id)[0];
 
 /**
  * What the inbox's menus and ⌘K commands act on. The page passes getters, so each call reads the
@@ -78,17 +82,27 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 	const make = (id: string): MenuEntry | null => {
 		switch (id) {
 			case 'peek':
-				return one?.number ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), 'Space') : null;
+				return one?.number
+					? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek'))
+					: null;
 			case 'main':
 				return one
-					? item(id, one.actionLabel, ExternalLink, () => ctx.open(one, one.actionUrl), '↵')
+					? item(
+							id,
+							one.actionLabel,
+							ExternalLink,
+							() => ctx.open(one, one.actionUrl),
+							key('list.open')
+						)
 					: null;
 			case 'github':
 				return one && one.htmlUrl !== one.actionUrl
 					? item(id, 'Open on GitHub', ExternalLink, () => ctx.open(one, one.htmlUrl), '⇧O')
 					: null;
 			case 'done':
-				return ctx.inInbox ? item(id, n('Done'), Check, () => ctx.act(ids, 'done'), 'E') : null;
+				return ctx.inInbox
+					? item(id, n('Done'), Check, () => ctx.act(ids, 'done'), key('inbox.done'))
+					: null;
 			case 'snooze':
 				return ctx.inInbox
 					? {
@@ -103,7 +117,9 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 						}
 					: null;
 			case 'mute':
-				return ctx.inInbox ? item(id, n('Mute'), BellOff, () => ctx.act(ids, 'mute'), 'M') : null;
+				return ctx.inInbox
+					? item(id, n('Mute'), BellOff, () => ctx.act(ids, 'mute'), key('inbox.mute'))
+					: null;
 			case 'restore':
 				return ctx.inInbox
 					? null
@@ -147,7 +163,13 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 						)
 					: null;
 			case 'selectAll':
-				return item(id, 'Select all', SquareCheck, () => ctx.sel.all(ctx.order), '⌘A');
+				return item(
+					id,
+					'Select all',
+					SquareCheck,
+					() => ctx.sel.all(ctx.order),
+					key('list.selectAll')
+				);
 		}
 		if (!ctx.inInbox) return null;
 		const time = snoozeOptions().find((o) => `snooze:${o.id}` === id);
@@ -175,7 +197,7 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			id: 'act:peek',
 			label: 'Peek',
 			icon: PanelRightOpen,
-			shortcut: 'Space',
+			shortcut: key('list.peek'),
 			run: () => ctx.peek(one)
 		});
 	if (one)
@@ -183,7 +205,7 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			id: 'act:open',
 			label: one.actionLabel,
 			icon: ExternalLink,
-			shortcut: '↵',
+			shortcut: key('list.open'),
 			run: () => ctx.open(one, one.actionUrl)
 		});
 	if (ctx.inInbox) {
@@ -191,7 +213,7 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			id: 'act:done',
 			label: 'Mark as done',
 			icon: Check,
-			shortcut: 'E',
+			shortcut: key('inbox.done'),
 			run: () => ctx.act(ids, 'done')
 		});
 		for (const o of snoozeOptions())
@@ -215,7 +237,7 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			id: 'act:mute',
 			label: 'Mute',
 			icon: BellOff,
-			shortcut: 'M',
+			shortcut: key('inbox.mute'),
 			run: () => ctx.act(ids, 'mute')
 		});
 	} else {
@@ -231,21 +253,21 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 		id: 'act:read',
 		label: read === 'read' ? 'Mark as read' : 'Mark as unread',
 		icon: read === 'read' ? MailOpen : Mail,
-		shortcut: 'U',
+		shortcut: key('inbox.read'),
 		run: () => ctx.act(ids, read)
 	});
 	add({
 		id: 'act:copy',
 		label: ids.length > 1 ? 'Copy links' : 'Copy link',
 		icon: Link,
-		shortcut: 'C',
+		shortcut: key('list.copy'),
 		run: () => ctx.copyLinks(ids)
 	});
 	add({
 		id: 'act:all',
 		label: 'Select all',
 		icon: SquareCheck,
-		shortcut: '⌘A',
+		shortcut: key('list.selectAll'),
 		run: () => ctx.sel.all(ctx.order)
 	});
 	return cmds;

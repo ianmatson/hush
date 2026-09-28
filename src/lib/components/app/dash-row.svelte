@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { keysOf } from '$lib/keys.svelte';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -273,7 +274,7 @@
 				</Tooltip.Trigger>
 				<Tooltip.Content
 					>{i.dismissed ? 'Show again' : 'Hide until it changes'}
-					<kbd class="ml-1 opacity-60">E</kbd></Tooltip.Content
+					<kbd class="ml-1 opacity-60">{keysOf('dash.hide')[0] ?? ''}</kbd></Tooltip.Content
 				>
 			</Tooltip.Root>
 			<Tooltip.Root>
@@ -291,7 +292,10 @@
 						>
 					{/snippet}
 				</Tooltip.Trigger>
-				<Tooltip.Content>Copy link <kbd class="ml-1 opacity-60">C</kbd></Tooltip.Content>
+				<Tooltip.Content
+					>Copy link <kbd class="ml-1 opacity-60">{keysOf('list.copy')[0] ?? ''}</kbd
+					></Tooltip.Content
+				>
 			</Tooltip.Root>
 		</div>
 		<Button
