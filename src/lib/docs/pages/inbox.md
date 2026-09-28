@@ -139,6 +139,10 @@ Plain words must all be in the title, the repository, or the author. Suggestions
 
 To keep a filter, choose the bookmark button at the end of the box: **Save this filter as a view (a new tab)**. See [Saved views](/docs/views).
 
+### Search everywhere
+
+While the box has text, choose **Search: everywhere** under it to search every thread: Needs you, FYI, Snoozed, Done, and Muted. Each result says which list it is in. Done, Snooze, and Mute work on the results that are in the inbox; **Move to inbox** and **Unmute** on the others. **This tab** searches the tab again.
+
 ## Right-click menu
 
 Right-click a row (or choose “⋯” on a phone) for every action: Peek, the main action, Open on GitHub, Done, Snooze, Mute, Move to inbox, Mark as read, Copy link, **Make a rule…**, and selection. With a selection, the menu acts on all selected rows. You can change the items and their order: see [Menus](/docs/appearance-and-menus#menus).

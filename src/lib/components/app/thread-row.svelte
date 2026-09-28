@@ -30,9 +30,12 @@
 		onopen,
 		onrowclick,
 		ontoggle,
-		menu
+		menu,
+		showList = false
 	}: {
 		thread: ThreadDTO;
+		/** Say which list it is in (a search of every tab). */
+		showList?: boolean;
 		/** The keyboard cursor is on this row. */
 		selected?: boolean;
 		/** Part of the multi-selection. */
@@ -119,6 +122,19 @@
 			<span class="mx-1 opacity-50">·</span>{t.title}
 		</a>
 		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">
+			{#if showList}
+				<span class="rounded-md border px-1.5 py-0.5 font-medium text-foreground/80"
+					>{t.category === 'muted'
+						? 'Muted'
+						: t.triage === 'done'
+							? 'Done'
+							: !inInbox
+								? 'Snoozed'
+								: t.category === 'action'
+									? 'Needs you'
+									: 'FYI'}</span
+				>
+			{/if}
 			<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>
 			{#if t.changes?.length}<ChangeChips changes={t.changes} />{/if}
 			{#if t.override}

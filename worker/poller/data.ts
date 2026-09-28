@@ -165,7 +165,9 @@ export abstract class PollerData extends PollerDashboard {
 		if (ifNoneMatch === etag) return { notModified: true, etag };
 		const { where, args } = viewWhere(view);
 		const order = view === 'snoozed' ? 'snoozed_until ASC' : 'gh_updated_at DESC';
-		const rows = this.threads(`${where} ORDER BY ${order} LIMIT 300`, ...args);
+		// A search of every tab reads more (Done threads stay 30 days).
+		const limit = view === 'all' ? 500 : 300;
+		const rows = this.threads(`${where} ORDER BY ${order} LIMIT ${limit}`, ...args);
 		const since = this.sinceYouLooked(
 			rows.flatMap((r) =>
 				r.subject_key && r.facts ? [{ key: r.subject_key, facts: r.facts }] : []

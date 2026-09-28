@@ -8,7 +8,7 @@ import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS, MENU_ITEMS } from '$lib/shared/menus';
 import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
 import { formatQuery } from '$lib/shared/query';
-import type { ThreadDTO, View } from '$lib/shared/types';
+import type { ThreadDTO } from '$lib/shared/types';
 import { snoozeOptions } from '$lib/time';
 import Check from '@lucide/svelte/icons/check';
 import AlarmClock from '@lucide/svelte/icons/alarm-clock';
@@ -32,9 +32,6 @@ const key = (id: string) => keysOf(id)[0];
  * current view, list, and selection.
  */
 export interface InboxActionContext {
-	readonly view: View;
-	/** Needs you, FYI, or the whole inbox (Done, Snooze, and Mute apply). */
-	readonly inInbox: boolean;
 	/** The visible threads' ids, in list order. */
 	readonly order: string[];
 	/** Your menu order (Settings → Menus). */
@@ -66,16 +63,27 @@ export const readAction = (
 	ids: string[]
 ): 'read' | 'unread' => (ids.some((id) => ctx.byId(id)?.unread) ? 'read' : 'unread');
 
-export const restoreAction = (view: View, t: ThreadDTO | undefined): ThreadAction =>
-	view === 'muted' || t?.category === 'muted'
-		? 'unmute'
-		: view === 'snoozed'
-			? 'unsnooze'
-			: 'undone';
+/**
+ * In the inbox now (Needs you or FYI, not Done, snoozed, or muted): Done, Snooze, and Mute apply.
+ * The others can go back ("Move to inbox", "Unmute"). Per thread, so a search of every tab works.
+ */
+export const isOpen = (t: ThreadDTO | undefined) =>
+	!!t &&
+	t.category !== 'muted' &&
+	(t.triage === 'inbox' || (t.triage === 'snoozed' && (t.snoozedUntil ?? 0) <= Date.now()));
+
+/** How a thread that is not open goes back: unmute, unsnooze, or out of Done. */
+export const restoreAction = (t: ThreadDTO | undefined): ThreadAction =>
+	t?.category === 'muted' ? 'unmute' : t?.triage === 'snoozed' ? 'unsnooze' : 'undone';
+export const restoreLabel = (t: ThreadDTO | undefined) =>
+	t?.category === 'muted' ? 'Unmute' : 'Move to inbox';
 
 /** The menu for these threads, in your saved ctx.order, with only the items that apply. */
 export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 	const one = ids.length === 1 ? ctx.byId(ids[0]) : undefined;
+	const threads = ids.map((id) => ctx.byId(id));
+	const anyOpen = threads.some(isOpen);
+	const handled = threads.find((t) => t && !isOpen(t));
 	const n = (label: string) => (ids.length > 1 ? `${label} (${ids.length})` : label);
 	const kinds = ids.map((id) => subjectKind(ctx.byId(id)?.subjectType ?? ''));
 	const already = one ? alreadyTrue(one) : [];
@@ -114,11 +122,11 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 						)
 					: null;
 			case 'done':
-				return ctx.inInbox
+				return anyOpen
 					? item(id, n('Done'), Check, () => ctx.act(ids, 'done'), key('inbox.done'))
 					: null;
 			case 'snooze':
-				return ctx.inInbox
+				return anyOpen
 					? {
 							type: 'snooze',
 							key: id,
@@ -131,15 +139,18 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 						}
 					: null;
 			case 'mute':
-				return ctx.inInbox
+				return anyOpen
 					? item(id, n('Mute'), BellOff, () => ctx.act(ids, 'mute'), key('inbox.mute'))
 					: null;
 			case 'restore':
-				return ctx.inInbox
-					? null
-					: item(id, n(ctx.view === 'muted' ? 'Unmute' : 'Move to inbox'), Undo, () =>
-							ctx.act(ids, restoreAction(ctx.view, one))
-						);
+				return handled
+					? item(id, n(restoreLabel(handled)), Undo, () =>
+							ctx.act(
+								ids.filter((x) => !isOpen(ctx.byId(x))),
+								restoreAction(handled)
+							)
+						)
+					: null;
 			case 'read': {
 				const r = readAction(ctx, ids);
 				return item(
@@ -195,7 +206,7 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 					key('list.selectAll')
 				);
 		}
-		if (!ctx.inInbox) return null;
+		if (!anyOpen) return null;
 		const time = snoozeOptions().find((o) => `snooze:${o.id}` === id);
 		if (time)
 			return item(id, n(itemLabel(id)), AlarmClock, () =>
@@ -232,7 +243,9 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			shortcut: key('list.open'),
 			run: () => ctx.open(one, one.actionUrl)
 		});
-	if (ctx.inInbox) {
+	const threads = ids.map((id) => ctx.byId(id));
+	const handled = threads.find((t) => t && !isOpen(t));
+	if (threads.some(isOpen)) {
 		add({
 			id: 'act:done',
 			label: 'Mark as done',
@@ -264,14 +277,18 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			shortcut: key('inbox.mute'),
 			run: () => ctx.act(ids, 'mute')
 		});
-	} else {
+	}
+	if (handled)
 		add({
 			id: 'act:restore',
-			label: ctx.view === 'muted' ? 'Unmute' : 'Move to inbox',
+			label: restoreLabel(handled),
 			icon: Undo,
-			run: () => ctx.act(ids, restoreAction(ctx.view, one))
+			run: () =>
+				ctx.act(
+					ids.filter((x) => !isOpen(ctx.byId(x))),
+					restoreAction(handled)
+				)
 		});
-	}
 	if (one && canSayNotNeeded(one))
 		add({
 			id: 'act:not-needed',

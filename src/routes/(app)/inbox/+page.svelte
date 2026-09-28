@@ -48,6 +48,8 @@
 		inboxMenu,
 		readAction,
 		restoreAction,
+		restoreLabel,
+		isOpen,
 		type InboxActionContext,
 		canSayNotNeeded
 	} from '$lib/inbox-actions';
@@ -90,8 +92,11 @@
 	const view = $derived<View>(
 		saved ? saved.base : viewParam.startsWith('v:') ? 'action' : (viewParam as View)
 	);
-	const inInbox = $derived(view === 'action' || view === 'fyi' || view === 'inbox');
-	const threadsQ = createQuery(() => threadsQuery(view));
+	let query = $state('');
+	// The Filter box searches this tab, or every thread (Needs you, FYI, Snoozed, Done, Muted).
+	let everywhere = $state(false);
+	const searching = $derived(everywhere && !!query.trim());
+	const threadsQ = createQuery(() => threadsQuery(searching ? 'all' : view));
 	// The base lists of the saved views, for their tab counts (D1 only, usually a 304).
 	const bases = $derived([...new Set(savedViews.map((v) => v.base))]);
 	const baseLists = createQueries(() => ({ queries: bases.map((b) => threadsQuery(b)) }));
@@ -113,7 +118,6 @@
 	const counts = $derived.by(() => (lastCounts = threadsQ.data?.counts ?? lastCounts));
 
 	let syncing = $state(false);
-	let query = $state('');
 	// The Filter box speaks the query language (shared/query.ts); parts with errors are left out.
 	const filter = $derived(parseQuery(query));
 	let selectedId = $state<string | null>(null);
@@ -129,7 +133,7 @@
 		return (threadsQ.data?.threads ?? []).filter(
 			(t) =>
 				!pending.has(t.id) &&
-				(!saved || threadMatches(saved.query, t, login)) &&
+				(searching || !saved || threadMatches(saved.query, t, login)) &&
 				threadMatches(filter.when, t, login)
 		);
 	});
@@ -331,6 +335,8 @@
 
 	/** Rows an action applies to: the selection, or else the cursor row. */
 	const targets = () => sel.targets(order, selectedId);
+	/** The targets that are in the inbox now (Done, Snooze, and Mute apply to these). */
+	const openTargets = () => targets().filter((id) => isOpen(byId(id)));
 
 	// Read/unread toggle (see readAction).
 	const toggleRead = (ids: string[]) => ids.length && act(ids, readAction(actions, ids));
@@ -403,10 +409,10 @@
 			'list.refresh': () => sync(),
 			'list.search': () => searchEl?.focus(),
 			'list.help': () => (helpOpen = true),
-			'inbox.done': () => inInbox && act(targets(), 'done'),
+			'inbox.done': () => openTargets().length && act(openTargets(), 'done'),
 			'inbox.snooze': () =>
-				inInbox && act(targets(), 'snooze', { until: snoozeOptions()[2].until }),
-			'inbox.mute': () => inInbox && act(targets(), 'mute'),
+				openTargets().length && act(openTargets(), 'snooze', { until: snoozeOptions()[2].until }),
+			'inbox.mute': () => openTargets().length && act(openTargets(), 'mute'),
 			'inbox.read': () => toggleRead(targets()),
 			'inbox.notNeeded': () => t && canSayNotNeeded(t) && sayNotNeeded(t)
 		};
@@ -460,12 +466,6 @@
 
 	// Menus and ⌘K commands (see inbox-actions.ts) read the page through this context.
 	const actions: InboxActionContext = {
-		get view() {
-			return view;
-		},
-		get inInbox() {
-			return inInbox;
-		},
 		get order() {
 			return order;
 		},
@@ -668,6 +668,23 @@
 		</Button>
 	</div>
 
+	{#if query.trim()}
+		<div class="mt-3 flex items-center gap-2 px-1 text-xs" role="radiogroup" aria-label="Search">
+			<span class="text-muted-foreground">Search</span>
+			{#each [{ on: false, label: saved ? `“${saved.name}”` : 'this tab' }, { on: true, label: 'everywhere (also Done, Snoozed, Muted)' }] as o (o.label)}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={everywhere === o.on}
+					class={cn(
+						'rounded-md px-2 py-0.5 text-muted-foreground hover:text-foreground',
+						everywhere === o.on && 'bg-muted text-foreground'
+					)}
+					onclick={() => (everywhere = o.on)}>{o.label}</button
+				>
+			{/each}
+		</div>
+	{/if}
 	<p class="mt-3 mb-2 px-1 text-xs text-muted-foreground">
 		{#if me.data?.firstSync}<span class="inline-flex items-center gap-1"
 				><RefreshCw class="size-3 animate-spin" />First sync in progress…</span
@@ -743,6 +760,7 @@
 									>
 										<ThreadRow
 											thread={t}
+											showList={searching}
 											selected={t.id === selectedId}
 											checked={sel.has(t.id)}
 											selecting={sel.size > 0}
@@ -767,8 +785,10 @@
 </main>
 
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
-	{#if inInbox}
-		<Button variant="ghost" size="sm" aria-label="Done" onclick={() => act(targets(), 'done')}
+	{@const open = openTargets()}
+	{@const back = targets().filter((id) => !isOpen(byId(id)))}
+	{#if open.length}
+		<Button variant="ghost" size="sm" aria-label="Done" onclick={() => act(open, 'done')}
 			><Check /><span class="hidden sm:inline">Done</span></Button
 		>
 		<Button
@@ -789,22 +809,19 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="center" side="top" class="w-56">
 					<SnoozeItems
-						subjects={targets().map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
-						onpick={(b) => act(targets(), 'snooze', b)}
+						subjects={open.map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
+						onpick={(b) => act(open, 'snooze', b)}
 					/>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		</span>
-		<Button variant="ghost" size="sm" aria-label="Mute" onclick={() => act(targets(), 'mute')}
+		<Button variant="ghost" size="sm" aria-label="Mute" onclick={() => act(open, 'mute')}
 			><BellOff /><span class="hidden sm:inline">Mute</span></Button
 		>
-	{:else}
-		<Button
-			variant="ghost"
-			size="sm"
-			onclick={() => act(targets(), restoreAction(view, undefined))}
-		>
-			<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
+	{/if}
+	{#if back.length}
+		<Button variant="ghost" size="sm" onclick={() => act(back, restoreAction(byId(back[0])))}>
+			<Undo />{restoreLabel(byId(back[0]))}
 		</Button>
 	{/if}
 	{@const bulkRead = readAction(actions, targets())}
@@ -867,7 +884,7 @@
 {#snippet peekFooter()}
 	{#if peekThread}
 		{@const t = peekThread}
-		{#if inInbox}
+		{#if isOpen(t)}
 			<Button variant="ghost" size="sm" aria-label="Done" onclick={() => act([t.id], 'done')}
 				><Check /><span class="max-sm:sr-only">Done</span></Button
 			>
@@ -899,8 +916,8 @@
 				><BellOff /><span class="max-sm:sr-only">Mute</span></Button
 			>
 		{:else}
-			<Button variant="ghost" size="sm" onclick={() => act([t.id], restoreAction(view, t))}>
-				<Undo />{view === 'muted' ? 'Unmute' : 'Move to inbox'}
+			<Button variant="ghost" size="sm" onclick={() => act([t.id], restoreAction(t))}>
+				<Undo />{restoreLabel(t)}
 			</Button>
 		{/if}
 		<Button
