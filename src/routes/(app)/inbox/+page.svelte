@@ -33,6 +33,8 @@
 	import ThreadRow from '$lib/components/app/thread-row.svelte';
 	import BulkBar from '$lib/components/app/bulk-bar.svelte';
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
+	import WhyLine from '$lib/components/app/why-line.svelte';
+	import WelcomeCard from '$lib/components/app/welcome-card.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
 	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
 	import AppMenu from '$lib/components/app/app-menu.svelte';
@@ -183,8 +185,10 @@
 	});
 	$effect(() => {
 		if (!owns) return;
+		peek.header = peekHeader;
 		peek.footer = peekFooter;
 		return () => {
+			if (peek.header === peekHeader) peek.header = null;
 			if (peek.footer === peekFooter) peek.footer = null;
 		};
 	});
@@ -648,6 +652,8 @@
 
 	<!-- A new tab replaces the list at once and fades the new one in. The rows' own transitions are
 	     local, so they play only for changes inside one tab (done, snooze, filter). -->
+	{#if me.data && !me.data.onboarded}<WelcomeCard />{/if}
+
 	{#key viewParam}
 		<div in:fade={{ duration: 150 }}>
 			{#if threadsQ.isPending || (visible.length === 0 && !query && me.data?.firstSync)}
@@ -788,6 +794,29 @@
 	subjects={targets().map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
 	onpick={(b) => act(targets(), 'snooze', b)}
 />
+
+{#snippet peekHeader()}
+	{#if peekThread}
+		{@const t = peekThread}
+		<WhyLine
+			lead={t.triage === 'done'
+				? 'Done'
+				: t.triage === 'snoozed'
+					? 'Snoozed'
+					: t.category === 'muted'
+						? 'Muted'
+						: t.category === 'action'
+							? 'Needs you'
+							: 'FYI'}
+			text={t.summary}
+			notes={[
+				t.why && `GitHub: ${t.why.charAt(0).toLowerCase()}${t.why.slice(1)}`,
+				t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Rule: ${t.rule}`),
+				t.resolvedNote && `Hush moved it: ${t.resolvedNote}`
+			]}
+		/>
+	{/if}
+{/snippet}
 
 {#snippet peekFooter()}
 	{#if peekThread}

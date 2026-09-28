@@ -36,6 +36,8 @@
 	import { meQuery } from '$lib/queries';
 	import { openOnGitHub } from '$lib/recheck';
 	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
+	import WhyLine from './why-line.svelte';
+	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
@@ -196,8 +198,10 @@
 	});
 	$effect(() => {
 		if (!owns) return;
+		peek.header = peekHeader;
 		peek.footer = peekFooter;
 		return () => {
+			if (peek.header === peekHeader) peek.header = null;
 			if (peek.footer === peekFooter) peek.footer = null;
 		};
 	});
@@ -895,6 +899,21 @@
 		><Link /><span class="hidden sm:inline">Copy links</span></Button
 	>
 </BulkBar>
+
+{#snippet peekHeader()}
+	{#if peekItem}
+		{@const i = peekItem}
+		<WhyLine
+			lead={i.dismissed ? 'Hidden' : groupLabel(i.turn)}
+			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
+			notes={[
+				i.movedByYou && 'You moved it here, until it changes',
+				i.sections.length > 0 &&
+					`Found by: ${i.sections.map((id) => sectionNames[id] ?? id).join(', ')}`
+			]}
+		/>
+	{/if}
+{/snippet}
 
 {#snippet peekFooter()}
 	{#if peekItem}

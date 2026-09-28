@@ -92,6 +92,9 @@ export const api = {
 	act: (id: string, action: ThreadAction, body?: ActionBody) =>
 		ok(client.api.threads[':id'][':action'].$post({ param: { id, action }, json: body ?? {} })),
 	sync: () => ok(client.api.sync.$post()),
+	/** What Hush found (the first-run card). */
+	summary: () => ok(client.api.threads.summary.$get()),
+	onboarded: () => ok(client.api.onboarded.$post()),
 	previewRules: (rules: Rule[]) => ok(client.api.rules.preview.$post({ json: { rules } })),
 	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
 	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */

@@ -101,7 +101,12 @@
 			<CommandPalette />
 			<AlertsPanel />
 			<!-- One peek for the app: it stays open when you change tabs (lib/peek.svelte.ts). -->
-			<Peek target={peek.target} onclose={closePeek} footer={peek.footer ?? undefined} />
+			<Peek
+				target={peek.target}
+				onclose={closePeek}
+				header={peek.header ?? undefined}
+				footer={peek.footer ?? undefined}
+			/>
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
 			<p class="mx-auto max-w-4xl px-4 pt-6 text-sm text-destructive">

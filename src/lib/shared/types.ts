@@ -381,6 +381,8 @@ export interface MeDTO {
 	tokenSource: 'app' | 'own';
 	/** The first sync after sign-in has not finished: the inbox is still filling. */
 	firstSync: boolean;
+	/** The first-run questions were answered (or skipped). */
+	onboarded: boolean;
 }
 
 /**

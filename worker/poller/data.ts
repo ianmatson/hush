@@ -82,9 +82,39 @@ export abstract class PollerData extends PollerDashboard {
 	abstract status(): Promise<PollStatus>;
 
 	/** For /api/me: your settings and the poll status, in one call. */
-	async me(): Promise<{ settings: Settings; status: PollStatus }> {
-		const [settings, status] = await Promise.all([this.settings(), this.status()]);
-		return { settings, status };
+	async me(): Promise<{ settings: Settings; status: PollStatus; onboarded: boolean }> {
+		const [settings, status, onboarded] = await Promise.all([
+			this.settings(),
+			this.status(),
+			this.ctx.storage.get<boolean>('onboarded')
+		]);
+		return { settings, status, onboarded: !!onboarded };
+	}
+
+	/**
+	 * What Hush found, for the first-run card: the counts, what it finished by itself, and the
+	 * repos with the most threads that do not need you (the noise).
+	 */
+	async summary(): Promise<{
+		counts: Counts;
+		notifications: number;
+		done: number;
+		noisyRepos: { repo: string; count: number }[];
+	}> {
+		const notifications = this.one<{ n: number }>('SELECT COUNT(*) AS n FROM threads')?.n ?? 0;
+		const done =
+			this.one<{ n: number }>(`SELECT COUNT(*) AS n FROM threads WHERE triage = 'done'`)?.n ?? 0;
+		const noisyRepos = this.all<{ repo: string; count: number }>(
+			`SELECT repo, COUNT(*) AS count FROM threads WHERE category != 'action'
+       GROUP BY repo ORDER BY count DESC LIMIT 6`
+		);
+		return { counts: this.counts(), notifications, done, noisyRepos };
+	}
+
+	/** The first-run questions were answered or skipped: the card does not show again. */
+	async setOnboarded(): Promise<{ ok: true }> {
+		await this.ctx.storage.put('onboarded', true);
+		return { ok: true };
 	}
 
 	/** Your GitHub login; the routes call only after the session check, so the account exists. */

@@ -11,8 +11,10 @@ export const peek = $state<{
 	owner: string | null;
 	/** The item on show; `id` lets its page put the cursor back on it. */
 	target: (PeekTarget & { id: string }) | null;
+	/** Why the item is in its list (the owner's "why" line). */
+	header: Snippet | null;
 	footer: Snippet | null;
-}>({ owner: null, target: null, footer: null });
+}>({ owner: null, target: null, header: null, footer: null });
 
 export const peekIsOpen = () => peek.owner !== null;
 
@@ -23,5 +25,6 @@ export function claimPeek(owner: string) {
 export function closePeek() {
 	peek.owner = null;
 	peek.target = null;
+	peek.header = null;
 	peek.footer = null;
 }

@@ -281,7 +281,7 @@ const app = routes()
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status } = await poller(c.env, u.id).me();
+		const { settings, status, onboarded } = await poller(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,
@@ -293,7 +293,8 @@ const app = routes()
 			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
 			firstSync: status.firstSync,
 			scopes: u.scopes ? u.scopes.split(',') : [],
-			tokenSource: u.token_source
+			tokenSource: u.token_source,
+			onboarded
 		};
 		return c.json(me);
 	});

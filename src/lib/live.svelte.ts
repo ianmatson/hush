@@ -13,6 +13,8 @@ const MAX_BACKOFF = 60_000;
 function apply(m: LiveMessage) {
 	switch (m.type) {
 		case 'threads':
+			// The first-run card's counts too (only fetched while it shows).
+			queryClient.invalidateQueries({ queryKey: ['summary'] });
 			return queryClient.invalidateQueries({ queryKey: keys.threadsAll });
 		case 'alerts':
 			return queryClient.invalidateQueries({ queryKey: keys.alerts });

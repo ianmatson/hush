@@ -7,7 +7,15 @@ description: Sign in, learn the three tabs, turn on push, and triage your first 
 
 Open [app.hush-gh.com](https://app.hush-gh.com) and choose **Sign in with GitHub**. GitHub asks you to let Hush read your notifications, your repositories, and your teams. If your org uses SAML single sign-on, GitHub also asks you to authorize Hush for it.
 
-After you sign in, Hush reads your notifications from the last 14 days. The first sync takes a few seconds; the inbox says “First sync in progress…” until it is done. After that, Hush checks GitHub every few minutes by itself (see [Limits](/docs/limits)).
+After you sign in, Hush reads your notifications from the last 14 days. The first sync can take a minute; the inbox says “First sync in progress…” until it is done. After that, Hush checks GitHub every few minutes by itself (see [Limits](/docs/limits)).
+
+The first time, **Welcome to Hush** is at the top of the inbox. It says what Hush found (“From 47 notifications, Hush found 5 things that need you. It moved 6 to FYI, and 36 that are already finished to Done.”), and asks three questions:
+
+- **Review requests to my teams need me**: on or off. Off, team requests are FYI, and show under “Your team's turn” on the Pull requests tab.
+- **Repositories you only want to read about**: the repositories with the most notifications that do not need you. Everything from the ones that you check goes to FYI (Hush adds a [rule](/docs/rules) for each).
+- **Push to this device**: pushes what needs you.
+
+Choose **Done** to save, or **Skip**. You can change all of it later.
 
 If an org that you work in is missing, its owners may not have approved Hush yet. Hush shows the orgs it can see in a note after sign-in. See [GitHub access](/docs/github-access).
 

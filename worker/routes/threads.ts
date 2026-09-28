@@ -42,6 +42,8 @@ const app = routes()
 		if ('error' in r) return c.json({ error: r.error }, r.status);
 		return c.json(r);
 	})
+	.get('/api/threads/summary', async (c) => c.json(await poller(c.env, c.get('user').id).summary()))
+	.post('/api/onboarded', async (c) => c.json(await poller(c.env, c.get('user').id).setOnboarded()))
 	.post('/api/sync', async (c) => c.json(await poller(c.env, c.get('user').id).pollNow()));
 
 export default app;
