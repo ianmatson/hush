@@ -6,8 +6,8 @@
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
-	import type { ActionKind, CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
-	import GhActions from './gh-actions.svelte';
+	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
+	import CommentBox from './comment-box.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import GitPullRequestDraft from '@lucide/svelte/icons/git-pull-request-draft';
@@ -24,7 +24,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	/** The contents of the peek panel: one PR or issue, fetched when shown. */
-	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
+	let { repo, number }: { repo: string; number: number } = $props();
 
 	const q = createQuery(() => peekQuery(repo, number));
 	// The server stored what this peek read. If that changed the inbox or dashboards, refetch
@@ -119,9 +119,16 @@
 				<span class={cn('flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', st.tone)}
 					><Icon class="size-3.5" />{st.label}</span
 				>
-				<span class="font-mono text-muted-foreground">{p.repo}#{p.number}</span>
+				<a
+					class="font-mono text-muted-foreground hover:text-foreground hover:underline"
+					href={p.url}
+					target="_blank"
+					rel="noreferrer">{p.repo}#{p.number}</a
+				>
 			</div>
-			<h2 class="text-base leading-snug font-semibold text-balance">{p.title}</h2>
+			<h2 class="text-base leading-snug font-semibold text-balance">
+				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
+			</h2>
 			<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 				<span class="flex items-center gap-1.5"
 					>{@render avatar(p.author.avatar, 'size-4')}<span class="text-foreground"
@@ -155,8 +162,6 @@
 				</div>
 			{/if}
 		</header>
-
-		<GhActions {p} {need} />
 
 		{#if p.pr}
 			{@const pr = p.pr}
@@ -287,6 +292,7 @@
 					{/if}
 				</div>
 			{/each}
+			<CommentBox {p} />
 		</section>
 	</article>
 {/if}

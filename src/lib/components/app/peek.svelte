@@ -19,6 +19,7 @@
 	import { ui } from '$lib/ui.svelte';
 	import SidePanel from './side-panel.svelte';
 	import PeekContent from './peek-content.svelte';
+	import GhActions from './gh-actions.svelte';
 	import { noteOpened } from '$lib/recheck';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 
@@ -46,7 +47,21 @@
 	});
 </script>
 
-<SidePanel open={!!target} {onclose} label="peek" title={target?.title ?? 'Peek'} {footer}>
+<!-- The bottom bar: the page's own buttons (Done, Snooze…), then the actions on GitHub. -->
+{#snippet bar()}
+	{@render footer?.()}
+	{#if target?.number}
+		<GhActions repo={target.repo} number={target.number} need={target.need ?? null} />
+	{/if}
+{/snippet}
+
+<SidePanel
+	open={!!target}
+	{onclose}
+	label="peek"
+	title={target?.title ?? 'Peek'}
+	footer={footer || target?.number ? bar : undefined}
+>
 	{#snippet start(wide)}
 		{#if wide}
 			<span class="px-2 text-xs text-muted-foreground"
@@ -70,10 +85,5 @@
 			>
 		{/if}
 	{/snippet}
-	{#if target}<PeekContent
-			repo={target.repo}
-			number={target.number}
-			title={target.title}
-			need={target.need ?? null}
-		/>{/if}
+	{#if target}<PeekContent repo={target.repo} number={target.number} title={target.title} />{/if}
 </SidePanel>

@@ -45,7 +45,6 @@
 	import Eye from '@lucide/svelte/icons/eye';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Link from '@lucide/svelte/icons/link';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
@@ -495,7 +494,7 @@
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
 		const chips = [null, ...(data?.sections ?? []).map((s) => s.id)];
-		// Each command's keys: shared/keymap.ts (and Settings → Keyboard shortcuts).
+		// Each command's keys: shared/keymap.ts (and Settings → Keybinds).
 		const run: Record<string, () => void> = {
 			'list.next': () => move(1),
 			'list.prev': () => move(-1),
@@ -912,13 +911,6 @@
 		</Button>
 		<Button variant="ghost" size="sm" aria-label="Copy link" onclick={() => copyLinks([i.id])}
 			><Link /><span class="max-sm:sr-only">Copy link</span></Button
-		>
-		<Button
-			variant={i.turn === 'you' ? 'default' : 'outline'}
-			size="sm"
-			class="ml-auto"
-			onclick={() => open(i, i.actionUrl)}
-			>{i.actionLabel}<ExternalLink class="opacity-60" /></Button
 		>
 	{/if}
 {/snippet}

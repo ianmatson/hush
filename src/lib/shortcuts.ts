@@ -20,7 +20,7 @@ export const DASH_MOUSE: Shortcut[] = [
 	['Drag ⋮⋮', 'Move to another group or position']
 ];
 
-/** The shortcuts of these scopes, with your keys (Settings → Keyboard shortcuts). */
+/** The shortcuts of these scopes, with your keys (Settings → Keybinds). */
 export function shortcutsFor(scopes: KeyScope[], extra: Shortcut[] = []): Shortcut[] {
 	const out: Shortcut[] = [];
 	const done = new Set<string>();

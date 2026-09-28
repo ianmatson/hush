@@ -14,7 +14,7 @@
 		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
 		{ href: '/settings/dashboards', label: 'PRs & issues', icon: GitPullRequest },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
-		{ href: '/settings/keys', label: 'Keyboard shortcuts', icon: Keyboard }
+		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard }
 	];
 </script>
 

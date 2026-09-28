@@ -56,7 +56,6 @@
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Undo from '@lucide/svelte/icons/undo-2';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Link from '@lucide/svelte/icons/link';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import Mail from '@lucide/svelte/icons/mail';
@@ -370,7 +369,7 @@
 		const cmd = commandFor(e, ['list', 'inbox']);
 		if (!cmd) return;
 		const t = visible[selectedIndex];
-		// Each command's keys: shared/keymap.ts (and Settings → Keyboard shortcuts).
+		// Each command's keys: shared/keymap.ts (and Settings → Keybinds).
 		const run: Record<string, () => void> = {
 			'list.next': () => move(1),
 			'list.prev': () => move(-1),
@@ -830,13 +829,6 @@
 					class="max-sm:sr-only">Unread</span
 				>{/if}
 		</Button>
-		<Button
-			variant={t.category === 'action' ? 'default' : 'outline'}
-			size="sm"
-			class="ml-auto"
-			onclick={() => open(t, t.actionUrl)}
-			>{t.actionLabel}<ExternalLink class="opacity-60" /></Button
-		>
 	{/if}
 {/snippet}
 

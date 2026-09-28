@@ -163,7 +163,7 @@
 		...(
 			[
 				['general', 'General', 'appearance menus account export import'],
-				['keys', 'Keyboard shortcuts', 'shortcuts keybindings hotkeys keys'],
+				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
 				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
 				['dashboards', 'PR and issue dashboards', 'sections teams'],

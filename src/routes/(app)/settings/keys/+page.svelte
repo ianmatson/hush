@@ -101,12 +101,12 @@
 	const changed = $derived(Object.keys(changes).length);
 </script>
 
-<svelte:head><title>Keyboard shortcuts · Settings · Hush</title></svelte:head>
+<svelte:head><title>Keybinds · Settings · Hush</title></svelte:head>
 
 <div class="grid gap-6">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">Keyboard shortcuts</h1>
+			<h1 class="text-lg font-semibold tracking-tight">Keybinds</h1>
 			<p class="text-sm text-muted-foreground">
 				Every shortcut in Hush. Changes are saved at once and follow you to every device.
 			</p>

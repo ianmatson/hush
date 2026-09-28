@@ -56,7 +56,7 @@
 		dashboards: 'PRs & issues',
 		notifications: 'Notifications',
 		general: 'General',
-		keys: 'Keyboard shortcuts'
+		keys: 'Keybinds'
 	};
 	function defaultOf(key: string): string {
 		const [top, sub] = key.split('.');

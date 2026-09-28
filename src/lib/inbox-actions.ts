@@ -22,7 +22,7 @@ import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import Zap from '@lucide/svelte/icons/zap';
 import ListFilter from '@lucide/svelte/icons/list-filter';
 
-/** A command's first key, for the hints in menus and the palette (Settings → Keyboard shortcuts). */
+/** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
 
 /**

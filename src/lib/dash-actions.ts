@@ -15,7 +15,7 @@ import ExternalLink from '@lucide/svelte/icons/external-link';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import SquareCheck from '@lucide/svelte/icons/square-check';
 
-/** A command's first key, for the hints in menus and the palette (Settings → Keyboard shortcuts). */
+/** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
 
 export interface TurnGroup {
