@@ -40,4 +40,4 @@ All of Hush is at [github.com/ianmatson/hush](https://github.com/ianmatson/hush)
 
 ## Report a problem
 
-If you find a security problem, please do not describe it in a public issue. Open an [issue](https://github.com/ianmatson/hush/issues) that says only that you found one, and we will set up a private way to talk. Thank you.
+If you find a security problem, please do not describe it in a public issue. [Report it privately on GitHub](https://github.com/ianmatson/hush/security/advisories/new): only the maintainer can see the report. Thank you.
