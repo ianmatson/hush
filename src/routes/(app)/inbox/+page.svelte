@@ -208,6 +208,14 @@
 		const timer = setTimeout(() => act([t.id], 'read'), 1500);
 		return () => clearTimeout(timer);
 	});
+	// …and as looking at it: "since you looked" starts again (when there is something to reset).
+	$effect(() => {
+		const t = peekThread;
+		if (!t?.number || (t.seenAt && !t.changes?.length)) return;
+		const timer = setTimeout(() => seen(t), 1500);
+		return () => clearTimeout(timer);
+	});
+	const seen = (t: ThreadDTO) => t.number && api.seen([`${t.repo}#${t.number}`]).catch(() => {});
 
 	// A new view starts with nothing selected. (The peek stays: it is independent of the view.)
 	$effect(() => {
@@ -330,6 +338,7 @@
 	function open(t: ThreadDTO, url: string) {
 		openOnGitHub(url);
 		if (t.unread) act([t.id], 'read');
+		seen(t);
 	}
 
 	async function copyLinks(ids: string[]) {
@@ -832,6 +841,8 @@
 							? 'Needs you'
 							: 'FYI'}
 			text={t.summary}
+			changes={t.changes ?? []}
+			seenAt={t.seenAt ?? null}
 			notes={[
 				t.why && `GitHub: ${t.why.charAt(0).toLowerCase()}${t.why.slice(1)}`,
 				t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Rule: ${t.rule}`),

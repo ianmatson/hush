@@ -220,7 +220,7 @@ fragment P on PullRequest {
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
   comments(last: 1) { totalCount nodes { author { login __typename } bodyText url createdAt } }
-  commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
+  commits(last: 1) { totalCount nodes { commit { committedDate statusCheckRollup { state } } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   requestEvents: timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
     nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
@@ -277,6 +277,7 @@ export function toSubject(n: Node): SubjectFacts {
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
 		comments: n.comments?.totalCount ?? 0,
+		commits: pr ? (n.commits?.totalCount ?? 0) : 0,
 		lastComment: c
 			? {
 					author: c.author?.login ?? 'ghost',

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { keysOf } from '$lib/keys.svelte';
+	import ChangeChips from './change-chips.svelte';
 	import type { ThreadDTO } from '$lib/shared/types';
 	import type { ActionBody, ThreadAction } from '$lib/api';
 	import { ago } from '$lib/time';
@@ -119,6 +120,7 @@
 		</a>
 		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">
 			<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>
+			{#if t.changes?.length}<ChangeChips changes={t.changes} />{/if}
 			{#if t.override}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">You said: doesn’t need me</span>
 			{/if}

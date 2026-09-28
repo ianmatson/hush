@@ -239,6 +239,13 @@ export interface DashLabel {
 	color: string;
 }
 
+/** One thing that changed since you last looked at a PR or issue (shared/changes.ts). */
+export interface Change {
+	kind: 'commits' | 'ci' | 'review' | 'comments' | 'state' | 'draft' | 'requested' | 'labels';
+	text: string;
+	tone: 'good' | 'bad' | null;
+}
+
 export interface DashItem {
 	id: string;
 	kind: DashKind;
@@ -295,6 +302,10 @@ export interface DashItem {
 	movedByYou: boolean;
 	/** Your manual position inside the group, or null (new items go on top). */
 	rank: number | null;
+	/** What changed since you last looked (none before your first look). */
+	changes?: Change[];
+	/** When you last looked at it, or null. */
+	seenAt?: number | null;
 }
 
 export interface DashResponse {
@@ -338,6 +349,10 @@ export interface ThreadDTO {
 	rule: string | null;
 	/** You said it does not need you ("only this one"): FYI until it changes. */
 	override?: boolean;
+	/** What changed since you last looked at its PR or issue (none before your first look). */
+	changes?: Change[];
+	/** When you last looked at its PR or issue, or null. */
+	seenAt?: number | null;
 	/** The newest comment, review, or push (who, and whether a bot): shared/activity.ts. */
 	activity: Activity | null;
 }

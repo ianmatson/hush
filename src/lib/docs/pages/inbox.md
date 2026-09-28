@@ -53,12 +53,23 @@ Each row shows:
 - The title, the repository, and the number.
 - **Why GitHub notified you**: “Review requested”, “You opened this”, “Watching repo”…
 - **rule: …** when one of your rules sorted it.
+- **What changed since you looked**, for a PR or issue: “+2 commits”, “CI fails”, “@alice approved”, “3 new comments”. See [Since you looked](#since-you-looked).
 - A note such as “✓ You approved” when Hush moved it to Done by itself.
 - The time and the condition of a snooze.
 - A dot when it is unread.
 - The **main action** button: Review, Fix CI, Address, Resolve, Merge, Reply, Triage, or Open. It opens the right page on GitHub (the files of a PR to review, its checks to fix CI) and marks the thread as read.
 
 Click a row to [peek](/docs/peek) at it.
+
+### Since you looked
+
+Hush remembers what a pull request or issue looked like when you last looked at it: when it stays open in the peek for a moment, or when you open it on GitHub, from the inbox or from the Pull requests and Issues tabs. After that, its rows and its peek list what changed since then:
+
+- New commits, new comments, and new reviews (“@alice approved”, “@bob requested changes”).
+- CI: “CI fails”, “CI passes now”, “CI running”.
+- Your review requested again; merged, closed, or reopened; ready for review or back to draft; new labels.
+
+Before your first look, nothing is listed. Your own changes do not count.
 
 ## Triage
 

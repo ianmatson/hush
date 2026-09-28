@@ -55,6 +55,12 @@ const app = routes()
 		if (typeof b.id !== 'string' || !b.id) return c.json({ error: 'Which thread?' }, 400);
 		return c.json(await poller(c.env, c.get('user').id).onlyThisOne(b.id, false));
 	})
+	/** You looked at these PRs or issues ("owner/repo#123"): "since you looked" starts again. */
+	.post('/api/seen', json<{ keys: string[] }>(), async (c) => {
+		const b = c.req.valid('json');
+		if (!Array.isArray(b.keys)) return c.json({ error: 'Which items?' }, 400);
+		return c.json(await poller(c.env, c.get('user').id).markSeen(b.keys));
+	})
 	.get('/api/threads/summary', async (c) => c.json(await poller(c.env, c.get('user').id).summary()))
 	.post('/api/onboarded', async (c) => c.json(await poller(c.env, c.get('user').id).setOnboarded()))
 	.post('/api/sync', async (c) => c.json(await poller(c.env, c.get('user').id).pollNow()));

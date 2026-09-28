@@ -165,6 +165,14 @@
 		const row = navigable[selectedIndex] ?? null;
 		return owns ? row : null;
 	});
+	// Looking at it in the peek for a moment: "since you looked" starts again (when there is
+	// something to reset).
+	$effect(() => {
+		const i = peekItem;
+		if (!i || (i.seenAt && !i.changes?.length)) return;
+		const timer = setTimeout(() => api.seen([i.id]).catch(() => {}), 1500);
+		return () => clearTimeout(timer);
+	});
 	// Back on the page that owns the peek (after another tab): the cursor goes to the item it
 	// shows. Not when this page just took the peek over: then the cursor is where you chose.
 	let restoredFor: string | null = null;
@@ -439,6 +447,7 @@
 
 	function open(i: DashItem, url: string) {
 		openOnGitHub(url);
+		api.seen([i.id]).catch(() => {});
 	}
 
 	async function copyLinks(ids: string[]) {
@@ -925,6 +934,8 @@
 		<WhyLine
 			lead={i.dismissed ? 'Hidden' : groupLabel(i.turn)}
 			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
+			changes={i.changes ?? []}
+			seenAt={i.seenAt ?? null}
 			notes={[
 				i.movedByYou && 'You moved it here, until it changes',
 				i.sections.length > 0 &&

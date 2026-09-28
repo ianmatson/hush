@@ -8,6 +8,8 @@ import {
 	withOverride
 } from '../../src/lib/shared/classify';
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
+import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
+import type { SubjectFacts } from '../../src/lib/shared/subject';
 import { FEED_TABS, threadMatches } from '../../src/lib/shared/views';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import {
@@ -23,6 +25,7 @@ import {
 } from '../../src/lib/shared/snooze';
 import type {
 	AlertDTO,
+	Change,
 	Counts,
 	DashItem,
 	DashKind,
@@ -163,7 +166,84 @@ export abstract class PollerData extends PollerDashboard {
 		const { where, args } = viewWhere(view);
 		const order = view === 'snoozed' ? 'snoozed_until ASC' : 'gh_updated_at DESC';
 		const rows = this.threads(`${where} ORDER BY ${order} LIMIT 300`, ...args);
-		return { threads: rows.map(toDTO), counts: this.counts(), etag };
+		const since = this.sinceYouLooked(
+			rows.flatMap((r) =>
+				r.subject_key && r.facts ? [{ key: r.subject_key, facts: r.facts }] : []
+			),
+			await this.login()
+		);
+		const threads = rows.map((r) => {
+			const dto = toDTO(r);
+			const s = r.subject_key ? since.get(r.subject_key) : undefined;
+			return s ? { ...dto, ...s } : dto;
+		});
+		return { threads, counts: this.counts(), etag };
+	}
+
+	/**
+	 * "Since you looked", for PRs and issues (by key, with their facts JSON): what changed since
+	 * your last look, and when that was. Keys you never looked at are left out.
+	 */
+	protected sinceYouLooked(
+		subjects: { key: string; facts: string }[],
+		me: string
+	): Map<string, { changes: Change[]; seenAt: number }> {
+		const out = new Map<string, { changes: Change[]; seenAt: number }>();
+		const keys = [...new Set(subjects.map((s) => s.key))];
+		if (!keys.length) return out;
+		const seen = new Map(
+			this.all<{ key: string; at: number; snapshot: string }>(
+				`SELECT key, at, snapshot FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
+				JSON.stringify(keys)
+			).map((r) => [r.key, r])
+		);
+		for (const { key, facts } of subjects) {
+			const s = seen.get(key);
+			if (!s || out.has(key)) continue;
+			const now = JSON.parse(facts) as SubjectFacts;
+			out.set(key, {
+				changes: changesSince(JSON.parse(s.snapshot) as Snapshot, now, me),
+				seenAt: s.at
+			});
+		}
+		return out;
+	}
+
+	/** You looked at these PRs or issues ("owner/repo#123"): "since you looked" starts again. */
+	async markSeen(keys: string[]): Promise<{ ok: true }> {
+		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
+		if (!keys.length) return { ok: true };
+		const me = await this.login();
+		const facts = this.all<{ key: string; facts: string }>(
+			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
+			JSON.stringify(keys)
+		);
+		const old = new Map(
+			this.all<{ key: string; snapshot: string }>(
+				`SELECT key, snapshot FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
+				JSON.stringify(keys)
+			).map((r) => [r.key, r.snapshot])
+		);
+		// Only what changed since the last look: each write counts against the daily row budget.
+		const writes = facts
+			.map((f) => ({ key: f.key, snapshot: JSON.stringify(snapshotOf(JSON.parse(f.facts), me)) }))
+			.filter((w) => old.get(w.key) !== w.snapshot);
+		if (!writes.length) return { ok: true };
+		const now = Date.now();
+		this.transaction(() => {
+			for (const w of writes)
+				this.run(
+					`INSERT INTO seen (key, at, snapshot) VALUES (?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET at = excluded.at, snapshot = excluded.snapshot`,
+					w.key,
+					now,
+					w.snapshot
+				);
+		});
+		await this.bumpVersion();
+		this.broadcast({ type: 'dash', kind: 'pr' });
+		this.broadcast({ type: 'dash', kind: 'issue' });
+		return { ok: true };
 	}
 
 	/** Apply one triage action to up to BULK_MAX threads, in one transaction. */
@@ -603,6 +683,17 @@ export abstract class PollerData extends PollerDashboard {
 			i.movedByYou = !!m && unchanged(i, m.updated_at) && m.turn !== i.turn;
 			if (i.movedByYou) i.turn = m!.turn;
 			i.rank = ranks.get(i.id) ?? null;
+		}
+		// "Since you looked", from the stored facts of each item (the same record as the inbox's).
+		const facts = this.all<{ key: string; facts: string }>(
+			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
+			JSON.stringify(data.items.map((i) => i.id))
+		);
+		const since = this.sinceYouLooked(facts, await this.login());
+		for (const i of data.items) {
+			const s = since.get(i.id);
+			i.changes = s?.changes ?? [];
+			i.seenAt = s?.seenAt ?? null;
 		}
 		return data;
 	}

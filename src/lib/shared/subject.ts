@@ -28,6 +28,8 @@ export interface SubjectFacts {
 	labels: { name: string; color: string }[];
 	assignees: string[];
 	comments: number;
+	/** PRs: the number of commits (0 for issues; missing in facts stored before it existed). */
+	commits?: number;
 	lastComment: LastComment | null;
 	// PRs only (empty or null for issues).
 	ci: CiState | null;

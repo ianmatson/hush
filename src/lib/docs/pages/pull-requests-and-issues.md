@@ -25,6 +25,8 @@ Inside a group, the most urgent items come first (failing CI before a comment), 
 
 The rules are the same as for the inbox's [Needs you](/docs/inbox#what-needs-you).
 
+A row also lists what changed since you last looked at the item (“+2 commits”, “CI fails”), the same as in the inbox: see [Since you looked](/docs/inbox#since-you-looked).
+
 ### Stale
 
 An item whose turn started more than 3 days ago is **stale**: it says how long it waited (“waiting 5d”) in amber. Change the number of days with [`dash.staleDays`](/docs/settings#dash-staledays).

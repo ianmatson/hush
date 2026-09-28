@@ -97,6 +97,8 @@ export const api = {
 	/** What Hush found (the first-run card). */
 	summary: () => ok(client.api.threads.summary.$get()),
 	onboarded: () => ok(client.api.onboarded.$post()),
+	/** You looked at these PRs or issues ("owner/repo#123"). */
+	seen: (keys: string[]) => ok(client.api.seen.$post({ json: { keys } })),
 	/** "Doesn't need me": a thread id or a dashboard item ("owner/repo#123"), and why. */
 	notNeeded: (id: string, answer: NotNeededAnswer) =>
 		ok(client.api['not-needed'].$post({ json: { id, answer } })),

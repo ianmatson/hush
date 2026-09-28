@@ -9,7 +9,7 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -74,6 +74,9 @@ CREATE TABLE push_devices (
 CREATE TABLE dash_hidden (item_id TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
 CREATE TABLE dash_moves (item_id TEXT PRIMARY KEY, turn TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE dash_order (item_id TEXT PRIMARY KEY, rank INTEGER NOT NULL);
+
+-- "Since you looked": each PR or issue's facts when you last looked at it (shared/changes.ts).
+CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT NULL);
 `;
 
 /** How to get from an older version of this layout to SCHEMA_VERSION. */
@@ -90,6 +93,10 @@ ALTER TABLE threads ADD COLUMN override TEXT;
 ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 		// The cached dashboards have the old ids.
 		resetKeys: ['dash:pr', 'dash:issue']
+	},
+	3: {
+		to: 4,
+		sql: `CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT NULL);`
 	}
 };
 

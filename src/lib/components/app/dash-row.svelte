@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { keysOf } from '$lib/keys.svelte';
+	import ChangeChips from './change-chips.svelte';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -193,6 +194,7 @@
 					>
 				</span>
 			{/if}
+			{#if i.changes?.length}<ChangeChips changes={i.changes} />{/if}
 			{#if ci}
 				<span class={cn('flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}>
 					<ci.icon class="size-3" />{ci.label}

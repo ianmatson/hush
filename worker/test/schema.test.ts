@@ -103,8 +103,12 @@ describe('schema migrations', () => {
 
 	it('schema 1 plus its steps equals a new schema', () => {
 		// Schema 1 is the current one without what the steps add.
-		const v1 = SCHEMA.replace(/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*/, '');
-		expect(v1).not.toBe(SCHEMA);
+		const v1 = SCHEMA.replace(
+			/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*/,
+			''
+		).replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n');
+		expect(v1).not.toContain('override');
+		expect(v1).not.toContain('CREATE TABLE seen');
 		const steps: string[] = [];
 		for (let v = 1; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
 		expect(columns([v1, ...steps])).toEqual(columns([SCHEMA]));
