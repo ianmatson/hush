@@ -5,7 +5,7 @@ GitHub notifications that only show what needs you. A SvelteKit app (shadcn-svel
 ## How it works
 
 ```
-Poller (Durable Object, one per user, alarm every ~60 s)
+Poller (Durable Object, one per user, alarm every 5 min; 15 min when idle)
   → GET /notifications (If-Modified-Since; a 304 is free)
   → GraphQL enrichment of changed PRs/issues (one batched request)
   → classify (defaults + your rules)  → the user's own SQLite (threads, subjects, alerts…)
@@ -18,7 +18,7 @@ Static assets  → the SPA (build/)
 - **FYI**: everything else (team mentions, watched repos, bots, merged/closed, passing CI).
 - **Rules** (Settings → Rules, JSON): first match wins; set `category` (`action`/`fyi`/`muted`) and/or `push`. Saving re-classifies stored threads.
 - **Triage**: Done (also marks done on GitHub), Snooze, Mute (unsubscribes on GitHub). New activity brings a done thread back.
-- **Pull requests / Issues tabs**: live GitHub searches ("sections"), grouped by whose turn it is: _Your turn_, _Your team's turn_, _Waiting on others_, _Other_. `@me` is you; `@team` runs a section once per tracked team. Edit sections, teams, scope, and filters in Settings → PRs & issues. "Hide until it changes" (`E`) hides an item until its `updatedAt` moves. The Poller caches each dashboard for 5 minutes and your teams for 6 hours.
+- **Pull requests / Issues tabs**: live GitHub searches ("sections"), grouped by whose turn it is: _Your turn_, _Your team's turn_, _Waiting on others_, _Other_. `@me` is you; `@team` runs a section once per tracked team. Edit sections, teams, scope, and filters in Settings → PRs & issues. "Hide until it changes" (`E`) hides an item until its `updatedAt` moves. The Poller caches each dashboard for 15 minutes and your teams for 6 hours.
 - **Data fetching**: TanStack Query, with the cache persisted to `localStorage` (cleared on sign-out). Tab changes use the cache; reloads show cached data at once and revalidate in the background.
 - **Sign-in**: Sign in with GitHub (an OAuth app, scopes `notifications repo read:org`; the Notifications API accepts only classic and OAuth tokens). The token is stored encrypted. In Settings → General, a user can add their own token for the same account (for example `gh auth token`), for orgs that have not approved the app; signing in again keeps it.
 - **Limits**: Workers rate-limit bindings (approximate, per location): sign-in 10/min per IP, feeds 30/min per IP, API 300/min per user. Max 10 push devices per user. The poller pauses accounts with no visits for 14 days (90 with push devices); opening Hush resumes it.
@@ -26,6 +26,10 @@ Static assets  → the SPA (build/)
 - **Storage**: each user's Durable Object has their threads, subjects (one record of each PR or issue's facts, which every view reads), alerts, push devices, dashboard marks, and settings (`worker/poller/schema.ts`). D1 has only global data: users (identity and encrypted token), sessions, and feeds.
 - Shared logic lives in `src/lib/shared/` and runs in both the Worker and the browser.
 - **Typed API**: the Worker's routes (`worker/routes/`) are one Hono chain, exported as `AppType`. `pnpm types:api` writes its declarations to `.api-types/` (also on install, `pnpm dev`, and `pnpm check`), and `src/lib/api.ts` calls the routes through Hono's typed client. A route that changes its path, input, or output is a type error in the browser code.
+
+## Docs
+
+The user docs are at [hush-gh.com/docs](https://hush-gh.com/docs): one Markdown file per page in `src/lib/docs/pages/`, in the order of `NAV` in `src/lib/docs/index.ts`. A line `{{ref:settings}}` inserts a table made from the app's own tables (settings, keybinds, query words, menus, actions, limits: `src/lib/docs/reference.ts`), and `{{key:inbox.done}}` a command's default keys, so the docs follow the code. Every page is also Markdown (`/docs/<page>.md`), listed in `/llms.txt`, and all in `/llms-full.txt`. `src/lib/docs/docs.test.ts` checks that every setting is documented, that every example in the docs is valid, and that every link works.
 
 ## Local development
 

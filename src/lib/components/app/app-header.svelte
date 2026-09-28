@@ -13,6 +13,8 @@
 	import Settings from '@lucide/svelte/icons/settings';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import { SITE_URL } from '$lib/site';
 	import Search from '@lucide/svelte/icons/search';
 	import Bell from '@lucide/svelte/icons/bell';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -159,6 +161,13 @@
 						<DropdownMenu.Item onclick={() => goto('/settings')}
 							><Settings /> Settings</DropdownMenu.Item
 						>
+						<DropdownMenu.Item>
+							{#snippet child({ props })}
+								<a {...props} href="{SITE_URL}/docs" target="_blank" rel="noreferrer"
+									><BookOpen /> Docs</a
+								>
+							{/snippet}
+						</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={signOut}><LogOut /> Sign out</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>

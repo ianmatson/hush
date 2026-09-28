@@ -31,8 +31,8 @@ rmSync(DIST, { recursive: true, force: true });
 const shell = 'app.html';
 const pages = htmlFiles().filter((f) => f !== shell);
 
-// Files only the site uses.
-const siteOnly = [...pages, 'sitemap.xml', 'og.png'];
+// Files only the site uses (the docs folder also has each page as Markdown).
+const siteOnly = [...pages, 'docs', 'sitemap.xml', 'llms.txt', 'llms-full.txt', 'og.png'];
 
 // --- The app: everything but the site's files; the shell is its index.html.
 const app = join(DIST, 'app');

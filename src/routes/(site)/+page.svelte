@@ -20,6 +20,7 @@
 	<header class="nav">
 		<a href="/" class="brand"><img src="/icon.svg" alt="" />hush</a>
 		<nav>
+			<a href="/docs">Docs</a>
 			<a href={REPO} rel="noreferrer">Source</a>
 			<a href="{APP_URL}/login">Sign in</a>
 			<a class="open" href="{APP_URL}/inbox">Open Hush</a>
@@ -81,6 +82,7 @@
 	<footer class="foot">
 		<span class="brand small"><img src="/icon.svg" alt="" />hush</span>
 		<nav>
+			<a href="/docs">Docs</a>
 			<a href={REPO} rel="noreferrer">Source</a>
 			<a href="{APP_URL}/login">Sign in</a>
 		</nav>

@@ -11,6 +11,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Card from '$lib/components/ui/card';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { SITE_URL } from '$lib/site';
 
 	/**
 	 * settings.json: your changes from the defaults, as JSON, the same as VS Code. The UI shows the
@@ -72,7 +73,12 @@
 		<Card.Title>settings.json</Card.Title>
 		<Card.Description
 			>Your changes from the defaults. Every setting is here, also the ones the pages do not show.
-			Remove a key to go back to its default.</Card.Description
+			Remove a key to go back to its default. <a
+				class="underline underline-offset-2 hover:text-foreground"
+				href="{SITE_URL}/docs/settings"
+				target="_blank"
+				rel="noreferrer">What each setting does</a
+			></Card.Description
 		>
 	</Card.Header>
 	<Card.Content class="grid gap-3">

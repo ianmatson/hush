@@ -115,7 +115,8 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'menus.inbox',
 		page: 'general',
-		description: 'The right-click and “⋯” menu of inbox threads: item ids in order, "-" is a line.'
+		description:
+			'The right-click and “⋯” menu of inbox threads: item ids in order; "sep" is a line.'
 	},
 	{ key: 'menus.dash', page: 'general', description: 'The menu of PRs and issues, the same way.' },
 	{

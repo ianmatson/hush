@@ -1,3 +1,4 @@
+import { DOCS, docPath } from '$lib/docs';
 import { SITE_URL } from '$lib/site';
 
 // Written once at build time, like the pages it lists.
@@ -5,7 +6,8 @@ export const prerender = true;
 
 /**
  * Every public page, found from the files in (site): a new page is in the sitemap with no extra
- * step. Route groups ("(site)") are not in URLs; the 404 page is left out.
+ * step. Route groups ("(site)") are not in URLs; the 404 page is left out. Pages with a parameter
+ * (the docs) come from their own lists.
  */
 const pages = Object.keys(import.meta.glob('/src/routes/(site)/**/+page.svelte'))
 	.map((file) =>
@@ -16,6 +18,8 @@ const pages = Object.keys(import.meta.glob('/src/routes/(site)/**/+page.svelte')
 	)
 	.filter((path) => path !== '/404' && !path.includes('['))
 	.map((path) => path || '/')
+	.concat(DOCS.map(docPath))
+	.filter((path, i, all) => all.indexOf(path) === i)
 	.sort();
 
 export function GET() {
