@@ -91,23 +91,26 @@
 
 {#if open && items.length}
 	<ul
-		class="absolute top-full left-0 z-20 mt-1 grid w-max max-w-[min(26rem,90vw)] min-w-full gap-0.5 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+		class="absolute top-full left-0 z-20 mt-1 grid w-[min(26rem,90vw)] gap-0.5 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
 		role="listbox"
 		aria-label="Suggestions"
 	>
 		{#each items as s, k (s.label)}
 			<li role="option" aria-selected={k === active}>
+				<!-- One highlight: the mouse moves the same selection as ↑ / ↓. The text wraps, so a
+				     long description never runs past the list. -->
 				<button
 					type="button"
 					class={cn(
-						'flex w-full items-baseline gap-2 rounded px-2 py-1 text-left hover:bg-muted',
+						'grid w-full grid-cols-[auto_minmax(0,1fr)] items-baseline gap-2 rounded px-2 py-1 text-left',
 						k === active && 'bg-muted'
 					)}
 					onmousedown={(e) => e.preventDefault()}
+					onmouseenter={() => (active = k)}
 					onclick={() => pick(s)}
 				>
 					<span class="font-mono font-medium">{s.label}</span>
-					{#if s.help}<span class="truncate text-muted-foreground">{s.help}</span>{/if}
+					{#if s.help}<span class="text-muted-foreground">{s.help}</span>{/if}
 				</button>
 			</li>
 		{/each}
