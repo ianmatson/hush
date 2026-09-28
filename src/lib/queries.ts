@@ -74,7 +74,9 @@ export const meQuery = () =>
 		queryKey: keys.me,
 		queryFn: api.me,
 		staleTime: MIN,
-		refetchInterval: afterNextPoll(5_000)
+		// During the first sync, ask often: its end must not wait for a socket message that a tab
+		// can miss (it connected after the message).
+		refetchInterval: (q) => (q.state.data?.firstSync ? 3_000 : afterNextPoll(5_000)())
 	});
 
 /** The alert history (the bell), refreshed when the live socket says so (or after each poll). */

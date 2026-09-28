@@ -42,6 +42,8 @@ export interface PollStatus {
 	nextPollAt: number | null;
 	/** Orgs whose notifications GitHub hides until the token is SAML-authorized. */
 	ssoHiddenOrgs: number;
+	/** The first sync after sign-in has not finished: the lanes are still filling. */
+	firstSync: boolean;
 	/** Items a manual refresh took out of Your turn (see checkTurn). */
 	resolved?: { title: string; note: string }[];
 }

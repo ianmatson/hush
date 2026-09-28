@@ -291,6 +291,7 @@ const app = routes()
 			nextPollAt: status.nextPollAt,
 			lastPollError: status.lastError,
 			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
+			firstSync: status.firstSync,
 			scopes: u.scopes ? u.scopes.split(',') : [],
 			tokenSource: u.token_source,
 			onboarded

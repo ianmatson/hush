@@ -349,6 +349,8 @@ export interface MeDTO {
 	tokenSource: 'app' | 'own';
 	/** The first-run questions were answered (or skipped). */
 	onboarded: boolean;
+	/** The first sync after sign-in has not finished: the lanes are still filling. */
+	firstSync: boolean;
 }
 
 /**
@@ -481,4 +483,5 @@ export type LiveMessage =
 			nextPollAt: number | null;
 			lastPollError: string | null;
 			ssoHiddenOrgs: number;
+			firstSync: boolean;
 	  };

@@ -51,6 +51,7 @@
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Undo from '@lucide/svelte/icons/undo-2';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
 	let {
 		view,
@@ -383,8 +384,14 @@
 
 {#key view}
 	<div in:fade={{ duration: 150 }}>
-		{#if list.isPending}
-			<div class="grid gap-1 px-1">
+		{#if list.isPending || (flat.length === 0 && me.data?.firstSync)}
+			{#if !list.isPending}
+				<p class="flex items-center gap-2 px-4 pb-1 text-sm text-muted-foreground" role="status">
+					<LoaderCircle class="size-4 animate-spin" />Hush is reading your GitHub. The first sync
+					can take a minute.
+				</p>
+			{/if}
+			<div class="grid gap-1 px-1" aria-hidden="true">
 				{#each [0, 1, 2, 3] as i (i)}
 					<div class="flex gap-3 px-3 py-3">
 						<Skeleton class="size-8 rounded-full" />

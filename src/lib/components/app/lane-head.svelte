@@ -17,6 +17,14 @@
 
 	const me = createQuery(meQuery);
 	let syncing = $state(false);
+	const busy = $derived(syncing || live.syncing || !!me.data?.firstSync);
+	const status = $derived.by(() => {
+		const m = me.data;
+		if (!m) return '';
+		if (m.firstSync) return 'First sync…';
+		if (syncing || live.syncing) return 'Syncing…';
+		return m.lastPollAt ? `Synced ${ago(m.lastPollAt)}` : '';
+	});
 	async function sync() {
 		syncing = true;
 		try {
@@ -69,12 +77,10 @@
 	<div class="flex shrink-0 items-center gap-1 pt-0.5">
 		{@render actions?.()}
 		<span class="hidden text-xs text-muted-foreground sm:inline">
-			{#if syncing || live.syncing}Syncing…{:else if me.data?.lastPollAt}Synced {ago(
-					me.data.lastPollAt
-				)}{:else}First sync…{/if}
+			{status}
 		</span>
 		<Button variant="ghost" size="icon-sm" aria-label="Sync now" onclick={sync} disabled={syncing}>
-			<RefreshCw class={cn((syncing || live.syncing) && 'animate-spin')} />
+			<RefreshCw class={cn(busy && 'animate-spin')} />
 		</Button>
 	</div>
 </div>

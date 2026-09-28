@@ -77,12 +77,15 @@ export class Poller extends PollerData {
 	}
 
 	async status(): Promise<PollStatus> {
-		const s = await this.ctx.storage.get(['lastError', 'ssoHiddenOrgs']);
+		const s = await this.ctx.storage.get(['lastError', 'ssoHiddenOrgs', 'initialized', 'stopped']);
+		const lastError = (s.get('lastError') as string) ?? null;
 		return {
 			lastPollAt: await this.lastPollAt(),
-			lastError: (s.get('lastError') as string) ?? null,
+			lastError,
 			ssoHiddenOrgs: ((s.get('ssoHiddenOrgs') as string[] | undefined) ?? []).length,
-			nextPollAt: await this.ctx.storage.getAlarm()
+			nextPollAt: await this.ctx.storage.getAlarm(),
+			// A first sync that failed is not "still filling": the error says what is wrong.
+			firstSync: !s.get('initialized') && !s.get('stopped') && !lastError
 		};
 	}
 
@@ -118,7 +121,8 @@ export class Poller extends PollerData {
 			lastPollAt: s.lastPollAt,
 			nextPollAt: s.nextPollAt,
 			lastPollError: s.lastError,
-			ssoHiddenOrgs: s.ssoHiddenOrgs
+			ssoHiddenOrgs: s.ssoHiddenOrgs,
+			firstSync: s.firstSync
 		});
 	}
 
@@ -250,13 +254,18 @@ export class Poller extends PollerData {
 		const ingested = await this.ingest(who, page.items, initialized);
 		// Save Last-Modified only after the threads are stored. If ingest fails, the next poll
 		// asks GitHub again instead of getting a 304 and losing those notifications.
+		// What Hush "finished" during the first sync was never in Your turn for you (a failed run
+		// that passed again, a review already done): not news. So the strip starts after it.
+		const firstSyncEnd: Record<string, number> = initialized ? {} : { finishedSeenAt: Date.now() };
 		await this.ctx.storage.put({
 			initialized: true,
+			...firstSyncEnd,
 			...(page.lastModified ? { lastModified: page.lastModified } : {})
 		});
 		await this.wakeSnoozed();
 		await this.watch(who, ingested);
 		await this.runSearches(who);
 		await this.cleanup();
+		if (!initialized) await this.ctx.storage.put('finishedSeenAt', Date.now());
 	}
 }

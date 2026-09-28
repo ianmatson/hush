@@ -14,6 +14,8 @@ function apply(m: LiveMessage) {
 	switch (m.type) {
 		case 'items':
 			queryClient.invalidateQueries({ queryKey: ['item'] });
+			// The first-run card's counts (only fetched while it shows).
+			queryClient.invalidateQueries({ queryKey: ['summary'] });
 			return queryClient.invalidateQueries({ queryKey: keys.itemsAll });
 		case 'alerts':
 			return queryClient.invalidateQueries({ queryKey: keys.alerts });
@@ -31,7 +33,8 @@ function apply(m: LiveMessage) {
 							lastPollAt: m.lastPollAt,
 							nextPollAt: m.nextPollAt,
 							lastPollError: m.lastPollError,
-							ssoHiddenOrgs: m.ssoHiddenOrgs
+							ssoHiddenOrgs: m.ssoHiddenOrgs,
+							firstSync: m.firstSync
 						}
 					: old
 			);

@@ -9,18 +9,28 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import type { MeDTO, Rule } from '$lib/shared/types';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
 	/**
 	 * The first run: what Hush found (the "noise report"), and three one-tap questions. Answered or
 	 * skipped once per account.
 	 */
 	const me = createQuery(meQuery);
+	const syncing = $derived(!!me.data?.firstSync);
+	// While the first sync runs, the counts grow: ask again every few seconds.
 	const summary = createQuery(() => ({
 		queryKey: ['summary'],
 		queryFn: api.summary,
-		refetchInterval: 5_000
+		refetchInterval: syncing ? 3_000 : false
 	}));
 	const s = $derived(summary.data);
+	// The last read of a first sync can be a few seconds old: read once more when it ends.
+	let wasSyncing = false;
+	$effect(() => {
+		if (wasSyncing && !syncing) void summary.refetch();
+		wasSyncing = syncing;
+	});
+	const found = $derived(s ? s.counts.turn + s.counts.waiting + s.updates : 0);
 
 	let teams = $state(false);
 	let quiet = $state<string[]>([]);
@@ -63,7 +73,18 @@
 
 <section class="mb-6 rounded-2xl border bg-card p-5 shadow-xs">
 	<h2 class="text-base font-semibold tracking-tight">Welcome to Hush</h2>
-	{#if s}
+	{#if syncing || !s}
+		<p class="mt-1 flex items-start gap-2 text-sm text-muted-foreground" role="status">
+			<LoaderCircle class="mt-0.5 size-4 shrink-0 animate-spin" />
+			<span>
+				Hush is reading your GitHub: your review requests and open PRs first, then your
+				notifications from the last 14 days. This can take a minute.{#if s && found}{' '}So far:
+					<b class="text-foreground">{s.counts.turn}</b>
+					your turn,
+					<b class="text-foreground">{s.counts.waiting}</b> waiting on others.{/if}
+			</span>
+		</p>
+	{:else}
 		<p class="mt-1 text-sm text-muted-foreground">
 			Hush found <b class="text-foreground">{s.counts.turn}</b>
 			{s.counts.turn === 1 ? 'thing' : 'things'} waiting on you and
@@ -72,8 +93,6 @@
 			{s.updates === 1 ? 'item' : 'items'} to Updates{#if s.notifications}, from
 				{s.notifications} notifications{/if}. It keeps looking every few minutes.
 		</p>
-	{:else}
-		<p class="mt-1 text-sm text-muted-foreground">Hush is reading your GitHub notifications…</p>
 	{/if}
 
 	<div class="mt-4 grid gap-4 text-sm">
@@ -87,7 +106,7 @@
 			</span>
 		</label>
 
-		{#if s?.noisyRepos.length}
+		{#if !syncing && s?.noisyRepos.length}
 			<div>
 				<p class="font-medium">Repositories you only want to read about</p>
 				<p class="text-xs text-muted-foreground">
