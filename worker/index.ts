@@ -7,14 +7,13 @@ import { SESSION_IDLE_DAYS, SESSION_TOUCH_MS } from '../src/lib/shared/session';
 import { clientIp, overLimit, SESSION_COOKIE, tooMany, type AppEnv, type Ctx } from './app';
 import alerts from './routes/alerts';
 import auth from './routes/auth';
-import dashboard from './routes/dashboard';
 import feeds from './routes/feeds';
 import live from './routes/live';
 import push from './routes/push';
 import settings from './routes/settings';
 import subjects from './routes/subjects';
 import actions from './routes/actions';
-import threads from './routes/threads';
+import items from './routes/items';
 
 export { Poller } from './poller';
 
@@ -79,13 +78,12 @@ app.get('/api/health', (c) => c.json({ ok: true }));
 // `AppType` carries every route's input and output types (the browser's typed client uses it).
 const api = app
 	.route('/', auth)
-	.route('/', threads)
+	.route('/', items)
 	.route('/', settings)
 	.route('/', push)
 	.route('/', alerts)
 	.route('/', subjects)
 	.route('/', actions)
-	.route('/', dashboard)
 	.route('/', feeds)
 	.route('/', live);
 export type AppType = typeof api;

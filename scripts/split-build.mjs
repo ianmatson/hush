@@ -40,7 +40,15 @@ cpSync(BUILD, app, { recursive: true, filter: (src) => !siteOnly.includes(relati
 renameSync(join(app, shell), join(app, 'index.html'));
 writeFileSync(
 	join(app, '_redirects'),
-	'# The app starts at the inbox; every other path gets the app shell (SPA fallback).\n/ /inbox 302\n'
+	[
+		'# The app starts at Your turn; every other path gets the app shell (SPA fallback).',
+		'/ /turn 302',
+		'# Pages from before the lanes.',
+		'/inbox /turn 301',
+		'/pulls /turn 301',
+		'/issues /turn 301',
+		''
+	].join('\n')
 );
 // Files in SvelteKit's immutable folder have a content hash in their names, so they never
 // change: the browser keeps them and does not ask again (by default every file is checked on
@@ -101,6 +109,21 @@ const csp = [
 	"frame-ancestors 'none'"
 ].join('; ');
 writeFileSync(join(site, '_headers'), `/*\n${SECURITY(csp)}${IMMUTABLE}`);
+// Docs pages that were renamed or merged.
+const MOVED_DOCS = {
+	inbox: 'your-turn',
+	'pull-requests-and-issues': 'your-turn',
+	views: 'search'
+};
+writeFileSync(
+	join(site, '_redirects'),
+	Object.entries(MOVED_DOCS)
+		.flatMap(([from, to]) => [
+			`/docs/${from} /docs/${to} 301`,
+			`/docs/${from}.md /docs/${to}.md 301`
+		])
+		.join('\n') + '\n'
+);
 console.log(
 	`split: ${pages.length} site pages → dist/site (${hashes.size} inline scripts in the CSP), app shell → dist/app`
 );

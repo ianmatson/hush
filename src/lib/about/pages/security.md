@@ -10,7 +10,7 @@ Hush needs access to your GitHub notifications and repositories. This page says 
 Hush signs you in with a GitHub OAuth app, with the scopes `notifications`, `repo`, and `read:org`. GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
 
 - **Hush reads** your notifications, the pull requests and issues behind them, the results of your saved searches, and your teams.
-- **Hush writes only when you do it.** Each write is one choice that you make in Hush: Done, Mute, or Read on a notification; or approve, request changes, comment, merge, auto-merge, re-run failed jobs, close, or reopen in the [peek](/docs/peek). A thread that you read in the peek is marked as read on GitHub; you can [turn this off](/docs/settings#peekmarksread).
+- **Hush writes only when you do it.** Each write is one choice that you make in Hush: Done or Mute on an item; or approve, request changes, comment, merge, auto-merge, re-run failed jobs, close, or reopen in the [peek](/docs/peek). When you see an item, its notification is marked as read on GitHub, and Done marks it done there; you can [turn this off](/docs/settings#markreadongithub).
 - Hush never writes by itself: no rule, schedule, or background job changes anything on GitHub.
 - Hush does not read code, change repositories or settings, or use admin rights.
 
@@ -25,7 +25,7 @@ You can deny or revoke the approval at any time in your org's settings, under **
 ## How Hush protects your access
 
 - **Your token is encrypted** with AES-256-GCM before Hush stores it. The key is a secret of the server, not in the database. Each encrypted token is bound to your account, so it cannot be moved to another account and used there. Hush decrypts the token only on the server, to call GitHub, and never sends it to your browser.
-- **Sessions:** your browser keeps a random 256-bit session id in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. The server stores only its SHA-256 hash. A session ends after 7 days with no use, 30 days after sign-in, or when you sign out. **Settings → General → Signed in** lists every browser where you are signed in, with **Sign out everywhere else**. When GitHub stops accepting your token (you revoked Hush, for example), Hush signs you out everywhere.
+- **Sessions:** your browser keeps a random 256-bit session id in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. The server stores only its SHA-256 hash. A session ends after 7 days with no use, 30 days after sign-in, or when you sign out. **Settings → Account → Signed in** lists every browser where you are signed in, with **Sign out everywhere else**. When GitHub stops accepting your token (you revoked Hush, for example), Hush signs you out everywhere.
 - **Sign-in** uses a random `state` value, so that another site cannot finish a sign-in for you.
 - **Requests that change things** must come from Hush's own address; others are refused.
 - **Your data is separate:** each account has a database of its own (a Cloudflare Durable Object).

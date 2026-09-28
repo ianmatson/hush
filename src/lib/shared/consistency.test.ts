@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { classify } from './classify';
-import { computeTurn, type DashFacts } from './dashboard';
+import { place } from './place';
+import { computeTurn, type TurnFacts } from './turn';
 import { DEFAULT_SETTINGS } from './settings';
 import type { Enrichment, Reason, Settings } from './types';
 
 /**
- * The inbox and the dashboards must agree about a PR or issue: "Needs you" exactly when it is
- * "Your turn". Each case builds the same subject both ways and checks both answers.
+ * The placement (from a notification's facts) and the turn rules must agree about a PR or issue:
+ * in Your turn exactly when it is your turn. Each case builds the same subject both ways.
  */
 const ME = 'ian';
 const T0 = '2026-09-10T00:00:00Z';
@@ -62,21 +62,15 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		openThreads: s.openThreads ?? 0,
 		lastVerdict: s.lastVerdict ?? null
 	};
-	const d: DashFacts = {
-		id: 'x',
+	const d: TurnFacts = {
 		kind,
-		number: 1,
-		title: 't',
 		url,
-		repo: 'o/r',
 		author: e.author!,
-		authorAvatar: null,
 		authorIsBot: e.authorIsBot!,
 		createdAt: T0,
 		updatedAt: T2,
 		state: e.state!,
 		draft: e.draft!,
-		labels: [],
 		comments: s.lastComment ? 1 : 0,
 		lastCommentBy: s.lastComment?.by ?? null,
 		lastCommentAt: s.lastComment?.at ?? null,
@@ -85,8 +79,6 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		ci: e.ci!,
 		reviewDecision: e.reviewDecision!,
 		mergeable: e.mergeable!,
-		additions: 1,
-		deletions: 1,
 		requestedMe: e.reviewRequestedFromMe!,
 		requestedTeams: [],
 		requestedAt: null,
@@ -98,7 +90,7 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		lastCommitAt: e.lastCommitAt!
 	};
 	const all = { ...DEFAULT_SETTINGS, ...settings };
-	const inbox = classify(
+	const inbox = place(
 		{
 			repo: 'o/r',
 			subjectType: kind === 'pr' ? 'PullRequest' : 'Issue',
@@ -111,61 +103,55 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		all
 	);
 	const dash = computeTurn(d, ME, [], {
-		botsAreFyi: all.botsAreFyi,
+		botsAreUpdates: all.botsAreUpdates,
 		reviewResolution: all.reviewResolution
 	});
 	return { inbox, dash };
 }
 
 const agree = (r: ReturnType<typeof both>) =>
-	expect(r.inbox.category === 'action').toBe(r.dash.turn === 'you');
+	expect(r.inbox.lane === 'turn').toBe(r.dash.turn === 'you');
 
-describe('inbox and dashboards agree (the audit cases)', () => {
+describe('placement and turn agree (the audit cases)', () => {
 	it('your draft PR with failing CI is not your turn anywhere', () => {
 		const r = both({ author: ME, draft: true, ci: 'FAILURE' }, 'author');
 		expect(r.dash.turn).toBe('none');
-		expect(r.inbox.category).toBe('fyi');
+		expect(r.inbox.lane).toBe('updates');
 	});
 
 	it('new commits since your review is your turn in both', () => {
 		const r = both({ myReview: { at: T0, state: 'COMMENTED' }, lastCommitAt: T1 });
 		expect(r.dash.turn).toBe('you');
-		expect(r.inbox).toMatchObject({ category: 'action', kind: 'review' });
+		expect(r.inbox).toMatchObject({ lane: 'turn', needs: 'review' });
 	});
 
-	it('a bot PR that asks for your review is FYI in both while bots are FYI', () => {
-		const r = both({ author: 'dependabot[bot]', authorIsBot: true, requestedMe: true });
+	it('a bot PR is an update in both, but one that asks you by name is your turn', () => {
+		const r = both({ author: 'dependabot[bot]', authorIsBot: true });
 		expect(r.dash.turn).toBe('none');
-		expect(r.inbox.category).toBe('fyi');
-		const off = both(
-			{ author: 'dependabot[bot]', authorIsBot: true, requestedMe: true },
-			'review_requested',
-			{
-				botsAreFyi: false
-			}
-		);
-		expect(off.dash.turn).toBe('you');
-		expect(off.inbox.kind).toBe('review');
+		expect(r.inbox.lane).toBe('updates');
+		const asks = both({ author: 'dependabot[bot]', authorIsBot: true, requestedMe: true });
+		expect(asks.dash.turn).toBe('you');
+		expect(asks.inbox).toMatchObject({ lane: 'turn', needs: 'review' });
 	});
 
 	it('an assigned PR is your turn, whatever the notification reason', () => {
 		const r = both({ assignedToMe: true }, 'comment');
 		expect(r.dash.turn).toBe('you');
-		expect(r.inbox).toMatchObject({ category: 'action', kind: 'triage' });
+		expect(r.inbox).toMatchObject({ lane: 'turn', needs: 'triage' });
 	});
 
 	it('a comment on your PR from before your latest push is not your turn', () => {
 		const r = both({ author: ME, lastComment: { by: 'bob', at: T0 }, lastCommitAt: T1 }, 'comment');
 		expect(r.dash.turn).toBe('them');
-		expect(r.inbox.category).toBe('fyi');
+		expect(r.inbox.lane).toBe('waiting');
 	});
 });
 
-describe('inbox and dashboards agree (open threads, any review)', () => {
+describe('placement and turn agree (open threads, any review)', () => {
 	it('your approved PR with open review threads is your turn: reply first', () => {
 		const r = both({ author: ME, reviewDecision: 'APPROVED', openThreads: 2 }, 'author');
 		expect(r.dash).toMatchObject({ turn: 'you', turnReason: 'Open review threads' });
-		expect(r.inbox).toMatchObject({ category: 'action', kind: 'reply' });
+		expect(r.inbox).toMatchObject({ lane: 'turn', needs: 'reply' });
 		expect(r.inbox.summary).toBe('Approved, but 2 review threads are open');
 	});
 
@@ -173,21 +159,21 @@ describe('inbox and dashboards agree (open threads, any review)', () => {
 		const s: Subject = { requestedMe: true, lastCommitAt: T0, lastVerdict: { by: 'bob', at: T1 } };
 		const strict = both(s, 'review_requested');
 		expect(strict.dash.turn).toBe('you');
-		expect(strict.inbox.category).toBe('action');
+		expect(strict.inbox.lane).toBe('turn');
 		const any = both(s, 'review_requested', { reviewResolution: 'any_review' });
 		expect(any.dash).toMatchObject({ turn: 'them', turnReason: '@bob reviewed' });
-		expect(any.inbox.category).toBe('fyi');
+		expect(any.inbox).toMatchObject({ lane: 'waiting', waitingOn: '@alice' });
 	});
 
 	it('a verdict from before the last push does not settle it', () => {
 		const s: Subject = { requestedMe: true, lastCommitAt: T2, lastVerdict: { by: 'bob', at: T1 } };
 		const any = both(s, 'review_requested', { reviewResolution: 'any_review' });
 		expect(any.dash.turn).toBe('you');
-		expect(any.inbox.category).toBe('action');
+		expect(any.inbox.lane).toBe('turn');
 	});
 });
 
-describe('inbox and dashboards agree (every state)', () => {
+describe('placement and turn agree (every state)', () => {
 	const people = [
 		{ author: ME },
 		{ author: 'alice' },
@@ -214,7 +200,7 @@ describe('inbox and dashboards agree (every state)', () => {
 		{ lastComment: { by: 'bot[bot]', at: T2, bot: true } }
 	];
 	// "comment" and "mention" are left out on purpose: those notifications can make a thread you
-	// commented in need a reply, which the dashboards cannot know.
+	// commented in need a reply, which the turn rules alone cannot know.
 	const reasons: Reason[] = ['author', 'review_requested', 'assign', 'subscribed', 'state_change'];
 
 	for (const reviewResolution of ['strict', 'any_review'] as const)

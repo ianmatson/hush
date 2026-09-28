@@ -12,12 +12,11 @@ const MAX_BACKOFF = 60_000;
 
 function apply(m: LiveMessage) {
 	switch (m.type) {
-		case 'threads':
-			return queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+		case 'items':
+			queryClient.invalidateQueries({ queryKey: ['item'] });
+			return queryClient.invalidateQueries({ queryKey: keys.itemsAll });
 		case 'alerts':
 			return queryClient.invalidateQueries({ queryKey: keys.alerts });
-		case 'dash':
-			return queryClient.invalidateQueries({ queryKey: keys.dash(m.kind) });
 		case 'settings':
 			return queryClient.invalidateQueries({ queryKey: keys.me });
 		case 'syncing':
@@ -57,7 +56,7 @@ export function connectLive(): () => void {
 			ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send('ping'), PING_EVERY);
 			// Back after a drop: catch up on what changed while the socket was down.
 			if (opened)
-				for (const queryKey of [keys.threadsAll, keys.alerts, keys.me])
+				for (const queryKey of [keys.itemsAll, keys.alerts, keys.me])
 					void queryClient.invalidateQueries({ queryKey });
 			opened = true;
 		};

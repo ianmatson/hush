@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DashKind, DashSection } from '$lib/shared/types';
+	import type { TrackedSearch } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
@@ -10,14 +10,13 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 
+	/** The GitHub searches Hush runs (Settings → Advanced): name, query, on or off, order. */
 	let {
-		kind,
 		sections = $bindable(),
 		scope,
 		previewTeam
 	}: {
-		kind: DashKind;
-		sections: DashSection[];
+		sections: TrackedSearch[];
 		scope: string;
 		previewTeam: string | null;
 	} = $props();
@@ -30,15 +29,15 @@
 
 	function add() {
 		const id = `custom-${Math.random().toString(36).slice(2, 8)}`;
-		const query = kind === 'pr' ? 'is:pr is:open ' : 'is:issue is:open ';
-		sections = [...sections, { id, name: 'New section', query, enabled: true }];
+		sections = [...sections, { id, name: 'New search', query: 'is:open ', enabled: true }];
 	}
 
 	/** Open the same search on GitHub, to check a query. */
-	function preview(s: DashSection) {
+	function preview(s: TrackedSearch) {
 		let q = [s.query, scope].filter(Boolean).join(' ');
 		if (q.includes('@team')) q = q.replaceAll('@team', previewTeam ?? '');
-		return `https://github.com/search?type=${kind === 'pr' ? 'pullrequests' : 'issues'}&q=${encodeURIComponent(q)}`;
+		const type = /\bis:issue\b/.test(q) ? 'issues' : 'pullrequests';
+		return `https://github.com/search?type=${type}&q=${encodeURIComponent(q)}`;
 	}
 </script>
 
@@ -94,7 +93,7 @@
 				<Button
 					variant="ghost"
 					size="icon-xs"
-					aria-label="Delete section"
+					aria-label="Delete search"
 					onclick={() => (sections = sections.filter((x) => x.id !== s.id))}><Trash /></Button
 				>
 			</div>
@@ -103,6 +102,6 @@
 </ul>
 <div>
 	<Button variant="outline" size="sm" onclick={add} disabled={sections.length >= 20}
-		><Plus /> Add section</Button
+		><Plus /> Add search</Button
 	>
 </div>

@@ -24,7 +24,7 @@ _Last updated: 28 September 2026._
 
 **What it needs to sort your notifications:**
 
-- Your notification threads: the repository, the title, the link, why GitHub notified you, read or unread, and what you did with it (Done, Snoozed, Muted).
+- Your items (from your notifications and Hush's GitHub searches): the repository, the title, the link, why GitHub notified you, its lane, what it looked like when you last saw it, and what you did with it (Done, Snoozed, Muted, Not my turn).
 - For each pull request and issue behind them: its state, author, labels, CI result, reviews and review requests, size, and the newest comment (its author, time, and text).
 - The results of your Pull requests and Issues searches, and the items that you hid or moved there.
 - Your teams (their names), for team review requests.
@@ -58,15 +58,15 @@ That is all. There are no analytics, tracking, or advertising services, and no t
 
 ## How long it is kept
 
-- Done threads with no activity for 30 days, and the PR and issue facts that nothing uses for 30 days, are deleted by themselves.
+- Updates, and Done or muted items, with no activity for 30 days, and the PR and issue facts that nothing uses for 30 days, are deleted by themselves.
 - Alerts are deleted after 30 days.
 - Everything else is kept until you delete your account. If you stop using Hush, it stops checking GitHub after 14 days (90 with push on), but it keeps your data until you delete it.
 
 ## Your choices
 
-- **Delete account** in **Settings → General → Account** deletes everything above at once. It does not change anything on GitHub.
+- **Delete account** in **Settings → Account** deletes everything above at once. It does not change anything on GitHub.
 - To take back Hush's access to GitHub too, revoke Hush on GitHub: **Settings → Applications → Authorized OAuth Apps**.
-- **Export** in **Settings → General → Settings file** gives you your settings as a file.
+- **Export** in **Settings → Account → Settings file** gives you your settings as a file.
 - Turn off push for a device, or turn off a feed, at any time.
 
 ## Changes

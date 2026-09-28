@@ -1,6 +1,6 @@
 // Page title, favicon dot, and app badge from the notification counts. Preferences are per browser.
 
-export type CountSource = 'alerts' | 'inbox' | 'inboxFyi' | 'prYou' | 'prTeam' | 'issueYou';
+export type CountSource = 'alerts' | 'turn' | 'waiting';
 export type Counts = Record<CountSource, number>;
 export type DotColor = 'red' | 'blue' | 'amber' | 'green';
 
@@ -12,19 +12,15 @@ export interface TabStatusPrefs {
 }
 
 export const SOURCES: { id: CountSource; label: string; short: string }[] = [
-	{ id: 'alerts', label: 'Alerts: unread', short: 'new' },
-	{ id: 'inbox', label: 'Inbox: Needs you', short: '' },
-	{ id: 'inboxFyi', label: 'Inbox: FYI', short: 'FYI' },
-	{ id: 'prYou', label: 'Pull requests: your turn', short: 'PR' },
-	{ id: 'prTeam', label: "Pull requests: your team's turn", short: 'team' },
-	{ id: 'issueYou', label: 'Issues: your turn', short: 'issue' }
+	{ id: 'turn', label: 'Your turn', short: '' },
+	{ id: 'waiting', label: 'Waiting', short: 'waiting' },
+	{ id: 'alerts', label: 'Alerts: unread', short: 'new' }
 ];
 
-// Alerts you have not seen yet (the bell), on this device.
-const DEFAULT_SOURCES: CountSource[] = ['alerts'];
-/** The defaults before version 2; saved lists equal to them move to the new default. */
-const OLD_DEFAULT_SOURCES: CountSource[] = ['inbox', 'prYou', 'issueYou'];
-const PREFS_VERSION = 2;
+// What is your turn: the one number that matters.
+const DEFAULT_SOURCES: CountSource[] = ['turn'];
+const PREFS_VERSION = 3;
+const KNOWN = new Set<CountSource>(SOURCES.map((x) => x.id));
 
 export const DEFAULT_PREFS: TabStatusPrefs = {
 	title: { enabled: true, sources: DEFAULT_SOURCES, style: 'total' },
@@ -51,18 +47,15 @@ export function loadPrefs(): TabStatusPrefs {
 			favicon: { ...DEFAULT_PREFS.favicon, ...raw.favicon },
 			appBadge: { ...DEFAULT_PREFS.appBadge, ...raw.appBadge }
 		};
-		// Version 2 changed the default to unread alerts. Lists you changed stay as they are.
-		if ((raw.v ?? 1) < 2)
-			for (const g of [prefs.title, prefs.favicon, prefs.appBadge])
-				if (sameSet(g.sources, OLD_DEFAULT_SOURCES)) g.sources = [...DEFAULT_SOURCES];
+		// Version 3 has new counts (the lanes): older lists start again from the default.
+		for (const g of [prefs.title, prefs.favicon, prefs.appBadge])
+			if ((raw.v ?? 1) < PREFS_VERSION || g.sources.some((x) => !KNOWN.has(x)))
+				g.sources = [...DEFAULT_SOURCES];
 		return prefs;
 	} catch {
 		return structuredClone(DEFAULT_PREFS);
 	}
 }
-
-const sameSet = (a: CountSource[], b: CountSource[]) =>
-	a.length === b.length && b.every((x) => a.includes(x));
 
 export function savePrefs(p: TabStatusPrefs) {
 	localStorage.setItem(KEY, JSON.stringify({ ...p, v: PREFS_VERSION }));

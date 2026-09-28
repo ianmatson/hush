@@ -18,6 +18,8 @@ export interface Env {
 	VAPID_PRIVATE_KEY: string;
 	/** Optional push contact (mailto: or https:). Defaults to the app's own URL. */
 	VAPID_SUBJECT?: string;
+	/** "off" in a local test copy: Hush writes nothing to GitHub (no read, done, mute, or actions). */
+	GITHUB_WRITES?: string;
 	// Rate limiters (optional, so tests and old configs still work).
 	AUTH_LIMIT?: RateLimit;
 	FEED_LIMIT?: RateLimit;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ActionKind, Category } from '$lib/shared/types';
+	import type { ActionKind, Lane } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
 	import Eye from '@lucide/svelte/icons/eye';
 	import CircleX from '@lucide/svelte/icons/circle-x';
@@ -16,11 +16,7 @@
 	import GitCommit from '@lucide/svelte/icons/git-commit-horizontal';
 	import Bell from '@lucide/svelte/icons/bell';
 
-	let {
-		kind,
-		category,
-		subjectType
-	}: { kind: ActionKind; category: Category; subjectType: string } = $props();
+	let { kind, lane, subjectType }: { kind: ActionKind; lane: Lane; subjectType: string } = $props();
 
 	const byKind = {
 		review: { icon: Eye, tone: 'text-signal-review bg-signal-review/12' },
@@ -43,7 +39,7 @@
 	};
 
 	const spec = $derived(
-		category === 'action' && kind !== 'none'
+		lane === 'turn' && kind !== 'none'
 			? byKind[kind]
 			: { icon: bySubject[subjectType] ?? Bell, tone: 'text-muted-foreground bg-muted' }
 	);

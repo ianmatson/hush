@@ -30,10 +30,13 @@
 	let {
 		target,
 		onclose,
+		header,
 		footer
 	}: {
 		target: PeekTarget | null;
 		onclose: () => void;
+		/** Why the item is here, and what changed since you looked. */
+		header?: Snippet;
 		/** Actions for the item (Done, Snooze…). */
 		footer?: Snippet;
 	} = $props();
@@ -85,5 +88,8 @@
 			>
 		{/if}
 	{/snippet}
-	{#if target}<PeekContent repo={target.repo} number={target.number} title={target.title} />{/if}
+	{#if target}
+		{@render header?.()}
+		<PeekContent repo={target.repo} number={target.number} title={target.title} />
+	{/if}
 </SidePanel>

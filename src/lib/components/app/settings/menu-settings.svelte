@@ -4,17 +4,9 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import {
-		DEFAULT_MENUS,
-		MENU_ITEMS,
-		MENUS_VERSION,
-		SEP,
-		tidySeparators,
-		type MenuKind
-	} from '$lib/shared/menus';
+	import { DEFAULT_MENU, MENU_ITEMS, SEP, tidySeparators } from '$lib/shared/menus';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
-	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Command from '$lib/components/ui/command';
 	import SortableList from '$lib/components/app/sortable-list.svelte';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
@@ -23,12 +15,11 @@
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Undo from '@lucide/svelte/icons/undo-2';
-	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import Link from '@lucide/svelte/icons/link';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
 	import Zap from '@lucide/svelte/icons/zap';
-	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import CircleSlash from '@lucide/svelte/icons/circle-slash';
+	import Hand from '@lucide/svelte/icons/hand';
 	import ListFilter from '@lucide/svelte/icons/list-filter';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Minus from '@lucide/svelte/icons/minus';
@@ -37,7 +28,7 @@
 
 	const me = createQuery(meQuery);
 	let adding = $state(false);
-	const saved = $derived(me.data?.settings.menus);
+	const saved = $derived(me.data?.settings.menu);
 
 	/** One entry of the list. Separators repeat, so each row has its own stable key. */
 	type Row = { id: string; key: string };
@@ -45,13 +36,11 @@
 	const toRows = (ids: string[]): Row[] =>
 		ids.map((id) => ({ id, key: id === SEP ? `sep-${nextKey++}` : id }));
 
-	let kind = $state<MenuKind>('inbox');
-	let draft = $state<Record<MenuKind, Row[]>>({ inbox: [], dash: [] });
-	const ids = (k: MenuKind) => draft[k].map((r) => r.id);
+	let draft = $state<Row[]>([]);
+	const ids = () => draft.map((r) => r.id);
 	let dirty = $state(false);
 	let saving = $state(false);
-	const load = (s: { inbox: string[]; dash: string[] }) =>
-		(draft = { inbox: toRows(s.inbox), dash: toRows(s.dash) });
+	const load = (s: string[]) => (draft = toRows(s));
 	// Fill the editor once the settings arrive, and after each save.
 	$effect(() => {
 		const s = saved;
@@ -68,61 +57,51 @@
 		snooze: AlarmClock,
 		mute: BellOff,
 		restore: Undo,
-		read: MailOpen,
+		'not-mine': CircleSlash,
+		'my-turn': Hand,
 		copy: Link,
 		select: SquareCheck,
 		selectAll: SquareCheck,
-		move: ArrowRightLeft,
-		undoMove: Undo,
-		hide: EyeOff,
 		rule: ListFilter
 	};
 	const iconOf = (id: string) =>
-		ICONS[id] ??
-		(id.startsWith('snooze:') ? AlarmClock : id.startsWith('until:') ? Zap : ArrowRightLeft);
-	const info = (id: string) => MENU_ITEMS[kind].find((i) => i.id === id);
+		ICONS[id] ?? (id.startsWith('snooze:') ? AlarmClock : id.startsWith('until:') ? Zap : Check);
+	const info = (id: string) => MENU_ITEMS.find((i) => i.id === id);
 	/** Preview labels: what the menu says for a typical item. */
 	const PREVIEW: Record<string, string> = {
 		main: 'Review',
 		snooze: 'Snooze',
-		restore: 'Move to inbox',
-		read: 'Mark as read',
-		select: 'Select',
-		hide: 'Hide until it changes',
-		move: 'Move to'
+		restore: 'Move back',
+		select: 'Select'
 	};
-	const SUBMENUS = new Set(['snooze', 'move']);
+	const SUBMENUS = new Set(['snooze']);
 
-	const unused = $derived(MENU_ITEMS[kind].filter((i) => !ids(kind).includes(i.id)));
-	// The preview shows a typical open thread: "Needs you" in the inbox, not moved on a dashboard.
-	const NOT_TYPICAL = new Set(['restore', 'undoMove']);
+	const unused = $derived(MENU_ITEMS.filter((i) => !ids().includes(i.id)));
+	// The preview shows a typical item in Your turn.
+	const NOT_TYPICAL = new Set(['restore', 'my-turn']);
 	const preview = $derived(
 		tidySeparators(
-			ids(kind).filter((id) => !NOT_TYPICAL.has(id)),
+			ids().filter((id) => !NOT_TYPICAL.has(id)),
 			(id) => id === SEP
 		)
 	);
 
 	function set(list: Row[]) {
-		draft[kind] = list;
+		draft = list;
 		dirty = true;
 	}
-	const remove = (k: number) => set(draft[kind].filter((_, i) => i !== k));
-	const add = (id: string) => set([...draft[kind], ...toRows([id])]);
+	const remove = (k: number) => set(draft.filter((_, i) => i !== k));
+	const add = (id: string) => set([...draft, ...toRows([id])]);
 
 	async function save() {
 		saving = true;
 		// Separators at the ends or next to each other do nothing; save the tidy list.
-		const menus = {
-			inbox: tidySeparators(ids('inbox'), (id) => id === SEP),
-			dash: tidySeparators(ids('dash'), (id) => id === SEP),
-			v: MENUS_VERSION
-		};
-		if (await saveSettings({ menus }, 'Menus saved')) dirty = false;
+		const menu = tidySeparators(ids(), (id) => id === SEP);
+		if (await saveSettings({ menu }, 'Menu saved')) dirty = false;
 		saving = false;
 	}
 	function reset() {
-		set(toRows(DEFAULT_MENUS[kind]));
+		set(toRows(DEFAULT_MENU));
 	}
 </script>
 
@@ -190,33 +169,26 @@
 
 <div class="grid gap-6">
 	<div>
-		<h2 class="text-base font-semibold tracking-tight">Menus</h2>
+		<h2 class="text-base font-semibold tracking-tight">Menu</h2>
 		<p class="text-sm text-muted-foreground">
-			Choose the items and their order in the right-click menu. The same list is the “⋯” menu on
-			phones. Hidden items still work with their keys and in the command palette (⌘K).
+			Choose the items and their order in the right-click menu of an item. The same list is the “⋯”
+			menu on phones. Hidden items still work with their keys and in the command palette.
 		</p>
 	</div>
 
 	{#if saved}
-		<Tabs.Root bind:value={kind}>
-			<Tabs.List>
-				<Tabs.Trigger value="inbox">Inbox</Tabs.Trigger>
-				<Tabs.Trigger value="dash">PRs & issues</Tabs.Trigger>
-			</Tabs.List>
-		</Tabs.Root>
-
 		<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>In the menu</Card.Title>
 					<Card.Description
-						>Drag, or use the arrows. Items that do not apply to a thread still stay out of its
-						menu, for example Done in the Done view.</Card.Description
+						>Drag, or use the arrows. Items that do not apply to an item stay out of its menu, for
+						example Done for an item that is done.</Card.Description
 					>
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-4">
 					<SortableList
-						items={draft[kind]}
+						items={draft}
 						onchange={set}
 						label="Menu items in order"
 						empty="The menu is empty."
@@ -280,7 +252,7 @@
 					{/each}
 				</div>
 				<p class="text-xs text-muted-foreground">
-					For one open thread. With a selection, most items act on all of it.
+					For one item in Your turn. With a selection, most items act on all of it.
 				</p>
 			</div>
 		</div>

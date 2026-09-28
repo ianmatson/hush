@@ -32,7 +32,9 @@
 		if (typeof patch === 'string') return toast.error(patch);
 		const n = (list: unknown[] | undefined, one: string) =>
 			list ? `${list.length} ${one}${list.length === 1 ? '' : 's'}` : null;
-		const what = [n(patch.rules, 'rule'), n(patch.views, 'view')].filter(Boolean).join(', ');
+		const what = [n(patch.rules, 'rule'), n(patch.saved, 'saved search')]
+			.filter(Boolean)
+			.join(', ');
 		if (
 			!confirm(
 				`Replace your settings with the ones in “${file.name}”?${what ? ` It has ${what}.` : ''} Settings that are not in the file go back to their defaults. Export first to keep a copy.`
@@ -52,8 +54,7 @@
 	<Card.Header>
 		<Card.Title>Settings file</Card.Title>
 		<Card.Description
-			>Keep a copy, move to another account, or share your rules. Appearance and your start page
-			stay in this browser.</Card.Description
+			>Keep a copy, move to another account, or share your rules. Appearance stays in this browser.</Card.Description
 		>
 	</Card.Header>
 	<Card.Content class="flex flex-wrap items-center gap-2">

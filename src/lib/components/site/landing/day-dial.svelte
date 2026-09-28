@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * A day of notifications on a 24-hour dial. The hand sweeps like a radar: each notification
-	 * shows as the hand passes its hour. What needs you buzzes (a ripple); FYI stays silent. At
+	 * shows as the hand passes its hour. What becomes your turn buzzes (a ripple); updates stay silent. At
 	 * night nothing buzzes; at 07:00 one ripple goes out for all of it. CSS only.
 	 */
 	type Dot = { h: number; need?: boolean; r: number };

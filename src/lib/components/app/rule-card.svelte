@@ -1,15 +1,12 @@
 <script lang="ts" module>
 	export interface RulePreview {
 		matches: number;
-		inInbox: number;
-		examples: { title: string; repo: string; category: string }[];
+		examples: { title: string; repo: string; lane: string }[];
 	}
 </script>
 
 <script lang="ts">
-	import type { Category, Rule } from '$lib/shared/types';
-	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
-	import ConditionsEditor from './conditions-editor.svelte';
+	import type { Rule } from '$lib/shared/types';
 	import QueryInput from './query-input.svelte';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
@@ -23,13 +20,12 @@
 	import Trash from '@lucide/svelte/icons/trash-2';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
-	/** One rule in the visual rule editor (Settings → Inbox). */
+	/** One rule: a query (when), and what it does (then). Settings → Advanced. */
 	let {
 		rule = $bindable(),
 		index,
 		count,
 		preview,
-		suggest,
 		onmove,
 		onduplicate,
 		onremove
@@ -38,56 +34,46 @@
 		index: number;
 		count: number;
 		preview?: RulePreview;
-		/** Values to suggest for text conditions (repos and authors you get notifications from). */
-		suggest: Partial<Record<RuleField, string[]>>;
 		onmove: (to: number) => void;
 		onduplicate: () => void;
 		onremove: () => void;
 	} = $props();
 
-	type Triage = NonNullable<Rule['then']['triage']>;
-	function setThen(patch: {
-		category?: Category | null;
-		push?: boolean | null;
-		triage?: Triage | null;
-		snoozeHours?: number;
-	}) {
-		const then = { ...rule.then };
-		if (patch.category !== undefined) {
-			if (patch.category === null) delete then.category;
-			else then.category = patch.category;
+	type Then = Rule['then'];
+	type Put = 'turn' | 'updates' | 'mute' | null;
+	function setThen(patch: { put?: Put; push?: boolean | null; snoozeHours?: number | null }) {
+		const then: Then = { ...rule.then };
+		if (patch.put !== undefined) {
+			delete then.lane;
+			delete then.mute;
+			if (patch.put === 'mute') then.mute = true;
+			else if (patch.put) then.lane = patch.put;
 		}
 		if (patch.push !== undefined) {
 			if (patch.push === null) delete then.push;
 			else then.push = patch.push;
 		}
-		if (patch.triage !== undefined) {
-			if (patch.triage === null) delete then.triage;
-			else then.triage = patch.triage;
-			if (patch.triage === 'snooze') then.snoozeHours ??= 24;
-			else delete then.snoozeHours;
+		if (patch.snoozeHours !== undefined) {
+			if (patch.snoozeHours === null) delete then.snoozeHours;
+			else then.snoozeHours = patch.snoozeHours;
 		}
-		if (patch.snoozeHours !== undefined) then.snoozeHours = patch.snoozeHours;
 		rule = { ...rule, then };
 	}
+	const put = $derived<Put>(rule.then.mute ? 'mute' : (rule.then.lane ?? null));
 
-	const CATEGORIES: { value: Category | null; label: string }[] = [
+	const PUT: { value: Put; label: string }[] = [
 		{ value: null, label: 'No change' },
-		{ value: 'action', label: 'Needs you' },
-		{ value: 'fyi', label: 'FYI' },
-		{ value: 'muted', label: 'Muted' }
+		{ value: 'turn', label: 'Your turn' },
+		{ value: 'updates', label: 'Updates' },
+		{ value: 'mute', label: 'Mute (hide)' }
 	];
 	const PUSH: { value: boolean | null; label: string }[] = [
 		{ value: null, label: 'No change' },
 		{ value: true, label: 'Always' },
 		{ value: false, label: 'Never' }
 	];
-	const TRIAGE: { value: Triage | null; label: string }[] = [
-		{ value: null, label: 'No change' },
-		{ value: 'done', label: 'Move to Done' },
-		{ value: 'snooze', label: 'Snooze' }
-	];
-	const SNOOZE_HOURS: { value: number; label: string }[] = [
+	const SNOOZE: { value: number | null; label: string }[] = [
+		{ value: null, label: 'No' },
 		{ value: 1, label: '1 hour' },
 		{ value: 4, label: '4 hours' },
 		{ value: 24, label: '1 day' },
@@ -95,13 +81,15 @@
 		{ value: 168, label: '1 week' }
 	];
 	const noResult = $derived(
-		rule.then.category === undefined &&
+		rule.then.lane === undefined &&
 			rule.then.push === undefined &&
-			rule.then.triage === undefined
+			rule.then.mute === undefined &&
+			rule.then.snoozeHours === undefined
 	);
-	const CATEGORY_LABEL: Record<string, string> = {
-		action: 'Needs you',
-		fyi: 'FYI',
+	const LANE_LABEL: Record<string, string> = {
+		turn: 'Your turn',
+		waiting: 'Waiting',
+		updates: 'Updates',
 		muted: 'Muted'
 	};
 </script>
@@ -186,50 +174,35 @@
 		</DropdownMenu.Root>
 	</header>
 
-	<ConditionsEditor
-		bind:when={() => rule.when ?? {}, (when) => (rule = { ...rule, when })}
-		fields={RULE_FIELDS}
-		{suggest}
-		idPrefix="rule-{index}"
-		emptyNote="No conditions: this rule matches every thread."
-	/>
 	<QueryInput
-		bind:when={() => rule.when ?? {}, (when) => (rule = { ...rule, when })}
+		bind:value={() => rule.when ?? '', (when) => (rule = { ...rule, when })}
 		id="rule-{index}-query"
+		label="When (a query; empty matches every item)"
 	/>
 
 	<section class="grid gap-2">
 		<h3 class="text-xs font-medium text-muted-foreground">Then</h3>
 		<div class="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-x-3">
 			<span class="text-sm">Put it in</span>
-			{@render segmented(
-				CATEGORIES,
-				rule.then.category ?? null,
-				(v) => setThen({ category: v }),
-				'Put it in'
-			)}
+			{@render segmented(PUT, put, (v) => setThen({ put: v }), 'Put it in')}
 			<span class="text-sm">Push</span>
 			{@render segmented(PUSH, rule.then.push ?? null, (v) => setThen({ push: v }), 'Push')}
-			<span class="text-sm">Also</span>
-			{@render segmented(TRIAGE, rule.then.triage ?? null, (v) => setThen({ triage: v }), 'Also')}
-			{#if rule.then.triage === 'snooze'}
-				<span class="text-sm">For</span>
-				{@render segmented(
-					SNOOZE_HOURS,
-					rule.then.snoozeHours ?? 24,
-					(v) => setThen({ snoozeHours: v }),
-					'Snooze for'
-				)}
-			{/if}
+			<span class="text-sm">Snooze it</span>
+			{@render segmented(
+				SNOOZE,
+				rule.then.snoozeHours ?? null,
+				(v) => setThen({ snoozeHours: v }),
+				'Snooze it when it comes into Your turn'
+			)}
 		</div>
-		{#if rule.then.triage}
+		{#if rule.then.snoozeHours}
 			<p class="text-xs text-muted-foreground">
-				When the rule starts to match a thread in your inbox. If you move the thread back, it stays.
+				When it comes into Your turn. If you move it back yourself, it stays.
 			</p>
 		{/if}
 		{#if noResult}
 			<p class="flex items-center gap-1.5 text-xs text-destructive">
-				<TriangleAlert class="size-3.5" />Choose where it goes, a push setting, or a move.
+				<TriangleAlert class="size-3.5" />Choose where it goes, a push setting, or a snooze.
 			</p>
 		{/if}
 	</section>
@@ -241,8 +214,7 @@
 			{:else if preview.matches}
 				<p>
 					Catches <span class="font-medium text-foreground">{preview.matches}</span>
-					{preview.matches === 1 ? 'thread' : 'threads'}{#if preview.inInbox}, {preview.inInbox}
-						in your inbox{/if}. For example:
+					{preview.matches === 1 ? 'item' : 'items'}. For example:
 				</p>
 				<ul class="grid gap-0.5">
 					{#each preview.examples as ex, k (k)}
@@ -253,13 +225,13 @@
 							<span class="hidden max-w-40 truncate font-mono text-[0.7rem] opacity-70 sm:block"
 								>{ex.repo}</span
 							>
-							<span class="shrink-0">→ {CATEGORY_LABEL[ex.category] ?? ex.category}</span>
+							<span class="shrink-0">→ {LANE_LABEL[ex.lane] ?? ex.lane}</span>
 						</li>
 					{/each}
 				</ul>
 			{:else}
 				<p>
-					Catches no stored thread now{index > 0 ? ' (or a rule above catches them first)' : ''}.
+					Catches no item now{index > 0 ? ' (or a rule above catches them first)' : ''}.
 				</p>
 			{/if}
 		</footer>

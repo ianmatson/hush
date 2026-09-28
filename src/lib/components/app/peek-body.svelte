@@ -27,8 +27,8 @@
 	let { repo, number }: { repo: string; number: number } = $props();
 
 	const q = createQuery(() => peekQuery(repo, number));
-	// The server stored what this peek read. If that changed the inbox or dashboards, refetch
-	// them now (once per fetch), so every view agrees with the peek.
+	// The server stored what this peek read. If that changed an item, refetch
+	// the lists now (once per fetch), so every list agrees with the peek.
 	let synced = 0;
 	$effect(() => {
 		const at = q.dataUpdatedAt;
@@ -36,8 +36,7 @@
 		if (!sync?.changed || at === synced) return;
 		synced = at;
 		reportResolved(sync.resolved);
-		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
-		queryClient.invalidateQueries({ queryKey: keys.dashAll });
+		queryClient.invalidateQueries({ queryKey: keys.itemsAll });
 		queryClient.invalidateQueries({ queryKey: keys.alerts });
 	});
 	let allChecks = $state(false);

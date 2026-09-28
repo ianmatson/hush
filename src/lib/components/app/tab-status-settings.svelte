@@ -35,7 +35,7 @@
 
 	const styles = {
 		total: 'Total, e.g. (12)',
-		breakdown: 'Breakdown, e.g. (7 · 3 PR · 2 issue)'
+		breakdown: 'Breakdown, e.g. (7 · 3 waiting)'
 	} as const;
 	const previewTitle = $derived(
 		[titlePrefix(counts, prefs.title), 'Hush'].filter(Boolean).join(' ')
@@ -96,8 +96,8 @@
 			<div class="grid gap-1.5">
 				<Card.Title>Tab title & icon</Card.Title>
 				<Card.Description
-					>Show unread alerts (or what needs you) on the browser tab, and on the app icon when Hush
-					is installed.</Card.Description
+					>Show what is your turn (or unread alerts) on the browser tab, and on the app icon when
+					Hush is installed.</Card.Description
 				>
 			</div>
 			<Button variant="ghost" size="xs" onclick={() => (prefs = structuredClone(DEFAULT_PREFS))}

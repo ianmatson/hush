@@ -1,6 +1,6 @@
 /**
- * Notes you chose "Don't show again" for, such as "acme has not approved Hush" on the
- * dashboards. A note for this browser (localStorage), not a setting; each note has its own key,
+ * Notes you chose "Don't show again" for, such as "acme has not approved Hush" after
+ * sign-in. A note for this browser (localStorage), not a setting; each note has its own key,
  * so a note about another org still shows.
  */
 const KEY = 'hush:dismissed-notes';

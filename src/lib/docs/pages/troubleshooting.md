@@ -5,42 +5,43 @@ description: What to do when notifications are missing, pushes do not arrive, or
 
 ## An org or a repository is missing
 
-The org has probably not approved Hush. GitHub then hides the org completely. Check the list in **Settings → General → GitHub access**. If the org is not there, choose **Request approval**, and [use a custom token](/docs/github-access#custom-token) until an owner approves Hush.
+The org has probably not approved Hush. GitHub then hides the org completely. Check the list in **Settings → Account → GitHub access**. If the org is not there, choose **Request approval**, and [use a custom token](/docs/github-access#custom-token) until an owner approves Hush.
 
-If the org uses SAML single sign-on and the inbox says “GitHub hides notifications from N orgs”, sign in again and authorize Hush for those orgs.
+If the org uses SAML single sign-on and Hush says “GitHub hides notifications from N orgs”, sign in again and authorize Hush for those orgs.
 
 ## “Hush cannot read your notifications”
 
-The token no longer works: you revoked Hush on GitHub, the token expired, or a custom token was deleted. Choose **Sign in again**. With a custom token, replace it in **Settings → General → GitHub access**.
+The token no longer works: you revoked Hush on GitHub, the token expired, or a custom token was deleted. Choose **Sign in again**. With a custom token, replace it in **Settings → Account → GitHub access**.
 
-## A thread is in the wrong list
+## An item is in the wrong lane
 
-- Look at the row: its summary says why Hush put it there, and “rule: …” names the rule that sorted it.
+- Open it in the [peek](/docs/peek): the top says why it is there, and names the rule that placed it, if any.
+- If it is in Your turn and it should not be, choose **Not my turn** ({{key:item.notMine}}). The answer fixes the setting or adds the rule. See [Not my turn](/docs/your-turn#not-my-turn).
+- If it should be your turn, choose **It is my turn** ({{key:item.myTurn}}).
 - Check your [rules](/docs/rules): the first rule that matches wins, so a wide rule at the top catches more than you expect.
-- Bots' activity is FYI by default ([`botsAreFyi`](/docs/settings#botsarefyi)), and so are team review requests ([`teamReviewsAreAction`](/docs/settings#teamreviewsareaction)).
+- Bots' activity is an update by default ([`botsAreUpdates`](/docs/settings#botsareupdates)), and team review requests wait on the team ([`teamReviewsAreMine`](/docs/settings#teamreviewsaremine)).
 - Press {{key:list.refresh}} to check GitHub again now.
 
-## A thread did not leave Needs you
+## An item did not leave Your turn
 
 Hush sees your own review, reply, or push within 15 minutes, because GitHub sends no notification for them. Press {{key:list.refresh}} to check at once, or choose **Done**.
+
+## An item is missing
+
+- Look in [Search](/docs/search): choose **Everything**. It may be done, snoozed, or muted.
+- Hush finds items from your notifications and from its [tracked searches](/docs/where-hush-looks). An item with no notification in the last 14 days, which no tracked search finds, is not in Hush. Add a search in **Settings → Advanced → Where Hush looks**, and choose the link button next to it to try it on GitHub.
+- Check the **Scope**: it is added to every search.
+- `@team` searches need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
 
 ## Pushes do not arrive
 
 1. In **Settings → Notifications**, check that this device says “Receives push notifications.”, and choose **Send test**.
 2. Check that your system allows notifications from the browser, and that focus modes or Do Not Disturb are off.
-3. Check [quiet hours](/docs/notifications#quiet-hours), and that the thread is one that gets pushed: by default only Needs you. A rule with `"push": false` stops pushes too.
+3. Check [quiet hours](/docs/notifications#quiet-hours), and that the item is one that gets pushed: only what comes into Your turn. A rule with `"push": false` stops pushes too.
 4. On iPhone and iPad, push works only when Hush is on the Home Screen.
 5. Turn push off and on again for the device.
 
 Pushes can come a few minutes after the event: Hush checks GitHub every 5 minutes while push is on.
-
-## The Pull requests or Issues tab is empty or incomplete
-
-- The sections are GitHub searches. Choose the link button next to a section in **Settings → PRs & issues** to try its search on GitHub.
-- Check the **Scope**: it is added to every search.
-- `@team` sections need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
-- Hidden items: press {{key:dash.showHidden}} to show them.
-- Drafts that others opened and PRs that bots opened are hidden by default: see [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 
 ## settings.json does not save
 

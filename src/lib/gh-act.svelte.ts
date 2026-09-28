@@ -29,7 +29,7 @@ export async function sendAction(
 			id: p.can.id
 		});
 		reportResolved(res.resolved);
-		for (const queryKey of [keys.peek(p.repo, p.number), keys.threadsAll, keys.dashAll])
+		for (const queryKey of [keys.peek(p.repo, p.number), keys.itemsAll, ['item']])
 			queryClient.invalidateQueries({ queryKey });
 		return true;
 	} catch (err) {

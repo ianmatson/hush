@@ -39,6 +39,9 @@ async function refusal(res: Response): Promise<string> {
 }
 
 const app = routes().post('/api/actions', json<ActionBody>(), async (c) => {
+	// A local test copy writes nothing to GitHub.
+	if (c.env.GITHUB_WRITES === 'off')
+		return c.json({ error: 'GitHub writes are off in this copy (GITHUB_WRITES=off).' }, 403);
 	const u = c.get('user');
 	const b = c.req.valid('json');
 	const [owner, name, extra] = typeof b.repo === 'string' ? b.repo.split('/') : [];

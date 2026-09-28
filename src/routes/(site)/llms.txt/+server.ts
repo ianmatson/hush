@@ -16,7 +16,7 @@ export function GET() {
 	});
 	const text = `# Hush
 
-> Hush sorts GitHub notifications into what needs you and what is only FYI, follows whose turn it is on every pull request and issue that involves you, and pushes only what waits on you. The app is at https://app.hush-gh.com. Every setting is one JSON object (settings.json); the settings page documents all of it.
+> Hush reads GitHub notifications and follows whose turn it is on every pull request and issue that involves you. It shows three lanes: Your turn (you must act next), Waiting (someone else must act), and Updates (a feed of the rest), and pushes only when something becomes your turn. The app is at https://app.hush-gh.com. Every setting is one JSON object (settings.json); the settings page documents all of it.
 
 All pages in one file: ${SITE_URL}/llms-full.txt
 

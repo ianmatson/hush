@@ -41,7 +41,7 @@
 
 	const close = () => (ui.alertsOpen = false);
 	function choose(a: AlertDTO) {
-		if (a.thread?.number) selected = a;
+		if (a.item?.number) selected = a;
 		else {
 			noteOpened(a.url);
 			window.open(a.url, '_blank', 'noreferrer');
@@ -61,7 +61,7 @@
 	open={ui.alertsOpen}
 	onclose={close}
 	label="alerts"
-	title={selected?.thread?.title ?? 'Alerts'}
+	title={selected?.item?.title ?? 'Alerts'}
 >
 	{#snippet start(wide)}
 		{#if selected}
@@ -86,11 +86,11 @@
 		{/if}
 	{/snippet}
 
-	{#if selected?.thread}
+	{#if selected?.item}
 		<PeekContent
-			repo={selected.thread.repo}
-			number={selected.thread.number}
-			title={selected.thread.title}
+			repo={selected.item.repo}
+			number={selected.item.number}
+			title={selected.item.title}
 		/>
 	{:else if alerts.isPending}
 		<div class="grid gap-3 p-4">
@@ -139,12 +139,12 @@
 							<span class="shrink-0 text-xs text-muted-foreground">{ago(a.sentAt)}</span>
 						</span>
 						<span class="truncate pl-3.5 text-sm text-muted-foreground">{line}</span>
-						{#if repo || a.thread?.state}
+						{#if repo || a.item?.state}
 							<span class="flex min-w-0 items-center gap-2 pl-3.5 text-xs text-muted-foreground">
 								{#if repo}<span class="truncate font-mono">{repo}</span>{/if}
-								{#if a.thread?.state}
+								{#if a.item?.state}
 									<span class="ml-auto shrink-0 rounded-md bg-muted px-1.5 py-0.5"
-										>{a.thread.state}</span
+										>{a.item.state}</span
 									>
 								{/if}
 							</span>

@@ -6,8 +6,8 @@ import type {
 	PeekPerson,
 	TeamDTO
 } from '../src/lib/shared/types';
-import { isBot } from '../src/lib/shared/classify';
-import type { ExpandedQuery } from '../src/lib/shared/dashboard';
+import { isBot } from '../src/lib/shared/bots';
+import type { ExpandedQuery } from '../src/lib/shared/turn';
 import type { SubjectFacts } from '../src/lib/shared/subject';
 
 const API = 'https://api.github.com';
@@ -220,7 +220,7 @@ fragment P on PullRequest {
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
   comments(last: 1) { totalCount nodes { author { login __typename } bodyText url createdAt } }
-  commits(last: 1) { nodes { commit { committedDate statusCheckRollup { state } } } }
+  commits(last: 1) { totalCount nodes { commit { committedDate statusCheckRollup { state } } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   requestEvents: timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
     nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
@@ -277,6 +277,7 @@ export function toSubject(n: Node): SubjectFacts {
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
 		comments: n.comments?.totalCount ?? 0,
+		commits: pr ? (n.commits?.totalCount ?? 0) : 0,
 		lastComment: c
 			? {
 					author: c.author?.login ?? 'ghost',
@@ -382,7 +383,7 @@ export interface SearchHit {
 	subject: SubjectFacts;
 }
 
-/** The most results one dashboard search asks for, and the fewest. */
+/** The most results one tracked search asks for, and the fewest. */
 export const SEARCH_MAX = 25;
 const SEARCH_MIN = 5;
 /** Room above a section's last count, so a few new items still fit in one request. */
@@ -402,7 +403,7 @@ export function searchSize(lastCount: number | undefined): number {
  * whose total grew past its size runs again at SEARCH_MAX in the same call, so no result is lost.
  * Returns the totals to pass back next time.
  */
-export async function searchDashboard(
+export async function searchGitHub(
 	token: string,
 	me: string,
 	queries: ExpandedQuery[],

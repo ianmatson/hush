@@ -1,10 +1,10 @@
 <script lang="ts">
 	/** One line of text is a rule: it types itself, and the conditions it means light up. */
-	const QUERY = 'author:dependabot* is:merged';
+	const QUERY = 'repo:acme/website needs:reply';
 	const PARTS = [
-		{ label: 'Author', value: 'dependabot*' },
-		{ label: 'State', value: 'merged' },
-		{ label: 'Then', value: 'Move to Done' }
+		{ label: 'Repository', value: 'acme/website' },
+		{ label: 'Needs', value: 'reply' },
+		{ label: 'Then', value: 'Updates' }
 	];
 </script>
 

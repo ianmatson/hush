@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	DEFAULT_MENUS,
-	MENU_ITEMS,
-	SEP,
-	tidySeparators,
-	upgradeMenus,
-	validateMenus
-} from './menus';
+import { DEFAULT_MENU, MENU_ITEMS, SEP, tidySeparators, validateMenu } from './menus';
 
 const isSep = (x: string) => x === SEP;
 
@@ -16,36 +9,20 @@ describe('menus', () => {
 		expect(tidySeparators([SEP, SEP], isSep)).toEqual([]);
 	});
 
-	it('accepts the defaults and every known item once', () => {
-		expect(validateMenus(DEFAULT_MENUS)).toBeNull();
-		expect(
-			validateMenus({
-				inbox: MENU_ITEMS.inbox.map((i) => i.id),
-				dash: MENU_ITEMS.dash.map((i) => i.id)
-			})
-		).toBeNull();
-		expect(validateMenus({ inbox: [] })).toBeNull();
+	it('accepts the default and every known item once', () => {
+		expect(validateMenu(DEFAULT_MENU)).toBeNull();
+		expect(validateMenu(MENU_ITEMS.map((i) => i.id))).toBeNull();
+		expect(validateMenu([])).toBeNull();
 	});
 
-	it('refuses unknown items, doubles, and items of the other menu', () => {
-		expect(validateMenus({ inbox: ['peek', 'nope'] })).toMatch(/Unknown/);
-		expect(validateMenus({ inbox: ['peek', 'peek'] })).toMatch(/twice/);
-		expect(validateMenus({ inbox: ['move'] })).toMatch(/Unknown/);
-		expect(validateMenus({ dash: ['done'] })).toMatch(/Unknown/);
-		expect(validateMenus({ inbox: 'peek' })).toMatch(/list/);
+	it('refuses unknown items and doubles', () => {
+		expect(validateMenu(['peek', 'nope'])).toMatch(/Unknown/);
+		expect(validateMenu(['peek', 'peek'])).toMatch(/twice/);
+		expect(validateMenu('peek')).toMatch(/list/);
 	});
 
-	it('defaults use only known items', () => {
-		for (const kind of ['inbox', 'dash'] as const)
-			for (const id of DEFAULT_MENUS[kind])
-				if (id !== SEP) expect(MENU_ITEMS[kind].some((i) => i.id === id)).toBe(true);
-	});
-
-	it('adds a new item once to menus saved before it, and keeps later choices', () => {
-		const old = { inbox: ['peek', 'copy', 'done'], dash: ['peek'] };
-		expect(upgradeMenus(old).inbox).toEqual(['peek', 'copy', 'rule', 'done']);
-		// Saved after the item existed and without it: you removed it, so it stays out.
-		expect(upgradeMenus({ ...old, v: 2 }).inbox).toEqual(['peek', 'copy', 'done']);
-		expect(upgradeMenus({ inbox: ['done'] }).inbox).toEqual(['done', 'rule']);
+	it('the default uses only known items', () => {
+		for (const id of DEFAULT_MENU)
+			if (id !== SEP) expect(MENU_ITEMS.some((i) => i.id === id)).toBe(true);
 	});
 });

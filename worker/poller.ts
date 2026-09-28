@@ -11,7 +11,7 @@ import {
 } from './poller/shared';
 import { PollerData } from './poller/data';
 
-export { MUTED_BY_USER, type PollStatus } from './poller/shared';
+export { type PollStatus } from './poller/shared';
 
 export class Poller extends PollerData {
 	private running: Promise<void> | null = null;
@@ -20,18 +20,9 @@ export class Poller extends PollerData {
 
 	async start(userId: number, origin: string): Promise<void> {
 		// A new token (signing in, or a custom token) can see what the old one could not: redo the
-		// first sync (the last 14 days; existing threads keep their triage state), and build the
-		// dashboards and the team list again.
-		await this.ctx.storage.delete([
-			'initialized',
-			'lastModified',
-			'pollGap',
-			'dash:pr',
-			'dash:issue',
-			'teams'
-		]);
-		this.broadcast({ type: 'dash', kind: 'pr' });
-		this.broadcast({ type: 'dash', kind: 'issue' });
+		// first sync (the last 14 days; existing items keep your choices), the tracked searches, and
+		// the team list.
+		await this.ctx.storage.delete(['initialized', 'lastModified', 'pollGap', 'searched', 'teams']);
 		await this.ctx.storage.put({
 			userId,
 			origin,
@@ -78,8 +69,8 @@ export class Poller extends PollerData {
 		await this.flushQuiet();
 		await this.schedule();
 		await this.broadcastStatus();
-		const resolved = await this.checkInbox().catch((err) => {
-			console.error('inbox check failed', err);
+		const resolved = await this.checkTurn().catch((err) => {
+			console.error('turn check failed', err);
 			return [];
 		});
 		return { ...(await this.status()), resolved };
@@ -207,6 +198,10 @@ export class Poller extends PollerData {
 		if (!who) return;
 		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
 		const lastModified = await this.ctx.storage.get<string>('lastModified');
+		// First of all after sign-in: the tracked searches fill Your turn in seconds, before the
+		// notifications of the last 14 days.
+		if (!initialized)
+			await this.runSearches(who).catch((err) => console.error('search failed', err));
 
 		let page;
 		try {
@@ -247,7 +242,9 @@ export class Poller extends PollerData {
 		});
 		if (page.status === 304) {
 			await this.wakeSnoozed();
-			return this.watch(who);
+			await this.watch(who);
+			await this.runSearches(who);
+			return;
 		}
 		await this.putChanged({ ssoHiddenOrgs: page.ssoHiddenOrgs });
 		const ingested = await this.ingest(who, page.items, initialized);
@@ -259,6 +256,7 @@ export class Poller extends PollerData {
 		});
 		await this.wakeSnoozed();
 		await this.watch(who, ingested);
+		await this.runSearches(who);
 		await this.cleanup();
 	}
 }

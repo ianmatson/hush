@@ -1,9 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types';
-import { settingsOverrides } from '../../src/lib/shared/settings-schema';
+import { settingsOverrides, validateSettings } from '../../src/lib/shared/settings-schema';
+import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
-import { SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
+import { ITEMS, MIGRATIONS, SCHEMA_VERSION, settingsFromV1, type ItemWithFacts } from './schema';
 import { TEAMS_TTL, type Who } from './shared';
 
 /** A value SQLite can bind: strings, numbers, null (no booleans, no undefined). */
@@ -11,8 +12,8 @@ export type SqlValue = string | number | null;
 
 /**
  * One Durable Object per user. This base has the user's own SQLite database (schema.ts), their
- * settings, and who they are; the layers above add alerts, the subject store, the notification
- * sync, the dashboards, and the API's data methods.
+ * settings, and who they are; the layers above add alerts, items and the subject store, the
+ * notification sync, the tracked searches, and the API's data methods.
  */
 export abstract class PollerBase extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -59,10 +60,20 @@ export abstract class PollerBase extends DurableObject<Env> {
 		}
 	}
 
-	/** Create this user's tables if they are missing (a new object, or after stop()). */
+	/** Create or update this user's tables (a new object, after stop(), or an older version). */
 	protected async migrate() {
-		if (((await this.ctx.storage.get<number>('schema')) ?? 0) >= SCHEMA_VERSION) return;
-		this.transaction(() => this.ctx.storage.sql.exec(SCHEMA));
+		const from = (await this.ctx.storage.get<number>('schema')) ?? 0;
+		if (from >= SCHEMA_VERSION) return;
+		const step = MIGRATIONS[from];
+		this.transaction(() => this.ctx.storage.sql.exec(step.sql));
+		if (step.resetKeys.length) await this.ctx.storage.delete(step.resetKeys);
+		if (from === 1) {
+			const old = await this.ctx.storage.get<string>('settings');
+			await this.ctx.storage.put(
+				'settings',
+				JSON.stringify(settingsFromV1(JSON.parse(old || '{}') as Record<string, unknown>))
+			);
+		}
 		await this.ctx.storage.put('schema', SCHEMA_VERSION);
 	}
 
@@ -86,9 +97,9 @@ export abstract class PollerBase extends DurableObject<Env> {
 		return this.ctx.storage.transactionSync(fn);
 	}
 
-	/** Threads with their subject's facts, for a WHERE on thread columns. */
-	protected threads(where: string, ...args: SqlValue[]): ThreadWithFacts[] {
-		return this.all<ThreadWithFacts>(`${THREADS} WHERE ${where}`, ...args);
+	/** Items with their subject's facts, for a WHERE on item columns. */
+	protected items(where: string, ...args: SqlValue[]): ItemWithFacts[] {
+		return this.all<ItemWithFacts>(`${ITEMS} WHERE ${where}`, ...args);
 	}
 
 	// --- The user -------------------------------------------------------------------------
@@ -103,6 +114,15 @@ export abstract class PollerBase extends DurableObject<Env> {
 		return parseSettings(await this.ctx.storage.get<string>('settings'));
 	}
 
+	/** Settings as stored, checked: a value that the checks refuse falls back to its default. */
+	protected async checkedSettings(): Promise<Settings> {
+		const s = await this.settings();
+		for (const k of Object.keys(s) as (keyof Settings)[])
+			if (validateSettings(s, [k]))
+				(s as unknown as Record<string, unknown>)[k] = DEFAULT_SETTINGS[k];
+		return s;
+	}
+
 	/** Stores only what differs from the defaults (see settingsOverrides). */
 	protected async saveSettings(settings: Settings): Promise<void> {
 		await this.ctx.storage.put('settings', JSON.stringify(settingsOverrides(settings)));
@@ -113,21 +133,23 @@ export abstract class PollerBase extends DurableObject<Env> {
 	protected async who(): Promise<Who | null> {
 		const user = await this.account();
 		if (!user) return null;
-		const settings = await this.settings();
+		const settings = await this.checkedSettings();
 		return {
 			userId: user.id,
 			me: user.login,
 			token: await userToken(this.env, user),
 			settings,
-			inboxTeams: settings.teamReviewsAreAction ? (await this.teams()).teams.map((t) => t.slug) : []
+			myTeams: (await this.teams()).teams
+				.map((t) => t.slug)
+				.filter((slug) => !settings.excludedTeams.includes(slug))
 		};
 	}
 
-	/** The inbox lists changed: the next request for them gets fresh data (see listThreads). */
+	/** The items changed: the next request for them gets fresh data (see listItems). */
 	protected async bumpVersion(): Promise<void> {
-		const v = (await this.ctx.storage.get<number>('threadsVersion')) ?? 0;
-		await this.ctx.storage.put('threadsVersion', v + 1);
-		this.broadcast({ type: 'threads' });
+		const v = (await this.ctx.storage.get<number>('itemsVersion')) ?? 0;
+		await this.ctx.storage.put('itemsVersion', v + 1);
+		this.broadcast({ type: 'items' });
 	}
 
 	/** Write only the values that changed. Each written key counts against the daily row budget. */

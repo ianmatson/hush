@@ -18,11 +18,16 @@ describe('query language', () => {
 	});
 
 	it('reads the plain words for events, needs, and lists', () => {
-		expect(parseQuery('event:you-opened,mentioned needs:nothing,changes in:fyi').when).toEqual({
+		expect(parseQuery('event:you-opened,mentioned needs:nothing,changes in:waiting').when).toEqual({
 			reason: ['author', 'mention'],
 			kind: ['none', 'address_review'],
-			category: ['fyi']
+			lane: ['waiting']
 		});
+		expect(parseQuery('is:done,snoozed is:open').when).toEqual({
+			itemState: ['done', 'snoozed'],
+			state: ['open']
+		});
+		expect(parseQuery('in:fyi').errors[0]).toMatch(/Unknown “in:fyi”/);
 		expect(parseQuery('NEEDS:Fix-CI').when).toEqual({ kind: ['fix_ci'] });
 	});
 

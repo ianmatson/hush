@@ -1,10 +1,8 @@
 import { inQuietHours } from '../../src/lib/shared/quiet';
-import type { Classification } from '../../src/lib/shared/types';
-import type { GhNotification } from '../github';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import { PollerBase } from './base';
-import { MAX_INDIVIDUAL_PUSHES, RESOLVE_WINDOW, ALERT_LOG_KEEP, NON_THREAD_TAGS } from './shared';
-import type { ThreadRow } from './schema';
+import { RESOLVE_WINDOW, ALERT_LOG_KEEP, NON_THREAD_TAGS } from './shared';
+import type { ItemRow } from './schema';
 
 const marks = (n: number) => Array(n).fill('?').join(',');
 
@@ -13,32 +11,6 @@ type Held = { count: number; lines: string[] };
 
 /** Push alerts: send them, record them in the alert history, and update them when resolved. */
 export abstract class PollerAlerts extends PollerBase {
-	protected async push(items: { n: GhNotification; c: Classification }[]) {
-		const origin = (await this.ctx.storage.get<string>('origin')) ?? '';
-		const one = ({ n, c }: (typeof items)[number]): PushMessage => ({
-			title: c.summary,
-			body: `${n.subject.title}\n${n.repository.full_name}`,
-			url: c.actionUrl,
-			tag: n.id
-		});
-		const messages: PushMessage[] =
-			items.length <= MAX_INDIVIDUAL_PUSHES
-				? items.map(one)
-				: [
-						{
-							title: `${items.length} things need you`,
-							body: items
-								.slice(0, 4)
-								.map(({ c }) => c.summary)
-								.join('\n'),
-							url: `${origin}/inbox`,
-							tag: 'digest'
-						}
-					];
-		// The history lists each alert, also the ones this push put together in one.
-		await this.send(messages, items.map(one));
-	}
-
 	/**
 	 * Update alerts that were pushed in the last day and are now resolved: each is replaced by a
 	 * quiet "✓ You approved"-style alert that closes itself (see the service worker). Browsers
@@ -48,8 +20,8 @@ export abstract class PollerAlerts extends PollerBase {
 	async notifyResolved(items: { id: string; note: string }[]): Promise<void> {
 		if (!items.length || !(await this.settings()).pushResolved) return;
 		const ids = items.map((i) => i.id);
-		const rows = this.all<Pick<ThreadRow, 'id' | 'title' | 'repo' | 'action_url'>>(
-			`SELECT id, title, repo, action_url FROM threads WHERE pushed_at > ? AND id IN (${marks(ids.length)})`,
+		const rows = this.all<Pick<ItemRow, 'key' | 'title' | 'repo' | 'action_url'>>(
+			`SELECT key, title, repo, action_url FROM items WHERE pushed_at > ? AND key IN (${marks(ids.length)})`,
 			Date.now() - RESOLVE_WINDOW,
 			...ids
 		);
@@ -57,19 +29,19 @@ export abstract class PollerAlerts extends PollerBase {
 		const note = new Map(items.map((i) => [i.id, i.note]));
 		const sent = await this.send(
 			rows.map((r) => ({
-				title: `✓ ${note.get(r.id)}`,
+				title: `✓ ${note.get(r.key)}`,
 				body: `${r.title}\n${r.repo}`,
 				url: r.action_url,
-				tag: r.id,
+				tag: r.key,
 				resolve: true
 			}))
 		);
-		// Once is enough: a second change to the same thread must not bring the alert back. In quiet
+		// Once is enough: a second change to the same item must not bring the alert back. In quiet
 		// hours nothing was sent, so a later resolution can still update the alert.
 		if (sent)
 			this.run(
-				`UPDATE threads SET pushed_at = NULL WHERE id IN (${marks(rows.length)})`,
-				...rows.map((r) => r.id)
+				`UPDATE items SET pushed_at = NULL WHERE key IN (${marks(rows.length)})`,
+				...rows.map((r) => r.key)
 			);
 	}
 
@@ -114,18 +86,18 @@ export abstract class PollerAlerts extends PollerBase {
 			}
 		}
 		const now = Date.now();
-		// Remember which threads have an alert on screen, so a resolution can update it.
-		const threadIds = messages
+		// Remember which items have an alert on screen, so a resolution can update it.
+		const keys = messages
 			.filter((m) => !m.resolve && m.tag && !NON_THREAD_TAGS.has(m.tag))
 			.map((m) => m.tag!);
 		this.transaction(() => {
 			if (gone.length)
 				this.run(`DELETE FROM push_devices WHERE endpoint IN (${marks(gone.length)})`, ...gone);
-			if (threadIds.length)
+			if (keys.length)
 				this.run(
-					`UPDATE threads SET pushed_at = ? WHERE id IN (${marks(threadIds.length)})`,
+					`UPDATE items SET pushed_at = ? WHERE key IN (${marks(keys.length)})`,
 					now,
-					...threadIds
+					...keys
 				);
 		});
 		this.logAlerts(log.filter((m) => !m.resolve));
@@ -141,7 +113,7 @@ export abstract class PollerAlerts extends PollerBase {
 		const summary: PushMessage = {
 			title: held.count === 1 ? '1 alert while quiet' : `${held.count} alerts while quiet`,
 			body: held.lines.join('\n'),
-			url: `${origin}/inbox`,
+			url: `${origin}/turn`,
 			tag: 'digest'
 		};
 		// Already in the history, one by one.
@@ -156,7 +128,7 @@ export abstract class PollerAlerts extends PollerBase {
 		this.transaction(() => {
 			for (const m of logged)
 				this.run(
-					'INSERT INTO alerts (sent_at, title, body, url, thread_id) VALUES (?, ?, ?, ?, ?)',
+					'INSERT INTO alerts (sent_at, title, body, url, item_key) VALUES (?, ?, ?, ?, ?)',
 					now,
 					m.title,
 					m.body,

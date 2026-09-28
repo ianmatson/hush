@@ -11,7 +11,7 @@
 		<a href="/pricing">Pricing</a>
 		<a class="wide" href={REPO_URL} rel="noreferrer">Source</a>
 		<a class="wide" href="{APP_URL}/login">Sign in</a>
-		<a class="open" href="{APP_URL}/inbox">Open Hush</a>
+		<a class="open" href="{APP_URL}/turn">Open Hush</a>
 	</nav>
 </header>
 

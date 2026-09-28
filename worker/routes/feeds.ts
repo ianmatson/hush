@@ -1,5 +1,5 @@
 import type { FeedDTO } from '../../src/lib/shared/types';
-import { feedViewOk } from '../../src/lib/shared/views';
+import { feedViewOk } from '../../src/lib/shared/search';
 import { randomToken, sha256 } from '../crypto';
 import { renderFeed } from '../feeds';
 import { routes } from '../app';
