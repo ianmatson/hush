@@ -70,9 +70,9 @@
 
 		<section class="close reveal">
 			<p>
-				Hush reads your notifications and changes nothing on GitHub except what you choose:
-				<em>Done</em>, <em>Read</em>, and <em>Mute</em>. It is open source, and it takes a minute to
-				set up.
+				Hush acts on GitHub only when you do: <em>approve</em>, <em>comment</em>,
+				<em>merge</em>, or mark it <em>Done</em>, without leaving your inbox. It is open source, and
+				it takes a minute to set up.
 			</p>
 			<a class="quiet" href="{APP_URL}/inbox">Open Hush <span>→</span></a>
 		</section>

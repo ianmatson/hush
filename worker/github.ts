@@ -479,9 +479,11 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
   repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) {
     __typename ...P ...I
     ... on PullRequest {
-      number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
-      baseRefName headRefName reviewDecision mergeable
-      repository { nameWithOwner }
+      id number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
+      baseRefName headRefName headRefOid reviewDecision mergeable mergeStateStatus locked
+      viewerDidAuthor viewerCanClose viewerCanReopen viewerCanMergeAsAdmin
+      viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
+      repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }
       author { ${PERSON} }
       labels(first: 10) { nodes { name color } }
       assignees(first: 10) { nodes { login } }
@@ -492,7 +494,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
         totalCount
         nodes {
           __typename
-          ... on CheckRun { name status conclusion detailsUrl }
+          ... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { databaseId } } }
           ... on StatusContext { context state targetUrl }
         }
       } } } } }
@@ -506,8 +508,9 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       }
     }
     ... on Issue {
-      number title url state createdAt bodyHTML
-      repository { nameWithOwner }
+      id number title url state createdAt bodyHTML locked
+      viewerDidAuthor viewerCanClose viewerCanReopen
+      repository { nameWithOwner viewerPermission }
       author { ${PERSON} }
       labels(first: 10) { nodes { name color } }
       assignees(first: 10) { nodes { login } }
@@ -519,6 +522,9 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
   } }
 }
 ${SUBJECT_FIELDS}`;
+
+/** Permissions that may still write in a locked conversation, and merge. */
+const WRITERS = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
 
 const person = (a: Node | null | undefined): PeekPerson => ({
 	login: a?.login ?? 'ghost',
@@ -609,7 +615,15 @@ export async function fetchPeek(
 		html: n.bodyHTML ?? '',
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
-		timeline: { total: n.timelineItems?.totalCount ?? items.length, items }
+		timeline: { total: n.timelineItems?.totalCount ?? items.length, items },
+		can: {
+			id: n.id,
+			author: !!n.viewerDidAuthor,
+			close: !!n.viewerCanClose,
+			reopen: !!n.viewerCanReopen,
+			comment: !n.locked || WRITERS.has(n.repository?.viewerPermission),
+			permission: n.repository?.viewerPermission ?? null
+		}
 	};
 	if (!pr) return { peek: base, subject };
 
@@ -625,6 +639,32 @@ export async function fetchPeek(
 			(a: { state: CheckState }, b: { state: CheckState }) =>
 				CHECK_ORDER[a.state] - CHECK_ORDER[b.state]
 		);
+	const r = n.repository ?? {};
+	const failedRuns = [
+		...new Set<number>(
+			(rollup?.contexts?.nodes ?? [])
+				.filter((c: Node) => c?.__typename === 'CheckRun' && checkState(c) === 'failure')
+				.map((c: Node) => c.checkSuite?.workflowRun?.databaseId)
+				.filter((id: unknown): id is number => typeof id === 'number')
+		)
+	];
+	base.can.pr = {
+		headOid: n.headRefOid,
+		mergeState: n.mergeStateStatus ?? 'UNKNOWN',
+		methods: [
+			...(r.squashMergeAllowed ? ['SQUASH' as const] : []),
+			...(r.mergeCommitAllowed ? ['MERGE' as const] : []),
+			...(r.rebaseMergeAllowed ? ['REBASE' as const] : [])
+		],
+		mergeAsAdmin: !!n.viewerCanMergeAsAdmin,
+		autoMerge: {
+			on: !!n.autoMergeRequest,
+			method: n.autoMergeRequest?.mergeMethod ?? null,
+			canEnable: !!n.viewerCanEnableAutoMerge,
+			canDisable: !!n.viewerCanDisableAutoMerge
+		},
+		failedRuns
+	};
 	const peek: PeekDTO = {
 		...base,
 		pr: {

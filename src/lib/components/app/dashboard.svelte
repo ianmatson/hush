@@ -6,7 +6,7 @@
 		type TurnGroup
 	} from '$lib/dash-actions';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
-	import { DASH_SHORTCUTS } from '$lib/shortcuts';
+	import { DASH_SHORTCUTS, PEEK_ACTION_SHORTCUTS } from '$lib/shortcuts';
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
@@ -184,7 +184,14 @@
 		if (!owns || !data) return;
 		untrack(() => {
 			if (!i) return closePeek();
-			peek.target = { id: i.id, repo: i.repo, number: i.number, title: i.title, url: i.url };
+			peek.target = {
+				id: i.id,
+				repo: i.repo,
+				number: i.number,
+				title: i.title,
+				url: i.url,
+				need: i.requestedMe ? 'review' : null
+			};
 		});
 	});
 	$effect(() => {
@@ -920,4 +927,4 @@
 	{/if}
 {/snippet}
 
-<ShortcutsDialog bind:open={helpOpen} shortcuts={DASH_SHORTCUTS} />
+<ShortcutsDialog bind:open={helpOpen} shortcuts={[...DASH_SHORTCUTS, ...PEEK_ACTION_SHORTCUTS]} />

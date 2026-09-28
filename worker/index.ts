@@ -12,6 +12,7 @@ import live from './routes/live';
 import push from './routes/push';
 import settings from './routes/settings';
 import subjects from './routes/subjects';
+import actions from './routes/actions';
 import threads from './routes/threads';
 
 export { Poller } from './poller';
@@ -68,6 +69,7 @@ const api = app
 	.route('/', push)
 	.route('/', alerts)
 	.route('/', subjects)
+	.route('/', actions)
 	.route('/', dashboard)
 	.route('/', feeds)
 	.route('/', live);

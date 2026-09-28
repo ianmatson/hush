@@ -364,7 +364,7 @@ export interface MeDTO {
 export type OrgAccess =
 	{ available: false } | { available: true; orgs: string[]; approveUrl: string };
 
-// --- Peek: a read-only view of one PR or issue --------------------------------------
+// --- Peek: one PR or issue in the side panel, with actions on it ---------------------
 
 export type CheckState = 'failure' | 'pending' | 'success' | 'neutral';
 
@@ -439,6 +439,35 @@ export interface PeekDTO {
 		checksTotal: number;
 	};
 	timeline: { total: number; items: PeekEntry[] };
+	/** What you may do here: the action buttons read it (shared/actions.ts). */
+	can: PeekCan;
+}
+
+export type MergeMethod = 'MERGE' | 'SQUASH' | 'REBASE';
+
+/** Your permissions and the state the actions need, read with the peek. */
+export interface PeekCan {
+	/** The GraphQL node ID (for the auto-merge mutations). */
+	id: string;
+	/** You opened it (GitHub does not let you review your own PR). */
+	author: boolean;
+	close: boolean;
+	reopen: boolean;
+	/** The conversation is not locked (or you may still write in it). */
+	comment: boolean;
+	/** Your permission on the repository: ADMIN, MAINTAIN, WRITE, TRIAGE, or READ. */
+	permission: string | null;
+	pr?: {
+		/** The head commit you saw: a merge fails if the branch moved since. */
+		headOid: string;
+		/** GitHub's merge state: CLEAN, BLOCKED, BEHIND, DIRTY, UNSTABLE, HAS_HOOKS, DRAFT, UNKNOWN. */
+		mergeState: string;
+		methods: MergeMethod[];
+		mergeAsAdmin: boolean;
+		autoMerge: { on: boolean; method: MergeMethod | null; canEnable: boolean; canDisable: boolean };
+		/** Workflow runs with a failed job, for "Re-run failed jobs". */
+		failedRuns: number[];
+	};
 }
 
 /**

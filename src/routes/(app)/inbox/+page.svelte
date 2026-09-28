@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
-	import { INBOX_SHORTCUTS } from '$lib/shortcuts';
+	import { INBOX_SHORTCUTS, PEEK_ACTION_SHORTCUTS } from '$lib/shortcuts';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -170,7 +170,14 @@
 		if (!owns || !threadsQ.data) return;
 		untrack(() => {
 			if (!t) return closePeek();
-			peek.target = { id: t.id, repo: t.repo, number: t.number, title: t.title, url: t.htmlUrl };
+			peek.target = {
+				id: t.id,
+				repo: t.repo,
+				number: t.number,
+				title: t.title,
+				url: t.htmlUrl,
+				need: t.kind
+			};
 		});
 	});
 	$effect(() => {
@@ -864,4 +871,4 @@
 	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
 />
 
-<ShortcutsDialog bind:open={helpOpen} shortcuts={INBOX_SHORTCUTS} />
+<ShortcutsDialog bind:open={helpOpen} shortcuts={[...INBOX_SHORTCUTS, ...PEEK_ACTION_SHORTCUTS]} />

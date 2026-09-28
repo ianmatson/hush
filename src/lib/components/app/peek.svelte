@@ -1,10 +1,14 @@
 <script lang="ts" module>
+	import type { ActionKind } from '$lib/shared/types';
+
 	export interface PeekTarget {
 		/** PRs and issues have a number; other threads (releases, CI runs) cannot be peeked. */
 		repo: string;
 		number: number | null;
 		title: string;
 		url: string;
+		/** What the thread asks of you: it picks the main action button. */
+		need?: ActionKind | null;
 	}
 </script>
 
@@ -64,5 +68,10 @@
 			>
 		{/if}
 	{/snippet}
-	{#if target}<PeekContent repo={target.repo} number={target.number} title={target.title} />{/if}
+	{#if target}<PeekContent
+			repo={target.repo}
+			number={target.number}
+			title={target.title}
+			need={target.need ?? null}
+		/>{/if}
 </SidePanel>

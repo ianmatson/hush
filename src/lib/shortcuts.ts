@@ -1,3 +1,5 @@
+import { GH_ACTIONS, keyLabel } from './shared/actions';
+
 /** Keyboard shortcuts, as [keys, what they do], for the "?" dialog. */
 export type Shortcut = [keys: string, does: string];
 
@@ -45,3 +47,17 @@ export const DASH_SHORTCUTS: Shortcut[] = [
 	['⌘ / Ctrl + K', 'Search and commands'],
 	['?', 'Show shortcuts']
 ];
+
+/**
+ * Keys for actions on GitHub, while the peek shows a PR or issue. From the action table, so
+ * custom keys (later) show here too. One line per key (Close and Reopen share X).
+ */
+export const PEEK_ACTION_SHORTCUTS: Shortcut[] = Object.values(
+	Object.values(GH_ACTIONS).reduce<Record<string, string[]>>((byKey, a) => {
+		if (a.key) (byKey[a.key] ??= []).push(a.label);
+		return byKey;
+	}, {})
+).map((labels) => {
+	const key = Object.values(GH_ACTIONS).find((a) => a.label === labels[0])!.key!;
+	return [keyLabel(key), `In the peek: ${labels.join(' / ')}`];
+});

@@ -6,7 +6,8 @@
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
-	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
+	import type { ActionKind, CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
+	import GhActions from './gh-actions.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import GitPullRequestDraft from '@lucide/svelte/icons/git-pull-request-draft';
@@ -23,7 +24,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	/** The contents of the peek panel: one PR or issue, fetched when shown. */
-	let { repo, number }: { repo: string; number: number } = $props();
+	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
 
 	const q = createQuery(() => peekQuery(repo, number));
 	// The server stored what this peek read. If that changed the inbox or dashboards, refetch
@@ -154,6 +155,8 @@
 				</div>
 			{/if}
 		</header>
+
+		<GhActions {p} {need} />
 
 		{#if p.pr}
 			{@const pr = p.pr}

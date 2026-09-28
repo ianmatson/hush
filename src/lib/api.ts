@@ -2,7 +2,8 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
-import type { DashKind, Rule, Settings, Turn, View } from '$lib/shared/types';
+import type { DashKind, MergeMethod, Rule, Settings, Turn, View } from '$lib/shared/types';
+import type { GhActionId } from '$lib/shared/actions';
 
 export class ApiError extends Error {
 	constructor(
@@ -53,6 +54,17 @@ export type ActionBody = { until?: number; event?: SnoozeEvent };
 
 export const api = {
 	me: () => ok(client.api.me.$get()),
+	/** An action on GitHub (approve, comment, merge…); the server reads the PR or issue again. */
+	ghAction: (a: {
+		repo: string;
+		number: number;
+		action: GhActionId;
+		body?: string;
+		method?: MergeMethod;
+		sha?: string;
+		runs?: number[];
+		id?: string;
+	}) => ok(client.api.actions.$post({ json: a })),
 	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */

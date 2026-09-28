@@ -38,8 +38,8 @@
 	</a>
 
 	<p class="text-xs leading-relaxed text-muted-foreground">
-		Hush asks for read access to your notifications, your repositories, and your teams. It stores
-		the token encrypted and changes nothing on GitHub except what you choose: Done, Read, and Mute.
+		Hush asks for access to your notifications, your repositories, and your teams. It stores the
+		token encrypted, and it acts on GitHub only when you do: a review, a comment, a merge, or Done.
 		If your org uses SAML SSO, GitHub asks you to authorize Hush for it.
 	</p>
 </main>
