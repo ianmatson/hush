@@ -1,4 +1,4 @@
-import { classify, ruleTriage, shouldPush } from '../../src/lib/shared/classify';
+import { classify, ruleTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
 import type { DashResponse } from '../../src/lib/shared/types';
@@ -158,18 +158,22 @@ export abstract class PollerSubjects extends PollerAlerts {
 		const now = Date.now();
 		for (const { row: r, fresh, before } of items) {
 			const e = enrichmentOf(fresh, me);
-			const c = classify(
-				{
-					repo: r.repo,
-					subjectType: r.subject_type,
-					title: r.title,
-					reason: r.reason,
-					htmlUrl: r.html_url,
-					enrichment: e,
-					me,
-					myTeams
-				},
-				settings
+			const c = withOverride(
+				classify(
+					{
+						repo: r.repo,
+						subjectType: r.subject_type,
+						title: r.title,
+						reason: r.reason,
+						htmlUrl: r.html_url,
+						enrichment: e,
+						me,
+						myTeams
+					},
+					settings
+				),
+				r,
+				r.gh_updated_at
 			);
 			const out = watchOutcome(
 				{

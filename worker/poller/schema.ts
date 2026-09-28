@@ -192,7 +192,8 @@ export function toDTO(r: ThreadWithFacts): ThreadDTO {
 		authorIsBot: !!f?.authorIsBot,
 		labels: f?.labels.map((l) => l.name) ?? [],
 		rule: r.rule,
-		activity: latestActivity(f)
+		activity: latestActivity(f),
+		override: r.override === 'fyi' && r.override_updated_at === r.gh_updated_at
 	};
 }
 

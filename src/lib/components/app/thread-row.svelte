@@ -119,6 +119,9 @@
 		</a>
 		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">
 			<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>
+			{#if t.override}
+				<span class="rounded-md border border-dashed px-1.5 py-0.5">You said: doesn’t need me</span>
+			{/if}
 			{#if t.rule}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">rule: {t.rule}</span>
 			{/if}

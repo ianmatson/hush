@@ -14,6 +14,7 @@ import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 import ExternalLink from '@lucide/svelte/icons/external-link';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import SquareCheck from '@lucide/svelte/icons/square-check';
+import CircleSlash from '@lucide/svelte/icons/circle-slash';
 
 /** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
@@ -48,6 +49,8 @@ export interface DashActionContext {
 	copyLinks(ids: string[]): unknown;
 	refresh(): unknown;
 	toggleShowHidden(): void;
+	/** Ask why an item in Your turn is not your turn ("Not my turn…"). */
+	notNeeded(i: DashItem): void;
 }
 
 /** ⌘K commands: refresh and hidden items, then actions on the cursor row or the selection. */
@@ -87,6 +90,15 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 		shortcut: key('dash.hide'),
 		run: () => ctx.toggleHide(ids)
 	});
+	if (one?.turn === 'you' && !one.dismissed)
+		add({
+			id: 'act:not-needed',
+			label: 'Not my turn…',
+			icon: CircleSlash,
+			shortcut: key('dash.notNeeded'),
+			keywords: ['wrong', 'fyi', 'doesn’t need me'],
+			run: () => ctx.notNeeded(one)
+		});
 	if (ids.some((id) => ctx.byId(id)?.movedByYou))
 		add({ id: 'act:undomove', label: 'Undo move', icon: Undo, run: () => ctx.arrange(ids, null) });
 	for (const g of [...ctx.groups].reverse())
@@ -153,7 +165,13 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					: null;
 			case 'github':
 				return one && one.url !== one.actionUrl
-					? item(id, 'Open on GitHub', ExternalLink, () => ctx.open(one, one.url), '⇧O')
+					? item(
+							id,
+							'Open on GitHub',
+							ExternalLink,
+							() => ctx.open(one, one.url),
+							key('list.openGitHub')
+						)
 					: null;
 			case 'move':
 				return {
@@ -177,13 +195,17 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 							() => ctx.toggleHide(ids),
 							key('dash.hide')
 						);
+			case 'not-needed':
+				return one?.turn === 'you' && !one.dismissed
+					? item(id, 'Not my turn…', CircleSlash, () => ctx.notNeeded(one), key('dash.notNeeded'))
+					: null;
 			case 'copy':
 				return item(
 					id,
 					n(ids.length > 1 ? 'Copy links' : 'Copy link'),
 					Link,
 					() => ctx.copyLinks(ids),
-					'C'
+					key('list.copy')
 				);
 			case 'select':
 				return one
@@ -192,7 +214,7 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 							ctx.sel.has(one.id) ? 'Deselect' : 'Select',
 							SquareCheck,
 							() => ctx.sel.toggle(one.id),
-							'X'
+							key('list.select')
 						)
 					: null;
 			case 'selectAll':

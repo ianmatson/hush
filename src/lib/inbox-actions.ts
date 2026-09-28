@@ -22,6 +22,7 @@ import SquareCheck from '@lucide/svelte/icons/square-check';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import Zap from '@lucide/svelte/icons/zap';
 import ListFilter from '@lucide/svelte/icons/list-filter';
+import CircleSlash from '@lucide/svelte/icons/circle-slash';
 
 /** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
@@ -46,7 +47,13 @@ export interface InboxActionContext {
 	copyLinks(ids: string[]): unknown;
 	/** Open the snooze sheet (phones) for these threads. */
 	snoozeSheet(ids: string[]): void;
+	/** Ask why a Needs you thread does not need you ("Doesn't need me…"). */
+	notNeeded(t: ThreadDTO): void;
 }
+
+/** A thread that "Doesn't need me…" applies to: it needs you now, in the inbox. */
+export const canSayNotNeeded = (t: ThreadDTO | undefined) =>
+	!!t && t.category === 'action' && t.triage !== 'done';
 
 const itemLabel = (id: string) => MENU_ITEMS.inbox.find((i) => i.id === id)?.label ?? id;
 
@@ -98,7 +105,13 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 					: null;
 			case 'github':
 				return one && one.htmlUrl !== one.actionUrl
-					? item(id, 'Open on GitHub', ExternalLink, () => ctx.open(one, one.htmlUrl), '⇧O')
+					? item(
+							id,
+							'Open on GitHub',
+							ExternalLink,
+							() => ctx.open(one, one.htmlUrl),
+							key('list.openGitHub')
+						)
 					: null;
 			case 'done':
 				return ctx.inInbox
@@ -134,16 +147,26 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 					n(r === 'read' ? 'Mark as read' : 'Mark as unread'),
 					r === 'read' ? MailOpen : Mail,
 					() => ctx.act(ids, r),
-					'U'
+					key('inbox.read')
 				);
 			}
+			case 'not-needed':
+				return one && canSayNotNeeded(one)
+					? item(
+							id,
+							'Doesn’t need me…',
+							CircleSlash,
+							() => ctx.notNeeded(one),
+							key('inbox.notNeeded')
+						)
+					: null;
 			case 'copy':
 				return item(
 					id,
 					n(ids.length > 1 ? 'Copy links' : 'Copy link'),
 					Link,
 					() => ctx.copyLinks(ids),
-					'C'
+					key('list.copy')
 				);
 			case 'rule':
 				return one
@@ -160,7 +183,7 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 							ctx.sel.has(one.id) ? 'Deselect' : 'Select',
 							SquareCheck,
 							() => ctx.sel.toggle(one.id),
-							'X'
+							key('list.select')
 						)
 					: null;
 			case 'selectAll':
@@ -249,6 +272,15 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			run: () => ctx.act(ids, restoreAction(ctx.view, one))
 		});
 	}
+	if (one && canSayNotNeeded(one))
+		add({
+			id: 'act:not-needed',
+			label: 'Doesn’t need me…',
+			icon: CircleSlash,
+			shortcut: key('inbox.notNeeded'),
+			keywords: ['wrong', 'fyi', 'not mine'],
+			run: () => ctx.notNeeded(one)
+		});
 	const read = readAction(ctx, ids);
 	add({
 		id: 'act:read',

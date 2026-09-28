@@ -73,6 +73,7 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'inbox.snooze', label: 'Snooze until tomorrow 9:00', scope: 'inbox', keys: ['s'] },
 	{ id: 'inbox.mute', label: 'Mute the thread', scope: 'inbox', keys: ['m'] },
 	{ id: 'inbox.read', label: 'Mark as read / unread', scope: 'inbox', keys: ['u'] },
+	{ id: 'inbox.notNeeded', label: 'Doesn’t need me…', scope: 'inbox', keys: ['n'] },
 	...range(1, 9).map((n) => ({
 		id: `inbox.view.${n}`,
 		label: `View ${n} (${n <= 5 ? 'built-in' : 'your saved views'})`,
@@ -82,6 +83,7 @@ export const COMMANDS: KeyCommand[] = [
 
 	{ id: 'dash.hide', label: 'Hide until it changes (or show again)', scope: 'dash', keys: ['e'] },
 	{ id: 'dash.showHidden', label: 'Show hidden items', scope: 'dash', keys: ['h'] },
+	{ id: 'dash.notNeeded', label: 'Not my turn…', scope: 'dash', keys: ['n'] },
 	...range(0, 9).map((n) => ({
 		id: `dash.section.${n}`,
 		label: n === 0 ? 'Section: all' : `Section ${n}`,

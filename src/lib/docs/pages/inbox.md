@@ -82,6 +82,20 @@ After each action, a message with **Undo** shows for a few seconds.
 - **Hush finishes threads for you.** When a thread in Needs you stops needing you (you approved, you pushed a fix, CI passes now, it was merged), Hush moves it to Done with a note that says why. If it needs you again within 7 days (someone requests changes again, CI fails again), it comes back to Needs you.
 - **FYI about work that closed** moves to Done when it is merged or closed.
 
+## Doesn't need me
+
+When Hush puts a thread in Needs you and it does not need you, press {{key:inbox.notNeeded}}, or choose **Doesn't need me** at the top of the [peek](/docs/peek) or in the right-click menu. Hush asks **Why doesn't this need you?**, and each answer fixes what would have been right:
+
+| Answer                                 | What changes                                                                                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Someone else already reviewed it**   | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.             |
+| **Team review requests don't need me** | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                     |
+| **A bot opened it**                    | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                          |
+| **I don't work on acme/website**       | Adds a [rule](/docs/rules) at the top: `repo:acme/website` is FYI.                                                                           |
+| **Only this one**                      | Moves only this thread to FYI, until it changes (a new notification). For a PR or issue, also to Other on the Pull requests and Issues tabs. |
+
+Hush shows only the answers that would change something for this thread. After each one, **Undo** in the message puts everything back. A thread that you moved says “You said: doesn't need me”.
+
 ## Snooze
 
 The Snooze menu has times and conditions. A time is on your computer's clock.

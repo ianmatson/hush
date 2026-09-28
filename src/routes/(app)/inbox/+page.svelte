@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
-	import { commandFor } from '$lib/keys.svelte';
+	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -35,6 +35,9 @@
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import WhyLine from '$lib/components/app/why-line.svelte';
 	import WelcomeCard from '$lib/components/app/welcome-card.svelte';
+	import NotNeededDialog, {
+		type NotNeededTarget
+	} from '$lib/components/app/not-needed-dialog.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
 	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
 	import AppMenu from '$lib/components/app/app-menu.svelte';
@@ -45,7 +48,8 @@
 		inboxMenu,
 		readAction,
 		restoreAction,
-		type InboxActionContext
+		type InboxActionContext,
+		canSayNotNeeded
 	} from '$lib/inbox-actions';
 	import { openOnGitHub, reportResolved } from '$lib/recheck';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -394,7 +398,8 @@
 			'inbox.snooze': () =>
 				inInbox && act(targets(), 'snooze', { until: snoozeOptions()[2].until }),
 			'inbox.mute': () => inInbox && act(targets(), 'mute'),
-			'inbox.read': () => toggleRead(targets())
+			'inbox.read': () => toggleRead(targets()),
+			'inbox.notNeeded': () => t && canSayNotNeeded(t) && sayNotNeeded(t)
 		};
 		VIEWS.forEach((v, i) => (run[`inbox.view.${i + 1}`] = () => goto(`/inbox?view=${v.id}`)));
 		savedViews
@@ -429,6 +434,21 @@
 	let menuSnoozeIds = $state<string[]>([]);
 	let menuSnoozeOpen = $state(false);
 
+	// "Doesn't need me…": Hush was wrong about a Needs you thread (not-needed-dialog.svelte).
+	let notNeededFor = $state<NotNeededTarget | null>(null);
+	function sayNotNeeded(t: ThreadDTO) {
+		notNeededFor = {
+			id: t.id,
+			title: t.title,
+			repo: t.repo,
+			review: t.kind === 'review',
+			// A team's request reads "@alice requests review from acme/web" (shared/dashboard.ts).
+			team: t.kind === 'review' && / requests review from /.test(t.summary),
+			bot: t.authorIsBot,
+			elsewhere: 'FYI'
+		};
+	}
+
 	// Menus and ⌘K commands (see inbox-actions.ts) read the page through this context.
 	const actions: InboxActionContext = {
 		get view() {
@@ -452,7 +472,8 @@
 		snoozeSheet: (ids) => {
 			menuSnoozeIds = ids;
 			menuSnoozeOpen = true;
-		}
+		},
+		notNeeded: sayNotNeeded
 	};
 	const menuFor = (ids: string[]) => inboxMenu(actions, ids);
 	$effect(() => palette.register(() => inboxCommands(actions, targets())));
@@ -789,6 +810,8 @@
 	</Button>
 </BulkBar>
 
+<NotNeededDialog bind:target={notNeededFor} />
+
 <SnoozeSheet
 	bind:open={bulkSnoozeOpen}
 	subjects={targets().map((id) => subjectKind(byId(id)?.subjectType ?? ''))}
@@ -812,9 +835,21 @@
 			notes={[
 				t.why && `GitHub: ${t.why.charAt(0).toLowerCase()}${t.why.slice(1)}`,
 				t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Rule: ${t.rule}`),
+				t.override && 'You said it doesn’t need you, until it changes',
 				t.resolvedNote && `Hush moved it: ${t.resolvedNote}`
 			]}
-		/>
+		>
+			{#snippet actions()}
+				{#if canSayNotNeeded(t)}
+					<Button
+						variant="outline"
+						size="xs"
+						title="Doesn’t need me ({keysOf('inbox.notNeeded')[0] ?? ''})"
+						onclick={() => sayNotNeeded(t)}>Doesn’t need me</Button
+					>
+				{/if}
+			{/snippet}
+		</WhyLine>
 	{/if}
 {/snippet}
 

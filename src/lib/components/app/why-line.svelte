@@ -13,7 +13,7 @@
 	}: {
 		lead: string;
 		text: string;
-		notes?: (string | null | false)[];
+		notes?: (string | null | false | undefined)[];
 		actions?: Snippet;
 	} = $props();
 

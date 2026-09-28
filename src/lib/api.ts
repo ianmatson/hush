@@ -47,6 +47,8 @@ export type ThreadsResponse = ThreadsBody & {
 	etag?: string;
 };
 
+/** Why a thread does not need you (worker/poller/data.ts: notNeeded). */
+export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'repo' | 'once';
 export type ThreadAction =
 	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
 /** The body of a thread action: snooze takes a time or a condition. */
@@ -95,6 +97,10 @@ export const api = {
 	/** What Hush found (the first-run card). */
 	summary: () => ok(client.api.threads.summary.$get()),
 	onboarded: () => ok(client.api.onboarded.$post()),
+	/** "Doesn't need me": a thread id or a dashboard item ("owner/repo#123"), and why. */
+	notNeeded: (id: string, answer: NotNeededAnswer) =>
+		ok(client.api['not-needed'].$post({ json: { id, answer } })),
+	undoOnlyThisOne: (id: string) => ok(client.api['not-needed'].undo.$post({ json: { id } })),
 	previewRules: (rules: Rule[]) => ok(client.api.rules.preview.$post({ json: { rules } })),
 	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
 	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */

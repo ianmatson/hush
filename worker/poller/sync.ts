@@ -1,4 +1,4 @@
-import { classify, ruleTriage, shouldPush } from '../../src/lib/shared/classify';
+import { classify, ruleTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { Classification, ThreadFacts } from '../../src/lib/shared/types';
@@ -97,7 +97,7 @@ export abstract class PollerSync extends PollerSubjects {
 				me,
 				myTeams
 			};
-			let c = classify(facts, settings);
+			let c = withOverride(classify(facts, settings), ex, n.updated_at);
 			if (ex?.category === 'muted' && ex.rule === MUTED_BY_USER)
 				c = { ...c, category: 'muted', rule: MUTED_BY_USER };
 

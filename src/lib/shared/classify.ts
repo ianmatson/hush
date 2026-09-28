@@ -196,6 +196,20 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	return true;
 }
 
+/**
+ * "Doesn't need me — only this one": a thread you took out of Needs you is FYI until it changes
+ * (a new notification moves its updatedAt past `override_updated_at`).
+ */
+export function withOverride(
+	c: Classification,
+	row: { override: string | null; override_updated_at: string | null } | null | undefined,
+	updatedAt: string
+): Classification {
+	if (row?.override !== 'fyi' || row.override_updated_at !== updatedAt || c.category !== 'action')
+		return c;
+	return { ...c, category: 'fyi', push: false };
+}
+
 /** Index of the first enabled rule that matches (the one that wins), or -1. */
 export function firstMatchingRule(t: ThreadFacts, rules: Rule[], base: Classification): number {
 	return rules.findIndex(

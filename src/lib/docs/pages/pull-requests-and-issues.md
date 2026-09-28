@@ -60,6 +60,10 @@ More options are only in [settings.json](/docs/settings): hide others' drafts ([
 | Copy link             | {{key:list.copy}}       | Copies the links of the item or the selection.                                                                                                     |
 | Refresh               | {{key:list.refresh}}    | Searches GitHub again now.                                                                                                                         |
 
+### Not my turn
+
+When an item in **Your turn** is not your turn, press {{key:dash.notNeeded}}, or choose **Not my turn** at the top of the [peek](/docs/peek) or in its menu. The answers are the same as [Doesn't need me](/docs/inbox#doesnt-need-me) in the inbox: they fix a setting, add a rule, or move only this item to Other (and its thread in the inbox to FYI) until it changes.
+
 ### Move an item to another group
 
 If Hush puts an item in the wrong group, drag it (by ⋮⋮) to another group or to another place in the list, or use **Move to** in its menu. The item stays where you put it **until it changes** on GitHub; then Hush sorts it again. “Moved by you” shows on it; **Undo move** puts it back. Your order inside a group stays too; new items come in on top.

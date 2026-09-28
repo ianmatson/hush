@@ -7,7 +7,7 @@
 	} from '$lib/dash-actions';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { DASH_MOUSE, shortcutsFor } from '$lib/shortcuts';
-	import { commandFor } from '$lib/keys.svelte';
+	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
@@ -37,6 +37,7 @@
 	import { openOnGitHub } from '$lib/recheck';
 	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
 	import WhyLine from './why-line.svelte';
+	import NotNeededDialog, { type NotNeededTarget } from './not-needed-dialog.svelte';
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -515,7 +516,8 @@
 			'list.search': () => searchEl?.focus(),
 			'list.help': () => (helpOpen = true),
 			'dash.hide': () => toggleHide(targets()),
-			'dash.showHidden': () => (showHidden = !showHidden)
+			'dash.showHidden': () => (showHidden = !showHidden),
+			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i)
 		};
 		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
 		const fn = run[cmd];
@@ -542,6 +544,20 @@
 	}
 
 	// Menus and ⌘K commands (see dash-actions.ts) read the dashboard through this context.
+	// "Not my turn…": Hush was wrong about an item in Your turn (not-needed-dialog.svelte).
+	let notNeededFor = $state<NotNeededTarget | null>(null);
+	function sayNotNeeded(i: DashItem) {
+		notNeededFor = {
+			id: i.id,
+			title: i.title,
+			repo: i.repo,
+			review: i.requestedMe,
+			team: false,
+			bot: i.authorIsBot,
+			elsewhere: 'Other'
+		};
+	}
+
 	const actions: DashActionContext = {
 		get noun() {
 			return noun;
@@ -567,7 +583,8 @@
 		toggleHide,
 		copyLinks,
 		refresh,
-		toggleShowHidden: () => (showHidden = !showHidden)
+		toggleShowHidden: () => (showHidden = !showHidden),
+		notNeeded: sayNotNeeded
 	};
 	const menuFor = (ids: string[]) => dashMenu(actions, ids);
 	$effect(() => palette.register(() => dashCommands(actions, targets())));
@@ -900,6 +917,8 @@
 	>
 </BulkBar>
 
+<NotNeededDialog bind:target={notNeededFor} />
+
 {#snippet peekHeader()}
 	{#if peekItem}
 		{@const i = peekItem}
@@ -911,7 +930,18 @@
 				i.sections.length > 0 &&
 					`Found by: ${i.sections.map((id) => sectionNames[id] ?? id).join(', ')}`
 			]}
-		/>
+		>
+			{#snippet actions()}
+				{#if i.turn === 'you' && !i.dismissed}
+					<Button
+						variant="outline"
+						size="xs"
+						title="Not my turn ({keysOf('dash.notNeeded')[0] ?? ''})"
+						onclick={() => sayNotNeeded(i)}>Not my turn</Button
+					>
+				{/if}
+			{/snippet}
+		</WhyLine>
 	{/if}
 {/snippet}
 

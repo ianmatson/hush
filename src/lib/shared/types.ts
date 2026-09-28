@@ -336,6 +336,8 @@ export interface ThreadDTO {
 	authorIsBot: boolean;
 	labels: string[];
 	rule: string | null;
+	/** You said it does not need you ("only this one"): FYI until it changes. */
+	override?: boolean;
 	/** The newest comment, review, or push (who, and whether a bot): shared/activity.ts. */
 	activity: Activity | null;
 }

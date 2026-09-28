@@ -4,7 +4,8 @@ import {
 	firstMatchingRule,
 	globToRegExp,
 	ruleTriage,
-	validateRules
+	validateRules,
+	withOverride
 } from '../../src/lib/shared/classify';
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { FEED_TABS, threadMatches } from '../../src/lib/shared/views';
@@ -63,6 +64,10 @@ const THREAD_ACTIONS = new Set<ThreadAction>([
 ]);
 // Mute makes 2 GitHub calls per thread; 20 × 2 stays under the Free plan's 50 subrequests.
 const BULK_MAX = 20;
+
+/** Why a thread or item does not need you ("Doesn't need me…"): what each answer changes. */
+export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'repo' | 'once';
+const NOT_NEEDED = new Set<NotNeededAnswer>(['others-reviewed', 'team', 'bots', 'repo', 'once']);
 const MAX_DEVICES = 10;
 const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all', 'inbox']);
 /** An open inbox records a visit (and brings the next poll forward) at most this often. */
@@ -249,7 +254,7 @@ export abstract class PollerData extends PollerDashboard {
 						);
 						break;
 					case 'unmute': {
-						const cls = classify(factsFromRow(t, me), settings!);
+						const cls = withOverride(classify(factsFromRow(t, me), settings!), t, t.gh_updated_at);
 						set(t, `category = ?, rule = ?, triage = 'inbox'`, cls.category, cls.rule ?? null);
 						break;
 					}
@@ -408,7 +413,7 @@ export abstract class PollerData extends PollerDashboard {
 		const done: { id: string; note: string }[] = [];
 		for (const r of this.threads('1')) {
 			if (r.rule === MUTED_BY_USER) continue;
-			const c = classify(factsFromRow(r, me, myTeams), settings);
+			const c = withOverride(classify(factsFromRow(r, me, myTeams), settings), r, r.gh_updated_at);
 			const moved =
 				r.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
 			const same =
@@ -625,6 +630,90 @@ export abstract class PollerData extends PollerDashboard {
 				)
 			);
 		});
+		return { ok: true };
+	}
+
+	/**
+	 * "Doesn't need me": Hush was wrong about a thread (its id) or a dashboard item (its
+	 * "owner/repo#123"). Each answer changes what would have been right: a setting, or a rule to
+	 * FYI; or only this PR or issue, until it changes ("once": FYI in the inbox, Other on the
+	 * dashboards). Returns how to undo it.
+	 */
+	async notNeeded(
+		id: string,
+		answer: NotNeededAnswer
+	): Promise<
+		Refusal | { settings?: Settings; undo: { settings?: Partial<Settings>; once?: string } }
+	> {
+		if (!NOT_NEEDED.has(answer)) return { error: 'Unknown answer', status: 400 };
+		const thread = id.includes('#')
+			? null
+			: this.one<{ repo: string }>('SELECT repo FROM threads WHERE id = ?', id);
+		const repo = thread?.repo ?? (id.includes('#') ? id.slice(0, id.lastIndexOf('#')) : null);
+		if (!repo) return { error: 'Not found', status: 404 };
+		if (answer === 'once') {
+			await this.onlyThisOne(id, true);
+			return { undo: { once: id } };
+		}
+		const old = await this.settings();
+		const patch: Partial<Settings> =
+			answer === 'others-reviewed'
+				? { reviewResolution: 'any_review' }
+				: answer === 'team'
+					? { teamReviewsAreAction: false }
+					: answer === 'bots'
+						? { botsAreFyi: true }
+						: {
+								rules: [
+									{ name: `${repo} is FYI`, when: `repo:${repo}`, then: { category: 'fyi' } },
+									...old.rules
+								]
+							};
+		const undo = Object.fromEntries(
+			Object.keys(patch).map((k) => [k, old[k as keyof Settings]])
+		) as Partial<Settings>;
+		const r = await this.updateSettings(patch);
+		if ('error' in r) return r;
+		return { settings: r.settings, undo: { settings: undo } };
+	}
+
+	/**
+	 * "Only this one", on both sides of the one record: the PR or issue's threads are FYI until
+	 * they change, and its dashboard item is in Other until it changes. `on: false` undoes it.
+	 */
+	async onlyThisOne(id: string, on: boolean): Promise<{ ok: true }> {
+		const key = id.includes('#')
+			? id
+			: (this.one<{ subject_key: string | null }>(
+					'SELECT subject_key FROM threads WHERE id = ?',
+					id
+				)?.subject_key ?? null);
+		const ids = key
+			? this.all<{ id: string }>('SELECT id FROM threads WHERE subject_key = ?', key).map(
+					(t) => t.id
+				)
+			: [id];
+		if (ids.length)
+			this.run(
+				`UPDATE threads SET override = ?, override_updated_at = CASE WHEN ? THEN gh_updated_at END
+         WHERE id IN (${marks(ids.length)})`,
+				on ? 'fyi' : null,
+				on ? 1 : 0,
+				...ids
+			);
+		await this.reclassify(await this.settings());
+		if (key) {
+			if (on)
+				this.run(
+					`INSERT INTO dash_moves (item_id, turn, updated_at) VALUES (?, 'none', ?)
+           ON CONFLICT (item_id) DO UPDATE SET turn = excluded.turn, updated_at = excluded.updated_at`,
+					key,
+					new Date().toISOString()
+				);
+			else this.run('DELETE FROM dash_moves WHERE item_id = ?', key);
+			this.broadcast({ type: 'dash', kind: 'pr' });
+			this.broadcast({ type: 'dash', kind: 'issue' });
+		}
 		return { ok: true };
 	}
 

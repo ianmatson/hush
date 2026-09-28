@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { classify, globToRegExp, ruleTriage, shouldPush, validateRules } from './classify';
+import {
+	classify,
+	globToRegExp,
+	ruleTriage,
+	shouldPush,
+	validateRules,
+	withOverride
+} from './classify';
 import { DEFAULT_SETTINGS } from './settings';
-import type { Enrichment, Settings, ThreadFacts } from './types';
+import type { Classification, Enrichment, Settings, ThreadFacts } from './types';
 
 const pr = (e: Partial<Enrichment> = {}): Enrichment => ({
 	kind: 'pr',
@@ -266,5 +273,20 @@ describe('latest activity', () => {
 			run(mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }), { rules: people })
 				.rule
 		).toBe('people');
+	});
+});
+
+describe('"Doesn\'t need me: only this one"', () => {
+	const needs = { category: 'action', kind: 'review', push: true } as unknown as Classification;
+	const at = '2026-09-20T00:00:00Z';
+	it('is FYI (and not pushed) until the thread changes', () => {
+		const row = { override: 'fyi', override_updated_at: at };
+		expect(withOverride(needs, row, at)).toMatchObject({ category: 'fyi', push: false });
+		expect(withOverride(needs, row, '2026-09-21T00:00:00Z').category).toBe('action');
+		expect(withOverride(needs, { override: null, override_updated_at: null }, at)).toBe(needs);
+	});
+	it('leaves FYI and muted threads as they are', () => {
+		const muted = { ...needs, category: 'muted' } as Classification;
+		expect(withOverride(muted, { override: 'fyi', override_updated_at: at }, at)).toBe(muted);
 	});
 });

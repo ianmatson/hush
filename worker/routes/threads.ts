@@ -1,6 +1,6 @@
 import type { SnoozeEvent } from '../../src/lib/shared/snooze';
 import type { View } from '../../src/lib/shared/types';
-import type { ThreadAction } from '../poller/data';
+import type { NotNeededAnswer, ThreadAction } from '../poller/data';
 import { routes, poller, json, query } from '../app';
 
 // --- Threads (the data and the rules are in the user's Durable Object: poller/data.ts) --------
@@ -41,6 +41,19 @@ const app = routes()
 		);
 		if ('error' in r) return c.json({ error: r.error }, r.status);
 		return c.json(r);
+	})
+	/** "Doesn't need me": a thread id or a dashboard item ("owner/repo#123"), and why. */
+	.post('/api/not-needed', json<{ id: string; answer: NotNeededAnswer }>(), async (c) => {
+		const b = c.req.valid('json');
+		if (typeof b.id !== 'string' || !b.id) return c.json({ error: 'Which thread?' }, 400);
+		const r = await poller(c.env, c.get('user').id).notNeeded(b.id, b.answer as NotNeededAnswer);
+		if ('error' in r) return c.json({ error: r.error }, r.status);
+		return c.json(r);
+	})
+	.post('/api/not-needed/undo', json<{ id: string }>(), async (c) => {
+		const b = c.req.valid('json');
+		if (typeof b.id !== 'string' || !b.id) return c.json({ error: 'Which thread?' }, 400);
+		return c.json(await poller(c.env, c.get('user').id).onlyThisOne(b.id, false));
 	})
 	.get('/api/threads/summary', async (c) => c.json(await poller(c.env, c.get('user').id).summary()))
 	.post('/api/onboarded', async (c) => c.json(await poller(c.env, c.get('user').id).setOnboarded()))
