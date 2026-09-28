@@ -8,8 +8,8 @@ import type { SubjectRef } from '../github';
  * has a user id. Indexes cost a row write each, so there are only the ones the queries need.
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
-// Schema 2 was the "lanes" layout (reverted): the next version of this layout is 3.
-export const SCHEMA_VERSION = 1;
+// Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
+export const SCHEMA_VERSION = 3;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -37,7 +37,9 @@ CREATE TABLE threads (
   marked_unread_at INTEGER,
   pushed_updated_at TEXT,            -- gh_updated_at of the last push for it
   pushed_at INTEGER,                 -- when that push went out (a resolution updates it)
-  first_seen_at INTEGER NOT NULL
+  first_seen_at INTEGER NOT NULL,
+  override TEXT,                     -- "fyi": you said it does not need you ("only this one")…
+  override_updated_at TEXT           -- …until it changes (gh_updated_at moves past this)
 );
 CREATE INDEX threads_view ON threads (category, triage);
 CREATE INDEX threads_subject ON threads (subject_key);
@@ -67,11 +69,29 @@ CREATE TABLE push_devices (
   created_at INTEGER NOT NULL
 );
 
--- Your dashboard marks: hidden and moved last until the item changes (its updatedAt moves).
+-- Your dashboard marks, by PR or issue ("owner/repo#123", the threads' subject_key): hidden and
+-- moved last until the item changes (its updatedAt moves).
 CREATE TABLE dash_hidden (item_id TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
 CREATE TABLE dash_moves (item_id TEXT PRIMARY KEY, turn TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE dash_order (item_id TEXT PRIMARY KEY, rank INTEGER NOT NULL);
 `;
+
+/** How to get from an older version of this layout to SCHEMA_VERSION. */
+export const MIGRATIONS: Record<number, { to: number; sql: string; resetKeys?: string[] }> = {
+	// Dashboard marks move from GitHub node ids to "owner/repo#123" (they start again), and threads
+	// get the "only this one" override.
+	1: {
+		to: 3,
+		sql: `
+DELETE FROM dash_hidden;
+DELETE FROM dash_moves;
+DELETE FROM dash_order;
+ALTER TABLE threads ADD COLUMN override TEXT;
+ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
+		// The cached dashboards have the old ids.
+		resetKeys: ['dash:pr', 'dash:issue']
+	}
+};
 
 export interface ThreadRow {
 	id: string;
@@ -100,6 +120,8 @@ export interface ThreadRow {
 	pushed_updated_at: string | null;
 	pushed_at: number | null;
 	first_seen_at: number;
+	override: string | null;
+	override_updated_at: string | null;
 }
 
 /** A thread with its subject's facts (JSON), from THREADS. */

@@ -126,7 +126,8 @@ export function dashFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): 
 	const ev = [...s.requestEvents].reverse().find(isMine);
 	const verdict = pr ? lastVerdictOf(s, me) : null;
 	return {
-		id: s.id,
+		// The same key as the inbox's threads: one record of each PR or issue for both.
+		id: subjectKey(s.repo, s.number),
 		kind: s.kind,
 		number: s.number,
 		title: s.title,

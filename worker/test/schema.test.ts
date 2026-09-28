@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { subjectRefOf, toDTO, viewWhere, type ThreadWithFacts } from '../poller/schema';
+import {
+	MIGRATIONS,
+	SCHEMA,
+	SCHEMA_VERSION,
+	subjectRefOf,
+	toDTO,
+	viewWhere,
+	type ThreadWithFacts
+} from '../poller/schema';
 
 describe('viewWhere', () => {
 	// SQLite refuses a statement whose bind values do not match its placeholders.
@@ -72,5 +80,33 @@ describe('subject keys on threads', () => {
 			author: 'alice',
 			labels: ['website']
 		});
+	});
+});
+
+describe('schema migrations', () => {
+	// The tables of a new account and of a migrated one must be the same.
+	const columns = (sql: string[]) => {
+		// node:sqlite is in Node 22+; the Worker runs the same SQL on Durable Object SQLite.
+		const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+		const db = new DatabaseSync(':memory:');
+		for (const s of sql) db.exec(s);
+		const tables = db
+			.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
+			.all() as { name: string }[];
+		return Object.fromEntries(
+			tables.map(({ name }) => [
+				name,
+				(db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map((c) => c.name)
+			])
+		);
+	};
+
+	it('schema 1 plus its steps equals a new schema', () => {
+		// Schema 1 is the current one without what the steps add.
+		const v1 = SCHEMA.replace(/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*/, '');
+		expect(v1).not.toBe(SCHEMA);
+		const steps: string[] = [];
+		for (let v = 1; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
+		expect(columns([v1, ...steps])).toEqual(columns([SCHEMA]));
 	});
 });

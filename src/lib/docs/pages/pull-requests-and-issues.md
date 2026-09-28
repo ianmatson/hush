@@ -50,15 +50,15 @@ More options are only in [settings.json](/docs/settings): hide others' drafts ([
 
 ## Actions
 
-| Action                | Key                     | What it does                                                     |
-| --------------------- | ----------------------- | ---------------------------------------------------------------- |
-| Peek                  | {{key:list.peek}}       | Read it in the [peek](/docs/peek), and act on GitHub from there. |
-| Main action           | {{key:list.open}}       | Review, Fix CI, Reply… on GitHub.                                |
-| Open on GitHub        | {{key:list.openGitHub}} | The PR or issue itself.                                          |
-| Hide until it changes | {{key:dash.hide}}       | Hides the item until something new happens on it.                |
-| Show hidden items     | {{key:dash.showHidden}} | Shows hidden items, to show one again.                           |
-| Copy link             | {{key:list.copy}}       | Copies the links of the item or the selection.                   |
-| Refresh               | {{key:list.refresh}}    | Searches GitHub again now.                                       |
+| Action                | Key                     | What it does                                                                                                                                       |
+| --------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Peek                  | {{key:list.peek}}       | Read it in the [peek](/docs/peek), and act on GitHub from there.                                                                                   |
+| Main action           | {{key:list.open}}       | Review, Fix CI, Reply… on GitHub.                                                                                                                  |
+| Open on GitHub        | {{key:list.openGitHub}} | The PR or issue itself.                                                                                                                            |
+| Hide until it changes | {{key:dash.hide}}       | Hides the item until something new happens on it, and moves its thread in the inbox to Done (also on GitHub). Done in the inbox hides it here too. |
+| Show hidden items     | {{key:dash.showHidden}} | Shows hidden items, to show one again.                                                                                                             |
+| Copy link             | {{key:list.copy}}       | Copies the links of the item or the selection.                                                                                                     |
+| Refresh               | {{key:list.refresh}}    | Searches GitHub again now.                                                                                                                         |
 
 ### Move an item to another group
 

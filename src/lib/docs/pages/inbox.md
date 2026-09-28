@@ -74,6 +74,8 @@ Each action works on the row under the cursor, or on every selected row.
 
 After each action, a message with **Undo** shows for a few seconds.
 
+**One record for each PR and issue.** Done or Mute on a pull request or issue also hides it on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#actions), until it changes. **Hide until it changes** there also moves its thread to Done here. Moving it back (Undo, Move to inbox, Show again) works on both.
+
 ### What comes back by itself
 
 - **New activity brings a Done thread back.** When GitHub sends a new notification for it, the thread is in the inbox again. A muted thread stays muted.

@@ -3,7 +3,7 @@ import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types'
 import { settingsOverrides } from '../../src/lib/shared/settings-schema';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
-import { SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
+import { MIGRATIONS, SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
 import { TEAMS_TTL, type Who } from './shared';
 
 /** A value SQLite can bind: strings, numbers, null (no booleans, no undefined). */
@@ -61,15 +61,23 @@ export abstract class PollerBase extends DurableObject<Env> {
 
 	/** Create this user's tables if they are missing (a new object, or after stop()). */
 	protected async migrate() {
-		const from = (await this.ctx.storage.get<number>('schema')) ?? 0;
+		let from = (await this.ctx.storage.get<number>('schema')) ?? 0;
 		if (from === SCHEMA_VERSION) return;
-		// A layout this code does not know (schema 2 was the abandoned "lanes" layout): start again
-		// from nothing. The user signs in again, and Hush syncs as for a new account.
-		if (from > SCHEMA_VERSION) {
+		// A layout this code does not know (2 was the abandoned "lanes" layout, or a newer one): start
+		// again from nothing. The user signs in again, and Hush syncs as for a new account.
+		if (from === 2 || from > SCHEMA_VERSION || (from && !MIGRATIONS[from])) {
 			await this.ctx.storage.deleteAlarm();
 			await this.ctx.storage.deleteAll();
+			from = 0;
 		}
-		this.transaction(() => this.ctx.storage.sql.exec(SCHEMA));
+		const steps: (typeof MIGRATIONS)[number][] = [];
+		for (let v = from; v && v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v]);
+		this.transaction(() => {
+			if (!from) return void this.ctx.storage.sql.exec(SCHEMA);
+			for (const step of steps) this.ctx.storage.sql.exec(step.sql);
+		});
+		const reset = steps.flatMap((s) => s.resetKeys ?? []);
+		if (reset.length) await this.ctx.storage.delete(reset);
 		await this.ctx.storage.put('schema', SCHEMA_VERSION);
 	}
 

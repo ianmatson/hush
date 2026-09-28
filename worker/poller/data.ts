@@ -257,18 +257,17 @@ export abstract class PollerData extends PollerDashboard {
 		});
 		await this.bumpVersion();
 
-		// Mirror the change on GitHub in the background (not from a local test copy).
-		const writes = this.env.GITHUB_WRITES !== 'off';
-		if (writes && (action === 'done' || action === 'read' || action === 'mute')) {
-			const token = await userToken(this.env, (await this.account())!);
-			const mirror = (id: string) =>
-				action === 'done'
-					? markThreadDone(token, id)
-					: action === 'read'
-						? markThreadRead(token, id)
-						: muteThread(token, id).then(() => markThreadDone(token, id));
-			this.ctx.waitUntil(Promise.allSettled(threads.map((t) => mirror(t.id))));
-		}
+		// One record per PR or issue: Done or Mute here also hides it on the dashboards (until it
+		// changes), and moving it back shows it there again.
+		const keys = [...new Set(threads.flatMap((t) => (t.subject_key ? [t.subject_key] : [])))];
+		if (action === 'done' || action === 'mute') this.markDashboards(keys, true);
+		if (action === 'undone' || action === 'unmute') this.markDashboards(keys, false);
+
+		if (action === 'done' || action === 'read' || action === 'mute')
+			await this.mirrorOnGitHub(
+				action,
+				threads.map((t) => t.id)
+			);
 		// Alerts for these threads on your other devices: replace them with a quiet note.
 		const RESOLVED_NOTE: Partial<Record<ThreadAction, string>> = {
 			done: 'Done',
@@ -629,7 +628,8 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	hide(items: ItemRef[]): { ok: true } {
+	/** Hide until it changes: on the dashboards, and Done in the inbox (one record of each). */
+	async hide(items: ItemRef[]): Promise<{ ok: true }> {
 		this.transaction(() => {
 			for (const i of items)
 				this.run(
@@ -639,13 +639,78 @@ export abstract class PollerData extends PollerDashboard {
 					i.updatedAt
 				);
 		});
+		await this.markInbox(
+			items.map((i) => i.id),
+			true
+		);
 		return { ok: true };
 	}
 
-	unhide(ids: string[]): { ok: true } {
+	async unhide(ids: string[]): Promise<{ ok: true }> {
 		this.transaction(() => {
 			for (const id of ids) this.run('DELETE FROM dash_hidden WHERE item_id = ?', id);
 		});
+		await this.markInbox(ids, false);
 		return { ok: true };
+	}
+
+	/**
+	 * The dashboards' side of Done in the inbox: hidden from now until the PR or issue changes, or
+	 * shown again. Open dashboards refresh (from the cache: no GitHub requests).
+	 */
+	private markDashboards(keys: string[], hidden: boolean) {
+		if (!keys.length) return;
+		const now = new Date().toISOString();
+		this.transaction(() => {
+			for (const key of keys)
+				if (hidden)
+					this.run(
+						`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
+             ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
+						key,
+						now
+					);
+				else this.run('DELETE FROM dash_hidden WHERE item_id = ?', key);
+		});
+		this.broadcast({ type: 'dash', kind: 'pr' });
+		this.broadcast({ type: 'dash', kind: 'issue' });
+	}
+
+	/**
+	 * The inbox's side of hiding on a dashboard: the threads of these PRs or issues go to Done (and
+	 * are marked done on GitHub), or back to the inbox. Muted threads stay muted.
+	 */
+	private async markInbox(keys: string[], done: boolean) {
+		if (!keys.length) return;
+		const threads = this.all<{ id: string }>(
+			`SELECT id FROM threads WHERE subject_key IN (${marks(keys.length)}) AND category != 'muted'
+       AND triage ${done ? "!= 'done'" : "= 'done'"}`,
+			...keys
+		);
+		if (!threads.length) return;
+		const ids = threads.map((t) => t.id);
+		this.run(
+			done
+				? `UPDATE threads SET triage = 'done', snoozed_until = NULL, snooze_event = NULL, unread = 0,
+           resolved_at = NULL, resolved_note = NULL WHERE id IN (${marks(ids.length)})`
+				: `UPDATE threads SET triage = 'inbox', resolved_at = NULL, resolved_note = NULL
+           WHERE id IN (${marks(ids.length)})`,
+			...ids
+		);
+		await this.bumpVersion();
+		if (done) await this.mirrorOnGitHub('done', ids);
+	}
+
+	/** Mirror a choice on GitHub in the background (not from a local test copy). */
+	private async mirrorOnGitHub(action: 'done' | 'read' | 'mute', ids: string[]) {
+		if (this.env.GITHUB_WRITES === 'off' || !ids.length) return;
+		const token = await userToken(this.env, (await this.account())!);
+		const mirror = (id: string) =>
+			action === 'done'
+				? markThreadDone(token, id)
+				: action === 'read'
+					? markThreadRead(token, id)
+					: muteThread(token, id).then(() => markThreadDone(token, id));
+		this.ctx.waitUntil(Promise.allSettled(ids.map(mirror)));
 	}
 }
