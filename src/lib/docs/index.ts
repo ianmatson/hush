@@ -46,34 +46,35 @@ const FILES = import.meta.glob('./pages/*.md', {
 	eager: true
 }) as Record<string, string>;
 
-function parse(file: string, raw: string, group: string): DocPage {
+/** A Markdown page with a title block (see above), and its {{ref:…}} and {{key:…}} filled in. */
+export function readPage(
+	file: string,
+	raw: string
+): { title: string; description: string; markdown: string } {
 	const m = /^---\n([\s\S]*?)\n---\n/.exec(raw);
-	if (!m) throw new Error(`docs: ${file} has no title block`);
+	if (!m) throw new Error(`${file} has no title block`);
 	const meta = Object.fromEntries(
 		m[1].split('\n').map((line) => {
 			const i = line.indexOf(':');
 			return [line.slice(0, i).trim(), line.slice(i + 1).trim()];
 		})
 	);
-	if (!meta.title || !meta.description)
-		throw new Error(`docs: ${file} needs a title and a description`);
-	const name = file.replace(/^\.\/pages\//, '').replace(/\.md$/, '');
+	if (!meta.title || !meta.description) throw new Error(`${file} needs a title and a description`);
 	const markdown = raw
 		.slice(m[0].length)
 		.replace(/^\{\{ref:([a-z-]+)((?: [^\s}]+)*)\}\}$/gm, (_, ref: string, args: string) => {
 			const make = REFERENCES[ref];
-			if (!make) throw new Error(`docs: ${file} asks for an unknown table {{ref:${ref}}}`);
+			if (!make) throw new Error(`${file} asks for an unknown table {{ref:${ref}}}`);
 			return make(args.trim().split(/\s+/).filter(Boolean));
 		})
 		.replace(/\{\{key:([\w.]+)\}\}/g, (_, id: string) => keyMention(id, file));
-	if (/\{\{/.test(markdown)) throw new Error(`docs: ${file} has a {{…}} that Hush does not know`);
-	return {
-		slug: name === 'index' ? '' : name,
-		title: meta.title,
-		description: meta.description,
-		group,
-		markdown: markdown.trim() + '\n'
-	};
+	if (/\{\{/.test(markdown)) throw new Error(`${file} has a {{…}} that Hush does not know`);
+	return { title: meta.title, description: meta.description, markdown: markdown.trim() + '\n' };
+}
+
+function parse(file: string, raw: string, group: string): DocPage {
+	const name = file.replace(/^\.\/pages\//, '').replace(/\.md$/, '');
+	return { slug: name === 'index' ? '' : name, group, ...readPage(`docs: ${file}`, raw) };
 }
 
 /** Every page, in the order of the navigation. */
@@ -104,8 +105,8 @@ export interface Rendered {
 	toc: { id: string; text: string }[];
 }
 
-/** A page as HTML. Headings get ids (and a link to themselves); tables can scroll sideways. */
-export function renderDoc(d: DocPage): Rendered {
+/** Markdown as HTML. Headings get ids (and a link to themselves); tables can scroll sideways. */
+export function renderMarkdown(markdown: string): Rendered {
 	const toc: Rendered['toc'] = [];
 	const used = new Map<string, number>();
 	const marked = new Marked({
@@ -132,14 +133,18 @@ export function renderDoc(d: DocPage): Rendered {
 			}
 		}
 	});
-	const html = (marked.parse(d.markdown, { async: false }) as string)
+	const html = (marked.parse(markdown, { async: false }) as string)
 		.replace(/<table>/g, '<div class="table"><table>')
 		.replace(/<\/table>/g, '</table></div>');
 	return { html, toc };
 }
 
 /** A page as one Markdown file, for agents: its title, its description, and full URLs. */
-export function docAsMarkdown(d: DocPage): string {
-	const body = d.markdown.replace(/\]\(\//g, `](${SITE_URL}/`);
-	return `# ${d.title}\n\n> ${d.description}\n\nSource: ${SITE_URL}${docPath(d)}\n\n${body}`;
+export function asMarkdown(
+	p: { title: string; description: string; markdown: string },
+	path: string
+): string {
+	const body = p.markdown.replace(/\]\(\//g, `](${SITE_URL}/`);
+	return `# ${p.title}\n\n> ${p.description}\n\nSource: ${SITE_URL}${path}\n\n${body}`;
 }
+export const docAsMarkdown = (d: DocPage) => asMarkdown(d, docPath(d));

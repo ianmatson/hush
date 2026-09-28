@@ -1,3 +1,4 @@
+import { ABOUT } from '$lib/about';
 import { DOCS, NAV, docMarkdownPath } from '$lib/docs';
 import { SITE_URL } from '$lib/site';
 
@@ -20,6 +21,10 @@ export function GET() {
 All pages in one file: ${SITE_URL}/llms-full.txt
 
 ${groups.join('\n\n')}
+
+## About Hush
+
+${ABOUT.map((p) => `- [${p.title}](${SITE_URL}/${p.slug}.md): ${p.description}`).join('\n')}
 `;
 	return new Response(text, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }

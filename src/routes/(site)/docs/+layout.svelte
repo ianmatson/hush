@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { DOCS, NAV, docPath } from '$lib/docs';
-	import { APP_URL } from '$lib/site';
+	import { APP_URL, REPO_URL } from '$lib/site';
+	import SiteFooter from '$lib/components/site/site-footer.svelte';
 
 	// The docs shell: the header, and the page list (a sidebar, or a menu on small screens).
 	// Plain HTML: the menu is a <details>, so it works with no JavaScript.
 	let { children } = $props();
-	const REPO = 'https://github.com/ianmatson/hush';
 	const groups = NAV.map((g) => ({
 		group: g.group,
 		pages: g.pages.map((s) => DOCS.find((d) => d.slug === s)!)
@@ -36,7 +36,7 @@
 		<a href="/" class="brand"><img src="/icon.svg" alt="" />hush</a>
 		<a href="/docs" class="section">Docs</a>
 		<nav>
-			<a class="source" href={REPO} rel="noreferrer">Source</a>
+			<a class="source" href={REPO_URL} rel="noreferrer">Source</a>
 			<a class="open" href="{APP_URL}/inbox">Open Hush</a>
 		</nav>
 	</header>
@@ -52,6 +52,7 @@
 		</aside>
 		<div class="main">{@render children()}</div>
 	</div>
+	<SiteFooter />
 </div>
 
 <style>

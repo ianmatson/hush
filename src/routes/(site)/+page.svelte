@@ -5,9 +5,9 @@
 	import TurnLanes from '$lib/components/site/landing/turn-lanes.svelte';
 	import DayDial from '$lib/components/site/landing/day-dial.svelte';
 	import RuleTyper from '$lib/components/site/landing/rule-typer.svelte';
-	import { APP_URL } from '$lib/site';
-
-	const REPO = 'https://github.com/ianmatson/hush';
+	import SiteHeader from '$lib/components/site/site-header.svelte';
+	import SiteFooter from '$lib/components/site/site-footer.svelte';
+	import { APP_URL, REPO_URL } from '$lib/site';
 </script>
 
 <SiteMeta
@@ -17,15 +17,7 @@
 />
 
 <div class="page">
-	<header class="nav">
-		<a href="/" class="brand"><img src="/icon.svg" alt="" />hush</a>
-		<nav>
-			<a href="/docs">Docs</a>
-			<a href={REPO} rel="noreferrer">Source</a>
-			<a href="{APP_URL}/login">Sign in</a>
-			<a class="open" href="{APP_URL}/inbox">Open Hush</a>
-		</nav>
-	</header>
+	<SiteHeader />
 
 	<main>
 		<section class="hero">
@@ -38,7 +30,7 @@
 			</p>
 			<p class="links in" style:--d="2">
 				<a class="open big" href="{APP_URL}/inbox">Open Hush</a>
-				<a class="quiet" href={REPO} rel="noreferrer">Read the source <span>→</span></a>
+				<a class="quiet" href={REPO_URL} rel="noreferrer">Read the source <span>→</span></a>
 			</p>
 			<div class="in" style:--d="3">
 				<HushWave />
@@ -79,14 +71,7 @@
 		</section>
 	</main>
 
-	<footer class="foot">
-		<span class="brand small"><img src="/icon.svg" alt="" />hush</span>
-		<nav>
-			<a href="/docs">Docs</a>
-			<a href={REPO} rel="noreferrer">Source</a>
-			<a href="{APP_URL}/login">Sign in</a>
-		</nav>
-	</footer>
+	<SiteFooter />
 </div>
 
 <style>
@@ -101,49 +86,6 @@
 		transition: color 0.2s;
 	}
 
-	.nav,
-	.foot {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		max-width: var(--width);
-		margin: 0 auto;
-		padding: 1.25rem 1.5rem;
-	}
-	.nav nav,
-	.foot nav {
-		display: flex;
-		align-items: center;
-		gap: 1.25rem;
-		font-size: 0.875rem;
-	}
-	.nav nav a:not(.open),
-	.foot nav a {
-		color: var(--muted-foreground);
-	}
-	.nav nav a:not(.open):hover,
-	.foot nav a:hover {
-		color: var(--foreground);
-	}
-	.brand {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-	}
-	.brand img {
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: 0.4375rem;
-	}
-	.brand.small {
-		font-size: 0.875rem;
-	}
-	.brand.small img {
-		width: 1.125rem;
-		height: 1.125rem;
-	}
 	.open {
 		padding: 0.375rem 0.75rem;
 		border-radius: 0.5rem;
@@ -266,21 +208,6 @@
 	.close em {
 		font-size: 1.06em;
 	}
-	/* The line spans the content only, like the lines above it. */
-	.foot {
-		position: relative;
-		padding-top: 1.75rem;
-		padding-bottom: 2.5rem;
-	}
-	.foot::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 1.5rem;
-		right: 1.5rem;
-		border-top: 1px solid var(--border);
-	}
-
 	@keyframes rise {
 		from {
 			opacity: 0;

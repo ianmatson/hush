@@ -3,7 +3,8 @@ import { parseQuery } from '$lib/shared/query';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, mergeSettings, validateSettings } from '$lib/shared/settings-schema';
 import type { Settings } from '$lib/shared/types';
-import { DOCS, docPath, renderDoc } from '.';
+import { ABOUT } from '$lib/about';
+import { DOCS, docPath, renderMarkdown } from '.';
 import { SETTING_DETAILS } from './reference';
 
 // The docs promise that they match the product: every setting is described, every example is
@@ -60,25 +61,30 @@ describe('docs', () => {
 	});
 
 	it('link only to pages and sections that exist', () => {
+		const pages = [
+			...DOCS.map((d) => ({ path: docPath(d), markdown: d.markdown })),
+			...ABOUT.map((p) => ({ path: `/${p.slug}`, markdown: p.markdown }))
+		];
 		const ids = new Map(
-			DOCS.map((d) => [
-				docPath(d),
-				new Set([...renderDoc(d).html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))
+			pages.map((p) => [
+				p.path,
+				new Set([...renderMarkdown(p.markdown).html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))
 			])
 		);
 		const files = new Set([
 			'/llms.txt',
 			'/llms-full.txt',
-			...DOCS.map((d) => `/docs/${d.slug || 'index'}.md`)
+			...DOCS.map((d) => `/docs/${d.slug || 'index'}.md`),
+			...ABOUT.map((p) => `/${p.slug}.md`)
 		]);
-		for (const d of DOCS)
-			for (const [, href] of renderDoc(d).html.matchAll(/ href="([^"]+)"/g)) {
+		for (const p of pages)
+			for (const [, href] of renderMarkdown(p.markdown).html.matchAll(/ href="([^"]+)"/g)) {
 				if (/^https?:/.test(href)) continue;
 				const [path, hash] = href.split('#');
-				const target = path || docPath(d);
+				const target = path || p.path;
 				if (files.has(target)) continue;
-				expect(ids.has(target), `${docPath(d)} links to ${href}`).toBe(true);
-				if (hash) expect(ids.get(target)!.has(hash), `${docPath(d)} links to ${href}`).toBe(true);
+				expect(ids.has(target), `${p.path} links to ${href}`).toBe(true);
+				if (hash) expect(ids.get(target)!.has(hash), `${p.path} links to ${href}`).toBe(true);
 			}
 	});
 });
