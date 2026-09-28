@@ -7,7 +7,25 @@
 	import RuleTyper from '$lib/components/site/landing/rule-typer.svelte';
 	import SiteHeader from '$lib/components/site/site-header.svelte';
 	import SiteFooter from '$lib/components/site/site-footer.svelte';
+	import { PLANS } from '$lib/pricing';
 	import { APP_URL, REPO_URL } from '$lib/site';
+
+	const price = PLANS.map((p) => `$${p.price} a ${p.per}`).join(' or ');
+	/** The pages for the questions people ask before they sign in. */
+	const ANSWERS = [
+		{
+			href: '/privacy',
+			title: 'Privacy',
+			text: 'What Hush stores, who sees it, and how to delete all of it.'
+		},
+		{
+			href: '/security',
+			title: 'Security',
+			text: 'What Hush can do with your GitHub access, for you and your org’s owners.'
+		},
+		{ href: '/pricing', title: 'Pricing', text: `Free during the beta. Later, ${price}.` },
+		{ href: '/docs', title: 'Docs', text: 'Every tab, rule, key, and setting, explained.' }
+	];
 </script>
 
 <SiteMeta
@@ -59,6 +77,20 @@
 					that clean up by themselves.
 				</p>
 			</article>
+		</section>
+
+		<section class="answers reveal" aria-labelledby="answers">
+			<h2 id="answers">Before you sign in</h2>
+			<ul>
+				{#each ANSWERS as a (a.href)}
+					<li>
+						<a href={a.href}>
+							<b>{a.title} <span>→</span></b>
+							{a.text}
+						</a>
+					</li>
+				{/each}
+			</ul>
 		</section>
 
 		<section class="close reveal">
@@ -189,6 +221,63 @@
 	.specimens b {
 		font-weight: 550;
 		color: var(--foreground);
+	}
+
+	.answers {
+		display: grid;
+		gap: 1.5rem;
+		padding: 4rem 0 5rem;
+		border-top: 1px solid var(--border);
+	}
+	.answers h2 {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--muted-foreground);
+	}
+	.answers ul {
+		display: grid;
+		gap: 1rem;
+	}
+	@media (min-width: 40rem) {
+		.answers ul {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (min-width: 60rem) {
+		.answers ul {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+	}
+	.answers a {
+		display: grid;
+		gap: 0.375rem;
+		height: 100%;
+		padding: 1.125rem 1.25rem;
+		border: 1px solid var(--border);
+		border-radius: 0.875rem;
+		font-size: 0.9rem;
+		line-height: 1.5;
+		color: var(--muted-foreground);
+		transition:
+			border-color 0.2s,
+			background 0.2s;
+	}
+	.answers a:hover {
+		border-color: color-mix(in oklab, var(--foreground) 30%, var(--border));
+		background: color-mix(in oklab, var(--muted) 50%, transparent);
+	}
+	.answers b {
+		font-size: 1rem;
+		font-weight: 550;
+		color: var(--foreground);
+	}
+	.answers b span {
+		display: inline-block;
+		color: var(--muted-foreground);
+		transition: translate 0.25s var(--ease);
+	}
+	.answers a:hover b span {
+		translate: 0.2rem 0;
 	}
 
 	.close {
