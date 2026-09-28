@@ -4,12 +4,7 @@
 	import { meQuery } from '$lib/queries';
 	import { applySettings } from '$lib/save-settings';
 	import { DEFAULT_SETTINGS } from '$lib/shared/settings';
-	import {
-		SETTINGS_DOCS,
-		settingsFile,
-		settingsFromFile,
-		settingsOverrides
-	} from '$lib/shared/settings-schema';
+	import { SETTINGS_DOCS, settingsOverrides } from '$lib/shared/settings-schema';
 	import type { Settings } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -18,7 +13,7 @@
 
 	/**
 	 * settings.json: your changes from the defaults, as JSON, the same as VS Code. The UI shows the
-	 * common settings; the rest are only here. Also export and import of the same JSON as a file.
+	 * common settings; the rest are only here. (Export and import: settings-file.svelte.)
 	 */
 	const me = createQuery(meQuery);
 	const settings = $derived(me.data?.settings);
@@ -68,42 +63,6 @@
 		const s = JSON.stringify(v);
 		return Array.isArray(v) && v.length && s.length > 40 ? `[${v.length} items]` : s;
 	}
-
-	function exportSettings() {
-		if (!settings) return;
-		const blob = new Blob([JSON.stringify(settingsFile(settings), null, '\t')], {
-			type: 'application/json'
-		});
-		const a = document.createElement('a');
-		a.href = URL.createObjectURL(blob);
-		a.download = `hush-settings-${new Date().toISOString().slice(0, 10)}.json`;
-		a.click();
-		URL.revokeObjectURL(a.href);
-	}
-
-	let fileInput = $state<HTMLInputElement | null>(null);
-	async function importSettings(file: File | undefined) {
-		if (!file) return;
-		const patch = settingsFromFile(await file.text());
-		if (fileInput) fileInput.value = '';
-		if (typeof patch === 'string') return toast.error(patch);
-		const n = (list: unknown[] | undefined, one: string) =>
-			list ? `${list.length} ${one}${list.length === 1 ? '' : 's'}` : null;
-		const what = [n(patch.rules, 'rule'), n(patch.views, 'view')].filter(Boolean).join(', ');
-		if (
-			!confirm(
-				`Replace your settings with the ones in “${file.name}”?${what ? ` It has ${what}.` : ''} Settings that are not in the file go back to their defaults. Export first to keep a copy.`
-			)
-		)
-			return;
-		try {
-			const note = await applySettings(patch, true);
-			toast.success(`Settings imported.${note}`);
-			text = null;
-		} catch (err) {
-			toast.error((err as Error).message);
-		}
-	}
 </script>
 
 <Card.Root>
@@ -147,21 +106,7 @@
 					error = null;
 				}}>Cancel</Button
 			>
-			<span class="flex-1"></span>
-			<Button variant="outline" size="sm" onclick={exportSettings}>Export</Button>
-			<Button variant="outline" size="sm" onclick={() => fileInput?.click()}>Import…</Button>
-			<input
-				bind:this={fileInput}
-				type="file"
-				accept="application/json,.json"
-				class="hidden"
-				onchange={(e) => importSettings(e.currentTarget.files?.[0])}
-			/>
 		</div>
-		<p class="text-xs text-muted-foreground">
-			Export and import use the same JSON, as a file. Appearance and your start page stay in this
-			browser.
-		</p>
 
 		<details class="group rounded-lg border">
 			<summary class="cursor-pointer px-3 py-2 text-sm font-medium select-none"

@@ -64,12 +64,18 @@
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
 	let searchEl = $state<HTMLInputElement | null>(null);
-	let collapsed = $state<Record<Turn, boolean>>({
-		you: false,
-		team: false,
-		them: false,
-		none: true
-	});
+	// Collapsed groups are read at once (not after the first paint), and they slide only after
+	// you open or close one: a page that loads shows them as they are, with no motion.
+	const readCollapsed = (k: DashKind): Record<Turn, boolean> => {
+		const base = { you: false, team: false, them: false, none: true };
+		try {
+			return { ...base, ...JSON.parse(localStorage.getItem(`hush:collapsed:${k}`) ?? '{}') };
+		} catch {
+			return base;
+		}
+	};
+	let collapsed = $state<Record<Turn, boolean>>(readCollapsed(untrack(() => kind)));
+	let groupMotion = $state(false);
 	const sel = new Selection();
 
 	const ALL_GROUPS: TurnGroup[] = [
@@ -349,8 +355,8 @@
 			section = null;
 			selectedId = null;
 			sel.clear();
-			const saved = localStorage.getItem(`hush:collapsed:${k}`);
-			if (saved) collapsed = JSON.parse(saved);
+			groupMotion = false;
+			collapsed = readCollapsed(k);
 		});
 	});
 	// (After the effect above, which resets the cursor when the page opens.)
@@ -637,7 +643,11 @@
 	{/if}
 
 	<p class="mt-2 mb-2 px-1 text-xs text-muted-foreground">
-		{#if data}
+		{#if data && (refreshing || dashQ.isFetching)}
+			<span class="inline-flex items-center gap-1"
+				><RefreshCw class="size-3 animate-spin" />Updating…</span
+			>
+		{:else if data}
 			Updated {ago(data.fetchedAt)}
 		{:else}Loading from GitHub…{/if}
 	</p>
@@ -721,12 +731,16 @@
 										'group/h mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors duration-150',
 										headerDrop && 'bg-primary/[0.07] text-primary'
 									)}
-									onclick={() => (collapsed[g.turn] = !collapsed[g.turn])}
+									onclick={() => {
+										groupMotion = true;
+										collapsed[g.turn] = !collapsed[g.turn];
+									}}
 									aria-expanded={!collapsed[g.turn]}
 								>
 									<ChevronDown
 										class={cn(
-											'size-3.5 text-muted-foreground transition-transform',
+											'size-3.5 text-muted-foreground',
+											groupMotion && 'transition-transform',
 											collapsed[g.turn] && '-rotate-90'
 										)}
 									/>
@@ -751,7 +765,7 @@
 									<!-- Opening or closing a group slides it; the rows' own transitions are local, so
 									     they do not also play. -->
 									<ul
-										transition:slide={SECTION_SLIDE}
+										transition:slide={groupMotion ? SECTION_SLIDE : { duration: 0 }}
 										class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
 										role="listbox"
 										aria-multiselectable="true"

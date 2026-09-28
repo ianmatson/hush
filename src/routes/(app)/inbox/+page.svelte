@@ -46,6 +46,8 @@
 	} from '$lib/inbox-actions';
 	import { openOnGitHub, reportResolved } from '$lib/recheck';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+	import { live } from '$lib/live-state.svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
@@ -580,7 +582,7 @@
 				class="h-8 pl-8"
 				aria-label="Filter threads"
 			/>
-			<!-- Under the box, over the list: typing does not move the box or the buttons. -->
+			<!-- A filter error: under the box, over the list. -->
 			{#if filter.errors.length}
 				<p
 					transition:fly={{ y: -4, duration: 120 }}
@@ -589,14 +591,19 @@
 				>
 					{filter.errors[0]}
 				</p>
-			{:else if !saved && query.trim()}
-				<button
-					type="button"
-					transition:fly={{ y: -4, duration: 120 }}
-					class="absolute top-full right-0 z-10 mt-1 flex items-center gap-1.5 rounded-md border bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-md hover:bg-muted"
-					onclick={() => editView(null, filter)}
-					><BookmarkPlus class="size-3.5" />Save as view</button
-				>
+			{/if}
+			<!-- Inside the box, at its right end, over the text: typing does not move anything. -->
+			{#if !saved && query.trim() && !filter.errors.length}
+				<Tooltip.Root>
+					<Tooltip.Trigger
+						class="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						aria-label="Save this filter as a view"
+						onclick={() => editView(null, filter)}
+					>
+						<BookmarkPlus class="size-3.5" />
+					</Tooltip.Trigger>
+					<Tooltip.Content>Save this filter as a view (a new tab)</Tooltip.Content>
+				</Tooltip.Root>
 			{/if}
 		</div>
 		{#if saved}
@@ -623,7 +630,9 @@
 	</div>
 
 	<p class="mt-3 mb-2 px-1 text-xs text-muted-foreground">
-		{#if me.data?.lastPollAt}Synced {ago(me.data.lastPollAt)}{:else}First sync in progress…{/if}
+		{#if syncing || live.syncing}<span class="inline-flex items-center gap-1"
+				><RefreshCw class="size-3 animate-spin" />Syncing…</span
+			>{:else if me.data?.lastPollAt}Synced {ago(me.data.lastPollAt)}{:else}First sync in progress…{/if}
 		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{Object.keys(saved.when ?? {})
 				.length
 				? `, ${formatQuery(saved.when)}`

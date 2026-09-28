@@ -161,7 +161,8 @@
 		},
 		...(
 			[
-				['general', 'General', 'appearance menus account json export import'],
+				['general', 'General', 'appearance menus account export import'],
+				['json', 'settings.json', 'json advanced all every raw'],
 				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
 				['dashboards', 'PR and issue dashboards', 'sections teams'],
 				['notifications', 'Notifications', 'push quiet']

@@ -450,6 +450,8 @@ export type LiveMessage =
 	| { type: 'alerts' }
 	| { type: 'dash'; kind: DashKind }
 	| { type: 'settings' }
+	/** A poll started (on) or ended: open tabs show "Syncing…". */
+	| { type: 'syncing'; on: boolean }
 	| {
 			type: 'status';
 			lastPollAt: number | null;

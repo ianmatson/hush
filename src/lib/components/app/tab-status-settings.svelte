@@ -14,7 +14,8 @@
 	} from '$lib/tab-status';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Card from '$lib/components/ui/card';
@@ -53,25 +54,40 @@
 </script>
 
 {#snippet sources(group: 'title' | 'favicon' | 'appBadge')}
-	<fieldset class="grid gap-2 sm:grid-cols-2">
-		<legend class="mb-2 text-xs text-muted-foreground">Count these</legend>
-		{#each SOURCES as s (s.id)}
-			{@const id = `${group}-${s.id}`}
-			<div class="flex items-center gap-2">
-				<Checkbox
-					{id}
-					checked={prefs[group].sources.includes(s.id)}
-					disabled={!prefs[group].enabled}
-					onCheckedChange={(v) =>
-						(prefs[group].sources = toggle(prefs[group].sources, s.id, v === true))}
-				/>
-				<Label for={id} class="font-normal">
-					{s.label}
-					<span class="text-xs text-muted-foreground tabular-nums">({counts[s.id]})</span>
-				</Label>
-			</div>
-		{/each}
-	</fieldset>
+	<!-- What counts: a small menu with checkboxes (six sources for each of the three places). -->
+	{@const on = SOURCES.filter((x) => prefs[group].sources.includes(x.id))}
+	<div class="flex items-center gap-3">
+		<span class="text-xs text-muted-foreground">Count</span>
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger disabled={!prefs[group].enabled}>
+				{#snippet child({ props })}
+					<Button {...props} variant="outline" size="sm" class="max-w-72 justify-start font-normal">
+						<span class="truncate"
+							>{on.length === 0
+								? 'Nothing'
+								: on.length === 1
+									? on[0].label
+									: `${on.length} counts`}</span
+						>
+						<ChevronDown class="ml-auto opacity-60" />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="start" class="w-72">
+				{#each SOURCES as x (x.id)}
+					<DropdownMenu.CheckboxItem
+						checked={prefs[group].sources.includes(x.id)}
+						closeOnSelect={false}
+						onCheckedChange={(v) =>
+							(prefs[group].sources = toggle(prefs[group].sources, x.id, v === true))}
+					>
+						<span class="flex-1">{x.label}</span>
+						<span class="text-xs text-muted-foreground tabular-nums">{counts[x.id]}</span>
+					</DropdownMenu.CheckboxItem>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+	</div>
 {/snippet}
 
 <Card.Root>

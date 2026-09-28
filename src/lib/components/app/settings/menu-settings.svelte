@@ -15,6 +15,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
+	import * as Command from '$lib/components/ui/command';
 	import SortableList from '$lib/components/app/sortable-list.svelte';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -35,6 +36,7 @@
 	import X from '@lucide/svelte/icons/x';
 
 	const me = createQuery(meQuery);
+	let adding = $state(false);
 	const saved = $derived(me.data?.settings.menus);
 
 	/** One entry of the list. Separators repeat, so each row has its own stable key. */
@@ -124,6 +126,50 @@
 	}
 </script>
 
+<!-- Items not in the menu, to add: a searchable list, not a wall of buttons. -->
+<Command.Dialog
+	bind:open={adding}
+	title="Add a menu item"
+	description="Search the items that are not in the menu."
+>
+	<Command.Input placeholder="Search menu items…" />
+	<Command.List class="max-h-[min(24rem,60vh)]">
+		<Command.Empty>No item matches.</Command.Empty>
+		{#each [['main', 'Not in the menu'], ['shortcut', 'One-click shortcuts']] as [group, title] (group)}
+			{@const items = unused.filter((i) => i.group === group)}
+			{#if items.length}
+				<Command.Group heading={title}>
+					{#each items as i (i.id)}
+						{@const Icon = iconOf(i.id)}
+						<Command.Item
+							value={`${i.label} ${i.note ?? ''}`}
+							onSelect={() => {
+								add(i.id);
+								adding = false;
+							}}
+						>
+							<Icon class="text-muted-foreground" />
+							<span class="flex-1">
+								{i.label}
+								{#if i.note}<span class="block text-xs text-muted-foreground">{i.note}</span>{/if}
+							</span>
+						</Command.Item>
+					{/each}
+				</Command.Group>
+			{/if}
+		{/each}
+		<Command.Group heading="Layout">
+			<Command.Item
+				value="Separator line"
+				onSelect={() => {
+					add(SEP);
+					adding = false;
+				}}><Minus class="text-muted-foreground" />Separator</Command.Item
+			>
+		</Command.Group>
+	</Command.List>
+</Command.Dialog>
+
 {#snippet menuRow(row: Row)}
 	{@const Icon = iconOf(row.id)}
 	{#if row.id === SEP}
@@ -186,33 +232,10 @@
 						{/snippet}
 					</SortableList>
 
-					<div class="grid gap-3 border-t pt-4">
-						{#each [['main', 'Not in the menu'], ['shortcut', 'One-click shortcuts']] as [group, title] (group)}
-							{@const items = unused.filter((i) => i.group === group)}
-							{#if items.length}
-								<div class="grid gap-1.5">
-									<h3 class="text-xs font-medium text-muted-foreground">{title}</h3>
-									<div class="flex flex-wrap gap-1.5">
-										{#each items as i (i.id)}
-											{@const Icon = iconOf(i.id)}
-											<Button
-												variant="outline"
-												size="sm"
-												class="h-7 font-normal"
-												title={i.note}
-												onclick={() => add(i.id)}
-												><Plus class="opacity-60" /><Icon class="opacity-60" />{i.label}</Button
-											>
-										{/each}
-									</div>
-								</div>
-							{/if}
-						{/each}
-						<div>
-							<Button variant="outline" size="sm" class="h-7 font-normal" onclick={() => add(SEP)}
-								><Minus class="opacity-60" />Separator</Button
-							>
-						</div>
+					<div class="border-t pt-4">
+						<Button variant="outline" size="sm" onclick={() => (adding = true)}
+							><Plus />Add item…</Button
+						>
 					</div>
 				</Card.Content>
 				<Card.Footer class="flex flex-wrap justify-between gap-2 border-t">

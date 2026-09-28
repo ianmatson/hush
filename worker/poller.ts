@@ -135,12 +135,16 @@ export class Poller extends PollerData {
 		// Alarms and manual syncs can overlap while we wait on fetch(); run one poll at a time.
 		// A failed poll must not throw: an alarm that keeps throwing is dropped after its retries,
 		// and polling would stop for this user with no visible error.
+		if (!this.running) this.broadcast({ type: 'syncing', on: true });
 		this.running ??= this.poll()
 			.catch((err) => {
 				console.error('poll failed', err);
 				return this.fail(`Sync failed: ${(err as Error).message}`);
 			})
-			.finally(() => (this.running = null));
+			.finally(() => {
+				this.running = null;
+				this.broadcast({ type: 'syncing', on: false });
+			});
 		return this.running;
 	}
 

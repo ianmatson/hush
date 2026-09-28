@@ -20,6 +20,9 @@ function apply(m: LiveMessage) {
 			return queryClient.invalidateQueries({ queryKey: keys.dash(m.kind) });
 		case 'settings':
 			return queryClient.invalidateQueries({ queryKey: keys.me });
+		case 'syncing':
+			live.syncing = m.on;
+			return;
 		case 'status':
 			// No request: the message has the values.
 			return queryClient.setQueryData<MeDTO>(keys.me, (old) =>
@@ -68,6 +71,7 @@ export function connectLive(): () => void {
 		};
 		ws.onclose = () => {
 			live.connected = false;
+			live.syncing = false;
 			clearInterval(ping);
 			if (stopped) return;
 			retry = setTimeout(open, backoff);
@@ -93,5 +97,6 @@ export function connectLive(): () => void {
 		document.removeEventListener('visibilitychange', onVisible);
 		ws?.close();
 		live.connected = false;
+		live.syncing = false;
 	};
 }
