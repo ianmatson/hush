@@ -9,6 +9,7 @@ import type {
 } from './types';
 import { isBot } from './bots';
 import { textMatches } from './text-match';
+import { activityText, latestActivity } from './activity';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 
 /** Notification reasons, as Hush shows them. */
@@ -114,10 +115,24 @@ export function classifyDefault(
 				e.lastComment?.url || url
 			);
 		if (t.reason === 'team_mention') return fyi('Your team was mentioned');
+		if (t.reason === 'review_requested' && pr && !mine)
+			return fyi('Review request no longer pending');
+		// Say what happened, not only that something did (the notification does not say).
+		const a = latestActivity(e);
+		const subject = pr
+			? mine
+				? e.draft
+					? 'your draft PR'
+					: 'your PR'
+				: 'this PR'
+			: mine
+				? 'your issue'
+				: 'this issue';
+		if (a) return fyi(activityText(a, t.me, subject));
 		if (!pr) return fyi('Issue activity');
-		if (mine) return fyi(e.draft ? 'Activity on your draft PR' : 'Activity on your PR');
-		if (t.reason === 'review_requested') return fyi('Review request no longer pending');
-		return fyi('PR activity');
+		return fyi(
+			mine ? (e.draft ? 'Activity on your draft PR' : 'Activity on your PR') : 'PR activity'
+		);
 	}
 
 	// Subjects without enrichment.
@@ -172,6 +187,11 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 		return false;
 	if (m.draft !== undefined && m.draft !== !!e?.draft) return false;
 	if (m.state && !(e?.state && m.state.includes(e.state))) return false;
+	if (m.by !== undefined || m.byBot !== undefined) {
+		const a = t.activity !== undefined ? t.activity : latestActivity(e);
+		if (!matchGlobs(a?.by ?? undefined, m.by)) return false;
+		if (m.byBot !== undefined && m.byBot !== !!a?.bot) return false;
+	}
 	return true;
 }
 
@@ -224,7 +244,9 @@ const MATCH_KEYS = new Set([
 	'bot',
 	'label',
 	'draft',
-	'state'
+	'state',
+	'by',
+	'byBot'
 ]);
 const STATES = new Set(['open', 'closed', 'merged']);
 /** A rule may snooze for 1 hour to 30 days. */

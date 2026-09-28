@@ -1,3 +1,4 @@
+import type { Activity } from './activity';
 // Types shared by the Worker (worker/) and the SPA (src/).
 
 export type Category = 'action' | 'fyi' | 'muted';
@@ -98,6 +99,8 @@ export interface ThreadFacts {
 	me: string;
 	/** "org/team" slugs of the teams you are in. */
 	myTeams?: string[];
+	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
+	activity?: Activity | null;
 }
 
 export interface Classification {
@@ -135,6 +138,10 @@ export interface RuleMatch {
 	draft?: boolean;
 	/** PRs and issues only: open, closed, or merged. */
 	state?: ('open' | 'closed' | 'merged')[];
+	/** Glob(s) on who did the latest activity (a comment or a review; see shared/activity.ts). */
+	by?: string | string[];
+	/** The latest activity is by a bot (true) or by a person (false). */
+	byBot?: boolean;
 }
 
 export interface Rule {
@@ -328,6 +335,8 @@ export interface ThreadDTO {
 	authorIsBot: boolean;
 	labels: string[];
 	rule: string | null;
+	/** The newest comment, review, or push (who, and whether a bot): shared/activity.ts. */
+	activity: Activity | null;
 }
 
 export interface Counts {

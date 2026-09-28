@@ -109,6 +109,13 @@ export const RULE_FIELDS: RuleFieldInfo[] = [
 		help: 'Any of these labels (exact names).'
 	},
 	{ key: 'bot', label: 'Author is a bot', input: 'yesno', yes: 'Bot', no: 'Person' },
+	{
+		key: 'by',
+		label: 'Latest activity by',
+		input: 'globs',
+		help: 'Who wrote the newest comment or review, for example github-actions or *[bot].'
+	},
+	{ key: 'byBot', label: 'Latest activity by a bot', input: 'yesno', yes: 'Bot', no: 'Person' },
 	{ key: 'draft', label: 'Draft PR', input: 'yesno', yes: 'Draft', no: 'Ready' }
 ];
 

@@ -1,3 +1,4 @@
+import { latestActivity } from '../../src/lib/shared/activity';
 import type { Enrichment, ThreadDTO, ThreadFacts } from '../../src/lib/shared/types';
 import { enrichmentOf, type SubjectFacts } from '../../src/lib/shared/subject';
 import type { SubjectRef } from '../github';
@@ -167,7 +168,8 @@ export function toDTO(r: ThreadWithFacts): ThreadDTO {
 		author: f?.author ?? null,
 		authorIsBot: !!f?.authorIsBot,
 		labels: f?.labels.map((l) => l.name) ?? [],
-		rule: r.rule
+		rule: r.rule,
+		activity: latestActivity(f)
 	};
 }
 

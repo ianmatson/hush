@@ -34,6 +34,7 @@ export function threadMatches(when: RuleMatch, t: ThreadDTO, me: string): boolea
 			reason: t.reason,
 			htmlUrl: t.htmlUrl,
 			me,
+			activity: t.activity,
 			enrichment: {
 				kind: 'other',
 				author: t.author ?? undefined,

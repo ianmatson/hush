@@ -48,6 +48,7 @@
 	import { openOnGitHub, reportResolved } from '$lib/recheck';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import { live } from '$lib/live-state.svelte';
+	import QuerySuggest from '$lib/components/app/query-suggest.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
@@ -581,10 +582,11 @@
 			<Input
 				bind:ref={searchEl}
 				bind:value={query}
-				placeholder="Filter: words or repo:, kind:, is:bot…"
+				placeholder="Filter: words, or repo:, needs:, from:…"
 				class="h-8 pl-8"
 				aria-label="Filter threads"
 			/>
+			<QuerySuggest input={searchEl} value={query} onpick={(next) => (query = next)} />
 			<!-- A filter error: under the box, over the list. -->
 			{#if filter.errors.length}
 				<p

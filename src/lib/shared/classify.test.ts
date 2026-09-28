@@ -243,3 +243,38 @@ describe('team review requests', () => {
 		});
 	});
 });
+
+describe('latest activity', () => {
+	const bot = {
+		author: 'github-actions',
+		authorIsBot: true,
+		body: '',
+		url: 'u',
+		createdAt: '2026-09-28T10:00:00Z'
+	};
+	const mine = (e: Partial<Enrichment> = {}) =>
+		facts({ reason: 'author', enrichment: pr({ author: 'ian', ...e }) });
+
+	it('says what happened on your PR', () => {
+		expect(run(mine({ lastComment: bot })).summary).toBe('@github-actions commented on your PR');
+		expect(run(mine({ lastCommitAt: '2026-09-28T11:00:00Z', lastComment: bot })).summary).toBe(
+			'New commits on your PR'
+		);
+		expect(run(mine()).summary).toBe('Activity on your PR');
+	});
+
+	it('matches who did it', () => {
+		const rules = [
+			{ name: 'ci bots', when: { by: 'github-*' }, then: { triage: 'done' as const } }
+		];
+		expect(run(mine({ lastComment: bot }), { rules }).rule).toBe('ci bots');
+		const people = [
+			{ name: 'people', when: { byBot: false }, then: { category: 'action' as const } }
+		];
+		expect(run(mine({ lastComment: bot }), { rules: people }).rule).toBeUndefined();
+		expect(
+			run(mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }), { rules: people })
+				.rule
+		).toBe('people');
+	});
+});
