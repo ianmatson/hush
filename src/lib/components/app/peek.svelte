@@ -3,9 +3,10 @@
 	import type { ActionKind } from '$lib/shared/types';
 
 	export interface PeekTarget {
-		/** PRs and issues have a number; other threads (releases, CI runs) cannot be peeked. */
+		/** PRs and issues have a number; other threads (runs, releases…) have their thread id. */
 		repo: string;
 		number: number | null;
+		thread?: string | null;
 		title: string;
 		url: string;
 		/** What the thread asks of you: it picks the main action button. */
@@ -90,6 +91,11 @@
 	{/snippet}
 	{#if target}
 		{@render header?.()}
-		<PeekContent repo={target.repo} number={target.number} title={target.title} />
+		<PeekContent
+			repo={target.repo}
+			number={target.number}
+			thread={target.thread ?? null}
+			title={target.title}
+		/>
 	{/if}
 </SidePanel>

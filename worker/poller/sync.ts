@@ -49,6 +49,13 @@ export abstract class PollerSync extends PollerSubjects {
 			const ids = items.slice(i, i + 90).map((n) => n.id);
 			for (const r of this.threads(`id IN (${marks(ids.length)})`, ...ids)) existing.set(r.id, r);
 		}
+		// Threads stored before their API address was kept get it now (one write each, once).
+		const fill = items.filter((n) => n.subject.url && existing.get(n.id)?.api_url === null);
+		if (fill.length)
+			this.transaction(() => {
+				for (const n of fill)
+					this.run('UPDATE threads SET api_url = ? WHERE id = ?', n.subject.url, n.id);
+			});
 		const changed = items.filter(
 			(n) =>
 				existing.get(n.id)?.gh_updated_at !== n.updated_at &&
@@ -146,15 +153,15 @@ export abstract class PollerSync extends PollerSubjects {
 				this.run(
 					`INSERT INTO threads (id, repo, subject_type, subject_key, title, html_url, reason, unread, gh_updated_at,
              category, kind, summary, why, action_label, action_url, rule, triage, pushed_updated_at, first_seen_at,
-             snoozed_until, snoozed_at, resolved_note)
-           VALUES (${marks(22)})
+             snoozed_until, snoozed_at, resolved_note, api_url)
+           VALUES (${marks(23)})
            ON CONFLICT (id) DO UPDATE SET
              repo = excluded.repo, subject_type = excluded.subject_type, subject_key = excluded.subject_key,
              title = excluded.title, html_url = excluded.html_url, reason = excluded.reason, unread = excluded.unread,
              gh_updated_at = excluded.gh_updated_at, category = excluded.category, kind = excluded.kind,
              summary = excluded.summary, why = excluded.why, action_label = excluded.action_label,
              action_url = excluded.action_url, rule = excluded.rule, triage = excluded.triage,
-             pushed_updated_at = excluded.pushed_updated_at,
+             pushed_updated_at = excluded.pushed_updated_at, api_url = excluded.api_url,
              snoozed_until = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_until ELSE excluded.snoozed_until END,
              snooze_event = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snooze_event END,
              snoozed_at = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_at ELSE excluded.snoozed_at END,
@@ -183,7 +190,8 @@ export abstract class PollerSync extends PollerSubjects {
 					now,
 					moved?.triage === 'snoozed' ? moved.until : null,
 					moved?.triage === 'snoozed' ? now : null,
-					moved?.triage === 'done' ? moved.note : null
+					moved?.triage === 'done' ? moved.note : null,
+					n.subject.url ?? null
 				)
 			);
 		}

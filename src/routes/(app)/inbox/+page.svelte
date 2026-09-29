@@ -186,6 +186,7 @@
 				id: t.id,
 				repo: t.repo,
 				number: t.number,
+				thread: t.number ? null : t.id,
 				title: t.title,
 				url: t.htmlUrl,
 				need: t.kind
@@ -209,7 +210,7 @@
 	// Reading it in the peek counts as reading it, once it stays open for a moment.
 	$effect(() => {
 		const t = peekThread;
-		if (!t?.unread || !t.number || me.data?.settings.peekMarksRead === false) return;
+		if (!t?.unread || me.data?.settings.peekMarksRead === false) return;
 		const timer = setTimeout(() => act([t.id], 'read'), 1500);
 		return () => clearTimeout(timer);
 	});
@@ -364,10 +365,10 @@
 		contextOpen = false;
 		closeRowMenus();
 		if (sel.click(e, t.id, order, selectedId)) return;
-		// A click on the card peeks it (PRs and issues; other threads only get the cursor).
+		// A click on the card peeks it (PRs, issues, runs, releases…).
 		sel.clear();
 		selectedId = t.id;
-		if (t.number) take();
+		take();
 	}
 
 	function onToggle(e: MouseEvent, t: ThreadDTO) {

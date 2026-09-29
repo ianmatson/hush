@@ -41,7 +41,7 @@
 
 	const close = () => (ui.alertsOpen = false);
 	function choose(a: AlertDTO) {
-		if (a.thread?.number) selected = a;
+		if (a.thread) selected = a;
 		else {
 			noteOpened(a.url);
 			window.open(a.url, '_blank', 'noreferrer');
@@ -90,6 +90,7 @@
 		<PeekContent
 			repo={selected.thread.repo}
 			number={selected.thread.number}
+			thread={selected.thread.number ? null : selected.thread.id}
 			title={selected.thread.title}
 		/>
 	{:else if alerts.isPending}

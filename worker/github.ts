@@ -26,7 +26,7 @@ export class GitHubError extends Error {
 export function gh(token: string, path: string, init: RequestInit = {}): Promise<Response> {
 	const headers = new Headers(init.headers);
 	headers.set('Authorization', `Bearer ${token}`);
-	headers.set('Accept', 'application/vnd.github+json');
+	if (!headers.has('Accept')) headers.set('Accept', 'application/vnd.github+json');
 	headers.set('X-GitHub-Api-Version', '2022-11-28');
 	headers.set('User-Agent', UA);
 	return fetch(path.startsWith('http') ? path : `${API}${path}`, { ...init, headers });

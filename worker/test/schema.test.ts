@@ -104,7 +104,7 @@ describe('schema migrations', () => {
 	it('schema 1 plus its steps equals a new schema', () => {
 		// Schema 1 is the current one without what the steps add.
 		const v1 = SCHEMA.replace(
-			/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*/,
+			/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*\n\s*api_url TEXT[^\n]*/,
 			''
 		).replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n');
 		expect(v1).not.toContain('override');

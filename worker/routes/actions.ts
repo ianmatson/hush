@@ -13,7 +13,7 @@ const MAX_BODY = 65_536;
 
 type ActionBody = {
 	repo: string;
-	number: number;
+	number?: number;
 	action: GhActionId;
 	/** The comment (required for comment and request changes). */
 	body?: string;
@@ -48,10 +48,13 @@ const app = routes().post('/api/actions', json<ActionBody>(), async (c) => {
 	const number = Number(b.number);
 	if (!NAME.test(owner ?? '') || !NAME.test(name ?? '') || extra !== undefined)
 		return c.json({ error: 'Not a repository.' }, 400);
-	if (!Number.isInteger(number) || number < 1) return c.json({ error: 'Not a PR or issue.' }, 400);
 	if (typeof b.action !== 'string' || !Object.hasOwn(GH_ACTIONS, b.action))
 		return c.json({ error: 'Unknown action.' }, 400);
 	const action: GhActionId = b.action;
+	// A re-run can come from a workflow run's peek, with no PR or issue.
+	const noSubject = action === 'rerun' && b.number === undefined;
+	if (!noSubject && (!Number.isInteger(number) || number < 1))
+		return c.json({ error: 'Not a PR or issue.' }, 400);
 	const text = typeof b.body === 'string' ? b.body.trim() : '';
 	if (text.length > MAX_BODY) return c.json({ error: 'The comment is too long.' }, 400);
 	if (GH_ACTIONS[action].body === 'required' && !text)
@@ -137,6 +140,7 @@ const app = routes().post('/api/actions', json<ActionBody>(), async (c) => {
 		}
 	}
 	if (error) return c.json({ error }, 422);
+	if (noSubject) return c.json({ ok: true as const, resolved: [] });
 	// Read it again now: the thread, the dashboards, and the peek show the new state at once.
 	const { resolved } = await poller(c.env, u.id)
 		.recheck(repo, number)

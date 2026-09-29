@@ -98,9 +98,7 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 	const make = (id: string): MenuEntry | null => {
 		switch (id) {
 			case 'peek':
-				return one?.number
-					? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek'))
-					: null;
+				return one ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek')) : null;
 			case 'main':
 				return one
 					? item(
@@ -227,7 +225,7 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 	const detail = one ? one.title : `${ids.length} selected`;
 	const cmds: PaletteCommand[] = [];
 	const add = (c: Omit<PaletteCommand, 'detail'>) => cmds.push({ ...c, detail });
-	if (one?.number)
+	if (one)
 		add({
 			id: 'act:peek',
 			label: 'Peek',

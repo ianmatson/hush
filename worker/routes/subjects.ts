@@ -1,6 +1,7 @@
-import type { PeekDTO } from '../../src/lib/shared/types';
+import type { PeekDTO, ThreadPeekDTO } from '../../src/lib/shared/types';
 import { userToken } from '../db';
 import { fetchPeek, GitHubError } from '../github';
+import { fetchThreadPeek } from '../peek-other';
 import { routes, poller, json } from '../app';
 
 // --- Quick check -----------------------------------------------------------
@@ -28,6 +29,21 @@ const app = routes()
 	})
 	// --- Peek ------------------------------------------------------------------
 
+	/** A thread that is not a PR or issue: a workflow run, a release, a commit, a discussion… */
+	.get('/api/peek-thread/:id', async (c) => {
+		const u = c.get('user');
+		const id = c.req.param('id');
+		if (!/^\d{1,20}$/.test(id)) return c.json({ error: 'Not a thread.' }, 400);
+		const ref = await poller(c.env, u.id).threadRef(id);
+		if (!ref) return c.json({ error: 'Hush does not have this thread.' }, 404);
+		try {
+			const peek: ThreadPeekDTO = await fetchThreadPeek(await userToken(c.env, u), ref);
+			return c.json(peek, 200, { 'Cache-Control': 'private, no-store' });
+		} catch (err) {
+			const status = err instanceof GitHubError && err.status === 401 ? 401 : 502;
+			return c.json({ error: (err as Error).message }, status);
+		}
+	})
 	.get('/api/peek/:owner/:repo/:number', async (c) => {
 		const u = c.get('user');
 		const { owner, repo } = c.req.param();

@@ -134,6 +134,11 @@ export const api = {
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),
+	/** The peek of a thread that is not a PR or issue (a workflow run, a release…). */
+	peekThread: (id: string) => ok(client.api['peek-thread'][':id'].$get({ param: { id } })),
+	/** Re-run the failed jobs of a workflow run (from its peek). */
+	rerunRun: (repo: string, run: number) =>
+		ok(client.api.actions.$post({ json: { repo, action: 'rerun', runs: [run] } })),
 	peek: (repo: string, number: number) => {
 		const [owner, name] = repo.split('/');
 		return ok(

@@ -11,7 +11,17 @@ The peek shows one pull request or issue next to your list. Click a row, or pres
 - The peek stays open when you go to another tab, and shows the same item until you move the cursor there.
 - The alert history (the bell) opens in the same place; the one that you opened last stays.
 
-Only pull requests and issues have a peek. Other threads (releases, workflow runs, alerts) open on GitHub.
+Every thread has a peek. Besides pull requests and issues:
+
+| Thread               | The peek shows                                                                                                                                                                                                        |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Workflow run**     | The workflow, the branch, the commit, and the PR it ran for; each job with its result and time; the steps that failed; and the end of each failed job's log, up to its error. **Re-run failed jobs** runs them again. |
+| **Release**          | The name, the tag, who published it and when, and the release notes.                                                                                                                                                  |
+| **Commit**           | The message, the author, and the changed files.                                                                                                                                                                       |
+| **Discussion**       | The question or post, its category, whether it is answered, and the last 10 comments.                                                                                                                                 |
+| **Dependabot alert** | The open alerts of the repository, newest first: severity, package, and the version that fixes it. GitHub shows alerts only to tokens that may read them; if it refuses, the peek says so.                            |
+
+Other kinds (an invitation, for example) show what GitHub sent, and a link to it.
 
 ## What it shows
 

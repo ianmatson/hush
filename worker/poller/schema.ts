@@ -9,7 +9,7 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -39,7 +39,8 @@ CREATE TABLE threads (
   pushed_at INTEGER,                 -- when that push went out (a resolution updates it)
   first_seen_at INTEGER NOT NULL,
   override TEXT,                     -- "fyi": you said it does not need you ("only this one")…
-  override_updated_at TEXT           -- …until it changes (gh_updated_at moves past this)
+  override_updated_at TEXT,          -- …until it changes (gh_updated_at moves past this)
+  api_url TEXT                       -- GitHub's API address of the subject (the peek of releases…)
 );
 CREATE INDEX threads_view ON threads (category, triage);
 CREATE INDEX threads_subject ON threads (subject_key);
@@ -97,6 +98,13 @@ ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 	3: {
 		to: 4,
 		sql: `CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT NULL);`
+	},
+	// The subject's API address, for the peek of releases, commits, and discussions. The last
+	// 14 days are read again once (quietly, as a first sync), to fill it.
+	4: {
+		to: 5,
+		sql: `ALTER TABLE threads ADD COLUMN api_url TEXT;`,
+		resetKeys: ['lastModified', 'initialized']
 	}
 };
 
@@ -129,6 +137,7 @@ export interface ThreadRow {
 	first_seen_at: number;
 	override: string | null;
 	override_updated_at: string | null;
+	api_url: string | null;
 }
 
 /** A thread with its subject's facts (JSON), from THREADS. */

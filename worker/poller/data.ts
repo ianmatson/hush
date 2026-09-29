@@ -39,6 +39,7 @@ import type {
 import { userToken } from '../db';
 import { markThreadDone, markThreadRead, muteThread } from '../github';
 import { sendPush, vapidFromEnv } from '../webpush';
+import type { ThreadRef } from '../peek-other';
 import { PollerDashboard } from './dashboard';
 import {
 	enrichmentFor,
@@ -46,6 +47,7 @@ import {
 	subjectRefOf,
 	toDTO,
 	viewWhere,
+	type ThreadRow,
 	type ThreadWithFacts
 } from './schema';
 import { MIN, MUTED_BY_USER, type PollStatus } from './shared';
@@ -211,6 +213,21 @@ export abstract class PollerData extends PollerDashboard {
 			});
 		}
 		return out;
+	}
+
+	/** What the peek of a thread that is not a PR or issue needs to find its subject on GitHub. */
+	async threadRef(id: string): Promise<ThreadRef | null> {
+		const r = this.one<ThreadRow>('SELECT * FROM threads WHERE id = ?', id);
+		return r
+			? {
+					repo: r.repo,
+					subjectType: r.subject_type,
+					title: r.title,
+					htmlUrl: r.html_url,
+					apiUrl: r.api_url,
+					updatedAt: r.gh_updated_at
+				}
+			: null;
 	}
 
 	/** You looked at these PRs or issues ("owner/repo#123"): "since you looked" starts again. */
@@ -655,6 +672,7 @@ export abstract class PollerData extends PollerDashboard {
 			url: r.url,
 			thread: r.tid
 				? {
+						id: r.tid,
 						repo: r.repo,
 						number: subjectRefOf({ id: r.tid, subject_key: r.subject_key })?.number ?? null,
 						title: r.ttitle,

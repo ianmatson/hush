@@ -26,7 +26,7 @@ const SNOOZE_TIMES = [
 
 export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 	inbox: [
-		{ id: 'peek', label: 'Peek', note: 'Pull requests and issues', group: 'main' },
+		{ id: 'peek', label: 'Peek', group: 'main' },
 		{ id: 'main', label: 'Main action', note: 'Review, Reply, Fix CI…', group: 'main' },
 		{
 			id: 'github',
