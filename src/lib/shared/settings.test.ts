@@ -61,7 +61,7 @@ describe('settings schema', () => {
 	it('documents every setting', () => {
 		const keys = SETTINGS_DOCS.map((d) => d.key);
 		for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
-			if (k === 'dash' || k === 'menus')
+			if (k === 'dash' || k === 'menus' || k === 'swipe')
 				for (const sub of Object.keys(v)) expect(keys).toContain(`${k}.${sub}`);
 			else expect(keys).toContain(k);
 		}
@@ -92,5 +92,24 @@ describe('settings schema', () => {
 			/"A"/
 		);
 		expect(check({ rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }] })).toBeNull();
+	});
+});
+
+describe('swipe settings', () => {
+	it('keeps the other side and list when you change one', () => {
+		const s = mergeSettings(DEFAULT_SETTINGS, { swipe: { inbox: { left: 'mute' } } } as never);
+		expect(s.swipe.dash).toEqual(DEFAULT_SETTINGS.swipe.dash);
+		expect(validateSettings(s, ['swipe'])).toBeNull();
+		const parsed = parseSettings(JSON.stringify({ swipe: { inbox: { left: 'mute' } } }));
+		expect(parsed.swipe.inbox).toEqual({ right: 'done', left: 'mute' });
+	});
+
+	it('refuses unknown actions and sides', () => {
+		const check = (swipe: unknown) =>
+			validateSettings({ ...DEFAULT_SETTINGS, swipe } as never, ['swipe']);
+		expect(check({ inbox: { left: 'mute', right: 'done' } })).toBeNull();
+		expect(check({ inbox: { left: 'merge', right: 'done' } })).toMatch(/swipe.inbox.left/);
+		expect(check({ inbox: { up: 'done' } })).toMatch(/left.*right/);
+		expect(check({ nope: {} })).toMatch(/swipe.nope/);
 	});
 });

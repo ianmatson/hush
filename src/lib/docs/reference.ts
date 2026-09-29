@@ -9,6 +9,7 @@ import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
 import { MAX_VIEWS, VIEW_BASES } from '$lib/shared/views';
 import { THEMES } from '$lib/themes/list';
+import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
 import {
 	ALERT_LOG_KEEP,
@@ -224,6 +225,18 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	'menus.dash': {
 		type: 'array of menu item ids',
 		body: `The menu of pull requests and issues on the dashboards, the same way as \`menus.inbox\`.`
+	},
+	'swipe.inbox': {
+		type: '{ "left": action, "right": action }',
+		body: `On a phone or tablet, swipe an inbox thread to the right or to the left to act on it: the row moves with your finger, shows the action, and acts when you let go past the line. A mouse or pen never swipes (on the dashboards it drags). The actions: ${SWIPE_ACTIONS.inbox.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.
+
+\`\`\`json settings
+{ "swipe": { "inbox": { "right": "done", "left": "mute" } } }
+\`\`\``
+	},
+	'swipe.dash': {
+		type: '{ "left": action, "right": action }',
+		body: `The same for pull requests and issues on the dashboards. The actions: ${SWIPE_ACTIONS.dash.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.`
 	},
 	keys: {
 		type: 'object: command id → array of keys',

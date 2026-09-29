@@ -1,6 +1,7 @@
 import { validateRules } from './classify';
 import { validateDash } from './dashboard';
 import { MENUS_VERSION, validateMenus } from './menus';
+import { validateSwipe } from './swipe';
 import { validateKeys } from './keymap';
 import { formatQuery } from './query';
 import { validateQuietHours } from './quiet';
@@ -121,6 +122,17 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	},
 	{ key: 'menus.dash', page: 'general', description: 'The menu of PRs and issues, the same way.' },
 	{
+		key: 'swipe.inbox',
+		page: 'general',
+		description:
+			'On touch screens: what a swipe on an inbox thread does, { "left": …, "right": … }.'
+	},
+	{
+		key: 'swipe.dash',
+		page: 'general',
+		description: 'What a swipe on a PR or issue does on the dashboards, the same way.'
+	},
+	{
 		key: 'keys',
 		page: 'keys',
 		description:
@@ -129,7 +141,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 ];
 
 /** Settings that are objects of their own settings (a change to one key keeps the others). */
-const GROUPS = new Set<keyof Settings>(['dash', 'menus']);
+const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe']);
 /** Settings that change how threads are sorted: a change re-sorts the stored threads. */
 export const RECLASSIFY_KEYS: (keyof Settings)[] = [
 	'rules',
@@ -191,7 +203,8 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	views: validateViews,
 	dash: validateDash,
 	menus: validateMenus,
-	keys: validateKeys
+	keys: validateKeys,
+	swipe: validateSwipe
 };
 
 /**

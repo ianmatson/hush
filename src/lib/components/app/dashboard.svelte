@@ -38,6 +38,7 @@
 	import { openOnGitHub } from '$lib/recheck';
 	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
 	import WhyLine from './why-line.svelte';
+	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
 	import NotNeededDialog, { type NotNeededTarget } from './not-needed-dialog.svelte';
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
@@ -47,6 +48,8 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import Eye from '@lucide/svelte/icons/eye';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import CircleSlash from '@lucide/svelte/icons/circle-slash';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import Link from '@lucide/svelte/icons/link';
@@ -604,6 +607,36 @@
 	}
 
 	// Menus and ⌘K commands (see dash-actions.ts) read the dashboard through this context.
+	// Swipe actions on touch screens (Settings → General → Swipe actions; shared/swipe.ts).
+	function swipeSide(side: 'left' | 'right', i: DashItem): SwipeSide | null {
+		switch (me.data?.settings.swipe.dash[side] ?? 'none') {
+			case 'hide':
+				return {
+					label: i.dismissed ? 'Show again' : 'Hide',
+					icon: i.dismissed ? Eye : EyeOff,
+					tone: 'bg-signal-review text-white',
+					run: () => toggleHide([i.id])
+				};
+			case 'mute':
+				return {
+					label: i.muted ? 'Unmute' : 'Mute',
+					icon: BellOff,
+					tone: 'bg-muted-foreground text-background',
+					run: () => toggleMute([i.id])
+				};
+			case 'not-needed':
+				return i.turn === 'you' && !i.dismissed
+					? {
+							label: 'Not my turn',
+							icon: CircleSlash,
+							tone: 'bg-foreground text-background',
+							run: () => sayNotNeeded(i)
+						}
+					: null;
+		}
+		return null;
+	}
+
 	// "Not my turn…": Hush was wrong about an item in Your turn (not-needed-dialog.svelte).
 	let notNeededFor = $state<NotNeededTarget | null>(null);
 	function sayNotNeeded(i: DashItem) {
@@ -871,23 +904,25 @@
 											>
 												{#if r.item}
 													{@const i = r.item}
-													<DashRow
-														item={i}
-														selected={i.id === selectedId}
-														checked={sel.has(i.id)}
-														selecting={sel.size > 0}
-														draggable={!showHidden}
-														showSections={!section}
-														{sectionNames}
-														onopen={open}
-														onhide={(x) => toggleHide([x.id])}
-														onmute={(x) => toggleMute([x.id])}
-														oncopy={(x) => copyLinks([x.id])}
-														onrowclick={(e) => onRowClick(e, i)}
-														ontoggle={(e) => onToggle(e, i)}
-														onundomove={(x) => arrange([x.id], null)}
-														menu={() => menuFor([i.id])}
-													/>
+													<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
+														<DashRow
+															item={i}
+															selected={i.id === selectedId}
+															checked={sel.has(i.id)}
+															selecting={sel.size > 0}
+															draggable={!showHidden}
+															showSections={!section}
+															{sectionNames}
+															onopen={open}
+															onhide={(x) => toggleHide([x.id])}
+															onmute={(x) => toggleMute([x.id])}
+															oncopy={(x) => copyLinks([x.id])}
+															onrowclick={(e) => onRowClick(e, i)}
+															ontoggle={(e) => onToggle(e, i)}
+															onundomove={(x) => arrange([x.id], null)}
+															menu={() => menuFor([i.id])}
+														/>
+													</SwipeRow>
 												{/if}
 											</li>
 										{/each}

@@ -22,7 +22,7 @@ describe('docs', () => {
 	it('describe every setting, and only real ones', () => {
 		const keys = SETTINGS_DOCS.map((d) => d.key);
 		expect(Object.keys(SETTING_DETAILS).sort()).toEqual([...keys].sort());
-		const groups = ['dash', 'menus'];
+		const groups = ['dash', 'menus', 'swipe'];
 		for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
 			if (!groups.includes(k)) expect(keys).toContain(k);
 			else

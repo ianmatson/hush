@@ -198,6 +198,8 @@ export interface Settings {
 	keys: Record<string, string[]>;
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
 	menus: { inbox: string[]; dash: string[]; v?: number };
+	/** Swipe actions on touch screens, for each list (see shared/swipe.ts). */
+	swipe: import('./swipe').SwipeSettings;
 }
 
 // --- Pull request and issue dashboards ------------------------------------------

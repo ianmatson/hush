@@ -1,5 +1,6 @@
 import { DEFAULT_DASH } from './dashboard';
 import { DEFAULT_MENUS, upgradeMenus } from './menus';
+import { DEFAULT_SWIPE } from './swipe';
 import type { Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -16,7 +17,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	dash: DEFAULT_DASH,
 	views: [],
 	menus: DEFAULT_MENUS,
-	keys: {}
+	keys: {},
+	swipe: DEFAULT_SWIPE
 };
 
 /**
@@ -33,7 +35,11 @@ export function parseSettings(json: string | null | undefined): Settings {
 			...DEFAULT_SETTINGS,
 			...raw,
 			dash: { ...DEFAULT_DASH, ...(raw.dash ?? {}) },
-			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS
+			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
+			swipe: {
+				inbox: { ...DEFAULT_SWIPE.inbox, ...(raw.swipe?.inbox ?? {}) },
+				dash: { ...DEFAULT_SWIPE.dash, ...(raw.swipe?.dash ?? {}) }
+			}
 		};
 	} catch {
 		return structuredClone(DEFAULT_SETTINGS);

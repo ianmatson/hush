@@ -33,3 +33,14 @@ Items that do not apply to a row are left out when the menu opens: Done in the D
 In settings.json, menus are [`menus.inbox`](/docs/settings#menus-inbox) and [`menus.dash`](/docs/settings#menus-dash): lists of these ids. `"sep"` is a separator line.
 
 {{ref:menus}}
+
+## Swipe actions
+
+On a phone or tablet, swipe a row to the right or to the left:
+
+- **A short swipe** rests open: the action shows as a button beside the row. Tap it to act. Tap the row, or swipe it back, to close it.
+- **A long swipe** (past about half of the row) acts at once.
+
+You choose the action of each direction, for the inbox and for the Pull requests and Issues tabs, in **Settings → General → Swipe actions**. The defaults: in the inbox, swipe right is **Done** and swipe left is **Snooze**; on the dashboards, swipe right is **Hide until it changes** and swipe left is **Mute**. An action that does not apply to a row (Done on a thread that is done) does nothing there.
+
+Only a finger swipes. A mouse or a pen never does, so on the dashboards they still drag rows. In settings.json, the actions are [`swipe.inbox`](/docs/settings#swipe-inbox) and [`swipe.dash`](/docs/settings#swipe-dash).

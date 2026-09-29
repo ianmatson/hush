@@ -69,6 +69,8 @@
 	import Link from '@lucide/svelte/icons/link';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import Mail from '@lucide/svelte/icons/mail';
+	import CircleSlash from '@lucide/svelte/icons/circle-slash';
+	import SwipeRow, { type SwipeSide } from '$lib/components/app/swipe-row.svelte';
 
 	type ThreadsData = { threads: ThreadDTO[]; counts: Counts };
 
@@ -456,6 +458,59 @@
 	let menuSnoozeIds = $state<string[]>([]);
 	let menuSnoozeOpen = $state(false);
 
+	// Swipe actions on touch screens (Settings → General → Swipe actions; shared/swipe.ts). A side
+	// whose action does not apply to the thread does nothing.
+	function swipeSide(side: 'left' | 'right', t: ThreadDTO): SwipeSide | null {
+		const id = me.data?.settings.swipe.inbox[side] ?? 'none';
+		const open = isOpen(t);
+		switch (id) {
+			case 'done':
+				return open
+					? {
+							label: 'Done',
+							icon: Check,
+							tone: 'bg-signal-merge text-white',
+							run: () => act([t.id], 'done')
+						}
+					: null;
+			case 'snooze':
+				return open
+					? {
+							label: 'Snooze',
+							icon: AlarmClock,
+							tone: 'bg-signal-warn text-white',
+							run: () => actions.snoozeSheet([t.id])
+						}
+					: null;
+			case 'mute':
+				return t.category !== 'muted'
+					? {
+							label: 'Mute',
+							icon: BellOff,
+							tone: 'bg-muted-foreground text-background',
+							run: () => act([t.id], 'mute')
+						}
+					: null;
+			case 'read':
+				return {
+					label: t.unread ? 'Read' : 'Unread',
+					icon: t.unread ? MailOpen : Mail,
+					tone: 'bg-signal-review text-white',
+					run: () => toggleRead([t.id])
+				};
+			case 'not-needed':
+				return canSayNotNeeded(t)
+					? {
+							label: 'Doesn’t need me',
+							icon: CircleSlash,
+							tone: 'bg-foreground text-background',
+							run: () => sayNotNeeded(t)
+						}
+					: null;
+		}
+		return null;
+	}
+
 	// "Doesn't need me…": Hush was wrong about a Needs you thread (not-needed-dialog.svelte).
 	let notNeededFor = $state<NotNeededTarget | null>(null);
 	function sayNotNeeded(t: ThreadDTO) {
@@ -765,18 +820,20 @@
 										out:slide={{ duration: 200, easing: cubicOut }}
 										in:fly={{ y: -8, duration: 200 }}
 									>
-										<ThreadRow
-											thread={t}
-											showList={searching}
-											selected={t.id === selectedId}
-											checked={sel.has(t.id)}
-											selecting={sel.size > 0}
-											onaction={(x, action, body) => act([x.id], action, body)}
-											onopen={open}
-											onrowclick={(e) => onRowClick(e, t)}
-											ontoggle={(e) => onToggle(e, t)}
-											menu={() => menuFor([t.id])}
-										/>
+										<SwipeRow left={swipeSide('left', t)} right={swipeSide('right', t)}>
+											<ThreadRow
+												thread={t}
+												showList={searching}
+												selected={t.id === selectedId}
+												checked={sel.has(t.id)}
+												selecting={sel.size > 0}
+												onaction={(x, action, body) => act([x.id], action, body)}
+												onopen={open}
+												onrowclick={(e) => onRowClick(e, t)}
+												ontoggle={(e) => onToggle(e, t)}
+												menu={() => menuFor([t.id])}
+											/>
+										</SwipeRow>
 									</li>
 								{/each}
 							</ul>
