@@ -296,6 +296,8 @@ export interface DashItem {
 	/** Lower sorts first inside a turn group. */
 	priority: number;
 	dismissed: boolean;
+	/** You muted it: hidden until you unmute it (not until it changes). */
+	muted?: boolean;
 	/** The turn Hush computed, before any move by you. */
 	autoTurn: Turn;
 	/** You dragged this into its group; lasts until the item changes. */

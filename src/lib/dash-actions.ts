@@ -15,6 +15,7 @@ import ExternalLink from '@lucide/svelte/icons/external-link';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import SquareCheck from '@lucide/svelte/icons/square-check';
 import CircleSlash from '@lucide/svelte/icons/circle-slash';
+import BellOff from '@lucide/svelte/icons/bell-off';
 
 /** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
@@ -46,6 +47,8 @@ export interface DashActionContext {
 	moveTo(ids: string[], turn: Turn): unknown;
 	arrange(ids: string[], turn: Turn | null): unknown;
 	toggleHide(ids: string[]): unknown;
+	/** Mute (hidden until unmuted, and its threads muted), or unmute. */
+	toggleMute(ids: string[]): unknown;
 	copyLinks(ids: string[]): unknown;
 	refresh(): unknown;
 	toggleShowHidden(): void;
@@ -89,6 +92,14 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 		icon: ctx.showHidden ? Eye : EyeOff,
 		shortcut: key('dash.hide'),
 		run: () => ctx.toggleHide(ids)
+	});
+	add({
+		id: 'act:mute',
+		label: one?.muted ? 'Unmute' : 'Mute',
+		icon: BellOff,
+		shortcut: key('dash.mute'),
+		keywords: ['hide', 'forever', 'ignore'],
+		run: () => ctx.toggleMute(ids)
 	});
 	if (one?.turn === 'you' && !one.dismissed)
 		add({
@@ -195,6 +206,14 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 							() => ctx.toggleHide(ids),
 							key('dash.hide')
 						);
+			case 'mute':
+				return item(
+					id,
+					n(one?.muted || (!one && ctx.showHidden) ? 'Unmute' : 'Mute'),
+					BellOff,
+					() => ctx.toggleMute(ids),
+					key('dash.mute')
+				);
 			case 'not-needed':
 				return one?.turn === 'you' && !one.dismissed
 					? item(id, 'Not my turn…', CircleSlash, () => ctx.notNeeded(one), key('dash.notNeeded'))

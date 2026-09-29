@@ -106,7 +106,10 @@ export abstract class PollerSubjects extends PollerAlerts {
 		for (const kind of ['pr', 'issue'] as const) {
 			const key = `dash:${kind}`;
 			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
-			const byId = new Map(subs.filter((x) => x.kind === kind).map((x) => [x.id, x]));
+			// Dashboard items use the PR or issue key, the same key as threads (see dashFactsOf).
+			const byId = new Map(
+				subs.filter((x) => x.kind === kind).map((x) => [subjectKey(x.repo, x.number), x])
+			);
 			if (!cached || !cached.data.items.some((i) => byId.has(i.id))) continue;
 			teamSet ??= new Set((await this.teams()).teams.map((t) => t.slug));
 			const names = Object.fromEntries(cached.data.sections.map((x) => [x.id, x.name]));

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { rowMenus } from '$lib/row-menus.svelte';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import type { DashItem } from '$lib/shared/types';
@@ -12,6 +14,8 @@
 	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import Bell from '@lucide/svelte/icons/bell';
+	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Eye from '@lucide/svelte/icons/eye';
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -33,6 +37,7 @@
 		sectionNames,
 		onopen,
 		onhide,
+		onmute,
 		oncopy,
 		onrowclick,
 		ontoggle,
@@ -51,6 +56,8 @@
 		sectionNames: Record<string, string>;
 		onopen: (i: DashItem, url: string) => void;
 		onhide: (i: DashItem) => void;
+		/** Mute (hidden until unmuted, and its threads muted), or unmute. */
+		onmute: (i: DashItem) => void;
 		oncopy: (i: DashItem) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
@@ -58,6 +65,13 @@
 		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
 		menu?: () => MenuEntry[];
 	} = $props();
+
+	// A click on any row closes this row's menus (see row-menus.svelte.ts).
+	let menuOpen = $state([false]);
+	$effect(() => {
+		void rowMenus.epoch;
+		untrack(() => (menuOpen = menuOpen.map(() => false)));
+	});
 
 	let row = $state<HTMLElement | null>(null);
 	$effect(() => {
@@ -234,7 +248,7 @@
 	<!-- Small screens: every action in one menu. -->
 	{#if menu}
 		<div class="shrink-0 self-center sm:hidden">
-			<DropdownMenu.Root>
+			<DropdownMenu.Root bind:open={menuOpen[0]}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button
@@ -277,6 +291,28 @@
 				<Tooltip.Content
 					>{i.dismissed ? 'Show again' : 'Hide until it changes'}
 					<kbd class="ml-1 opacity-60">{keysOf('dash.hide')[0] ?? ''}</kbd></Tooltip.Content
+				>
+			</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							size="icon-sm"
+							aria-label={i.muted ? 'Unmute' : 'Mute'}
+							onclick={(e) => {
+								e.stopPropagation();
+								onmute(i);
+							}}
+						>
+							{#if i.muted}<Bell />{:else}<BellOff />{/if}
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content
+					>{i.muted ? 'Unmute' : 'Mute: hide until you unmute it'}
+					<kbd class="ml-1 opacity-60">{keysOf('dash.mute')[0] ?? ''}</kbd></Tooltip.Content
 				>
 			</Tooltip.Root>
 			<Tooltip.Root>

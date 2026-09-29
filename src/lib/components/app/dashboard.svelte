@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { closeRowMenus } from '$lib/row-menus.svelte';
+	import { untrack } from 'svelte';
 	import {
 		dashCommands,
 		dashMenu,
@@ -8,7 +10,6 @@
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { DASH_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
-	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -414,6 +415,50 @@
 		);
 	}
 
+	/** Mute: hidden until you unmute it, and its threads muted (see PollerData.mute). */
+	async function toggleMute(ids: string[]) {
+		const items = ids.map(byId).filter((i): i is DashItem => !!i);
+		if (!items.length) return;
+		const mute = !items[0].muted;
+		const set = new Set(items.map((i) => i.id));
+		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
+		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
+		sel.clear();
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
+		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
+			old
+				? {
+						...old,
+						items: old.items.map((x) =>
+							set.has(x.id) ? { ...x, dismissed: mute, muted: mute } : x
+						)
+					}
+				: old
+		);
+		try {
+			if (mute) await api.muteItems([...set]);
+			else await api.unhide([...set]);
+			queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+			toast(mute ? 'Muted' : 'Unmuted', {
+				description: items.length === 1 ? items[0].title : `${items.length} items`,
+				action: mute
+					? {
+							label: 'Undo',
+							onClick: () => {
+								api
+									.unhide([...set])
+									.then(() => queryClient.invalidateQueries({ queryKey: keys.dash(kind) }))
+									.catch((e) => toast.error(e.message));
+							}
+						}
+					: undefined
+			});
+		} catch (err) {
+			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
+			toast.error((err as Error).message);
+		}
+	}
+
 	async function toggleHide(ids: string[]) {
 		const items = ids.map(byId).filter((i): i is DashItem => !!i);
 		if (!items.length) return;
@@ -470,7 +515,12 @@
 
 	const targets = () => sel.targets(order, selectedId);
 
+	// The list is the right-click menu's trigger, so a click on a row is not "outside" the
+	// menu: close it here.
+	let contextOpen = $state(false);
 	function onRowClick(e: MouseEvent, i: DashItem) {
+		contextOpen = false;
+		closeRowMenus();
 		if (sel.click(e, i.id, order, selectedId)) return;
 		// A click on the card peeks it.
 		sel.clear();
@@ -526,6 +576,7 @@
 			'list.help': () => (helpOpen = true),
 			'dash.hide': () => toggleHide(targets()),
 			'dash.showHidden': () => (showHidden = !showHidden),
+			'dash.mute': () => toggleMute(targets()),
 			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i)
 		};
 		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
@@ -590,6 +641,7 @@
 		moveTo,
 		arrange,
 		toggleHide,
+		toggleMute,
 		copyLinks,
 		refresh,
 		toggleShowHidden: () => (showHidden = !showHidden),
@@ -747,7 +799,7 @@
 			{/if}
 		</div>
 	{:else}
-		<ContextMenu.Root>
+		<ContextMenu.Root bind:open={contextOpen}>
 			<ContextMenu.Trigger>
 				{#snippet child({ props })}
 					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
@@ -829,6 +881,7 @@
 														{sectionNames}
 														onopen={open}
 														onhide={(x) => toggleHide([x.id])}
+														onmute={(x) => toggleMute([x.id])}
 														oncopy={(x) => copyLinks([x.id])}
 														onrowclick={(e) => onRowClick(e, i)}
 														ontoggle={(e) => onToggle(e, i)}
@@ -883,6 +936,7 @@
 					draggable={false}
 					onopen={() => {}}
 					onhide={() => {}}
+					onmute={() => {}}
 					oncopy={() => {}}
 					onrowclick={() => {}}
 					ontoggle={() => {}}
@@ -932,7 +986,7 @@
 	{#if peekItem}
 		{@const i = peekItem}
 		<WhyLine
-			lead={i.dismissed ? 'Hidden' : groupLabel(i.turn)}
+			lead={i.muted ? 'Muted' : i.dismissed ? 'Hidden' : groupLabel(i.turn)}
 			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
 			changes={i.changes ?? []}
 			seenAt={i.seenAt ?? null}

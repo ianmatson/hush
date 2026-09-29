@@ -44,7 +44,7 @@ describe('menus', () => {
 	it('adds a new item once to menus saved before it, and keeps later choices', () => {
 		const old = { inbox: ['peek', 'copy', 'read', 'done'], dash: ['peek', 'hide'] };
 		expect(upgradeMenus(old).inbox).toEqual(['peek', 'copy', 'rule', 'read', 'not-needed', 'done']);
-		expect(upgradeMenus(old).dash).toEqual(['peek', 'hide', 'not-needed']);
+		expect(upgradeMenus(old).dash).toEqual(['peek', 'hide', 'mute', 'not-needed']);
 		// Saved after an item existed and without it: you removed it, so it stays out.
 		expect(upgradeMenus({ ...old, v: 2 }).inbox).toEqual([
 			'peek',

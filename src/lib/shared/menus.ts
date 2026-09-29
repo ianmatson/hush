@@ -78,6 +78,7 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 		{ id: 'move', label: 'Move to', note: 'Every group', group: 'main' },
 		{ id: 'undoMove', label: 'Undo move', note: 'Items you moved', group: 'main' },
 		{ id: 'hide', label: 'Hide until it changes / Show again', group: 'main' },
+		{ id: 'mute', label: 'Mute / Unmute', note: 'Hidden until you unmute it', group: 'main' },
 		{ id: 'not-needed', label: 'Not my turn…', note: 'Your turn', group: 'main' },
 		{ id: 'copy', label: 'Copy link', group: 'main' },
 		{ id: 'select', label: 'Select / Deselect', group: 'main' },
@@ -115,6 +116,7 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'move',
 		'undoMove',
 		'hide',
+		'mute',
 		'not-needed',
 		'copy',
 		SEP,
@@ -127,11 +129,12 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
  * Items added after a menu may have been saved. A saved menu older than an item's version gets
  * that item once (after `after`, or at the end); later choices are yours.
  */
-export const MENUS_VERSION = 3;
+export const MENUS_VERSION = 4;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
 	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
 	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
-	{ kind: 'dash', id: 'not-needed', after: 'hide', version: 3 }
+	{ kind: 'dash', id: 'not-needed', after: 'hide', version: 3 },
+	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 }
 ];
 
 /** Saved menus, upgraded to the current version. */

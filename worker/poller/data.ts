@@ -67,6 +67,8 @@ const THREAD_ACTIONS = new Set<ThreadAction>([
 ]);
 // Mute makes 2 GitHub calls per thread; 20 × 2 stays under the Free plan's 50 subrequests.
 const BULK_MAX = 20;
+/** A dashboard mark with no end: muted (hidden until you unmute it, not until it changes). */
+const MUTED_AT = '9999-12-31T23:59:59Z';
 
 /** Why a thread or item does not need you ("Doesn't need me…"): what each answer changes. */
 export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'repo' | 'once';
@@ -347,8 +349,9 @@ export abstract class PollerData extends PollerDashboard {
 		// One record per PR or issue: Done or Mute here also hides it on the dashboards (until it
 		// changes), and moving it back shows it there again.
 		const keys = [...new Set(threads.flatMap((t) => (t.subject_key ? [t.subject_key] : [])))];
-		if (action === 'done' || action === 'mute') this.markDashboards(keys, true);
-		if (action === 'undone' || action === 'unmute') this.markDashboards(keys, false);
+		if (action === 'done') this.markDashboards(keys, 'hidden');
+		if (action === 'mute') this.markDashboards(keys, 'muted');
+		if (action === 'undone' || action === 'unmute') this.markDashboards(keys, null);
 
 		if (action === 'done' || action === 'read' || action === 'mute')
 			await this.mirrorOnGitHub(
@@ -680,6 +683,7 @@ export abstract class PollerData extends PollerDashboard {
 		const ranks = new Map(order.map((o) => [o.item_id, o.rank]));
 		for (const i of data.items) {
 			i.dismissed = unchanged(i, hiddenAt.get(i.id));
+			i.muted = hiddenAt.get(i.id) === MUTED_AT;
 			const m = moved.get(i.id);
 			i.autoTurn = i.turn;
 			i.movedByYou = !!m && unchanged(i, m.updated_at) && m.turn !== i.turn;
@@ -833,6 +837,49 @@ export abstract class PollerData extends PollerDashboard {
 			for (const id of ids) this.run('DELETE FROM dash_hidden WHERE item_id = ?', id);
 		});
 		await this.markInbox(ids, false);
+		// Unmuted here: its threads you muted are unmuted too (one record).
+		const muted = this.all<{ id: string }>(
+			`SELECT id FROM threads WHERE subject_key IN (${marks(ids.length)}) AND rule = ?`,
+			...ids,
+			MUTED_BY_USER
+		);
+		if (muted.length)
+			await this.threadAction(
+				muted.map((t) => t.id),
+				'unmute',
+				{}
+			);
+		return { ok: true };
+	}
+
+	/**
+	 * Mute on a dashboard: hidden there until you unmute it, and its threads are muted (which
+	 * unsubscribes you on GitHub), the same as Mute in the inbox.
+	 */
+	async mute(ids: string[]): Promise<{ ok: true }> {
+		this.transaction(() => {
+			for (const id of ids)
+				this.run(
+					`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
+           ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
+					id,
+					MUTED_AT
+				);
+		});
+		const threads = this.all<{ id: string }>(
+			`SELECT id FROM threads WHERE subject_key IN (${marks(ids.length)}) AND category != 'muted'`,
+			...ids
+		);
+		if (threads.length)
+			await this.threadAction(
+				threads.map((t) => t.id),
+				'mute',
+				{}
+			);
+		else {
+			this.broadcast({ type: 'dash', kind: 'pr' });
+			this.broadcast({ type: 'dash', kind: 'issue' });
+		}
 		return { ok: true };
 	}
 
@@ -840,9 +887,10 @@ export abstract class PollerData extends PollerDashboard {
 	 * The dashboards' side of Done in the inbox: hidden from now until the PR or issue changes, or
 	 * shown again. Open dashboards refresh (from the cache: no GitHub requests).
 	 */
-	private markDashboards(keys: string[], hidden: boolean) {
+	private markDashboards(keys: string[], mark: 'hidden' | 'muted' | null) {
 		if (!keys.length) return;
-		const now = new Date().toISOString();
+		const hidden = mark !== null;
+		const now = mark === 'muted' ? MUTED_AT : new Date().toISOString();
 		this.transaction(() => {
 			for (const key of keys)
 				if (hidden)

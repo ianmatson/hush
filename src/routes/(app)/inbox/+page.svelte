@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { closeRowMenus } from '$lib/row-menus.svelte';
+	import { untrack } from 'svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { untrack } from 'svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import { flip } from 'svelte/animate';
 	import { fade, fly, slide } from 'svelte/transition';
@@ -356,7 +357,12 @@
 		toast.success(urls.length === 1 ? 'Link copied' : `${urls.length} links copied`);
 	}
 
+	// The list is the right-click menu's trigger, so a click on a row is not "outside" the
+	// menu: close it here.
+	let contextOpen = $state(false);
 	function onRowClick(e: MouseEvent, t: ThreadDTO) {
+		contextOpen = false;
+		closeRowMenus();
 		if (sel.click(e, t.id, order, selectedId)) return;
 		// A click on the card peeks it (PRs and issues; other threads only get the cursor).
 		sel.clear();
@@ -741,7 +747,7 @@
 					{/if}
 				</div>
 			{:else}
-				<ContextMenu.Root>
+				<ContextMenu.Root bind:open={contextOpen}>
 					<ContextMenu.Trigger>
 						{#snippet child({ props })}
 							<ul

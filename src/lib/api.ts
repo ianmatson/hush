@@ -127,6 +127,8 @@ export const api = {
 	hide: (items: { id: string; updatedAt: string }[]) =>
 		ok(client.api.dashboard.hide.$post({ json: { items } })),
 	unhide: (ids: string[]) => ok(client.api.dashboard.unhide.$post({ json: { ids } })),
+	/** Hidden until you unmute it; its threads are muted too (also on GitHub). */
+	muteItems: (ids: string[]) => ok(client.api.dashboard.mute.$post({ json: { ids } })),
 	arrange: (items: { id: string; updatedAt: string; turn?: Turn | null }[], order: string[]) =>
 		ok(client.api.dashboard.arrange.$post({ json: { items, order } })),
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),

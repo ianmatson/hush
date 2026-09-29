@@ -83,6 +83,7 @@ export const COMMANDS: KeyCommand[] = [
 
 	{ id: 'dash.hide', label: 'Hide until it changes (or show again)', scope: 'dash', keys: ['e'] },
 	{ id: 'dash.showHidden', label: 'Show hidden items', scope: 'dash', keys: ['h'] },
+	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'dash', keys: ['m'] },
 	{ id: 'dash.notNeeded', label: 'Not my turn…', scope: 'dash', keys: ['n'] },
 	...range(0, 9).map((n) => ({
 		id: `dash.section.${n}`,

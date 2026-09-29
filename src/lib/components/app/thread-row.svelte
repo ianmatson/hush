@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { rowMenus } from '$lib/row-menus.svelte';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import type { ThreadDTO } from '$lib/shared/types';
@@ -49,6 +51,13 @@
 		/** The "⋯" menu on phones (the same list as the right-click menu). */
 		menu: () => MenuEntry[];
 	} = $props();
+
+	// A click on any row closes this row's menus (see row-menus.svelte.ts).
+	let menuOpen = $state([false, false]);
+	$effect(() => {
+		void rowMenus.epoch;
+		untrack(() => (menuOpen = menuOpen.map(() => false)));
+	});
 
 	let row = $state<HTMLElement | null>(null);
 	$effect(() => {
@@ -168,7 +177,7 @@
 
 	<!-- Small screens: every action in one menu. -->
 	<div class="shrink-0 self-center sm:hidden">
-		<DropdownMenu.Root>
+		<DropdownMenu.Root bind:open={menuOpen[0]}>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
 					<Button
@@ -210,7 +219,7 @@
 						></Tooltip.Content
 					>
 				</Tooltip.Root>
-				<DropdownMenu.Root>
+				<DropdownMenu.Root bind:open={menuOpen[1]}>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
 							<Button

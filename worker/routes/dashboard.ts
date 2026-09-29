@@ -65,6 +65,16 @@ const app = routes()
 		if (!validRefs(body.items)) return c.json({ error: 'Invalid items' }, 400);
 		return c.json(await poller(c.env, u.id).hide(body.items));
 	})
+	.post('/api/dashboard/mute', json<{ ids: string[] }>(), async (c) => {
+		const body = c.req.valid('json');
+		const ids = Array.isArray(body.ids)
+			? (body.ids as unknown[])
+					.filter((id): id is string => typeof id === 'string' && id.length <= 100)
+					.slice(0, 20)
+			: [];
+		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
+		return c.json(await poller(c.env, c.get('user').id).mute(ids));
+	})
 	.post('/api/dashboard/unhide', json<{ ids: string[] }>(), async (c) => {
 		const u = c.get('user');
 		const body = c.req.valid('json');
