@@ -5,8 +5,25 @@
 	import AppShell from '$lib/components/app/app-shell.svelte';
 	import { persistOptions, queryClient } from '$lib/queries';
 	import { ui } from '$lib/ui.svelte';
+	import { onMount } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
+	import { updated } from '$app/state';
 
 	let { children } = $props();
+
+	// A Home Screen app can stay suspended for days and resume with the old code. When it comes
+	// back to the screen, check for a new version and load it; with one known, the next link
+	// loads the whole page.
+	onMount(() => {
+		const onVisible = async () => {
+			if (document.visibilityState === 'visible' && (await updated.check())) location.reload();
+		};
+		document.addEventListener('visibilitychange', onVisible);
+		return () => document.removeEventListener('visibilitychange', onVisible);
+	});
+	beforeNavigate(({ willUnload, to }) => {
+		if (updated.current && !willUnload && to?.url) location.href = to.url.href;
+	});
 </script>
 
 <svelte:head>
