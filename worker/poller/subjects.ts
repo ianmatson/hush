@@ -265,7 +265,6 @@ export abstract class PollerSubjects extends PollerAlerts {
 			await this.bumpVersion();
 		}
 		if (messages.length && !opts.quiet) await this.send(messages.slice(0, MAX_INDIVIDUAL_PUSHES));
-		if (resolved.length && !opts.quiet) await this.notifyResolved(resolved);
 		return { resolved, wrote: writes.length };
 	}
 

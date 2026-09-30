@@ -157,8 +157,6 @@ export interface PushMessage {
 	url: string;
 	/** The thread id, so a later push can replace this alert (or "digest", "test"). */
 	tag?: string;
-	/** An update to an alert already shown: the service worker replaces it quietly, then closes it. */
-	resolve?: boolean;
 }
 
 /** Send one push. Returns the push service's HTTP status (404/410 = subscription is gone). */

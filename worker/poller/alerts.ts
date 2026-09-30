@@ -3,7 +3,7 @@ import type { Classification } from '../../src/lib/shared/types';
 import type { GhNotification } from '../github';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import { PollerBase } from './base';
-import { MAX_INDIVIDUAL_PUSHES, RESOLVE_WINDOW, ALERT_LOG_KEEP, NON_THREAD_TAGS } from './shared';
+import { MAX_INDIVIDUAL_PUSHES, ALERT_LOG_KEEP, NON_THREAD_TAGS } from './shared';
 import type { ThreadRow } from './schema';
 
 const marks = (n: number) => Array(n).fill('?').join(',');
@@ -40,40 +40,6 @@ export abstract class PollerAlerts extends PollerBase {
 	}
 
 	/**
-	 * Update alerts that were pushed in the last day and are now resolved: each is replaced by a
-	 * quiet "✓ You approved"-style alert that closes itself (see the service worker). Browsers
-	 * require every push to show something, so this is never an invisible push. Also called for
-	 * Done, Mute, and Snooze, so the alert goes away on your other devices too.
-	 */
-	async notifyResolved(items: { id: string; note: string }[]): Promise<void> {
-		if (!items.length || !(await this.settings()).pushResolved) return;
-		const ids = items.map((i) => i.id);
-		const rows = this.all<Pick<ThreadRow, 'id' | 'title' | 'repo' | 'action_url'>>(
-			`SELECT id, title, repo, action_url FROM threads WHERE pushed_at > ? AND id IN (${marks(ids.length)})`,
-			Date.now() - RESOLVE_WINDOW,
-			...ids
-		);
-		if (!rows.length) return;
-		const note = new Map(items.map((i) => [i.id, i.note]));
-		const sent = await this.send(
-			rows.map((r) => ({
-				title: `✓ ${note.get(r.id)}`,
-				body: `${r.title}\n${r.repo}`,
-				url: r.action_url,
-				tag: r.id,
-				resolve: true
-			}))
-		);
-		// Once is enough: a second change to the same thread must not bring the alert back. In quiet
-		// hours nothing was sent, so a later resolution can still update the alert.
-		if (sent)
-			this.run(
-				`UPDATE threads SET pushed_at = NULL WHERE id IN (${marks(rows.length)})`,
-				...rows.map((r) => r.id)
-			);
-	}
-
-	/**
 	 * Send push messages to every device; forget devices the push service dropped. `log` is what
 	 * the alert history records (default: the messages; never resolve updates). In quiet hours
 	 * nothing is sent: the history records the alerts, and they go out as one push when quiet
@@ -86,7 +52,7 @@ export abstract class PollerAlerts extends PollerBase {
 		await this.putChanged({ hasPush: devices.length > 0 });
 		if (!devices.length || !this.env.VAPID_PRIVATE_KEY) return false;
 		if (inQuietHours((await this.settings()).quietHours)) {
-			const held = log.filter((m) => !m.resolve && m.tag !== 'test');
+			const held = log.filter((m) => m.tag !== 'test');
 			this.logAlerts(held);
 			if (held.length) {
 				const q = (await this.ctx.storage.get<Held>('quietHeld')) ?? { count: 0, lines: [] };
@@ -113,22 +79,9 @@ export abstract class PollerAlerts extends PollerBase {
 				}
 			}
 		}
-		const now = Date.now();
-		// Remember which threads have an alert on screen, so a resolution can update it.
-		const threadIds = messages
-			.filter((m) => !m.resolve && m.tag && !NON_THREAD_TAGS.has(m.tag))
-			.map((m) => m.tag!);
-		this.transaction(() => {
-			if (gone.length)
-				this.run(`DELETE FROM push_devices WHERE endpoint IN (${marks(gone.length)})`, ...gone);
-			if (threadIds.length)
-				this.run(
-					`UPDATE threads SET pushed_at = ? WHERE id IN (${marks(threadIds.length)})`,
-					now,
-					...threadIds
-				);
-		});
-		this.logAlerts(log.filter((m) => !m.resolve));
+		if (gone.length)
+			this.run(`DELETE FROM push_devices WHERE endpoint IN (${marks(gone.length)})`, ...gone);
+		this.logAlerts(log);
 		return true;
 	}
 

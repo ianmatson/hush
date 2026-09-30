@@ -284,7 +284,6 @@ export abstract class PollerSync extends PollerSubjects {
 				);
 		});
 		await this.bumpVersion();
-		await this.notifyResolved(done.map((r) => ({ id: r.id, note: 'A later run passed' })));
 	}
 
 	/**
@@ -346,7 +345,6 @@ export abstract class PollerSync extends PollerSubjects {
 			});
 			await this.bumpVersion();
 		}
-		await this.notifyResolved(doneOnGitHub);
 		return ingested;
 	}
 

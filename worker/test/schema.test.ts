@@ -57,7 +57,6 @@ describe('subject keys on threads', () => {
 		resolved_note: null,
 		marked_unread_at: null,
 		pushed_updated_at: null,
-		pushed_at: null,
 		first_seen_at: 0,
 		facts: null,
 		...over
@@ -106,7 +105,11 @@ describe('schema migrations', () => {
 		const v1 = SCHEMA.replace(
 			/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*\n\s*api_url TEXT[^\n]*/,
 			''
-		).replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n');
+		)
+			.replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n')
+			// Schema 1 still had pushed_at (a later step drops it).
+			.replace(/(\n\s*pushed_updated_at TEXT,[^\n]*)/, '$1\n  pushed_at INTEGER,');
+		expect(v1).toContain('pushed_at INTEGER');
 		expect(v1).not.toContain('override');
 		expect(v1).not.toContain('CREATE TABLE seen');
 		const steps: string[] = [];

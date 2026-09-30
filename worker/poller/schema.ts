@@ -9,7 +9,7 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -36,7 +36,6 @@ CREATE TABLE threads (
   resolved_note TEXT,
   marked_unread_at INTEGER,
   pushed_updated_at TEXT,            -- gh_updated_at of the last push for it
-  pushed_at INTEGER,                 -- when that push went out (a resolution updates it)
   first_seen_at INTEGER NOT NULL,
   override TEXT,                     -- "fyi": you said it does not need you ("only this one")…
   override_updated_at TEXT,          -- …until it changes (gh_updated_at moves past this)
@@ -105,7 +104,9 @@ ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 		to: 5,
 		sql: `ALTER TABLE threads ADD COLUMN api_url TEXT;`,
 		resetKeys: ['lastModified', 'initialized']
-	}
+	},
+	// No more "✓ Done" pushes that replace an alert: Hush no longer keeps when it pushed.
+	5: { to: 6, sql: `ALTER TABLE threads DROP COLUMN pushed_at;` }
 };
 
 export interface ThreadRow {
@@ -133,7 +134,6 @@ export interface ThreadRow {
 	resolved_note: string | null;
 	marked_unread_at: number | null;
 	pushed_updated_at: string | null;
-	pushed_at: number | null;
 	first_seen_at: number;
 	override: string | null;
 	override_updated_at: string | null;

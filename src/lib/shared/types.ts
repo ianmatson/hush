@@ -174,8 +174,6 @@ export interface Settings {
 	pushFyi: boolean;
 	/** Push when a thread becomes your turn with no new notification (the inbox watcher). */
 	pushTurnChanges: boolean;
-	/** Replace an alert already shown with a quiet "✓ resolved" one when its thread is resolved. */
-	pushResolved: boolean;
 	/** No pushes during these hours (they still go in the alert history). Null: off. */
 	quietHours: QuietHours | null;
 	/** A thread open in the peek for a moment is marked as read. */

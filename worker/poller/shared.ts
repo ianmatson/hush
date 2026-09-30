@@ -15,8 +15,6 @@ export const WATCH_EVERY = 15 * MIN;
 export const WATCH_BATCH = 80;
 // Read and done states come from GitHub for threads updated in this window.
 export const SYNC_DAYS = 14;
-/** Alerts pushed within this time are updated when their thread is resolved. */
-export const RESOLVE_WINDOW = DAY;
 // A manual refresh checks up to this many inbox threads again, at most once a minute.
 export const INBOX_CHECK_MAX = 40;
 export const INBOX_CHECK_GAP = MIN;

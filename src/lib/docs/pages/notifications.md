@@ -22,13 +22,12 @@ The list under **Devices** has every device that gets push, with “(this device
 | **“Needs you” items** ([`pushAction`](/docs/settings#pushaction))   | on      | Review requests, failed CI on your PRs, replies, direct mentions: everything that arrives in Needs you. |
 | **FYI items** ([`pushFyi`](/docs/settings#pushfyi))                 | off     | FYI threads too. Usually noisy.                                                                         |
 | [`pushTurnChanges`](/docs/settings#pushturnchanges) (settings.json) | on      | A thread that becomes your turn with no new notification, for example new commits after your review.    |
-| [`pushResolved`](/docs/settings#pushresolved) (settings.json)       | on      | Replaces a recent alert with a quiet “✓ You approved” when it is resolved.                              |
 
 [Rules](/docs/rules) decide for the threads they match: `"push": true` pushes even FYI threads, and `"push": false` stops the push even for Needs you. This is the best way to hear about one repository or one person.
 
 Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 threads arrive in one check, they come as one push: “5 things need you”.
 
-A push opens the thread's main action (the PR's files to review, its checks…). When you finish a thread on one device (Done, Mute, Snooze, or when Hush sees that you approved), its alert on your other devices changes to a quiet note and closes.
+A push opens the thread's main action (the PR's files to review, its checks…). An alert stays until you close it: Done, Mute, or Snooze in Hush does not change it. (A browser must show something for each push, so Hush cannot remove an alert without showing a new one.)
 
 ## Quiet hours
 

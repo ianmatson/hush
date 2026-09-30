@@ -78,10 +78,6 @@ export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
 		type: 'boolean',
 		body: `GitHub sends no notification for some changes that make a thread your turn: new commits after your review, CI that fails later, a snooze that ends. The inbox watcher looks at open threads every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, Hush moves it to Needs you and, with this on, pushes it.`
 	},
-	pushResolved: {
-		type: 'boolean',
-		body: `When an alert from the last day is resolved (you approved, CI passes now, you marked it Done on another device), Hush replaces it with a quiet alert such as “✓ You approved”, which then closes itself. Off: the old alert stays until you close it.`
-	},
 	quietHours: {
 		type: 'object or null',
 		body: `No pushes at these times. The alerts still go in the alert history (the bell). When quiet hours end, one push lists what waited.

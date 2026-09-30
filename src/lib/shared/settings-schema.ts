@@ -38,12 +38,6 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'Push when a thread becomes your turn with no new notification from GitHub, for example new commits after your review.'
 	},
 	{
-		key: 'pushResolved',
-		page: null,
-		description:
-			'Change an alert from the last day to a quiet “✓ You approved” (or “Done”, “CI passes now”…) when it is resolved, then close it.'
-	},
-	{
 		key: 'quietHours',
 		page: 'notifications',
 		description:
@@ -190,7 +184,6 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	pushAction: bool('pushAction'),
 	pushFyi: bool('pushFyi'),
 	pushTurnChanges: bool('pushTurnChanges'),
-	pushResolved: bool('pushResolved'),
 	peekMarksRead: bool('peekMarksRead'),
 	botsAreFyi: bool('botsAreFyi'),
 	teamReviewsAreAction: bool('teamReviewsAreAction'),

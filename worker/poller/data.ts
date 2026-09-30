@@ -374,14 +374,6 @@ export abstract class PollerData extends PollerDashboard {
 				action,
 				threads.map((t) => t.id)
 			);
-		// Alerts for these threads on your other devices: replace them with a quiet note.
-		const RESOLVED_NOTE: Partial<Record<ThreadAction, string>> = {
-			done: 'Done',
-			mute: 'Muted',
-			snooze: 'Snoozed'
-		};
-		const note = RESOLVED_NOTE[action];
-		if (note) this.ctx.waitUntil(this.notifyResolved(threads.map((t) => ({ id: t.id, note }))));
 		return { ok: true, updated: threads.length, counts: this.counts() };
 	}
 
@@ -551,7 +543,6 @@ export abstract class PollerData extends PollerDashboard {
 			this.transaction(() => changes.forEach((change) => change()));
 			await this.bumpVersion();
 		}
-		await this.notifyResolved(done);
 		return changes.length;
 	}
 

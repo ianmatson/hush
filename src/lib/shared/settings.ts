@@ -7,7 +7,6 @@ export const DEFAULT_SETTINGS: Settings = {
 	pushAction: true,
 	pushFyi: false,
 	pushTurnChanges: true,
-	pushResolved: true,
 	quietHours: null,
 	peekMarksRead: true,
 	reviewResolution: 'strict',
