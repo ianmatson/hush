@@ -14,6 +14,7 @@
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
+	import ReactionBar from './reaction-bar.svelte';
 
 	/**
 	 * The peek of a thread that is not a PR or issue: a workflow run (jobs, failed steps, the end
@@ -253,6 +254,7 @@
 				</p>
 			</header>
 			<div class="gh-html">{@html sanitize(p.html)}</div>
+			{#if p.reactions}<ReactionBar r={p.reactions} />{/if}
 			{#if p.comments.length}
 				<section class="grid gap-4 border-t pt-4">
 					{#if p.totalComments > p.comments.length}
@@ -267,6 +269,7 @@
 								{ago(c.createdAt)}
 							</p>
 							<div class="gh-html">{@html sanitize(c.html)}</div>
+							{#if c.reactions}<ReactionBar r={c.reactions} class="mt-1" />{/if}
 						</div>
 					{/each}
 				</section>

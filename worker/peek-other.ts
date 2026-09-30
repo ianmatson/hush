@@ -1,5 +1,6 @@
 import type { RunJobDTO, ThreadPeekDTO } from '../src/lib/shared/types';
 import { gh, GitHubError } from './github';
+import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 
 /**
  * The peek of threads that are not PRs or issues: a workflow run (its jobs, the steps that
@@ -270,9 +271,9 @@ async function commitPeek(token: string, t: ThreadRef): Promise<ThreadPeekDTO | 
 }
 
 const DISCUSSION = `
-  number title url bodyHTML createdAt isAnswered
+  number title url bodyHTML createdAt isAnswered ${REACTION_FIELDS}
   author { login } category { name }
-  comments(last: 10) { totalCount nodes { author { login } bodyHTML createdAt url } }`;
+  comments(last: 10) { totalCount nodes { author { login } bodyHTML createdAt url ${REACTION_FIELDS} } }`;
 
 async function discussionPeek(token: string, t: ThreadRef): Promise<ThreadPeekDTO | null> {
 	const [owner, name] = t.repo.split('/');
@@ -311,11 +312,13 @@ async function discussionPeek(token: string, t: ThreadRef): Promise<ThreadPeekDT
 		category: d.category?.name ?? null,
 		answered: !!d.isAnswered,
 		html: d.bodyHTML ?? '',
+		reactions: reactionsOf(d),
 		comments: (d.comments?.nodes ?? []).map((c: Json) => ({
 			author: c.author?.login ?? null,
 			html: c.bodyHTML ?? '',
 			createdAt: c.createdAt,
-			url: c.url
+			url: c.url,
+			reactions: reactionsOf(c)
 		})),
 		totalComments: d.comments?.totalCount ?? 0
 	};

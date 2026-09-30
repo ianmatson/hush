@@ -7,6 +7,7 @@ import type {
 	TeamDTO
 } from '../src/lib/shared/types';
 import { isBot } from '../src/lib/shared/classify';
+import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts } from '../src/lib/shared/subject';
 
@@ -482,6 +483,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
     ... on PullRequest {
       id number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
       baseRefName headRefName headRefOid reviewDecision mergeable mergeStateStatus locked
+      ${REACTION_FIELDS}
       viewerDidAuthor viewerCanClose viewerCanReopen viewerCanMergeAsAdmin
       viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
       repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }
@@ -503,13 +505,13 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
         totalCount
         nodes {
           __typename
-          ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url }
-          ... on PullRequestReview { author { ${PERSON} } bodyHTML state submittedAt createdAt url comments { totalCount } }
+          ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url ${REACTION_FIELDS} }
+          ... on PullRequestReview { author { ${PERSON} } bodyHTML state submittedAt createdAt url comments { totalCount } ${REACTION_FIELDS} }
         }
       }
     }
     ... on Issue {
-      id number title url state createdAt bodyHTML locked
+      id number title url state createdAt bodyHTML locked ${REACTION_FIELDS}
       viewerDidAuthor viewerCanClose viewerCanReopen
       repository { nameWithOwner viewerPermission }
       author { ${PERSON} }
@@ -517,7 +519,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       assignees(first: 10) { nodes { login } }
       timelineItems(last: ${PEEK_TIMELINE}, itemTypes: [ISSUE_COMMENT]) {
         totalCount
-        nodes { __typename ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url } }
+        nodes { __typename ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url ${REACTION_FIELDS} } }
       }
     }
   } }
@@ -593,14 +595,16 @@ export async function fetchPeek(
 						url: t.url,
 						html: t.bodyHTML ?? '',
 						state: t.state,
-						inline: t.comments?.totalCount ?? 0
+						inline: t.comments?.totalCount ?? 0,
+						reactions: reactionsOf(t)
 					}
 				: {
 						type: 'comment',
 						author: person(t.author),
 						at: t.createdAt,
 						url: t.url,
-						html: t.bodyHTML ?? ''
+						html: t.bodyHTML ?? '',
+						reactions: reactionsOf(t)
 					}
 		);
 	const base: PeekDTO = {
@@ -614,6 +618,7 @@ export async function fetchPeek(
 		author: person(n.author),
 		createdAt: n.createdAt,
 		html: n.bodyHTML ?? '',
+		reactions: reactionsOf(n),
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
 		timeline: { total: n.timelineItems?.totalCount ?? items.length, items },

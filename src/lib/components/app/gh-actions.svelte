@@ -22,8 +22,8 @@
 
 	/**
 	 * Actions on GitHub in the peek's bottom bar: the main one for what the thread asks of you, and
-	 * the rest in "More" (shared/actions.ts). Comment and request changes go to the comment box at
-	 * the end of the conversation. Merge asks once more; approve waits 5 seconds (it cannot be
+	 * the rest in "More" (shared/actions.ts). Comment is only the comment box at the end of the
+	 * conversation, and request changes goes there too. Merge asks once more; approve waits 5 seconds (it cannot be
 	 * withdrawn); close and auto-merge offer Undo. Keys: shared/keymap.ts.
 	 */
 	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
@@ -31,8 +31,11 @@
 	const q = createQuery(() => peekQuery(repo, number));
 	const p = $derived(q.data);
 	const states = $derived(p ? ghActions(p) : []);
-	const main = $derived(mainAction(need, states));
-	const others = $derived(states.filter((s) => s.id !== main?.id));
+	// Comment has no button here: the comment box at the end of the conversation is the one place
+	// for it (its key and the palette still go there).
+	const bar = $derived(states.filter((s) => s.id !== 'comment'));
+	const main = $derived(mainAction(need, bar));
+	const others = $derived(bar.filter((s) => s.id !== main?.id));
 	const has = (id: GhActionId) => states.find((s) => s.id === id);
 
 	let method = $state<MergeMethod>('SQUASH');
@@ -106,7 +109,7 @@
 		>{/if}
 {/snippet}
 
-{#if p && states.length}
+{#if p && bar.length}
 	<div class="ml-auto flex items-center gap-1.5" role="group" aria-label="Actions on GitHub">
 		{#if others.length}
 			<DropdownMenu.Root>

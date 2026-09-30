@@ -32,6 +32,7 @@ Other kinds (an invitation, for example) show what GitHub sent, and a link to it
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted, not shown.
+- The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another. Discussions have them too.
 - A comment box at the end.
 
 A thread that stays open in the peek for a moment is marked as read, also on GitHub. Turn this off with [`peekMarksRead`](/docs/settings#peekmarksread).
@@ -43,7 +44,7 @@ The bar at the bottom of the peek has two parts:
 1. The buttons of the page that you are on: **Done**, **Snooze**, **Mute**, and **Read** in the inbox; **Hide until it changes** and **Copy link** on the Pull requests and Issues tabs.
 2. The **actions on GitHub**: a main button, and **More** for the rest.
 
-The main button is the action that fits what the thread asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, **Merge** when it is ready, and **Comment** for a reply or anything else.
+The main button is the action that fits what the thread asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).
 
 ## Actions on GitHub
 
@@ -52,7 +53,7 @@ Hush shows only the actions that you can do now. An action that GitHub would ref
 {{ref:actions}}
 
 - **Approve** waits 5 seconds before Hush sends it, because GitHub cannot take back an approval. **Undo** in the message stops it. **Approve with a comment…** (in More) opens the comment box.
-- **Request changes** and **Comment** need text: the comment box opens. {{key:editor.send}} sends it.
+- **Request changes** and **Comment** ({{key:peek.comment}}, or the palette with {{key:palette}}) need text: the comment box opens. {{key:editor.send}} sends it.
 - **Merge** asks once more: the button becomes “Confirm: merge”. Press it (or the key) again. The merge uses the method chosen under **Merge method** in More, when the repository allows more than one. Hush merges only the commit that you saw: if someone pushed since, GitHub refuses, and you can look again.
 - **Enable auto-merge** shows when the repository allows it and the PR cannot merge yet: GitHub merges it when the checks and reviews pass.
 - **Close** and **Reopen** can be undone from the message.

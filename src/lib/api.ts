@@ -2,7 +2,15 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
-import type { DashKind, MergeMethod, Rule, Settings, Turn, View } from '$lib/shared/types';
+import type {
+	DashKind,
+	MergeMethod,
+	ReactionContent,
+	Rule,
+	Settings,
+	Turn,
+	View
+} from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 
 export class ApiError extends Error {
@@ -68,6 +76,8 @@ export const api = {
 		id?: string;
 	}) => ok(client.api.actions.$post({ json: a })),
 	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
+	react: (id: string, content: ReactionContent, add: boolean) =>
+		ok(client.api.reactions.$post({ json: { id, content, add } })),
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */
 	orgs: () => ok(client.api.account.orgs.$get()),

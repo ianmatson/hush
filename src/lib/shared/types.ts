@@ -493,7 +493,14 @@ export type ThreadPeekDTO = ThreadPeekBase &
 				category: string | null;
 				answered: boolean;
 				html: string;
-				comments: { author: string | null; html: string; createdAt: string; url: string }[];
+				reactions?: Reactions;
+				comments: {
+					author: string | null;
+					html: string;
+					createdAt: string;
+					url: string;
+					reactions?: Reactions;
+				}[];
 				totalComments: number;
 		  }
 		| {
@@ -523,8 +530,22 @@ export interface PeekPerson {
 	bot: boolean;
 }
 
+export type ReactionContent =
+	'THUMBS_UP' | 'THUMBS_DOWN' | 'LAUGH' | 'HOORAY' | 'CONFUSED' | 'HEART' | 'ROCKET' | 'EYES';
+
+/** The reactions on a comment, review, or description, as GitHub shows them under it. */
+export interface Reactions {
+	/** The GraphQL node ID of the comment (what you react to). */
+	id: string;
+	/** False in a locked conversation you cannot write in, for example. */
+	canReact: boolean;
+	/** Only the reactions someone gave, in GitHub's order. */
+	groups: { content: ReactionContent; count: number; mine: boolean }[];
+}
+
 export interface PeekEntry {
 	type: 'comment' | 'review';
+	reactions?: Reactions;
 	author: PeekPerson;
 	at: string;
 	url: string;
@@ -569,6 +590,8 @@ export interface PeekDTO {
 	author: PeekPerson;
 	createdAt: string;
 	html: string;
+	/** The description's reactions. */
+	reactions?: Reactions;
 	labels: { name: string; color: string }[];
 	assignees: string[];
 	pr?: {

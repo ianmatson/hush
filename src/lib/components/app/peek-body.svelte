@@ -8,6 +8,7 @@
 	import { cn } from '$lib/utils';
 	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
 	import CommentBox from './comment-box.svelte';
+	import ReactionBar from './reaction-bar.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import GitPullRequestDraft from '@lucide/svelte/icons/git-pull-request-draft';
@@ -247,6 +248,7 @@
 			{:else}
 				<p class="text-sm text-muted-foreground italic">No description.</p>
 			{/if}
+			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
 
 		<section class="grid gap-3">
@@ -290,6 +292,7 @@
 							{@html sanitize(e.html)}
 						</div>
 					{/if}
+					{#if e.reactions}<ReactionBar r={e.reactions} class="ml-7" />{/if}
 				</div>
 			{/each}
 			<CommentBox {p} />
