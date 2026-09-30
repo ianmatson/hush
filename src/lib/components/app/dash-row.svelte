@@ -100,6 +100,9 @@
 					: null
 	);
 
+	/** Labels added since you last looked (the row marks them). */
+	const newLabels = $derived(i.changes?.flatMap((c) => c.labels ?? []) ?? []);
+
 	const review = $derived(
 		i.reviewDecision === 'APPROVED'
 			? { label: 'Approved', tone: 'text-signal-merge' }
@@ -208,10 +211,22 @@
 					>
 				</span>
 			{/if}
-			{#if i.changes?.length}<ChangeChips changes={i.changes} />{/if}
+			<!-- A CI change marks the CI chip, not a chip of its own (it would say the same). -->
+			{#if i.changes?.length}<ChangeChips
+					changes={i.changes.filter((c) => !(c.kind === 'ci' && ci) && c.kind !== 'labels')}
+					omit={[i.turnReason]}
+				/>{/if}
 			{#if ci}
-				<span class={cn('flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}>
+				{@const ciNew = i.changes?.some((c) => c.kind === 'ci')}
+				<span
+					class={cn('relative flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}
+					title={ciNew ? 'Changed since you last looked' : undefined}
+				>
 					<ci.icon class="size-3" />{ci.label}
+					{#if ciNew}<span
+							class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-signal-review"
+							aria-label="Changed since you last looked"
+						></span>{/if}
 				</span>
 			{/if}
 			{#if review}
@@ -228,10 +243,16 @@
 			{#if i.draft}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">Draft</span>
 			{/if}
+			<!-- A label added since you last looked has a ring (no chip of its own). -->
 			{#each i.labels.slice(0, 3) as l (l.name)}
+				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}
 				<span
-					class="max-w-40 truncate rounded-full px-1.5 py-0.5"
-					style="background:#{l.color}; color:{ink(l.color)}">{l.name}</span
+					class={cn(
+						'max-w-40 truncate rounded-full px-1.5 py-0.5',
+						added && 'ring-2 ring-signal-review ring-offset-1 ring-offset-background'
+					)}
+					style="background:#{l.color}; color:{ink(l.color)}"
+					title={added ? 'Added since you last looked' : undefined}>{l.name}</span
 				>
 			{/each}
 			{#if showSections}

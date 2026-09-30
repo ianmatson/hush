@@ -83,6 +83,11 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 		});
 	const added = after.labels.filter((l) => !before.labels.includes(l));
 	if (added.length)
-		out.push({ kind: 'labels', text: added.map((l) => `+${l}`).join(' '), tone: null });
+		out.push({
+			kind: 'labels',
+			text: added.map((l) => `+${l}`).join(' '),
+			tone: null,
+			labels: added
+		});
 	return out;
 }

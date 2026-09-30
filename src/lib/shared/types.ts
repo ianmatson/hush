@@ -246,6 +246,8 @@ export interface Change {
 	kind: 'commits' | 'ci' | 'review' | 'comments' | 'state' | 'draft' | 'requested' | 'labels';
 	text: string;
 	tone: 'good' | 'bad' | null;
+	/** The labels added (kind "labels"), so a row that shows labels can mark them. */
+	labels?: string[];
 }
 
 export interface DashItem {

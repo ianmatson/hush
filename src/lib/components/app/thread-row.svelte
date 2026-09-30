@@ -145,7 +145,7 @@
 				>
 			{/if}
 			<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>
-			{#if t.changes?.length}<ChangeChips changes={t.changes} />{/if}
+			{#if t.changes?.length}<ChangeChips changes={t.changes} omit={[t.summary, t.why]} />{/if}
 			{#if t.override}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">You said: doesn’t need me</span>
 			{/if}
