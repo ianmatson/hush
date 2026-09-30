@@ -363,12 +363,11 @@ export abstract class PollerData extends PollerDashboard {
 		});
 		await this.bumpVersion();
 
-		// One record per PR or issue: Done or Mute here also hides it on the dashboards (until it
-		// changes), and moving it back shows it there again.
+		// Mute is about the whole PR or issue: it also mutes it on the dashboards (and Unmute shows
+		// it again). Done is about one event only: the PR or issue stays on its dashboard.
 		const keys = [...new Set(threads.flatMap((t) => (t.subject_key ? [t.subject_key] : [])))];
-		if (action === 'done') this.markDashboards(keys, 'hidden');
-		if (action === 'mute') this.markDashboards(keys, 'muted');
-		if (action === 'undone' || action === 'unmute') this.markDashboards(keys, null);
+		if (action === 'mute') this.markDashboards(keys, true);
+		if (action === 'unmute') this.markDashboards(keys, false);
 
 		if (action === 'done' || action === 'read' || action === 'mute')
 			await this.mirrorOnGitHub(
@@ -832,7 +831,7 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	/** Hide until it changes: on the dashboards, and Done in the inbox (one record of each). */
+	/** Hide until it changes, on the dashboards only (the inbox has its own Done). */
 	async hide(items: ItemRef[]): Promise<{ ok: true }> {
 		this.transaction(() => {
 			for (const i of items)
@@ -843,10 +842,6 @@ export abstract class PollerData extends PollerDashboard {
 					i.updatedAt
 				);
 		});
-		await this.markInbox(
-			items.map((i) => i.id),
-			true
-		);
 		return { ok: true };
 	}
 
@@ -854,7 +849,6 @@ export abstract class PollerData extends PollerDashboard {
 		this.transaction(() => {
 			for (const id of ids) this.run('DELETE FROM dash_hidden WHERE item_id = ?', id);
 		});
-		await this.markInbox(ids, false);
 		// Unmuted here: its threads you muted are unmuted too (one record).
 		const muted = this.all<{ id: string }>(
 			`SELECT id FROM threads WHERE subject_key IN (${marks(ids.length)}) AND rule = ?`,
@@ -902,51 +896,26 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/**
-	 * The dashboards' side of Done in the inbox: hidden from now until the PR or issue changes, or
-	 * shown again. Open dashboards refresh (from the cache: no GitHub requests).
+	 * The dashboards' side of Mute in the inbox: hidden until you unmute it, or shown again.
+	 * Unmute clears only a mute (not a "hide until it changes"). Open dashboards refresh (from the
+	 * cache: no GitHub requests).
 	 */
-	private markDashboards(keys: string[], mark: 'hidden' | 'muted' | null) {
+	private markDashboards(keys: string[], muted: boolean) {
 		if (!keys.length) return;
-		const hidden = mark !== null;
-		const now = mark === 'muted' ? MUTED_AT : new Date().toISOString();
 		this.transaction(() => {
 			for (const key of keys)
-				if (hidden)
+				if (muted)
 					this.run(
 						`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
              ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
 						key,
-						now
+						MUTED_AT
 					);
-				else this.run('DELETE FROM dash_hidden WHERE item_id = ?', key);
+				else
+					this.run('DELETE FROM dash_hidden WHERE item_id = ? AND updated_at = ?', key, MUTED_AT);
 		});
 		this.broadcast({ type: 'dash', kind: 'pr' });
 		this.broadcast({ type: 'dash', kind: 'issue' });
-	}
-
-	/**
-	 * The inbox's side of hiding on a dashboard: the threads of these PRs or issues go to Done (and
-	 * are marked done on GitHub), or back to the inbox. Muted threads stay muted.
-	 */
-	private async markInbox(keys: string[], done: boolean) {
-		if (!keys.length) return;
-		const threads = this.all<{ id: string }>(
-			`SELECT id FROM threads WHERE subject_key IN (${marks(keys.length)}) AND category != 'muted'
-       AND triage ${done ? "!= 'done'" : "= 'done'"}`,
-			...keys
-		);
-		if (!threads.length) return;
-		const ids = threads.map((t) => t.id);
-		this.run(
-			done
-				? `UPDATE threads SET triage = 'done', snoozed_until = NULL, snooze_event = NULL, unread = 0,
-           resolved_at = NULL, resolved_note = NULL WHERE id IN (${marks(ids.length)})`
-				: `UPDATE threads SET triage = 'inbox', resolved_at = NULL, resolved_note = NULL
-           WHERE id IN (${marks(ids.length)})`,
-			...ids
-		);
-		await this.bumpVersion();
-		if (done) await this.mirrorOnGitHub('done', ids);
 	}
 
 	/** Mirror a choice on GitHub in the background (not from a local test copy). */

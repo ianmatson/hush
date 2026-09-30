@@ -19,14 +19,14 @@ Hush stores the token encrypted. It acts on GitHub **only when you do**: when yo
 
 ## What Hush does on GitHub
 
-| In Hush                                       | On GitHub                                                                           |
-| --------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Done, or Hide until it changes on a dashboard | Marks the notification as done.                                                     |
-| Mute                                          | Unsubscribes you from the thread, and marks it as done.                             |
-| Read                                          | Marks the notification as read.                                                     |
-| Unread                                        | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
-| Snooze, Move to inbox, Unmute                 | Nothing. These stay in Hush.                                                        |
-| Actions in the peek                           | The action itself: a review, a comment, a merge, a re-run, a close.                 |
+| In Hush                             | On GitHub                                                                           |
+| ----------------------------------- | ----------------------------------------------------------------------------------- |
+| Done                                | Marks the notification as done.                                                     |
+| Mute                                | Unsubscribes you from the thread, and marks it as done.                             |
+| Read                                | Marks the notification as read.                                                     |
+| Unread                              | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
+| Snooze, Move to inbox, Unmute, Hide | Nothing. These stay in Hush.                                                        |
+| Actions in the peek                 | The action itself: a review, a comment, a merge, a re-run, a close.                 |
 
 ## When an org is missing
 
