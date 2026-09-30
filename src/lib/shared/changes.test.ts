@@ -68,3 +68,14 @@ describe('since you looked', () => {
 		expect(texts(facts({ commits: undefined }), facts({ commits: 37 }))).toEqual([]);
 	});
 });
+
+describe('draft changes', () => {
+	it('says when someone else’s PR is ready for review', () => {
+		expect(texts(facts({ draft: true }), facts())).toContain('Ready for review');
+	});
+	it('says nothing when your own PR leaves draft (you did it)', () => {
+		expect(texts(facts({ author: 'ian', draft: true }), facts({ author: 'ian' }))).not.toContain(
+			'Ready for review'
+		);
+	});
+});

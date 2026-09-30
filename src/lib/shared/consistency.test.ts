@@ -167,7 +167,7 @@ describe('inbox and dashboards agree (the audit cases)', () => {
 describe('inbox and dashboards agree (open threads, any review)', () => {
 	it('your approved PR with open review threads is your turn: reply first', () => {
 		const r = both({ author: ME, reviewDecision: 'APPROVED', openThreads: 2 }, 'author');
-		expect(r.dash).toMatchObject({ turn: 'you', turnReason: 'Open review threads' });
+		expect(r.dash).toMatchObject({ turn: 'you', turnReason: '2 open threads' });
 		expect(r.inbox).toMatchObject({ category: 'action', kind: 'reply' });
 		expect(r.inbox.summary).toBe('Approved, but 2 review threads are open');
 	});

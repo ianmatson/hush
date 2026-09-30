@@ -75,7 +75,8 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 			text: plural(after.comments - before.comments, 'new comment'),
 			tone: null
 		});
-	if (after.draft !== before.draft)
+	// Only the author moves a PR in and out of draft: on your own PR, that was you.
+	if (after.draft !== before.draft && now.author.toLowerCase() !== meL)
 		out.push({
 			kind: 'draft',
 			text: after.draft ? 'Back to draft' : 'Ready for review',

@@ -3,6 +3,8 @@
 	import { rowMenus } from '$lib/row-menus.svelte';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
+	import { newChanges, saidBy } from '$lib/shared/badges';
+	import { BUILT_IN_SECTIONS } from '$lib/shared/dashboard';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -103,6 +105,24 @@
 	/** Labels added since you last looked (the row marks them). */
 	const newLabels = $derived(i.changes?.flatMap((c) => c.labels ?? []) ?? []);
 
+	// One fact, one badge: what the reason says, no badge repeats.
+	const said = $derived(saidBy(i.turnReason));
+	/** CI changed since you last looked: a dot on the CI badge (or on the reason, if it is about CI). */
+	const ciNew = $derived(!!i.changes?.some((c) => c.kind === 'ci'));
+	const changes = $derived(
+		newChanges(
+			(i.changes ?? []).filter((c) => c.kind !== 'labels' && !(c.kind === 'ci' && ci)),
+			said,
+			[i.turnReason]
+		)
+	);
+	/** Your own searches say something the reason does not; the built-in ones only repeat it. */
+	const sections = $derived(
+		showSections
+			? i.sections.filter((s) => !BUILT_IN_SECTIONS.has(s) && sectionNames[s] !== i.turnReason)
+			: []
+	);
+
 	const review = $derived(
 		i.reviewDecision === 'APPROVED'
 			? { label: 'Approved', tone: 'text-signal-merge' }
@@ -118,6 +138,13 @@
 		return l > 0.6 ? '#1a1a1a' : '#fff';
 	}
 </script>
+
+{#snippet newDot()}
+	<span
+		class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-signal-review"
+		aria-label="Changed since you last looked"
+	></span>
+{/snippet}
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
@@ -193,8 +220,10 @@
 		</div>
 
 		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem]">
-			<span class={cn('rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
-				>{i.turnReason}</span
+			<span
+				class={cn('relative rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
+				title={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
+				>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
 			>
 			{#if i.movedByYou}
 				<span
@@ -211,36 +240,28 @@
 					>
 				</span>
 			{/if}
-			<!-- A CI change marks the CI chip, not a chip of its own (it would say the same). -->
-			{#if i.changes?.length}<ChangeChips
-					changes={i.changes.filter((c) => !(c.kind === 'ci' && ci) && c.kind !== 'labels')}
-					omit={[i.turnReason]}
-				/>{/if}
-			{#if ci}
-				{@const ciNew = i.changes?.some((c) => c.kind === 'ci')}
+			{#if changes.length}<ChangeChips {changes} />{/if}
+			{#if ci && !said.has('ci')}
 				<span
 					class={cn('relative flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}
 					title={ciNew ? 'Changed since you last looked' : undefined}
 				>
 					<ci.icon class="size-3" />{ci.label}
-					{#if ciNew}<span
-							class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-signal-review"
-							aria-label="Changed since you last looked"
-						></span>{/if}
+					{#if ciNew}{@render newDot()}{/if}
 				</span>
 			{/if}
-			{#if review}
+			{#if review && !said.has('review')}
 				<span class={cn('rounded-md bg-muted px-1.5 py-0.5', review.tone)}>{review.label}</span>
 			{/if}
-			{#if i.openThreads}
+			{#if i.openThreads && !said.has('threads')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-signal-reply"
 					>{i.openThreads} open {i.openThreads === 1 ? 'thread' : 'threads'}</span
 				>
 			{/if}
-			{#if i.mergeable === 'CONFLICTING'}
+			{#if i.mergeable === 'CONFLICTING' && !said.has('conflicts')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-signal-warn">Conflicts</span>
 			{/if}
-			{#if i.draft}
+			{#if i.draft && !said.has('draft')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">Draft</span>
 			{/if}
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
@@ -255,14 +276,12 @@
 					title={added ? 'Added since you last looked' : undefined}>{l.name}</span
 				>
 			{/each}
-			{#if showSections}
-				{#each i.sections.filter((s) => sectionNames[s] !== i.turnReason) as s (s)}
-					<span
-						class="hidden rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground sm:inline"
-						>{sectionNames[s] ?? s}</span
-					>
-				{/each}
-			{/if}
+			{#each sections as s (s)}
+				<span
+					class="hidden rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground sm:inline"
+					>{sectionNames[s] ?? s}</span
+				>
+			{/each}
 		</div>
 	</div>
 

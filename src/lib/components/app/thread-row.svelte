@@ -3,6 +3,7 @@
 	import { rowMenus } from '$lib/row-menus.svelte';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
+	import { newChanges, saidBy, whyAddsInfo } from '$lib/shared/badges';
 	import type { ThreadDTO } from '$lib/shared/types';
 	import type { ActionBody, ThreadAction } from '$lib/api';
 	import { ago } from '$lib/time';
@@ -69,6 +70,10 @@
 	const inInbox = $derived(
 		t.triage === 'inbox' || (t.triage === 'snoozed' && (t.snoozedUntil ?? 0) <= Date.now())
 	);
+	// One fact, one badge: what the summary says, no badge repeats.
+	const said = $derived(saidBy(t.summary));
+	const showWhy = $derived(whyAddsInfo(t.why, t.summary));
+	const changes = $derived(newChanges(t.changes ?? [], said, [t.summary, t.why]));
 	const stop = (fn: () => void) => (e: MouseEvent) => {
 		e.stopPropagation();
 		fn();
@@ -144,8 +149,8 @@
 									: 'FYI'}</span
 				>
 			{/if}
-			<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>
-			{#if t.changes?.length}<ChangeChips changes={t.changes} omit={[t.summary, t.why]} />{/if}
+			{#if showWhy}<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>{/if}
+			{#if changes.length}<ChangeChips {changes} />{/if}
 			{#if t.override}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">You said: doesn’t need me</span>
 			{/if}
@@ -158,8 +163,8 @@
 					><Check class="size-3" />{t.resolvedNote}</span
 				>
 			{/if}
-			{#if t.draft}
-				<span class="rounded-md bg-muted px-1.5 py-0.5">draft</span>
+			{#if t.draft && !said.has('draft')}
+				<span class="rounded-md bg-muted px-1.5 py-0.5">Draft</span>
 			{/if}
 			{#if t.triage === 'snoozed' && t.snoozedUntil && t.snoozedUntil > Date.now()}
 				{@const ev = SNOOZE_EVENTS.find((e) => e.id === t.snoozeEvent)}

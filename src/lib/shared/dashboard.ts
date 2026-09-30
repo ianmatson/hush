@@ -63,6 +63,11 @@ export const DEFAULT_ISSUE_SECTIONS: DashSection[] = [
 	}
 ];
 
+/** The sections Hush ships. Their names only repeat a row's turn reason, so rows do not tag them. */
+export const BUILT_IN_SECTIONS = new Set(
+	[...DEFAULT_PR_SECTIONS, ...DEFAULT_ISSUE_SECTIONS].map((s) => s.id)
+);
+
 export const DEFAULT_DASH: DashSettings = {
 	pr: DEFAULT_PR_SECTIONS,
 	issue: DEFAULT_ISSUE_SECTIONS,
@@ -309,7 +314,7 @@ export function computeTurn(
 		// "Ready to merge".
 		if (i.reviewDecision === 'APPROVED' && i.openThreads > 0)
 			return you(
-				'Open review threads',
+				`${i.openThreads} open ${i.openThreads === 1 ? 'thread' : 'threads'}`,
 				2,
 				i.updatedAt,
 				'Reply',
