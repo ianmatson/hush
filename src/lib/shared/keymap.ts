@@ -100,6 +100,15 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'peek.closeReopen', label: 'Close or reopen', scope: 'peek', keys: ['Shift+x'] },
 
 	{ id: 'editor.send', label: 'Send the comment', scope: 'editor', keys: ['Mod+Enter'] },
+	{ id: 'editor.suggestNext', label: 'Suggestions: next', scope: 'editor', keys: ['ArrowDown'] },
+	{ id: 'editor.suggestPrev', label: 'Suggestions: previous', scope: 'editor', keys: ['ArrowUp'] },
+	{
+		id: 'editor.suggestPick',
+		label: 'Suggestions: use this one',
+		scope: 'editor',
+		keys: ['Enter', 'Tab']
+	},
+	{ id: 'editor.suggestClose', label: 'Suggestions: close', scope: 'editor', keys: ['Escape'] },
 	{ id: 'editor.save', label: 'Save settings.json', scope: 'editor', keys: ['Mod+s'] }
 ];
 

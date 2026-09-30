@@ -14,6 +14,21 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { api } from '$lib/api';
+	import { caretXY } from '$lib/caret';
+	import { meQuery, queryClient } from '$lib/queries';
+	import {
+		applyPick,
+		rankRefs,
+		rankUsers,
+		triggerAt,
+		type RefSuggestion,
+		type Suggestion,
+		type Trigger,
+		type UserSuggestion
+	} from '$lib/shared/suggest';
+	import SuggestMenu from './suggest-menu.svelte';
 
 	/**
 	 * The comment box at the end of the conversation, as on GitHub. On a PR you can review, the
@@ -55,6 +70,152 @@
 		composer.intent = 'comment';
 	}
 
+	// --- "@" and "#" suggestions, as on GitHub (shared/suggest.ts) ---------------------------
+	const me = createQuery(meQuery);
+	let trigger = $state<Trigger | null>(null);
+	/** Esc closes the list until you type somewhere else. */
+	let closedAt = -1;
+	let items = $state<Suggestion[]>([]);
+	let loading = $state(false);
+	let active = $state(0);
+	/** Where the list goes on screen: under the caret, or over it when there is no room below. */
+	let pos = $state<{ x: number; top?: number; bottom?: number }>({ x: 0 });
+	let asked = 0;
+
+	/** The conversation's people: the author, then the latest to speak, reviewers, assignees. */
+	const participants = $derived.by((): UserSuggestion[] => {
+		const u = (login: string, avatar: string | null = null): UserSuggestion => ({
+			kind: 'user',
+			login,
+			name: null,
+			avatar,
+			team: false
+		});
+		return [
+			u(p.author.login, p.author.avatar),
+			...[...p.timeline.items].reverse().map((e) => u(e.author.login, e.author.avatar)),
+			...(p.pr?.reviews ?? []).map((r) => u(r.who.login, r.who.avatar)),
+			...(p.pr?.requested ?? []).filter((r) => !r.team).map((r) => u(r.name)),
+			...p.assignees.map((a) => u(a))
+		].filter((x) => x.login !== 'ghost');
+	});
+
+	const suggestKey = (t: Trigger) =>
+		[
+			'suggest',
+			t.kind === 'ref' && t.repo ? t.repo : p.repo,
+			t.kind,
+			t.query.toLowerCase()
+		] as const;
+
+	function fetchSuggestions(t: Trigger) {
+		const repo = t.kind === 'ref' && t.repo ? t.repo : p.repo;
+		// Only the words so far: the list waits for a short pause (GitHub limits searches).
+		return queryClient.fetchQuery({
+			queryKey: suggestKey(t),
+			queryFn: () => api.suggest(repo, t.kind, t.query, p.repo).then((r) => r.items),
+			staleTime: 5 * 60_000
+		});
+	}
+
+	function place(el: HTMLTextAreaElement, t: Trigger) {
+		const c = caretXY(el, t.start);
+		const rect = el.getBoundingClientRect();
+		const x = Math.max(8, Math.min(rect.left + c.x, window.innerWidth - 296));
+		const y = rect.top + c.y;
+		pos =
+			window.innerHeight - (y + c.line) > 340
+				? { x, top: y + c.line + 4 }
+				: { x, bottom: window.innerHeight - y + 4 };
+	}
+
+	// A scroll of the peek moves the caret: the list follows it.
+	$effect(() => {
+		const follow = () => {
+			if (trigger && box) place(box, trigger);
+		};
+		document.addEventListener('scroll', follow, true);
+		window.addEventListener('resize', follow);
+		return () => {
+			document.removeEventListener('scroll', follow, true);
+			window.removeEventListener('resize', follow);
+		};
+	});
+
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	function update() {
+		const el = box;
+		if (!el || el.selectionStart !== el.selectionEnd) return close();
+		const t = triggerAt(text, el.selectionStart);
+		if (!t) closedAt = -1;
+		if (!t || t.start === closedAt) return close();
+		const same = trigger && trigger.kind === t.kind && trigger.start === t.start;
+		if (!same) active = 0;
+		trigger = t;
+		place(el, t);
+		const mine = (u: Suggestion[]) =>
+			t.kind === 'user'
+				? rankUsers(participants, u as UserSuggestion[], t.query, me.data?.login ?? '')
+				: rankRefs(u as RefSuggestion[], t.query);
+		// Saved answers and the conversation's people show at once; the rest after the answer.
+		const saved = queryClient.getQueryData<Suggestion[]>(suggestKey(t));
+		if (saved) items = mine(saved);
+		else if (t.kind === 'user') items = mine(same ? items : []);
+		else if (!same) items = [];
+		const n = ++asked;
+		loading = true;
+		clearTimeout(timer);
+		timer = setTimeout(
+			() =>
+				fetchSuggestions(t)
+					.then((found) => {
+						if (n !== asked) return;
+						items = mine(found as Suggestion[]);
+						active = Math.min(active, Math.max(0, items.length - 1));
+					})
+					.catch(() => {})
+					.finally(() => {
+						if (n === asked) loading = false;
+					}),
+			t.query ? 150 : 0
+		);
+	}
+
+	function close() {
+		trigger = null;
+		items = [];
+		asked++;
+		clearTimeout(timer);
+	}
+
+	async function pick(s: Suggestion) {
+		const el = box;
+		if (!el || !trigger) return;
+		const r = applyPick(text, el.selectionStart, trigger, s);
+		text = r.text;
+		close();
+		await tick();
+		el.focus();
+		el.setSelectionRange(r.caret, r.caret);
+	}
+
+	/** A key for the open list; false when the list is closed or the key is not one of its keys. */
+	function listKey(e: KeyboardEvent): boolean {
+		if (!trigger || e.isComposing) return false;
+		const cmd = commandFor(e, ['editor']);
+		if (cmd === 'editor.suggestClose') {
+			closedAt = trigger.start;
+			close();
+			return true;
+		}
+		if (!items.length) return false;
+		if (cmd === 'editor.suggestNext') active = (active + 1) % items.length;
+		else if (cmd === 'editor.suggestPrev') active = (active - 1 + items.length) % items.length;
+		else if (cmd === 'editor.suggestPick') void pick(items[active]);
+		else return false;
+		return true;
+	}
+
 	const placeholder = $derived(
 		composer.intent === 'request_changes'
 			? 'What should change?'
@@ -73,22 +234,45 @@
 			submit(composer.intent);
 		}}
 	>
-		<Textarea
-			bind:ref={box}
-			bind:value={text}
-			class="min-h-20 text-sm"
-			{placeholder}
-			aria-label="Comment"
-			onkeydown={(e) => {
-				if (commandFor(e, ['editor']) === 'editor.send') {
-					e.preventDefault();
-					submit(composer.intent);
-				} else if (e.key === 'Escape') {
-					e.preventDefault();
-					box?.blur();
-				}
-			}}
-		/>
+		<div>
+			<Textarea
+				bind:ref={box}
+				bind:value={text}
+				class="min-h-20 text-sm"
+				{placeholder}
+				aria-label="Comment"
+				aria-autocomplete="list"
+				aria-expanded={!!trigger}
+				oninput={update}
+				onclick={update}
+				onkeyup={(e) => {
+					if (
+						e.key === 'ArrowLeft' ||
+						e.key === 'ArrowRight' ||
+						e.key === 'Home' ||
+						e.key === 'End'
+					)
+						update();
+				}}
+				onblur={close}
+				onkeydown={(e) => {
+					if (listKey(e)) {
+						e.preventDefault();
+						return;
+					}
+					if (commandFor(e, ['editor']) === 'editor.send') {
+						e.preventDefault();
+						submit(composer.intent);
+					} else if (e.key === 'Escape') {
+						e.preventDefault();
+						box?.blur();
+					}
+				}}
+			/>
+			{#if trigger && (items.length || loading || trigger.query)}
+				<SuggestMenu {items} {active} {loading} {pos} onpick={pick} onhover={(i) => (active = i)} />
+			{/if}
+		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<span class="text-xs text-muted-foreground"
 				>Markdown · {keysOf('editor.send')[0] ?? ''} to send</span

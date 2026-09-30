@@ -76,6 +76,8 @@ export const api = {
 		id?: string;
 	}) => ok(client.api.actions.$post({ json: a })),
 	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
+	suggest: (repo: string, kind: 'user' | 'ref', q: string, from: string) =>
+		ok(client.api.suggest.$get({ query: { repo, kind, q, from } })),
 	react: (id: string, content: ReactionContent, add: boolean) =>
 		ok(client.api.reactions.$post({ json: { id, content, add } })),
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),

@@ -65,3 +65,7 @@ The keys work while the peek is open. Change them in [Keybinds](/docs/keybinds) 
 ## The comment box
 
 The box at the end of the conversation posts a comment. It can also approve or request changes with your text. {{key:editor.send}} sends. You can write Markdown, the same as on GitHub.
+
+Type **@** to mention someone: the people in the conversation come first, then the other people of the repo, then your organization's teams (**@org/team**). Type **#** for an issue or pull request of the repo: first the most recently updated, then the ones that match your number or title words. **owner/repo#** finds them in another repo. {{key:editor.suggestNext}} and {{key:editor.suggestPrev}} move in the list, {{key:editor.suggestPick}} puts the pick in the text, and {{key:editor.suggestClose}} closes the list.
+
+GitHub.com makes its own list with private data, so the order can be a little different there. The people and items are the same.
