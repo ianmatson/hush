@@ -130,8 +130,12 @@
 						{:else}
 							<DropdownMenu.Item
 								class={cn(confirming === s.id && 'text-destructive')}
-								closeOnSelect={!GH_ACTIONS[s.id].confirm || confirming === s.id}
-								onSelect={() => run(s.id)}
+								onSelect={(e) => {
+									// The first press of an action that asks again only arms it: the menu stays
+									// open to show "Confirm: …". (Decide before run() changes `confirming`.)
+									if (GH_ACTIONS[s.id].confirm && confirming !== s.id) e.preventDefault();
+									run(s.id);
+								}}
 							>
 								{confirming === s.id ? `Confirm: ${label(s.id).toLowerCase()}` : label(s.id)}
 								{@render keyHint(s.id)}
