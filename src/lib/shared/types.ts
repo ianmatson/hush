@@ -319,6 +319,8 @@ export interface DashResponse {
 	teams: TeamDTO[];
 	fetchedAt: number;
 	errors: string[];
+	/** This is the saved list; a new one is on its way (a live message says when). */
+	refreshing?: boolean;
 }
 
 /** A thread as the API returns it to the SPA. */

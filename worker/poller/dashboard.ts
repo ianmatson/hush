@@ -11,9 +11,14 @@ import { searchDashboard } from '../github';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
 
+const RETRY_AFTER = 60_000;
+
 /** The PR and issue dashboards, from saved searches, cached for 15 minutes. */
 export abstract class PollerDashboard extends PollerSync {
 	private dashInflight = new Map<DashKind, Promise<DashResponse>>();
+	private dashRefreshing = new Map<DashKind, Promise<unknown>>();
+	/** After a failed refresh, the next one waits until then (no loop of failing requests). */
+	private dashRetryAt = new Map<DashKind, number>();
 
 	/** Live PR or issue dashboard from saved searches, cached for 15 minutes. */
 	dashboard(kind: DashKind, force = false): Promise<DashResponse> {
@@ -23,6 +28,25 @@ export abstract class PollerDashboard extends PollerSync {
 			this.dashInflight.set(kind, p);
 		}
 		return p;
+	}
+
+	/**
+	 * Refresh in the background (once at a time); when it worked, tell open pages to load it
+	 * again. Returns false when no refresh runs (a failed one waits a minute).
+	 */
+	private refreshDashboard(kind: DashKind): boolean {
+		if (this.dashRefreshing.has(kind)) return true;
+		if (Date.now() < (this.dashRetryAt.get(kind) ?? 0)) return false;
+		const p = this.buildDashboard(kind, true)
+			.then(() => this.broadcast({ type: 'dash', kind }))
+			.catch((err) => {
+				console.error('dashboard refresh', (err as Error).message);
+				this.dashRetryAt.set(kind, Date.now() + RETRY_AFTER);
+			})
+			.finally(() => this.dashRefreshing.delete(kind));
+		this.dashRefreshing.set(kind, p);
+		this.ctx.waitUntil(p);
+		return true;
 	}
 
 	protected async buildDashboard(kind: DashKind, force: boolean): Promise<DashResponse> {
@@ -41,8 +65,11 @@ export abstract class PollerDashboard extends PollerSync {
 		]);
 		const key = `dash:${kind}`;
 		const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
-		if (!force && cached?.sig === sig && Date.now() - cached.data.fetchedAt < DASH_TTL)
-			return cached.data;
+		if (!force && cached?.sig === sig) {
+			if (Date.now() - cached.data.fetchedAt < DASH_TTL) return cached.data;
+			// Old: answer with it now, and refresh behind it. Open pages update when it is done.
+			return this.refreshDashboard(kind) ? { ...cached.data, refreshing: true } : cached.data;
+		}
 
 		const { teams, error: teamError } = await this.teams();
 		const { queries, skipped } = expandSections(dash[kind], dash, teams);

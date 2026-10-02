@@ -760,7 +760,7 @@
 	{/if}
 
 	<p class="mt-2 mb-2 px-1 text-xs text-muted-foreground">
-		{#if data && (refreshing || dashQ.isFetching)}
+		{#if data && (refreshing || dashQ.isFetching || data.refreshing)}
 			<span class="inline-flex items-center gap-1"
 				><RefreshCw class="size-3 animate-spin" />Updating…</span
 			>

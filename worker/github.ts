@@ -24,13 +24,23 @@ export class GitHubError extends Error {
 	}
 }
 
+/**
+ * The longest Hush waits for GitHub. GitHub stops a request itself after about 10 seconds; a
+ * request with no answer at all (a broken connection) must not keep work open forever.
+ */
+const GITHUB_WAIT_MS = 20_000;
+
 export function gh(token: string, path: string, init: RequestInit = {}): Promise<Response> {
 	const headers = new Headers(init.headers);
 	headers.set('Authorization', `Bearer ${token}`);
 	if (!headers.has('Accept')) headers.set('Accept', 'application/vnd.github+json');
 	headers.set('X-GitHub-Api-Version', '2022-11-28');
 	headers.set('User-Agent', UA);
-	return fetch(path.startsWith('http') ? path : `${API}${path}`, { ...init, headers });
+	return fetch(path.startsWith('http') ? path : `${API}${path}`, {
+		...init,
+		headers,
+		signal: init.signal ?? AbortSignal.timeout(GITHUB_WAIT_MS)
+	});
 }
 
 export interface GhUser {
@@ -447,7 +457,11 @@ export async function searchDashboard(
 		const res = await gh(token, '/graphql', {
 			method: 'POST',
 			body: JSON.stringify({ query, variables: vars })
-		});
+		}).catch(() => null);
+		if (!res) {
+			errors.push('GitHub did not answer a search. Hush tries again on the next refresh.');
+			return;
+		}
 		if (TIMED_OUT.has(res.status) && chunk.length > 1) {
 			const half = Math.ceil(chunk.length / 2);
 			await Promise.all([ask(chunk.slice(0, half)), ask(chunk.slice(half))]);

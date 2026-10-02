@@ -82,3 +82,17 @@ describe('searchDashboard', () => {
 		expect(r.errors[0]).toMatch(/took too long/);
 	});
 });
+
+describe('searchDashboard, no answer', () => {
+	afterEach(() => vi.unstubAllGlobals());
+	it('reports a search that got no answer, and keeps the others', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				throw new DOMException('The operation timed out.', 'TimeoutError');
+			})
+		);
+		const r = await searchDashboard('t', 'ian', [{ section: 'mine', q: 'is:pr' }]);
+		expect(r.errors[0]).toMatch(/did not answer/);
+	});
+});

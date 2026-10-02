@@ -137,7 +137,9 @@ export const dashQuery = (kind: DashKind) =>
 		queryKey: keys.dash(kind),
 		queryFn: () => api.dashboard(kind),
 		staleTime: 15 * MIN,
-		refetchInterval: 15 * MIN
+		// A saved list with a refresh on its way: the live socket says when it is ready; without
+		// the socket, ask again soon.
+		refetchInterval: (q) => (q.state.data?.refreshing && !live.connected ? 10_000 : 15 * MIN)
 	});
 
 export const feedsQuery = () =>
