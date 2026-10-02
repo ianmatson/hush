@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { parseSsoHeader } from '../github';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { parseSsoHeader, searchDashboard } from '../github';
 import { tokenHelp } from '../../src/lib/token-help';
 import { vapidFromEnv } from '../webpush';
 
@@ -39,5 +39,46 @@ describe('vapidFromEnv', () => {
 		expect(vapidFromEnv({ ...env, VAPID_SUBJECT: 'mailto:a@b.c' }, 'https://x').subject).toBe(
 			'mailto:a@b.c'
 		);
+	});
+});
+
+describe('searchDashboard', () => {
+	const queries = Array.from({ length: 6 }, (_, i) => ({ section: 'mine', q: `is:pr q${i}` }));
+	const answer = (searches: number) =>
+		new Response(
+			JSON.stringify({
+				data: Object.fromEntries(
+					Array.from({ length: searches }, (_, j) => [`s${j}`, { issueCount: 0, nodes: [] }])
+				)
+			})
+		);
+	const searchesIn = (init?: RequestInit) =>
+		(JSON.parse(String(init?.body)).query.match(/search\(/g) ?? []).length;
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('asks again in halves when GitHub takes too long', async () => {
+		const sizes: number[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				const n = searchesIn(init);
+				sizes.push(n);
+				return n > 1 ? new Response('', { status: 502 }) : answer(n);
+			})
+		);
+		const r = await searchDashboard('t', 'ian', queries);
+		expect(r.errors).toEqual([]);
+		expect(Object.keys(r.counts)).toHaveLength(6);
+		expect(Math.max(...sizes)).toBeLessThanOrEqual(4);
+	});
+
+	it('says so when even one search takes too long', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('', { status: 504 }))
+		);
+		const r = await searchDashboard('t', 'ian', queries.slice(0, 1));
+		expect(r.errors[0]).toMatch(/took too long/);
 	});
 });

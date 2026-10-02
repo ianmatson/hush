@@ -377,7 +377,13 @@ export async function fetchTeams(
 	};
 }
 
-const SEARCH_CHUNK = 10;
+/**
+ * Searches in one GraphQL request. GitHub stops a request after about 10 seconds (it answers 502
+ * or 504), and a request with many big searches can take that long, so keep them small.
+ */
+const SEARCH_CHUNK = 4;
+/** GitHub's answers when a request took too long. */
+const TIMED_OUT = new Set([502, 504]);
 
 export interface SearchHit {
 	section: string;
@@ -418,42 +424,52 @@ export async function searchDashboard(
 		const chunks: (typeof batch)[] = [];
 		for (let i = 0; i < batch.length; i += SEARCH_CHUNK)
 			chunks.push(batch.slice(i, i + SEARCH_CHUNK));
-		await Promise.all(
-			chunks.map(async (chunk) => {
-				const vars: Record<string, string> = { me };
-				const decl = ['$me: String!'];
-				const body = chunk.map(({ q, first }, j) => {
-					vars[`q${j}`] = q.q;
-					decl.push(`$q${j}: String!`);
-					return `s${j}: search(type: ISSUE, query: $q${j}, first: ${first}) { issueCount nodes { __typename ...P ...I } }`;
-				});
-				const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`;
-				const res = await gh(token, '/graphql', {
-					method: 'POST',
-					body: JSON.stringify({ query, variables: vars })
-				});
-				if (!res.ok) {
-					errors.push(`GitHub search returned ${res.status}.`);
-					return;
-				}
-				const json = (await res.json()) as {
-					data?: Record<string, Node | null>;
-					errors?: { message: string }[];
-				};
-				for (const e of json.errors ?? []) errors.push(e.message);
-				chunk.forEach(({ q }, j) => {
-					const result = json.data?.[`s${j}`];
-					if (!result) return;
-					counts[q.q] = result.issueCount ?? 0;
-					byQuery.set(
-						q,
-						(result.nodes ?? [])
-							.filter((n: Node) => n?.id)
-							.map((n: Node) => ({ section: q.section, subject: toSubject(n) }))
-					);
-				});
-			})
-		);
+		await Promise.all(chunks.map(ask));
+	}
+
+	/** One request. If GitHub took too long, ask again in two halves (down to one search). */
+	async function ask(chunk: { q: ExpandedQuery; first: number }[]): Promise<void> {
+		const vars: Record<string, string> = { me };
+		const decl = ['$me: String!'];
+		const body = chunk.map(({ q, first }, j) => {
+			vars[`q${j}`] = q.q;
+			decl.push(`$q${j}: String!`);
+			return `s${j}: search(type: ISSUE, query: $q${j}, first: ${first}) { issueCount nodes { __typename ...P ...I } }`;
+		});
+		const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`;
+		const res = await gh(token, '/graphql', {
+			method: 'POST',
+			body: JSON.stringify({ query, variables: vars })
+		});
+		if (TIMED_OUT.has(res.status) && chunk.length > 1) {
+			const half = Math.ceil(chunk.length / 2);
+			await Promise.all([ask(chunk.slice(0, half)), ask(chunk.slice(half))]);
+			return;
+		}
+		if (!res.ok) {
+			errors.push(
+				TIMED_OUT.has(res.status)
+					? 'GitHub took too long to answer a search. Hush tries again on the next refresh.'
+					: `GitHub search returned ${res.status}.`
+			);
+			return;
+		}
+		const json = (await res.json()) as {
+			data?: Record<string, Node | null>;
+			errors?: { message: string }[];
+		};
+		for (const e of json.errors ?? []) errors.push(e.message);
+		chunk.forEach(({ q }, j) => {
+			const result = json.data?.[`s${j}`];
+			if (!result) return;
+			counts[q.q] = result.issueCount ?? 0;
+			byQuery.set(
+				q,
+				(result.nodes ?? [])
+					.filter((n: Node) => n?.id)
+					.map((n: Node) => ({ section: q.section, subject: toSubject(n) }))
+			);
+		});
 	}
 
 	const sized = queries.map((q) => ({ q, first: searchSize(lastCounts[q.q]) }));
