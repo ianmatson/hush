@@ -75,4 +75,6 @@ Select many items to move, hide, or copy them together, the same as in the [inbo
 
 ## Refresh
 
-Hush keeps the results for 15 minutes, and searches GitHub again when you open the tab after that. Press {{key:list.refresh}} to search now. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).
+Hush keeps the results for 15 minutes. When you open the tab after that, it shows the saved list at once ("Updating…") and searches GitHub again in the background; the list changes when the new results arrive.
+
+A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 50 results for each section). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}} to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).

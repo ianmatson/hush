@@ -387,125 +387,170 @@ export async function fetchTeams(
 	};
 }
 
-/**
- * Searches in one GraphQL request. GitHub stops a request after about 10 seconds (it answers 502
- * or 504), and a request with many big searches can take that long, so keep them small.
- */
-const SEARCH_CHUNK = 4;
-/** GitHub's answers when a request took too long. */
+/** GitHub's answers when a request took too long (it stops after about 10 seconds). */
 const TIMED_OUT = new Set([502, 504]);
 
-export interface SearchHit {
-	section: string;
-	subject: SubjectFacts;
-}
-
-/** A team search keeps only the PRs that request one of its teams (see expandSections). */
-const forTeams = (q: ExpandedQuery, s: SubjectFacts) =>
-	!q.teams ||
-	s.reviewRequests.some(
-		(r) => r.team && q.teams!.some((t) => t.toLowerCase() === r.name.toLowerCase())
-	);
-
-/** The most results one dashboard search asks for, and the fewest. */
-export const SEARCH_MAX = 25;
-const SEARCH_MIN = 5;
-/** Room above a section's last count, so a few new items still fit in one request. */
-const SEARCH_HEADROOM = 5;
-
 /**
- * How many results to ask for. GitHub prices what a search asks for, not what it returns, so ask
- * for the last count plus headroom (SEARCH_MAX when the count is unknown).
+ * Send items in GraphQL requests of `size`. A request that GitHub stopped (too slow) is sent
+ * again in two halves, down to one item. `use` reads each answer; failures go to `errors`.
  */
-export function searchSize(lastCount: number | undefined): number {
-	if (lastCount === undefined) return SEARCH_MAX;
-	return Math.min(SEARCH_MAX, Math.max(SEARCH_MIN, lastCount + SEARCH_HEADROOM));
-}
-
-/**
- * Run many searches in few GraphQL requests. `lastCounts` (by query) sizes each search; a search
- * whose total grew past its size runs again at SEARCH_MAX in the same call, so no result is lost.
- * Returns the totals to pass back next time.
- */
-export async function searchDashboard(
+async function inRequests<T>(
 	token: string,
-	me: string,
-	queries: ExpandedQuery[],
-	lastCounts: Record<string, number> = {}
-): Promise<{ hits: SearchHit[]; errors: string[]; counts: Record<string, number> }> {
-	const errors: string[] = [];
-	const counts: Record<string, number> = {};
-	const byQuery = new Map<ExpandedQuery, SearchHit[]>();
-
-	async function run(batch: { q: ExpandedQuery; first: number }[]) {
-		const chunks: (typeof batch)[] = [];
-		for (let i = 0; i < batch.length; i += SEARCH_CHUNK)
-			chunks.push(batch.slice(i, i + SEARCH_CHUNK));
-		await Promise.all(chunks.map(ask));
-	}
-
-	/** One request. If GitHub took too long, ask again in two halves (down to one search). */
-	async function ask(chunk: { q: ExpandedQuery; first: number }[]): Promise<void> {
-		const vars: Record<string, string> = { me };
-		const decl = ['$me: String!'];
-		const body = chunk.map(({ q, first }, j) => {
-			vars[`q${j}`] = q.q;
-			decl.push(`$q${j}: String!`);
-			return `s${j}: search(type: ISSUE, query: $q${j}, first: ${first}) { issueCount nodes { __typename ...P ...I } }`;
-		});
-		const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`;
+	items: T[],
+	size: number,
+	build: (chunk: T[]) => { query: string; variables: Record<string, unknown> },
+	use: (chunk: T[], data: Record<string, Node | null> | undefined) => void,
+	errors: string[]
+): Promise<void> {
+	async function ask(chunk: T[]): Promise<void> {
 		const res = await gh(token, '/graphql', {
 			method: 'POST',
-			body: JSON.stringify({ query, variables: vars })
+			body: JSON.stringify(build(chunk))
 		}).catch(() => null);
-		if (!res) {
-			errors.push('GitHub did not answer a search. Hush tries again on the next refresh.');
-			return;
-		}
+		if (!res)
+			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
 		if (TIMED_OUT.has(res.status) && chunk.length > 1) {
 			const half = Math.ceil(chunk.length / 2);
 			await Promise.all([ask(chunk.slice(0, half)), ask(chunk.slice(half))]);
 			return;
 		}
-		if (!res.ok) {
-			errors.push(
+		if (!res.ok)
+			return void errors.push(
 				TIMED_OUT.has(res.status)
-					? 'GitHub took too long to answer a search. Hush tries again on the next refresh.'
-					: `GitHub search returned ${res.status}.`
+					? 'GitHub took too long to answer. Hush tries again on the next refresh.'
+					: `GitHub returned ${res.status}.`
 			);
-			return;
-		}
-		const json = (await res.json()) as {
+		// The time limit also covers reading the answer.
+		const json = (await res.json().catch(() => null)) as {
 			data?: Record<string, Node | null>;
 			errors?: { message: string }[];
-		};
+		} | null;
+		if (!json)
+			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
 		for (const e of json.errors ?? []) errors.push(e.message);
-		chunk.forEach(({ q }, j) => {
-			const result = json.data?.[`s${j}`];
-			if (!result) return;
-			counts[q.q] = result.issueCount ?? 0;
-			byQuery.set(
-				q,
-				(result.nodes ?? [])
-					.filter((n: Node) => n?.id)
-					.map((n: Node) => ({ section: q.section, subject: toSubject(n) }))
-					.filter((h: SearchHit) => forTeams(q, h.subject))
-			);
-		});
+		use(chunk, json.data);
 	}
-
-	const sized = queries.map((q) => ({ q, first: searchSize(lastCounts[q.q]) }));
-	await run(sized);
-	// Grew past its size since last time: ask again for the full page.
-	const short = sized.filter(({ q, first }) => first < SEARCH_MAX && (counts[q.q] ?? 0) > first);
-	if (short.length) await run(short.map(({ q }) => ({ q, first: SEARCH_MAX })));
-
-	return {
-		hits: queries.flatMap((q) => byQuery.get(q) ?? []),
-		errors: [...new Set(errors)].slice(0, 3),
-		counts
-	};
+	const chunks: T[][] = [];
+	for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+	await Promise.all(chunks.map(ask));
 }
+
+/** Results for each dashboard search (it asks for no more). */
+export const SEARCH_MAX = 50;
+/** Short searches in one request: their answers are small. */
+const SEARCH_CHUNK = 10;
+/** Items with all their details in one request: these answers are big. */
+const DETAILS_CHUNK = 20;
+
+/** One result of a short search: enough to know if Hush must read it again. */
+export interface SearchHit {
+	query: ExpandedQuery;
+	/** The GraphQL node ID. */
+	id: string;
+	/** "owner/repo#123". */
+	key: string;
+	updatedAt: string;
+}
+
+const SHORT = `__typename
+  ... on PullRequest { id number updatedAt repository { nameWithOwner } }
+  ... on Issue { id number updatedAt repository { nameWithOwner } }`;
+
+/**
+ * Step 1 of a dashboard refresh: run the searches, for IDs and update times only. Many fit in
+ * one request; the details come after, only for what needs them (fetchDetails).
+ */
+export async function searchShort(
+	token: string,
+	queries: ExpandedQuery[]
+): Promise<{ hits: SearchHit[]; errors: string[] }> {
+	const errors: string[] = [];
+	const hits: SearchHit[] = [];
+	await inRequests(
+		token,
+		queries,
+		SEARCH_CHUNK,
+		(chunk) => ({
+			query: `query(${chunk.map((_, j) => `$q${j}: String!`).join(', ')}) {\n${chunk
+				.map(
+					(_, j) =>
+						`s${j}: search(type: ISSUE, query: $q${j}, first: ${SEARCH_MAX}) { nodes { ${SHORT} } }`
+				)
+				.join('\n')}\n}`,
+			variables: Object.fromEntries(chunk.map((q, j) => [`q${j}`, q.q]))
+		}),
+		(chunk, data) =>
+			chunk.forEach((q, j) => {
+				for (const n of data?.[`s${j}`]?.nodes ?? [])
+					if (n?.id && n.repository?.nameWithOwner)
+						hits.push({
+							query: q,
+							id: n.id,
+							key: `${n.repository.nameWithOwner}#${n.number}`,
+							updatedAt: n.updatedAt
+						});
+			}),
+		errors
+	);
+	return { hits, errors: [...new Set(errors)].slice(0, 3) };
+}
+
+/** Step 2: the full facts of these PRs and issues (by node ID). Missing ones are left out. */
+export async function fetchDetails(
+	token: string,
+	me: string,
+	ids: string[]
+): Promise<{ subjects: Map<string, SubjectFacts>; errors: string[] }> {
+	const errors: string[] = [];
+	const subjects = new Map<string, SubjectFacts>();
+	await inRequests(
+		token,
+		ids,
+		DETAILS_CHUNK,
+		(chunk) => ({
+			query: `query($me: String!, $ids: [ID!]!) { nodes(ids: $ids) { __typename ...P ...I } }\n${SUBJECT_FIELDS}`,
+			variables: { me, ids: chunk }
+		}),
+		(_, data) => {
+			for (const n of (data?.nodes as unknown as Node[] | undefined) ?? [])
+				if (n?.id) subjects.set(n.id, toSubject(n));
+		},
+		errors
+	);
+	return { subjects, errors: [...new Set(errors)].slice(0, 3) };
+}
+
+/** Details of an item that did not change are read again after this long, as a safety net. */
+export const DETAILS_TTL = 60 * 60_000;
+
+/**
+ * Must the refresh read this item's details again? Yes when Hush has none, when it changed on
+ * GitHub, when its CI still runs (a CI result does not change the PR's update time), when the
+ * last read is old, or on a full refresh (the Refresh button).
+ */
+export function needsDetails(
+	stored: SubjectFacts | undefined,
+	updatedAt: string,
+	readAt: number | undefined,
+	now: number,
+	full: boolean
+): boolean {
+	return (
+		full ||
+		!stored ||
+		stored.updatedAt !== updatedAt ||
+		stored.ci === 'PENDING' ||
+		stored.ci === 'EXPECTED' ||
+		now - (readAt ?? 0) > DETAILS_TTL
+	);
+}
+
+/** A team search keeps only the PRs that request one of its teams (see expandSections). */
+export const forTeams = (q: ExpandedQuery, s: SubjectFacts) =>
+	!q.teams ||
+	s.reviewRequests.some(
+		(r) => r.team && q.teams!.some((t) => t.toLowerCase() === r.name.toLowerCase())
+	);
 
 // ---------------------------------------------------------------------------
 // Peek: one PR or issue with its description, checks, and latest comments. About 1 point.

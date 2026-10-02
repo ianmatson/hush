@@ -6,12 +6,13 @@ import {
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
 import type { DashKind, DashResponse } from '../../src/lib/shared/types';
-import { dashFactsOf } from '../../src/lib/shared/subject';
-import { searchDashboard } from '../github';
+import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
+import { fetchDetails, forTeams, needsDetails, searchShort } from '../github';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
 
 const RETRY_AFTER = 60_000;
+const marks = (n: number) => Array(n).fill('?').join(',');
 
 /** The PR and issue dashboards, from saved searches, cached for 15 minutes. */
 export abstract class PollerDashboard extends PollerSync {
@@ -37,7 +38,7 @@ export abstract class PollerDashboard extends PollerSync {
 	private refreshDashboard(kind: DashKind): boolean {
 		if (this.dashRefreshing.has(kind)) return true;
 		if (Date.now() < (this.dashRetryAt.get(kind) ?? 0)) return false;
-		const p = this.buildDashboard(kind, true)
+		const p = this.buildDashboard(kind, true, false)
 			.then(() => this.broadcast({ type: 'dash', kind }))
 			.catch((err) => {
 				console.error('dashboard refresh', (err as Error).message);
@@ -49,7 +50,15 @@ export abstract class PollerDashboard extends PollerSync {
 		return true;
 	}
 
-	protected async buildDashboard(kind: DashKind, force: boolean): Promise<DashResponse> {
+	/**
+	 * Build the dashboard: short searches, then details only for the items that need them (all of
+	 * them when `full`). `force` skips the saved list.
+	 */
+	protected async buildDashboard(
+		kind: DashKind,
+		force: boolean,
+		full = force
+	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
 		const { dash, botsAreFyi, reviewResolution } = who.settings;
@@ -73,21 +82,46 @@ export abstract class PollerDashboard extends PollerSync {
 
 		const { teams, error: teamError } = await this.teams();
 		const { queries, skipped } = expandSections(dash[kind], dash, teams);
-		// Each search asks for about its last count (GitHub prices what a search asks for).
-		const countsKey = `dash:counts:${kind}`;
-		const lastCounts = (await this.ctx.storage.get<Record<string, number>>(countsKey)) ?? {};
-		const { hits, errors, counts } = await searchDashboard(who.token, who.me, queries, lastCounts);
-		await this.putChanged({ [countsKey]: counts });
+		const { hits, errors: searchErrors } = await searchShort(who.token, queries);
+
+		// Details: what Hush has, and only what needs a new read from GitHub.
+		const latest = new Map(hits.map((h) => [h.key, h]));
+		const keys = [...latest.keys()];
+		const stored = this.storedFacts(keys);
+		const readKey = `dash:read:${kind}`;
+		const readAt = (await this.ctx.storage.get<Record<string, number>>(readKey)) ?? {};
+		const now = Date.now();
+		const need = keys.filter((k) =>
+			needsDetails(stored.get(k), latest.get(k)!.updatedAt, readAt[k], now, full)
+		);
+		const { subjects: fresh, errors: detailErrors } = await fetchDetails(
+			who.token,
+			who.me,
+			need.map((k) => latest.get(k)!.id)
+		);
+		const facts = new Map<string, SubjectFacts>();
+		const nextRead: Record<string, number> = {};
+		for (const k of keys) {
+			const f = fresh.get(latest.get(k)!.id);
+			if (f) nextRead[k] = now;
+			else if (readAt[k]) nextRead[k] = readAt[k];
+			const use = f ?? stored.get(k);
+			if (use) facts.set(k, use);
+		}
+		await this.ctx.storage.put(readKey, nextRead);
+		const errors = [...new Set([...searchErrors, ...detailErrors])].slice(0, 3);
 
 		const teamSet = new Set(teams.map((t) => t.slug));
 		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
 		for (const h of hits) {
-			const e = byId.get(h.subject.id) ?? {
-				facts: dashFactsOf(h.subject, who.me, teamSet),
+			const subject = facts.get(h.key);
+			if (!subject || !forTeams(h.query, subject)) continue;
+			const e = byId.get(h.key) ?? {
+				facts: dashFactsOf(subject, who.me, teamSet),
 				sections: new Set<string>()
 			};
-			e.sections.add(h.section);
-			byId.set(h.subject.id, e);
+			e.sections.add(h.query.section);
+			byId.set(h.key, e);
 		}
 		const enabled = dash[kind].filter((s) => s.enabled);
 		const items = sortItems(
@@ -121,11 +155,21 @@ export abstract class PollerDashboard extends PollerSync {
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
-		await this.record(
-			who,
-			hits.map((h) => h.subject),
-			{ dash: false }
-		);
+		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
+	}
+
+	/** The stored facts of these PRs and issues ("owner/repo#123"). */
+	private storedFacts(keys: string[]): Map<string, SubjectFacts> {
+		const out = new Map<string, SubjectFacts>();
+		for (let i = 0; i < keys.length; i += 50) {
+			const chunk = keys.slice(i, i + 50);
+			for (const r of this.all<{ key: string; facts: string }>(
+				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
+				...chunk
+			))
+				out.set(r.key, JSON.parse(r.facts) as SubjectFacts);
+		}
+		return out;
 	}
 }
