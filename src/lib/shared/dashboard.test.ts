@@ -131,13 +131,22 @@ describe('expandSections', () => {
 	];
 	it('runs @team once per tracked team and appends the scope', () => {
 		const { queries } = expandSections(
-			[{ id: 't', name: 'T', query: 'is:pr team-review-requested:@team', enabled: true }],
+			[{ id: 't', name: 'T', query: 'is:pr team:@team', enabled: true }],
 			{ scope: 'org:o', excludedTeams: ['o/infra'] },
 			teams
 		);
-		expect(queries).toEqual([
-			{ section: 't', team: 'o/web', q: 'is:pr team-review-requested:o/web org:o' }
-		]);
+		expect(queries).toEqual([{ section: 't', team: 'o/web', q: 'is:pr team:o/web org:o' }]);
+	});
+	it('runs team review requests as one search, filtered by the tracked teams', () => {
+		const { queries, skipped } = expandSections(
+			[{ id: 't', name: 'T', query: 'is:pr team-review-requested:@team', enabled: true }],
+			{ scope: 'org:o', excludedTeams: ['o/infra'] },
+			[...teams, ...Array.from({ length: 20 }, (_, i) => ({ slug: `o/t${i}`, name: '', org: 'o' }))]
+		);
+		expect(queries).toHaveLength(1);
+		expect(queries[0].q).toBe('is:pr review-requested:@me org:o');
+		expect(queries[0].teams).toHaveLength(21);
+		expect(skipped).toEqual({});
 	});
 	it('skips disabled sections and explains team sections without teams', () => {
 		const { queries, skipped } = expandSections(DEFAULT_DASH.pr, DEFAULT_DASH, []);

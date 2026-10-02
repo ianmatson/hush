@@ -390,6 +390,13 @@ export interface SearchHit {
 	subject: SubjectFacts;
 }
 
+/** A team search keeps only the PRs that request one of its teams (see expandSections). */
+const forTeams = (q: ExpandedQuery, s: SubjectFacts) =>
+	!q.teams ||
+	s.reviewRequests.some(
+		(r) => r.team && q.teams!.some((t) => t.toLowerCase() === r.name.toLowerCase())
+	);
+
 /** The most results one dashboard search asks for, and the fewest. */
 export const SEARCH_MAX = 25;
 const SEARCH_MIN = 5;
@@ -468,6 +475,7 @@ export async function searchDashboard(
 				(result.nodes ?? [])
 					.filter((n: Node) => n?.id)
 					.map((n: Node) => ({ section: q.section, subject: toSubject(n) }))
+					.filter((h: SearchHit) => forTeams(q, h.subject))
 			);
 		});
 	}

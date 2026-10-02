@@ -42,7 +42,7 @@ The default sections:
 
 Change them in **Settings → PRs & issues**:
 
-- Each section has a name and a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). `@me` is you. `@team` runs the search once for each team that you track.
+- Each section has a name and a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams (it leaves out your own PRs, which are in **Your PRs**).
 - Turn a section off with its switch, move it up or down, delete it, or choose **Add section**. The link button opens the same search on GitHub, to check it.
 - **Scope** is added to every search: for example `org:acme`, or `-repo:acme/website`.
 - **Teams** lists your teams. Turn off big teams (such as “everyone”) to cut noise. **Look up teams again** finds new teams at once; otherwise Hush looks every 6 hours.

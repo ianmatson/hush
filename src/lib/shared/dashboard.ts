@@ -86,7 +86,15 @@ export interface ExpandedQuery {
 	section: string;
 	team?: string;
 	q: string;
+	/** Keep only results that request a review from one of these teams ("org/team"). */
+	teams?: string[];
 }
+
+/**
+ * GitHub's review-requested:@me finds PRs that ask you or one of your teams (not your own PRs),
+ * so one search, filtered by your tracked teams, does the work of one search per team.
+ */
+const TEAM_REVIEW = /\bteam-review-requested:@team\b/g;
 
 /** Turn saved sections into concrete GitHub search strings. */
 export function expandSections(
@@ -106,6 +114,11 @@ export function expandSections(
 		}
 		if (!tracked.length) {
 			skipped[s.id] = 'You are not in any tracked team.';
+			continue;
+		}
+		const one = q.replace(TEAM_REVIEW, 'review-requested:@me');
+		if (one !== q && !one.includes('@team')) {
+			queries.push({ section: s.id, q: one, teams: tracked.map((t) => t.slug) });
 			continue;
 		}
 		const use = tracked.slice(0, MAX_TEAMS_PER_SECTION);
