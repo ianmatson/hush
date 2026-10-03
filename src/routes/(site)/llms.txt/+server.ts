@@ -1,4 +1,5 @@
 import { ABOUT } from '$lib/about';
+import { COMPARE, COMPARE_INDEX, compareMarkdownPath } from '$lib/compare';
 import { DOCS, NAV, docMarkdownPath } from '$lib/docs';
 import { SITE_URL } from '$lib/site';
 
@@ -25,6 +26,11 @@ ${groups.join('\n\n')}
 ## About Hush
 
 ${ABOUT.map((p) => `- [${p.title}](${SITE_URL}/${p.slug}.md): ${p.description}`).join('\n')}
+
+## ${COMPARE_INDEX.title}
+
+- [Overview](${SITE_URL}${COMPARE_INDEX.path}): ${COMPARE_INDEX.description}
+${COMPARE.map((p) => `- [${p.title}](${SITE_URL}${compareMarkdownPath(p)}): ${p.description}`).join('\n')}
 `;
 	return new Response(text, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }

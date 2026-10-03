@@ -1,3 +1,4 @@
+import { COMPARE, comparePath } from '$lib/compare';
 import { DOCS, docPath } from '$lib/docs';
 import { SITE_URL } from '$lib/site';
 
@@ -19,6 +20,7 @@ const pages = Object.keys(import.meta.glob('/src/routes/(site)/**/+page.svelte')
 	.filter((path) => path !== '/404' && !path.includes('['))
 	.map((path) => path || '/')
 	.concat(DOCS.map(docPath))
+	.concat(COMPARE.map(comparePath))
 	.filter((path, i, all) => all.indexOf(path) === i)
 	.sort();
 
