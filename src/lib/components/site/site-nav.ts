@@ -1,15 +1,18 @@
+import { COMPARE_ORDER, COMPARE_OVERVIEW, comparePath } from '$lib/compare';
+
 export type SiteLink = { href: string; label: string };
 
-export const COMPARE_PAGES: readonly SiteLink[] = [];
+export const COMPARE_PAGES: readonly SiteLink[] = COMPARE_ORDER.map((slug) => ({
+	href: comparePath({ slug }),
+	label: `vs ${COMPARE_OVERVIEW[slug].name}`
+}));
 
 export const COMPARE_INDEX: SiteLink = { href: '/compare', label: 'Compare' };
-
-const hasComparePages = COMPARE_PAGES.length > 0;
 
 export const SITE_SECTIONS: readonly SiteLink[] = [
 	{ href: '/docs', label: 'Docs' },
 	{ href: '/pricing', label: 'Pricing' },
-	...(hasComparePages ? [COMPARE_INDEX] : [])
+	COMPARE_INDEX
 ];
 
 export const SITE_ABOUT_PAGES: readonly SiteLink[] = [

@@ -109,7 +109,7 @@
 		font-size: 0.6875rem;
 		color: var(--muted-foreground);
 	}
-	.doc :global(.table) {
+	.doc :global(.table-scroll) {
 		overflow-x: auto;
 		border: 1px solid var(--border);
 		border-radius: 0.625rem;

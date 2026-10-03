@@ -13,7 +13,7 @@
 	path={COMPARE_INDEX.path}
 />
 
-<main class="compare">
+<div class="compare">
 	<h1>{COMPARE_INDEX.title}</h1>
 	<p class="lead">{COMPARE_INDEX.description}</p>
 
@@ -32,7 +32,7 @@
 			{/each}
 		</ul>
 	</nav>
-</main>
+</div>
 
 <style>
 	.compare {

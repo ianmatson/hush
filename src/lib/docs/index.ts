@@ -134,7 +134,7 @@ export function renderMarkdown(markdown: string): Rendered {
 		}
 	});
 	const html = (marked.parse(markdown, { async: false }) as string)
-		.replace(/<table>/g, '<div class="table"><table>')
+		.replace(/<table>/g, '<div class="table-scroll"><table>')
 		.replace(/<\/table>/g, '</table></div>');
 	return { html, toc };
 }

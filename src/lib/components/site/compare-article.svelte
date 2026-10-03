@@ -19,7 +19,7 @@
 
 <SiteMeta title="{page.title} · Hush" description={page.description} path={comparePath(page)} />
 
-<main class="compare">
+<div class="compare">
 	<article>
 		<p class="eyebrow"><a href={COMPARE_INDEX.path}>Compare</a></p>
 		<h1>{page.title}</h1>
@@ -39,7 +39,7 @@
 			</p>
 		</footer>
 	</article>
-</main>
+</div>
 
 <style>
 	.compare {
