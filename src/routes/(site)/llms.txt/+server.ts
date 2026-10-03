@@ -1,6 +1,7 @@
 import { ABOUT } from '$lib/about';
 import { COMPARE, COMPARE_INDEX, compareMarkdownPath } from '$lib/compare';
 import { DOCS, NAV, docMarkdownPath } from '$lib/docs';
+import { GUIDES, GUIDES_INDEX, guideMarkdownPath } from '$lib/guides';
 import { SITE_URL } from '$lib/site';
 
 // The docs for agents, as https://llmstxt.org describes: what Hush is, then every page in
@@ -22,6 +23,11 @@ export function GET() {
 All pages in one file: ${SITE_URL}/llms-full.txt
 
 ${groups.join('\n\n')}
+
+## ${GUIDES_INDEX.title}
+
+- [Overview](${SITE_URL}${GUIDES_INDEX.path}): ${GUIDES_INDEX.description}
+${GUIDES.map((p) => `- [${p.title}](${SITE_URL}${guideMarkdownPath(p)}): ${p.description}`).join('\n')}
 
 ## About Hush
 

@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { COMPARE, comparePath } from '$lib/compare';
 import { DOCS, docPath } from '$lib/docs';
+import { GUIDES, guidePath, guideSourceFile } from '$lib/guides';
 import { SITE_URL } from '$lib/site';
 
 // Written once at build time, like the pages it lists.
@@ -20,7 +21,8 @@ const CONTENT_SOURCES: Record<string, string[]> = {
 	'/privacy': ['src/lib/about/pages/privacy.md'],
 	'/security': ['src/lib/about/pages/security.md'],
 	'/pricing': ['src/lib/pricing.ts'],
-	'/compare': ['src/lib/compare/index.ts']
+	'/compare': ['src/lib/compare/index.ts'],
+	'/guides': ['src/lib/guides/index.ts', ...GUIDES.map(guideSourceFile)]
 };
 
 /**
@@ -42,6 +44,10 @@ const pages: SitemapPage[] = [
 	...COMPARE.map((c) => ({
 		path: comparePath(c),
 		sources: [`src/lib/compare/pages/${c.slug}.md`]
+	})),
+	...GUIDES.map((g) => ({
+		path: guidePath(g),
+		sources: [guideSourceFile(g)]
 	}))
 ]
 	.filter((page, i, all) => all.findIndex((p) => p.path === page.path) === i)

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { APP_URL, REPO_URL } from '$lib/site';
-	import { COMPARE_PAGES, SITE_ABOUT_PAGES, SITE_SECTIONS } from './site-nav';
+	import { COMPARE_PAGES, GUIDE_PAGES, SITE_ABOUT_PAGES, SITE_SECTIONS } from './site-nav';
 </script>
 
 <footer class="foot">
@@ -13,6 +13,13 @@
 			<a href={REPO_URL} rel="noreferrer">GitHub</a>
 			<a href="{APP_URL}/login">Sign in</a>
 		</nav>
+		{#if GUIDE_PAGES.length > 0}
+			<nav aria-label="Guides">
+				{#each GUIDE_PAGES as link (link.href)}
+					<a href={link.href}>{link.label}</a>
+				{/each}
+			</nav>
+		{/if}
 		{#if COMPARE_PAGES.length > 0}
 			<nav aria-label="Compare">
 				{#each COMPARE_PAGES as link (link.href)}

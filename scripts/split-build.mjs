@@ -36,6 +36,7 @@ const siteOnly = [
 	...pages,
 	'docs',
 	'compare',
+	'guides',
 	'sitemap.xml',
 	'llms.txt',
 	'llms-full.txt',
