@@ -87,6 +87,10 @@
 	structuredData={[websiteData(), softwareData(), faqData(FAQ)]}
 />
 
+{#snippet tag(label: string, hint: string, isCount = false)}
+	<span class="tag">{label}<span class={['tag-hint', isCount && 'tag-count']}>{hint}</span></span>
+{/snippet}
+
 <div class="page">
 	<section class="hero" aria-labelledby="hero-title">
 		<div class="wrap hero-copy">
@@ -115,6 +119,7 @@
 	<section class="band tint" aria-labelledby="noise-title">
 		<div class="wrap">
 			<div class="intro center">
+				{@render tag('Inbox', '5', true)}
 				<h2 id="noise-title">47 notifications. <em>Five need you.</em></h2>
 				<p>
 					Hush reads the PR or issue behind each notification, and puts it where it belongs: <b
@@ -135,6 +140,7 @@
 					<QuietPhone />
 				</div>
 				<div class="calm-copy">
+					{@render tag('Push alerts', '1', true)}
 					<h3 id="calm-title">A push only when it is your turn.</h3>
 					<p class="sub">
 						Busy PRs change all day. Hush keeps them from buzzing your phone each time.
@@ -156,6 +162,7 @@
 		<div class="wrap">
 			<div class="split">
 				<div class="intro">
+					{@render tag('Rules', 'settings.json')}
 					<h2 id="config-title">Sorted <em>your way.</em></h2>
 					<p>
 						Write a rule in one line, such as <code>author:dependabot*</code>, and send what it
@@ -191,6 +198,7 @@
 		<div class="wrap split reverse">
 			<PeekActions />
 			<div class="intro">
+				{@render tag('Peek', 'Space')}
 				<h2 id="act-title">Approve, reply, merge. <em>From the inbox.</em></h2>
 				<p>
 					Press <kbd>Space</kbd> to peek at a thread: the checks, the reviews, and the conversation. Approve,
@@ -266,13 +274,6 @@
 		--ease: cubic-bezier(0.16, 1, 0.3, 1);
 		--serif: 'Newsreader Variable', Georgia, serif;
 		--tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
-		--wave: clamp(2rem, 5vw, 4rem);
-		--glow-strength: 11%;
-		--flat-edge: linear-gradient(transparent 0 0);
-		--edge-top-rise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 64C320 8 640 8 960 44C1180 70 1320 60 1440 28V96H0Z'/%3E%3C/svg%3E");
-		--edge-top-dip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 30C260 70 560 88 860 52C1100 22 1300 18 1440 60V96H0Z'/%3E%3C/svg%3E");
-		--edge-bottom-swell: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1440V40C1160 92 880 96 600 60C360 30 160 34 0 70Z'/%3E%3C/svg%3E");
-		--edge-bottom-sway: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1440V70C1200 40 960 20 700 50C440 82 200 90 0 44Z'/%3E%3C/svg%3E");
 		overflow-x: clip;
 	}
 	.wrap {
@@ -394,13 +395,8 @@
 		inset: auto 0 0;
 		z-index: -1;
 		height: clamp(10rem, 22vw, 17rem);
+		border-top: 1px solid var(--border);
 		background: var(--tint);
-		mask-image: var(--edge-top-rise), linear-gradient(#000 0 0);
-		mask-size:
-			100% var(--wave),
-			100% calc(100% - var(--wave) + 1px);
-		mask-position: top, bottom;
-		mask-repeat: no-repeat;
 	}
 	.hero-copy {
 		display: grid;
@@ -457,6 +453,9 @@
 	.intro.center {
 		justify-items: center;
 		margin: 0 auto clamp(3rem, 6vw, 4.5rem);
+	}
+	.intro.center .tag {
+		justify-self: center;
 	}
 	.intro p {
 		max-width: 36rem;
@@ -555,74 +554,67 @@
 	}
 
 	.tint {
-		--edge-top: var(--flat-edge);
-		--edge-bottom: var(--flat-edge);
-		--glow-a: var(--signal-review);
-		--glow-b: var(--signal-reply);
-		--glow-a-at: 12% 20%;
-		--glow-b-at: 88% 85%;
 		position: relative;
 		isolation: isolate;
-	}
-	:global(.dark) .page {
-		--glow-strength: 7%;
+		border-block: 1px solid var(--border);
+		background: var(--tint);
 	}
 	.tint::before {
 		content: '';
 		position: absolute;
-		inset: calc(var(--wave) * -1) 0;
+		inset: 0;
 		z-index: -1;
-		background:
-			radial-gradient(
-				55% 60% at var(--glow-a-at),
-				color-mix(in oklab, var(--glow-a) var(--glow-strength), transparent),
-				transparent 72%
-			),
-			radial-gradient(
-				50% 55% at var(--glow-b-at),
-				color-mix(in oklab, var(--glow-b) calc(var(--glow-strength) - 2%), transparent),
-				transparent 72%
-			),
-			linear-gradient(
-				var(--tint),
-				color-mix(in oklab, var(--foreground) 5%, var(--background)) 55%,
-				var(--tint)
-			);
-		mask-image: var(--edge-top), linear-gradient(#000 0 0), var(--edge-bottom);
-		mask-size:
-			100% var(--wave),
-			100% calc(100% - 2 * var(--wave) + 2px),
-			100% var(--wave);
-		mask-position: top, center, bottom;
-		mask-repeat: no-repeat;
+		background-image: radial-gradient(
+			circle,
+			color-mix(in oklab, var(--foreground) 16%, transparent) 1px,
+			transparent 1.5px
+		);
+		background-size: 22px 22px;
+		background-position: center top;
+		mask-image:
+			radial-gradient(ellipse 62% 70% at 50% 50%, transparent 40%, #000 100%),
+			linear-gradient(transparent, #000 18%, #000 82%, transparent);
+		mask-composite: intersect;
 		pointer-events: none;
 	}
 	.band.tint {
-		--edge-bottom: var(--edge-bottom-swell);
-		--glow-a-at: 15% 45%;
-	}
-	.config.tint {
-		--edge-top: var(--edge-top-dip);
-		--edge-bottom: var(--edge-bottom-sway);
-		--glow-a: var(--signal-merge);
-		--glow-a-at: 85% 15%;
-		--glow-b: var(--signal-review);
-		--glow-b-at: 10% 90%;
-	}
-	.open.tint {
-		--edge-top: var(--edge-top-rise);
-		--edge-bottom: var(--edge-bottom-swell);
-		--glow-a: var(--signal-reply);
-		--glow-a-at: 20% 80%;
-		--glow-b: var(--signal-warn);
-		--glow-b-at: 80% 10%;
+		border-top: none;
 	}
 	.final.tint {
-		--edge-top: var(--edge-top-dip);
-		--edge-bottom: linear-gradient(#000, transparent);
-		--glow-a-at: 25% 65%;
-		--glow-b: var(--signal-merge);
-		--glow-b-at: 70% 30%;
+		border-bottom: none;
+	}
+	.tag {
+		justify-self: start;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		height: 1.75rem;
+		padding: 0 0.3rem 0 0.65rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: var(--background);
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--muted-foreground);
+	}
+	.tag-hint {
+		display: inline-grid;
+		place-items: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.4rem;
+		border-radius: 999px;
+		background: color-mix(in oklab, var(--foreground) 7%, transparent);
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: 0.6875rem;
+		color: var(--foreground);
+	}
+	.tag-count {
+		background: var(--primary);
+		font-family: inherit;
+		font-weight: 600;
+		color: var(--primary-foreground);
+		font-variant-numeric: tabular-nums;
 	}
 	.note {
 		font-weight: 500;
