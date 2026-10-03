@@ -1,7 +1,8 @@
 <script lang="ts">
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
 	import MarkdownBody from '$lib/components/site/markdown-body.svelte';
-	import { COMPARE, COMPARE_INDEX, comparePath } from '$lib/compare';
+	import { comparePath } from '$lib/compare';
+	import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
 	import { renderMarkdown } from '$lib/docs';
 	import { SITE_NAME } from '$lib/site';
 	import { articleData } from '$lib/structured-data';

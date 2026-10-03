@@ -1,5 +1,6 @@
 import { ABOUT } from '$lib/about';
-import { COMPARE, COMPARE_INDEX, compareMarkdownPath } from '$lib/compare';
+import { compareMarkdownPath } from '$lib/compare';
+import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
 import { DOCS, NAV, docMarkdownPath } from '$lib/docs';
 import { SITE_URL } from '$lib/site';
 

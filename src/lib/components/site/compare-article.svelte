@@ -4,13 +4,8 @@
 	import { REPO_URL, SITE_NAME } from '$lib/site';
 	import { articleData } from '$lib/structured-data';
 	import { renderMarkdown } from '$lib/docs';
-	import {
-		COMPARE,
-		COMPARE_INDEX,
-		compareMarkdownPath,
-		comparePath,
-		type ComparePage
-	} from '$lib/compare';
+	import { compareMarkdownPath, comparePath, type ComparePage } from '$lib/compare';
+	import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
 
 	let { page }: { page: ComparePage } = $props();
 	const rendered = $derived(renderMarkdown(page.markdown));

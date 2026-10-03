@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
+	import { MediaQuery } from 'svelte/reactivity';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { signalColor, type Signal } from './mock';
 
@@ -96,12 +98,59 @@
 	];
 
 	const LABEL: Record<Sorted, string> = { action: 'Needs you', fyi: 'FYI', done: 'Done' };
-	const needsYou = INCOMING.map((row, i) => ({ ...row, i })).filter(
-		(row) => row.sorted === 'action'
+	const TAIL = [
+		{ repo: 'acme/web', title: 'Bump prettier from 3.3 to 3.4', reason: 'subscribed' },
+		{ repo: 'acme/infra', title: 'Nightly build: all checks passed', reason: 'ci activity' }
+	];
+	const LAST = INCOMING.length - 1;
+	const STEP_MS = 650;
+	const HOLD_MS = 3200;
+	const ROW_REM = 2.25;
+
+	const reducedMotion = new MediaQuery('prefers-reduced-motion: reduce');
+	let cursor = $state(LAST);
+	let running = $state(false);
+
+	const sent = $derived(
+		INCOMING.map((row, i) => ({ ...row, i })).filter(
+			(row) => row.sorted === 'action' && row.i <= cursor
+		)
 	);
+
+	function scanWhileVisible(node: HTMLElement) {
+		if (reducedMotion.current) return;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const tickScan = () => {
+			if (cursor >= LAST) {
+				timer = setTimeout(() => {
+					cursor = 0;
+					timer = setTimeout(tickScan, STEP_MS);
+				}, HOLD_MS);
+				return;
+			}
+			cursor += 1;
+			timer = setTimeout(tickScan, STEP_MS);
+		};
+		const observer = new IntersectionObserver(([entry]) => {
+			clearTimeout(timer);
+			if (entry.isIntersecting) {
+				running = true;
+				cursor = 0;
+				timer = setTimeout(tickScan, STEP_MS);
+			} else {
+				running = false;
+				cursor = LAST;
+			}
+		});
+		observer.observe(node);
+		return () => {
+			observer.disconnect();
+			clearTimeout(timer);
+		};
+	}
 </script>
 
-<div class="sort" aria-hidden="true" style:--rows={INCOMING.length}>
+<div class="sort" aria-hidden="true" {@attach scanWhileVisible}>
 	<div class="panel before">
 		<div class="head">
 			<span>GitHub notifications</span>
@@ -110,8 +159,8 @@
 		<ul class="incoming">
 			{#each INCOMING as row, i (row.title)}
 				<li
-					class={row.sorted}
-					style:--i={i}
+					class={i <= cursor ? row.sorted : 'waiting'}
+					class:scanned={running && i === cursor}
 					style:--signal={row.signal ? signalColor(row.signal) : 'var(--muted-foreground)'}
 				>
 					<span class="dot"></span>
@@ -122,8 +171,20 @@
 					<span class="label">{LABEL[row.sorted]}</span>
 				</li>
 			{/each}
+			{#each TAIL as row (row.title)}
+				<li class="tail">
+					<span class="dot"></span>
+					<span class="line">
+						<span class="t">{row.title}</span>
+						<span class="r">{row.repo} · {row.reason}</span>
+					</span>
+					<span class="label"></span>
+				</li>
+			{/each}
 		</ul>
-		<span class="sweep"></span>
+		{#if running}
+			<span class="scanner" style:translate="0 {cursor * ROW_REM}rem"></span>
+		{/if}
 	</div>
 
 	<span class="arrow"><ArrowRight size={20} /></span>
@@ -131,11 +192,11 @@
 	<div class="panel after">
 		<div class="head">
 			<span>Hush</span>
-			<b>Needs you · 5</b>
+			<b>Needs you · {sent.length}</b>
 		</div>
 		<ul class="needs">
-			{#each needsYou as row (row.title)}
-				<li style:--i={row.i} style:--signal={signalColor(row.signal ?? 'review')}>
+			{#each sent as row (row.title)}
+				<li style:--signal={signalColor(row.signal ?? 'review')} in:fly={{ x: -16, duration: 350 }}>
 					<span class="line">
 						<span class="t">{row.title}</span>
 						<span class="r">{row.repo}</span>
@@ -153,8 +214,6 @@
 
 <style>
 	.sort {
-		--loop: 11s;
-		--step: 0.4s;
 		--ease: cubic-bezier(0.16, 1, 0.3, 1);
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -199,9 +258,6 @@
 		color: var(--muted-foreground);
 	}
 
-	.before {
-		height: 31rem;
-	}
 	.before::after {
 		content: '';
 		position: absolute;
@@ -218,8 +274,9 @@
 		height: 2.25rem;
 		padding: 0 1rem;
 		border-bottom: 1px solid var(--border);
-		animation: sorted var(--loop) var(--ease) infinite;
-		animation-delay: calc(var(--i) * var(--step));
+		transition:
+			opacity 0.35s var(--ease),
+			background 0.35s var(--ease);
 	}
 	.incoming .t {
 		font-weight: 500;
@@ -240,30 +297,40 @@
 		font-size: 0.6875rem;
 		font-weight: 600;
 		text-align: right;
-		color: var(--signal);
-		opacity: 0;
-		animation: label var(--loop) var(--ease) infinite;
-		animation-delay: calc(var(--i) * var(--step));
-	}
-	.incoming .fyi .label,
-	.incoming .done .label {
 		color: var(--muted-foreground);
+		transition:
+			opacity 0.3s var(--ease),
+			translate 0.3s var(--ease);
 	}
-	.sweep {
+	.incoming .waiting .label {
+		opacity: 0;
+		translate: -0.5rem 0;
+	}
+	.incoming .action {
+		background: color-mix(in oklab, var(--signal) 12%, transparent);
+	}
+	.incoming .action .label {
+		color: var(--signal);
+	}
+	.incoming .fyi {
+		opacity: 0.55;
+	}
+	.incoming .done {
+		opacity: 0.28;
+	}
+	.incoming .scanned {
+		opacity: 1;
+	}
+	.scanner {
 		position: absolute;
+		top: calc(2.6rem - 1px);
 		left: 0;
 		right: 0;
-		top: 2.6rem;
-		height: 2.25rem;
-		background: linear-gradient(
-			90deg,
-			transparent,
-			color-mix(in oklab, var(--signal-review) 22%, transparent) 30%,
-			color-mix(in oklab, var(--signal-review) 22%, transparent) 70%,
-			transparent
-		);
-		border-block: 1px solid color-mix(in oklab, var(--signal-review) 40%, transparent);
-		animation: sweep var(--loop) linear infinite;
+		height: calc(2.25rem + 2px);
+		border-block: 1px solid color-mix(in oklab, var(--signal-review) 55%, transparent);
+		background: color-mix(in oklab, var(--signal-review) 14%, transparent);
+		box-shadow: 0 0 24px -6px color-mix(in oklab, var(--signal-review) 50%, transparent);
+		transition: translate 0.22s var(--ease);
 		pointer-events: none;
 	}
 
@@ -277,8 +344,14 @@
 		color: var(--muted-foreground);
 	}
 
+	.after {
+		align-self: stretch;
+		display: grid;
+		grid-template-rows: auto 1fr auto;
+	}
 	.needs {
 		display: grid;
+		align-content: start;
 		padding: 0.375rem;
 	}
 	.needs li {
@@ -288,8 +361,6 @@
 		gap: 0.75rem;
 		padding: 0.7rem 0.75rem;
 		border-radius: 0.625rem;
-		animation: arrive var(--loop) var(--ease) infinite;
-		animation-delay: calc(var(--i) * var(--step));
 	}
 	.needs li + li {
 		box-shadow: 0 -1px 0 var(--border);
@@ -321,85 +392,6 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	@keyframes sweep {
-		0% {
-			translate: 0 0;
-			opacity: 1;
-		}
-		48% {
-			opacity: 1;
-		}
-		52% {
-			translate: 0 calc(var(--rows) * 2.25rem);
-			opacity: 0;
-		}
-		100% {
-			translate: 0 calc(var(--rows) * 2.25rem);
-			opacity: 0;
-		}
-	}
-	@keyframes sorted {
-		0%,
-		2% {
-			opacity: 1;
-			background: transparent;
-		}
-		5%,
-		82% {
-			opacity: var(--dim, 1);
-			background: var(--wash, transparent);
-		}
-		92%,
-		100% {
-			opacity: 1;
-			background: transparent;
-		}
-	}
-	.incoming .action {
-		--wash: color-mix(in oklab, var(--signal) 12%, transparent);
-	}
-	.incoming .fyi {
-		--dim: 0.55;
-	}
-	.incoming .done {
-		--dim: 0.28;
-	}
-	@keyframes label {
-		0%,
-		2% {
-			opacity: 0;
-			translate: -0.5rem 0;
-		}
-		6%,
-		82% {
-			opacity: 1;
-			translate: 0 0;
-		}
-		92%,
-		100% {
-			opacity: 0;
-		}
-	}
-	@keyframes arrive {
-		0%,
-		2% {
-			opacity: 0.25;
-			translate: -0.5rem 0;
-			filter: blur(2px);
-		}
-		7%,
-		82% {
-			opacity: 1;
-			translate: 0 0;
-			filter: blur(0);
-		}
-		92%,
-		100% {
-			opacity: 0.25;
-			filter: blur(2px);
-		}
-	}
-
 	@media (max-width: 52rem) {
 		.sort {
 			grid-template-columns: minmax(0, 1fr);
@@ -409,31 +401,13 @@
 			justify-self: center;
 			rotate: 90deg;
 		}
-		.before {
-			height: 20rem;
+		.after {
+			min-height: 22.5rem;
 		}
 	}
 	@media (max-width: 30rem) {
 		.incoming .r {
 			display: none;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.incoming li,
-		.label,
-		.needs li,
-		.sweep {
-			animation: none;
-		}
-		.sweep {
-			display: none;
-		}
-		.label {
-			opacity: 1;
-		}
-		.incoming li {
-			opacity: var(--dim, 1);
-			background: var(--wash, transparent);
 		}
 	}
 </style>

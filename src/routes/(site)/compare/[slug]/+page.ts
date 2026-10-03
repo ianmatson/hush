@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { COMPARE, compareBySlug } from '$lib/compare';
+import { COMPARE, compareBySlug } from '$lib/compare/content';
 
 export const entries = () => COMPARE.map((p) => ({ slug: p.slug }));
 
