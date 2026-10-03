@@ -5,7 +5,7 @@ description: Sign in, learn the three tabs, turn on push, and triage your first 
 
 ## 1. Sign in
 
-Open [app.hush-gh.com](https://app.hush-gh.com) and choose **Sign in with GitHub**. GitHub asks you to let Hush read your notifications, your repositories, and your teams. If your org uses SAML single sign-on, GitHub also asks you to authorize Hush for it.
+Open [app.hush-gh.com](https://app.hush-gh.com) and choose **Sign in with GitHub**. Any GitHub account can sign in. GitHub asks you to let Hush read your notifications, your repositories, and your teams. If your org uses SAML single sign-on, GitHub also asks you to authorize Hush for it.
 
 After you sign in, Hush reads your notifications from the last 14 days. The first sync can take a minute; the inbox says “First sync in progress…” until it is done. After that, Hush checks GitHub every few minutes by itself (see [Limits](/docs/limits)).
 
@@ -41,7 +41,7 @@ Often you do not need Done: when you approve, reply, or push a fix, Hush sees it
 
 ## 4. Turn on push
 
-Go to **Settings → Notifications** and choose **Turn on** for this device. Hush pushes only “Needs you” threads by default. Do this on each browser or phone that should get pushes.
+Go to **Settings → Notifications** and choose **Turn on** for this device. Hush pushes only “Needs you” threads by default, and each PR or issue only once until you open Hush. Do this on each browser or phone that should get pushes.
 
 On iPhone and iPad, first add Hush to your Home Screen (Share → Add to Home Screen), open it from there, and then turn on push. See [Notifications](/docs/notifications).
 

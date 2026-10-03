@@ -15,7 +15,7 @@ You sign in with GitHub. Hush asks for three scopes:
 
 GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
 
-Hush stores the token encrypted. It acts on GitHub **only when you do**: when you choose Done, Mute, Read, or an action in the [peek](/docs/peek). It never writes by itself. The one exception is reading: a thread that you read in the peek is marked as read on GitHub (you can turn this off with [`peekMarksRead`](/docs/settings#peekmarksread)).
+Hush stores the token encrypted. It acts on GitHub **only when you do**: when you choose Done, Mute, Read, or an action or a reaction in the [peek](/docs/peek). The Done and Snooze buttons on a push alert act the same way as in Hush. It never writes by itself. The one exception is reading: a thread that you read in the peek is marked as read on GitHub (you can turn this off with [`peekMarksRead`](/docs/settings#peekmarksread)).
 
 ## What Hush does on GitHub
 
@@ -27,6 +27,7 @@ Hush stores the token encrypted. It acts on GitHub **only when you do**: when yo
 | Unread                              | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
 | Snooze, Move to inbox, Unmute, Hide | Nothing. These stay in Hush.                                                        |
 | Actions in the peek                 | The action itself: a review, a comment, a merge, a re-run, a close.                 |
+| A reaction in the peek              | Adds your reaction, or removes it.                                                  |
 
 ## When an org is missing
 

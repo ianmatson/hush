@@ -5,6 +5,16 @@ description: How Hush sorts your GitHub notifications, and how to make it work y
 
 Hush reads your GitHub notifications and sorts them into what **needs you** and what is only **FYI**. It follows whose turn it is on every pull request and issue that involves you, sends a push only when something waits on you, and lets you act on GitHub (approve, comment, merge, mark Done) without leaving your inbox.
 
+## What Hush is
+
+Hush is a web app for your GitHub notifications. It replaces the notifications page on github.com. It is open source, and it runs at [app.hush-gh.com](https://app.hush-gh.com).
+
+- **Who it is for:** developers who get more GitHub notifications than they can read. For example, people who review pull requests for a team, people who work in large orgs or busy repositories, and maintainers of open-source projects.
+- **What you need:** a GitHub account. Any GitHub user can sign in. An org that limits OAuth apps hides its private repositories until an owner approves Hush (see [GitHub access](/docs/github-access)).
+- **Where it works:** in any modern browser, on a computer, a tablet, or a phone. You can install it as an app, and get push notifications on each device.
+- **What it costs:** Hush is free while it is in beta. See [Pricing](/pricing).
+- **Your data:** Hush has no ads and no analytics. See [Privacy](/privacy) and [Security](/security).
+
 ## The idea in one minute
 
 - **Needs you** is short on purpose. A thread is there only when you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you, your approved PR is ready to merge. See [what needs you](/docs/inbox#what-needs-you).

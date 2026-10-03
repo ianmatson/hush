@@ -5,7 +5,7 @@ description: What Hush stores about you, where it keeps it, who else sees it, an
 
 Hush is a small open-source app. It reads your GitHub notifications so that it can sort them for you, and that is all it uses your data for. It has no ads and no analytics, and it does not sell or share your data. Everything below is also in [the source code](https://github.com/ianmatson/hush).
 
-_Last updated: 28 September 2026._
+_Last updated: 3 October 2026._
 
 ## The short version
 
@@ -34,6 +34,8 @@ Hush does not read code. The [peek](/docs/peek) shows a PR's description and com
 **For push and feeds:**
 
 - Your alert history: the title and text of each push, for 30 days.
+- For each pull request or issue that Hush pushed: when it pushed and why, for 30 days. Hush uses this to push an item only once (see [`pushRepeat`](/docs/settings#pushrepeat)).
+- Pushes that wait for the end of quiet hours, a digest, or a push limit, until Hush sends them.
 - Each device that gets push: the address that its browser's push service gave it, its encryption keys, and a label such as “Chrome on macOS”.
 - A hash of the secret address of each [feed](/docs/feeds) that you made, not the address itself.
 
@@ -54,12 +56,12 @@ That is all. There are no analytics, tracking, or advertising services, and no t
 ## Your browser
 
 - One cookie: your session. It is `HttpOnly` and `Secure`. It ends after 7 days with no use, or 30 days after sign-in.
-- Local storage: a copy of your lists (so that Hush opens at once), and the choices that are for this browser only: theme and mode, start page, tab counts, and notes that you chose not to see again. **Sign out** clears the copy of your lists.
+- Local storage: a copy of your lists (so that Hush opens at once); the comments that you started to write in the peek and did not send (for up to 30 days); your recent choices in the command palette; and the choices that are for this browser only: theme and mode, start page, tab counts, closed groups on the Pull requests and Issues tabs, and notes that you chose not to see again. **Sign out** clears the copy of your lists and the unsent comments.
 
 ## How long it is kept
 
 - Done threads with no activity for 30 days, and the PR and issue facts that nothing uses for 30 days, are deleted by themselves.
-- Alerts are deleted after 30 days.
+- Alerts, and the record of when each item pushed, are deleted after 30 days.
 - Everything else is kept until you delete your account. If you stop using Hush, it stops checking GitHub after 14 days (90 with push on), but it keeps your data until you delete it.
 
 ## Your choices

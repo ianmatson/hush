@@ -13,7 +13,7 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
 - **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `Rule 2: "then" needs category, push, or triage.`, and saves nothing. Unknown keys are errors too.
-- **`dash` and `menus` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the default sections. A list, such as `dash.pr` or `rules`, is always replaced as a whole.
+- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the default sections. A list, such as `dash.pr` or `rules`, is always replaced as a whole.
 - **Changes apply at once**, on every device. A change to `rules`, `botsAreFyi`, `teamReviewsAreAction`, or `reviewResolution` sorts your stored threads again.
 
 A complete example:
@@ -43,7 +43,7 @@ A complete example:
 
 These are not settings of your account, so they are not in the file:
 
-- **This browser only:** the mode and theme, the start page, the tab title and icon counts, and notes that you chose “Don't show again” for.
+- **This browser only:** the mode and theme, the start page, the tab title and icon counts, the closed groups on the Pull requests and Issues tabs, unsent comments, and notes that you chose “Don't show again” for.
 - **Your data:** push devices, feeds, and what you did to threads and items (Done, Snooze, Mute, hidden and moved items).
 - **Your GitHub access:** the custom token, if any.
 

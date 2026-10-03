@@ -56,7 +56,7 @@ Hush shows only the actions that you can do now. An action that GitHub would ref
 - **Request changes** and **Comment** ({{key:peek.comment}}, or the palette with {{key:palette}}) need text: the comment box opens. {{key:editor.send}} sends it.
 - **Merge** asks once more: the button becomes “Confirm: merge”. Press it (or the key) again. The merge uses the method chosen under **Merge method** in More, when the repository allows more than one. Hush merges only the commit that you saw: if someone pushed since, GitHub refuses, and you can look again.
 - **Enable auto-merge** shows when the repository allows it and the PR cannot merge yet: GitHub merges it when the checks and reviews pass.
-- **Close** and **Reopen** can be undone from the message.
+- **Close**, **Reopen**, and **Enable auto-merge** can be undone from the message.
 
 After an action, Hush checks the item again at once, so the lists update without a sync.
 
@@ -70,4 +70,4 @@ Type **@** to mention someone: the people in the conversation come first, then t
 
 GitHub.com makes its own list with private data, so the order can be a little different there. The people and items are the same.
 
-Hush keeps what you type in the box on this device until you send it, so you can close the peek and come back to it. Drafts older than 30 days go away, and signing out deletes them all.
+Hush keeps what you type in the box in this browser until you send it, one draft for each pull request or issue. You can close the peek, or reload Hush, and come back to it. Drafts older than 30 days go away, and signing out deletes them all.

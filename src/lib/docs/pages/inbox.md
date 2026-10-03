@@ -43,7 +43,9 @@ Hush reads each notification and the pull request or issue behind it (CI, review
 
 Everything else is **FYI**: team mentions, repositories that you watch, merged and closed work, passing CI, releases. With [`botsAreFyi`](/docs/settings#botsarefyi) on (the default), PRs, comments, and mentions by bots are FYI too. A review request to you by name still needs you, also on a bot's PR.
 
-The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. To change where threads go, write [rules](/docs/rules).
+Turn the two bot and team settings on or off in **Settings → Inbox → Defaults**.
+
+The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” on the Pull requests tab. To change where threads go, write [rules](/docs/rules).
 
 ## Rows
 
@@ -51,7 +53,7 @@ Each row shows:
 
 - **What happened**, in one line: “CI failed on your PR”, “@alice requests your review”, “@github-actions commented on your PR”.
 - The title, the repository, and the number.
-- **Why GitHub notified you**: “Review requested”, “You opened this”, “Watching repo”…
+- **Why GitHub notified you**: “Review requested”, “You opened this”, “Watching repo”… A row does not show a fact twice: when the first line already says why, or that it is a draft, that tag is left out.
 - **rule: …** when one of your rules sorted it.
 - **What changed since you looked**, for a PR or issue: “+2 commits”, “CI fails”, “@alice approved”, “3 new comments”. See [Since you looked](#since-you-looked).
 - A note such as “✓ You approved” when Hush moved it to Done by itself.

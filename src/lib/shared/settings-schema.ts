@@ -77,7 +77,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'clearNotifications',
 		page: 'notifications',
 		description:
-			'Remove Hush notifications from this device: "open" all of them when Hush opens, "item" each one when you open its PR or issue, or "never".'
+			'Remove Hush notifications from a device when you use Hush there: "open" all of them when Hush opens, "item" each one when you open its PR or issue, or "never".'
 	},
 	{
 		key: 'peekMarksRead',
@@ -104,13 +104,13 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'rules',
 		page: 'inbox',
 		description:
-			'Inbox rules, top to bottom; the first match wins. Each is { "name", "enabled", "when": conditions, "then": { "category", "push", "triage", "snoozeHours" } }.'
+			'Inbox rules, top to bottom; the first match wins. Each is { "name", "enabled", "when": a query, "then": { "category", "push", "triage", "snoozeHours" } }.'
 	},
 	{
 		key: 'views',
 		page: 'inbox',
 		description:
-			'Saved views: extra inbox tabs. Each is { "id", "name", "base", "when": conditions }.'
+			'Saved views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
 	},
 	{
 		key: 'dash.pr',
