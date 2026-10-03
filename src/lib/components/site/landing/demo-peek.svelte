@@ -182,7 +182,7 @@
 				kind: 'user',
 				login: who.login,
 				name: null,
-				avatar: null,
+				avatar: who.avatar ?? null,
 				team: false
 			}))
 	);

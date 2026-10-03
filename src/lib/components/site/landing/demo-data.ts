@@ -107,27 +107,30 @@ const REPO_URL = `https://github.com/${DEMO_REPO}`;
 const pull = (n: number, tab = '') => `${REPO_URL}/pull/${n}${tab}`;
 const issue = (n: number) => `${REPO_URL}/issues/${n}`;
 
-const person = (login: string, initials: string, hue: number): MockPerson => ({
+const AVATAR_DIR = '/demo-avatars';
+
+const person = (login: string, initials: string, hue: number, avatarFile: string): MockPerson => ({
 	login,
 	initials,
-	hue
+	hue,
+	avatar: `${AVATAR_DIR}/${avatarFile}`
 });
 
-export const DEMO_ME = person('ianmatson', 'IM', 256);
+export const DEMO_ME = person('ianmatson', 'IM', 256, 'ianmatson.jpg');
 
 const GH = {
-	nataliaAmorim: person('natalia-amorim', 'NA', 30),
-	cleoPleurodon: person('cleo-pleurodon', 'CL', 180),
-	rafaeelaudibert: person('rafaeelaudibert', 'RA', 150),
-	ivanagas: person('ivanagas', 'IV', 200),
-	charlescook: person('charlescook-ph', 'CC', 300),
-	joethreepwood: person('joethreepwood', 'JT', 90),
-	rubychilds: person('rubychilds', 'RC', 0),
-	sarahxsanders: person('sarahxsanders', 'SS', 330),
-	brittanyjoiner: person('brittanyjoiner15', 'BJ', 120),
-	lizzieepton: person('Lizzieepton', 'LE', 60),
-	posthogBot: person('posthog[bot]', 'PH', 40),
-	dependabot: person('dependabot[bot]', 'DB', 256)
+	nataliaAmorim: person('natalia-amorim', 'NA', 30, 'natalia-amorim.jpg'),
+	cleoPleurodon: person('cleo-pleurodon', 'CL', 180, 'cleo-pleurodon.jpg'),
+	rafaeelaudibert: person('rafaeelaudibert', 'RA', 150, 'rafaeelaudibert.png'),
+	ivanagas: person('ivanagas', 'IV', 200, 'ivanagas.jpg'),
+	charlescook: person('charlescook-ph', 'CC', 300, 'charlescook-ph.png'),
+	joethreepwood: person('joethreepwood', 'JT', 90, 'joethreepwood.png'),
+	rubychilds: person('rubychilds', 'RC', 0, 'rubychilds.png'),
+	sarahxsanders: person('sarahxsanders', 'SS', 330, 'sarahxsanders.png'),
+	brittanyjoiner: person('brittanyjoiner15', 'BJ', 120, 'brittanyjoiner15.jpg'),
+	lizzieepton: person('Lizzieepton', 'LE', 60, 'lizzieepton.jpg'),
+	posthogBot: person('posthog[bot]', 'PH', 40, 'posthog-bot.png'),
+	dependabot: person('dependabot[bot]', 'DB', 256, 'dependabot-bot.png')
 } satisfies Record<string, MockPerson>;
 
 const LABEL = {
@@ -813,6 +816,6 @@ export const DEMO_PEOPLE: UserSuggestion[] = [DEMO_ME, ...Object.values(GH)].map
 	kind: 'user',
 	login: who.login,
 	name: null,
-	avatar: null,
+	avatar: who.avatar ?? null,
 	team: false
 }));

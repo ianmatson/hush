@@ -4,7 +4,20 @@
 	let { person, size = 1.75 }: { person: MockPerson; size?: number } = $props();
 </script>
 
-<span class="avatar" style:--hue={person.hue} style:--size="{size}rem">{person.initials}</span>
+{#if person.avatar}
+	<img
+		class="avatar photo"
+		src={person.avatar}
+		alt=""
+		width="64"
+		height="64"
+		loading="lazy"
+		draggable="false"
+		style:--size="{size}rem"
+	/>
+{:else}
+	<span class="avatar" style:--hue={person.hue} style:--size="{size}rem">{person.initials}</span>
+{/if}
 
 <style>
 	.avatar {
@@ -20,7 +33,11 @@
 		color: oklch(0.36 0.09 var(--hue));
 		background: oklch(0.92 0.05 var(--hue));
 	}
-	:global(.dark) .avatar {
+	.photo {
+		object-fit: cover;
+		background: var(--muted);
+	}
+	:global(.dark) .avatar:not(.photo) {
 		color: oklch(0.92 0.06 var(--hue));
 		background: oklch(0.34 0.08 var(--hue));
 	}
