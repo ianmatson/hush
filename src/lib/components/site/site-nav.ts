@@ -17,10 +17,15 @@ export const COMPARE_INDEX: SiteLink = { href: '/compare', label: 'Compare' };
 
 export const GUIDES_SECTION: SiteLink = { href: GUIDES_INDEX.path, label: 'Guides' };
 
+const DOCS_SECTION: SiteLink = { href: '/docs', label: 'Docs' };
+const PRICING_SECTION: SiteLink = { href: '/pricing', label: 'Pricing' };
+
+export const HEADER_SECTIONS: readonly SiteLink[] = [DOCS_SECTION, COMPARE_INDEX];
+
 export const SITE_SECTIONS: readonly SiteLink[] = [
-	{ href: '/docs', label: 'Docs' },
+	DOCS_SECTION,
 	GUIDES_SECTION,
-	{ href: '/pricing', label: 'Pricing' },
+	PRICING_SECTION,
 	COMPARE_INDEX
 ];
 

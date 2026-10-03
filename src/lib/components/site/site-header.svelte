@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { APP_URL, REPO_URL } from '$lib/site';
-	import { SITE_SECTIONS, isCurrentSection } from './site-nav';
+	import { HEADER_SECTIONS, isCurrentSection } from './site-nav';
 
 	const pathname = $derived(page.url.pathname);
 	const currentFor = (href: string) => (isCurrentSection(pathname, href) ? 'page' : undefined);
@@ -13,7 +13,7 @@
 	</a>
 
 	<nav class="wide" aria-label="Main">
-		{#each SITE_SECTIONS as section (section.href)}
+		{#each HEADER_SECTIONS as section (section.href)}
 			<a href={section.href} aria-current={currentFor(section.href)}>{section.label}</a>
 		{/each}
 		<a href={REPO_URL} rel="noreferrer">Source</a>
@@ -30,7 +30,7 @@
 				</svg>
 			</summary>
 			<nav aria-label="Main">
-				{#each SITE_SECTIONS as section (section.href)}
+				{#each HEADER_SECTIONS as section (section.href)}
 					<a href={section.href} aria-current={currentFor(section.href)}>{section.label}</a>
 				{/each}
 				<a href={REPO_URL} rel="noreferrer">Source</a>
