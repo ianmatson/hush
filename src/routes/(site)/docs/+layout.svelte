@@ -1,10 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { DOCS, NAV, docPath } from '$lib/docs';
-	import { APP_URL, REPO_URL } from '$lib/site';
-	import SiteFooter from '$lib/components/site/site-footer.svelte';
 
-	// The docs shell: the header, and the page list (a sidebar, or a menu on small screens).
 	// Plain HTML: the menu is a <details>, so it works with no JavaScript.
 	let { children } = $props();
 	const groups = NAV.map((g) => ({
@@ -32,15 +29,6 @@
 {/snippet}
 
 <div class="docs">
-	<header>
-		<a href="/" class="brand"><img src="/icon.svg" alt="" />hush</a>
-		<a href="/docs" class="section">Docs</a>
-		<nav>
-			<a class="source" href={REPO_URL} rel="noreferrer">Source</a>
-			<a class="open" href="{APP_URL}/inbox">Open Hush</a>
-		</nav>
-	</header>
-
 	<details class="menu">
 		<summary>Pages</summary>
 		<nav aria-label="Docs">{@render list()}</nav>
@@ -52,70 +40,9 @@
 		</aside>
 		<div class="main">{@render children()}</div>
 	</div>
-	<SiteFooter />
 </div>
 
 <style>
-	.docs {
-		--width: 80rem;
-		min-height: 100dvh;
-	}
-	header {
-		position: sticky;
-		top: 0;
-		z-index: 10;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		max-width: var(--width);
-		margin: 0 auto;
-		padding: 0.875rem 1.5rem;
-		background: color-mix(in oklab, var(--background) 88%, transparent);
-		backdrop-filter: blur(10px);
-		border-bottom: 1px solid var(--border);
-	}
-	.brand {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-	}
-	.brand img {
-		width: 1.375rem;
-		height: 1.375rem;
-		border-radius: 0.375rem;
-	}
-	.section {
-		padding-left: 0.75rem;
-		border-left: 1px solid var(--border);
-		font-size: 0.875rem;
-		color: var(--muted-foreground);
-	}
-	header nav {
-		display: flex;
-		align-items: center;
-		gap: 1.25rem;
-		margin-left: auto;
-		font-size: 0.875rem;
-	}
-	header nav a:not(.open) {
-		color: var(--muted-foreground);
-	}
-	header nav a:not(.open):hover {
-		color: var(--foreground);
-	}
-	.open {
-		padding: 0.3125rem 0.75rem;
-		border-radius: 0.5rem;
-		background: var(--foreground);
-		color: var(--background);
-		font-weight: 500;
-	}
-	.open:hover {
-		opacity: 0.85;
-	}
-
 	.body {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -129,11 +56,6 @@
 	.main {
 		min-width: 0;
 	}
-	@media (max-width: 30rem) {
-		.source {
-			display: none;
-		}
-	}
 	@media (min-width: 60rem) {
 		.body {
 			grid-template-columns: 14rem minmax(0, 1fr);
@@ -142,9 +64,9 @@
 		aside {
 			display: block;
 			position: sticky;
-			top: 3.75rem;
+			top: 0;
 			align-self: start;
-			max-height: calc(100dvh - 3.75rem);
+			max-height: 100dvh;
 			overflow-y: auto;
 			padding: 2rem 0 3rem;
 		}
@@ -186,7 +108,7 @@
 		max-width: var(--width);
 		margin: 0 auto;
 		padding: 0.75rem 1.5rem;
-		border-bottom: 1px solid var(--border);
+		border-block: 1px solid var(--border);
 	}
 	.menu summary {
 		cursor: pointer;

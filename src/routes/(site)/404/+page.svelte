@@ -10,11 +10,13 @@
 	noindex
 />
 
-<main
-	class="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 px-4 text-center"
+<section
+	class="mx-auto flex max-w-md flex-col items-center justify-center gap-3 px-6 py-24 text-center sm:py-32"
 >
-	<img src="/icon.svg" alt="" class="size-10 rounded-lg" />
 	<h1 class="text-xl font-semibold">Page not found</h1>
 	<p class="text-sm text-muted-foreground">There is no page at this address.</p>
-	<a href="/" class="text-sm underline underline-offset-4">Go to Hush</a>
-</main>
+	<p class="flex gap-5 text-sm">
+		<a href="/" class="underline underline-offset-4">Go to Hush</a>
+		<a href="/docs" class="underline underline-offset-4">Read the docs</a>
+	</p>
+</section>

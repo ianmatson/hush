@@ -5,8 +5,6 @@
 	import TurnLanes from '$lib/components/site/landing/turn-lanes.svelte';
 	import DayDial from '$lib/components/site/landing/day-dial.svelte';
 	import RuleTyper from '$lib/components/site/landing/rule-typer.svelte';
-	import SiteHeader from '$lib/components/site/site-header.svelte';
-	import SiteFooter from '$lib/components/site/site-footer.svelte';
 	import { PLANS } from '$lib/pricing';
 	import { APP_URL, REPO_URL } from '$lib/site';
 
@@ -35,9 +33,7 @@
 />
 
 <div class="page">
-	<SiteHeader />
-
-	<main>
+	<div class="content">
 		<section class="hero">
 			<h1 class="in" style:--d="0">
 				GitHub sends you everything. Hush keeps <em>quiet</em> about most of it.
@@ -101,17 +97,13 @@
 			</p>
 			<a class="quiet" href="{APP_URL}/inbox">Open Hush <span>→</span></a>
 		</section>
-	</main>
-
-	<SiteFooter />
+	</div>
 </div>
 
 <style>
 	.page {
 		--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 		--serif: 'Newsreader Variable', Georgia, serif;
-		--width: 68rem;
-		min-height: 100dvh;
 		overflow-x: clip;
 	}
 	a {
@@ -154,7 +146,7 @@
 		letter-spacing: -0.01em;
 	}
 
-	main {
+	.content {
 		max-width: var(--width);
 		margin: 0 auto;
 		padding: 0 1.5rem;

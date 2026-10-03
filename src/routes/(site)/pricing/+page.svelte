@@ -1,8 +1,6 @@
 <script lang="ts">
 	import '@fontsource-variable/newsreader/opsz-italic.css';
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
-	import SiteHeader from '$lib/components/site/site-header.svelte';
-	import SiteFooter from '$lib/components/site/site-footer.svelte';
 	import { aboutBySlug } from '$lib/about';
 	import { INCLUDED, PLANS, PRICING_NOTE } from '$lib/pricing';
 	import { APP_URL, REPO_URL } from '$lib/site';
@@ -15,8 +13,7 @@
 <SiteMeta title="Pricing · Hush" description={about.description} path="/pricing" />
 
 <div class="page">
-	<SiteHeader />
-	<main>
+	<div class="content">
 		<section class="head">
 			<p class="beta">{PRICING_NOTE}</p>
 			<h1>One price, <em>all</em> of Hush.</h1>
@@ -82,17 +79,14 @@
 				</div>
 			</dl>
 		</section>
-	</main>
-	<SiteFooter />
+	</div>
 </div>
 
 <style>
 	.page {
 		--serif: 'Newsreader Variable', Georgia, serif;
-		--width: 68rem;
-		min-height: 100dvh;
 	}
-	main {
+	.content {
 		max-width: var(--width);
 		margin: 0 auto;
 		padding: clamp(2.5rem, 7vw, 5rem) 1.5rem 6rem;

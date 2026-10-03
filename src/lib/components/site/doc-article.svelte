@@ -98,9 +98,9 @@
 		.toc {
 			display: block;
 			position: sticky;
-			top: 5.75rem;
+			top: 2rem;
 			align-self: start;
-			max-height: calc(100dvh - 7rem);
+			max-height: calc(100dvh - 3rem);
 			overflow-y: auto;
 		}
 	}

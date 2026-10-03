@@ -1,7 +1,5 @@
 <script lang="ts">
 	import SiteMeta from './site-meta.svelte';
-	import SiteHeader from './site-header.svelte';
-	import SiteFooter from './site-footer.svelte';
 	import MarkdownBody from './markdown-body.svelte';
 	import type { AboutPage } from '$lib/about';
 	import { renderMarkdown } from '$lib/docs';
@@ -13,23 +11,15 @@
 
 <SiteMeta title="{page.title} · Hush" description={page.description} path="/{page.slug}" />
 
-<div class="page">
-	<SiteHeader />
-	<main>
-		<h1>{page.title}</h1>
-		<p class="lead">{page.description}</p>
-		<MarkdownBody html={rendered.html} />
-		<p class="md"><a href="/{page.slug}.md">This page as Markdown</a></p>
-	</main>
-	<SiteFooter />
-</div>
+<article>
+	<h1>{page.title}</h1>
+	<p class="lead">{page.description}</p>
+	<MarkdownBody html={rendered.html} />
+	<p class="md"><a href="/{page.slug}.md">This page as Markdown</a></p>
+</article>
 
 <style>
-	.page {
-		--width: 68rem;
-		min-height: 100dvh;
-	}
-	main {
+	article {
 		max-width: 44rem;
 		margin: 0 auto;
 		padding: clamp(2.5rem, 7vw, 5rem) 1.5rem 5rem;
