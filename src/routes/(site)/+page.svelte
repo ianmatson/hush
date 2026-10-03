@@ -266,6 +266,13 @@
 		--ease: cubic-bezier(0.16, 1, 0.3, 1);
 		--serif: 'Newsreader Variable', Georgia, serif;
 		--tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
+		--wave: clamp(2rem, 5vw, 4rem);
+		--glow-strength: 11%;
+		--flat-edge: linear-gradient(transparent 0 0);
+		--edge-top-rise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 64C320 8 640 8 960 44C1180 70 1320 60 1440 28V96H0Z'/%3E%3C/svg%3E");
+		--edge-top-dip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 30C260 70 560 88 860 52C1100 22 1300 18 1440 60V96H0Z'/%3E%3C/svg%3E");
+		--edge-bottom-swell: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1440V40C1160 92 880 96 600 60C360 30 160 34 0 70Z'/%3E%3C/svg%3E");
+		--edge-bottom-sway: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 96' preserveAspectRatio='none'%3E%3Cpath d='M0 0H1440V70C1200 40 960 20 700 50C440 82 200 90 0 44Z'/%3E%3C/svg%3E");
 		overflow-x: clip;
 	}
 	.wrap {
@@ -388,6 +395,12 @@
 		z-index: -1;
 		height: clamp(10rem, 22vw, 17rem);
 		background: var(--tint);
+		mask-image: var(--edge-top-rise), linear-gradient(#000 0 0);
+		mask-size:
+			100% var(--wave),
+			100% calc(100% - var(--wave) + 1px);
+		mask-position: top, bottom;
+		mask-repeat: no-repeat;
 	}
 	.hero-copy {
 		display: grid;
@@ -542,7 +555,74 @@
 	}
 
 	.tint {
-		background: var(--tint);
+		--edge-top: var(--flat-edge);
+		--edge-bottom: var(--flat-edge);
+		--glow-a: var(--signal-review);
+		--glow-b: var(--signal-reply);
+		--glow-a-at: 12% 20%;
+		--glow-b-at: 88% 85%;
+		position: relative;
+		isolation: isolate;
+	}
+	:global(.dark) .page {
+		--glow-strength: 7%;
+	}
+	.tint::before {
+		content: '';
+		position: absolute;
+		inset: calc(var(--wave) * -1) 0;
+		z-index: -1;
+		background:
+			radial-gradient(
+				55% 60% at var(--glow-a-at),
+				color-mix(in oklab, var(--glow-a) var(--glow-strength), transparent),
+				transparent 72%
+			),
+			radial-gradient(
+				50% 55% at var(--glow-b-at),
+				color-mix(in oklab, var(--glow-b) calc(var(--glow-strength) - 2%), transparent),
+				transparent 72%
+			),
+			linear-gradient(
+				var(--tint),
+				color-mix(in oklab, var(--foreground) 5%, var(--background)) 55%,
+				var(--tint)
+			);
+		mask-image: var(--edge-top), linear-gradient(#000 0 0), var(--edge-bottom);
+		mask-size:
+			100% var(--wave),
+			100% calc(100% - 2 * var(--wave) + 2px),
+			100% var(--wave);
+		mask-position: top, center, bottom;
+		mask-repeat: no-repeat;
+		pointer-events: none;
+	}
+	.band.tint {
+		--edge-bottom: var(--edge-bottom-swell);
+		--glow-a-at: 15% 45%;
+	}
+	.config.tint {
+		--edge-top: var(--edge-top-dip);
+		--edge-bottom: var(--edge-bottom-sway);
+		--glow-a: var(--signal-merge);
+		--glow-a-at: 85% 15%;
+		--glow-b: var(--signal-review);
+		--glow-b-at: 10% 90%;
+	}
+	.open.tint {
+		--edge-top: var(--edge-top-rise);
+		--edge-bottom: var(--edge-bottom-swell);
+		--glow-a: var(--signal-reply);
+		--glow-a-at: 20% 80%;
+		--glow-b: var(--signal-warn);
+		--glow-b-at: 80% 10%;
+	}
+	.final.tint {
+		--edge-top: var(--edge-top-dip);
+		--edge-bottom: linear-gradient(#000, transparent);
+		--glow-a-at: 25% 65%;
+		--glow-b: var(--signal-merge);
+		--glow-b-at: 70% 30%;
 	}
 	.note {
 		font-weight: 500;
