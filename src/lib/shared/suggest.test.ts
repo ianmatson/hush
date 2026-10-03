@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
 	applyPick,
+	closedShortcodeBefore,
+	emojiForShortcode,
+	rankEmoji,
 	rankRefs,
 	rankUsers,
+	replaceWithEmoji,
 	triggerAt,
+	type EmojiEntry,
 	type RefSuggestion,
 	type UserSuggestion
 } from './suggest';
@@ -92,6 +97,49 @@ describe('rankUsers', () => {
 		];
 		expect(rankUsers([], all, 'jo', 'ian').map((u) => u.login)).toEqual(['bob', 'acme/jobs']);
 		expect(rankUsers([], all, 'AL', 'ian').map((u) => u.login)).toEqual(['alice']);
+	});
+});
+
+describe('emoji', () => {
+	const list: EmojiEntry[] = [
+		{ emoji: '😄', names: ['smile'], tags: ['happy'] },
+		{ emoji: '😺', names: ['smiley_cat'], tags: [] },
+		{ emoji: '😀', names: ['grinning'], tags: ['smile', 'happy'] },
+		{ emoji: '🙂', names: ['slightly_smiling_face'], tags: [] },
+		{ emoji: '🎉', names: ['tada', 'hooray'], tags: ['party'] }
+	];
+
+	it('opens after ":" and two letters, at the start or after a space', () => {
+		expect(at(':s')).toBeNull();
+		expect(at('nice :sm')).toEqual({ kind: 'emoji', start: 5, query: 'sm' });
+		expect(at('(:tada')).toEqual({ kind: 'emoji', start: 1, query: 'tada' });
+	});
+	it('does not open inside a word or a time', () => {
+		expect(at('at 10:30')).toBeNull();
+		expect(at('note:ab')).toBeNull();
+	});
+	it('ranks name prefixes (shortest first), then names that contain, then tags', () => {
+		expect(rankEmoji(list, 'smil').map((e) => e.emoji)).toEqual(['😄', '😺', '🙂', '😀']);
+	});
+	it('shows the name that matched', () => {
+		expect(rankEmoji(list, 'hoo')).toEqual([{ kind: 'emoji', emoji: '🎉', shortcode: 'hooray' }]);
+	});
+	it('puts the emoji in place of the query', () => {
+		const text = 'ship it :ta';
+		const e = rankEmoji(list, 'ta')[0];
+		expect(applyPick(text, text.length, at(text)!, e)).toEqual({
+			text: 'ship it 🎉 ',
+			caret: 8 + '🎉 '.length
+		});
+	});
+	it('turns a closed shortcode into its emoji', () => {
+		const text = 'ship it :Tada:';
+		const closed = closedShortcodeBefore(text, text.length)!;
+		expect(closed).toEqual({ start: 8, shortcode: 'tada' });
+		const emoji = emojiForShortcode(list, closed.shortcode)!;
+		expect(replaceWithEmoji(text, text.length, closed.start, emoji).text).toBe('ship it 🎉');
+		expect(closedShortcodeBefore('at 10:30:', 9)).toBeNull();
+		expect(emojiForShortcode(list, 'nope')).toBeNull();
 	});
 });
 

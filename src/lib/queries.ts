@@ -2,6 +2,7 @@ import { QueryCache, QueryClient, queryOptions } from '@tanstack/svelte-query';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { browser } from '$app/environment';
 import { live } from '$lib/live-state.svelte';
+import { DRAFTS_KEY } from '$lib/drafts';
 import { api, ApiError, type ThreadsResponse } from '$lib/api';
 import type {
 	Counts,
@@ -169,7 +170,9 @@ export function setSettings(settings: Settings) {
 /** Forget everything, e.g. on sign-out. */
 export function clearCache() {
 	queryClient.clear();
-	if (browser) localStorage.removeItem('hush:query-cache');
+	if (!browser) return;
+	localStorage.removeItem('hush:query-cache');
+	localStorage.removeItem(DRAFTS_KEY);
 }
 
 let leaving = false;

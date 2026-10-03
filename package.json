@@ -59,6 +59,7 @@
 		"@tanstack/svelte-query": "^6.2.4",
 		"@tanstack/svelte-query-persist-client": "^6.2.4",
 		"dompurify": "^3.4.16",
+		"gemoji": "^8.1.0",
 		"hono": "^4.13.9"
 	}
 }

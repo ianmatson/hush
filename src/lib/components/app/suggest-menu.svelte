@@ -65,7 +65,7 @@
 			{#if loading}<LoaderCircle class="size-3 animate-spin" />Looking…{:else}No matches{/if}
 		</p>
 	{/if}
-	{#each items as s, i (s.kind === 'user' ? s.login : `${s.repo}#${s.number}`)}
+	{#each items as s, i (s.kind === 'user' ? s.login : s.kind === 'emoji' ? `:${s.shortcode}:` : `${s.repo}#${s.number}`)}
 		<button
 			type="button"
 			role="option"
@@ -88,6 +88,9 @@
 				{/if}
 				<span class="shrink-0 font-medium">{s.login}</span>
 				{#if s.name}<span class="truncate text-xs text-muted-foreground">{s.name}</span>{/if}
+			{:else if s.kind === 'emoji'}
+				<span class="w-5 shrink-0 text-center text-base leading-none">{s.emoji}</span>
+				<span class="truncate">:{s.shortcode}:</span>
 			{:else}
 				{@const Icon = ICON[s.type][s.state]}
 				<Icon

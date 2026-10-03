@@ -20,15 +20,24 @@
 	import { meQuery, queryClient } from '$lib/queries';
 	import {
 		applyPick,
+		closedShortcodeBefore,
+		emojiForShortcode,
+		rankEmoji,
 		rankRefs,
 		rankUsers,
+		replaceWithEmoji,
 		triggerAt,
 		type RefSuggestion,
 		type Suggestion,
 		type Trigger,
 		type UserSuggestion
 	} from '$lib/shared/suggest';
+	import { loadEmojiList } from '$lib/emoji';
+	import { draftKey, loadDraft, saveDraft } from '$lib/drafts';
 	import SuggestMenu from './suggest-menu.svelte';
+
+	type EmojiTrigger = Extract<Trigger, { kind: 'emoji' }>;
+	type RemoteTrigger = Exclude<Trigger, EmojiTrigger>;
 
 	/**
 	 * The comment box at the end of the conversation, as on GitHub. On a PR you can review, the
@@ -44,7 +53,16 @@
 	};
 	const review = $derived(can('approve') || can('request_changes'));
 
+	const draft = $derived(draftKey(p.repo, p.number));
 	let text = $state('');
+	let loadedDraft = '';
+	$effect.pre(() => {
+		if (draft === loadedDraft) return;
+		loadedDraft = draft;
+		text = loadDraft(draft);
+	});
+	$effect(() => saveDraft(draft, text));
+
 	let box = $state<HTMLTextAreaElement | null>(null);
 	let wrap = $state<HTMLElement | null>(null);
 
@@ -100,7 +118,7 @@
 		].filter((x) => x.login !== 'ghost');
 	});
 
-	const suggestKey = (t: Trigger) =>
+	const suggestKey = (t: RemoteTrigger) =>
 		[
 			'suggest',
 			t.kind === 'ref' && t.repo ? t.repo : p.repo,
@@ -108,7 +126,7 @@
 			t.query.toLowerCase()
 		] as const;
 
-	function fetchSuggestions(t: Trigger) {
+	function fetchSuggestions(t: RemoteTrigger) {
 		const repo = t.kind === 'ref' && t.repo ? t.repo : p.repo;
 		// Only the words so far: the list waits for a short pause (GitHub limits searches).
 		return queryClient.fetchQuery({
@@ -153,6 +171,7 @@
 		if (!same) active = 0;
 		trigger = t;
 		place(el, t);
+		if (t.kind === 'emoji') return suggestEmoji(t);
 		const mine = (u: Suggestion[]) =>
 			t.kind === 'user'
 				? rankUsers(participants, u as UserSuggestion[], t.query, me.data?.login ?? '')
@@ -179,6 +198,37 @@
 					}),
 			t.query ? 150 : 0
 		);
+	}
+
+	function suggestEmoji(t: EmojiTrigger) {
+		const n = ++asked;
+		clearTimeout(timer);
+		loading = true;
+		loadEmojiList()
+			.then((list) => {
+				if (n !== asked) return;
+				items = rankEmoji(list, t.query);
+				active = Math.min(active, Math.max(0, items.length - 1));
+			})
+			.catch(() => {})
+			.finally(() => {
+				if (n === asked) loading = false;
+			});
+	}
+
+	async function expandClosedShortcode() {
+		const el = box;
+		if (!el || el.selectionStart !== el.selectionEnd) return;
+		const caret = el.selectionStart;
+		const closed = closedShortcodeBefore(text, caret);
+		if (!closed) return;
+		const textWhenTyped = text;
+		const emoji = emojiForShortcode(await loadEmojiList(), closed.shortcode);
+		if (!emoji || text !== textWhenTyped) return;
+		const r = replaceWithEmoji(text, caret, closed.start, emoji);
+		text = r.text;
+		await tick();
+		el.setSelectionRange(r.caret, r.caret);
 	}
 
 	function close() {
@@ -243,7 +293,10 @@
 				aria-label="Comment"
 				aria-autocomplete="list"
 				aria-expanded={!!trigger}
-				oninput={update}
+				oninput={() => {
+					update();
+					void expandClosedShortcode();
+				}}
 				onclick={update}
 				onkeyup={(e) => {
 					if (
@@ -269,7 +322,7 @@
 					}
 				}}
 			/>
-			{#if trigger && (items.length || loading || trigger.query)}
+			{#if trigger && (items.length || loading || (trigger.query && trigger.kind !== 'emoji'))}
 				<SuggestMenu {items} {active} {loading} {pos} onpick={pick} onhover={(i) => (active = i)} />
 			{/if}
 		</div>

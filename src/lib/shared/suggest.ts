@@ -1,12 +1,14 @@
 /**
  * The comment box's suggestions, like GitHub's: "@" for people and teams, "#" for issues and
- * pull requests (also "owner/repo#" for another repo). The people in the conversation come
- * first, then the rest of the repo's people; see /api/suggest for where they come from.
+ * pull requests (also "owner/repo#" for another repo), and ":" for emoji, as in Slack. The people
+ * in the conversation come first, then the rest of the repo's people; see /api/suggest for where
+ * they come from.
  */
 
 export type Trigger =
 	| { kind: 'user'; start: number; query: string }
-	| { kind: 'ref'; start: number; query: string; repo: string | null };
+	| { kind: 'ref'; start: number; query: string; repo: string | null }
+	| { kind: 'emoji'; start: number; query: string };
 
 export interface UserSuggestion {
 	kind: 'user';
@@ -27,10 +29,24 @@ export interface RefSuggestion {
 	repo: string | null;
 }
 
-export type Suggestion = UserSuggestion | RefSuggestion;
+export interface EmojiSuggestion {
+	kind: 'emoji';
+	emoji: string;
+	shortcode: string;
+}
+
+export type Suggestion = UserSuggestion | RefSuggestion | EmojiSuggestion;
+
+export interface EmojiEntry {
+	emoji: string;
+	names: string[];
+	tags: string[];
+}
 
 const USER = /(?:^|[\s([{])@([A-Za-z0-9-]*(?:\/[A-Za-z0-9_.-]*)?)$/;
 const REF = /(?:^|[\s([{])((?:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?)#([^\s#]*)$/;
+const EMOJI_AFTER_TWO_LETTERS = /(?:^|[\s([{]):([a-z0-9_+-]{2,})$/i;
+const CLOSED_SHORTCODE = /(?:^|[\s([{]):([a-z0-9_+-]+):$/i;
 
 /** What you are typing just before the caret, if it asks for a suggestion. */
 export function triggerAt(text: string, caret: number): Trigger | null {
@@ -47,7 +63,27 @@ export function triggerAt(text: string, caret: number): Trigger | null {
 			repo
 		};
 	}
+	const e = EMOJI_AFTER_TWO_LETTERS.exec(before);
+	if (e) return { kind: 'emoji', start: caret - e[1].length - 1, query: e[1] };
 	return null;
+}
+
+export function closedShortcodeBefore(
+	text: string,
+	caret: number
+): { start: number; shortcode: string } | null {
+	const m = CLOSED_SHORTCODE.exec(text.slice(0, caret));
+	if (!m) return null;
+	return { start: caret - m[1].length - 2, shortcode: m[1].toLowerCase() };
+}
+
+export function replaceWithEmoji(
+	text: string,
+	caret: number,
+	start: number,
+	emoji: string
+): { text: string; caret: number } {
+	return { text: text.slice(0, start) + emoji + text.slice(caret), caret: start + emoji.length };
 }
 
 /** The text with the pick in place of what you typed, and where the caret goes. */
@@ -58,7 +94,11 @@ export function applyPick(
 	s: Suggestion
 ): { text: string; caret: number } {
 	const word =
-		s.kind === 'user' ? `@${s.login}` : `${s.repo ? `${s.repo}` : ''}#${String(s.number)}`;
+		s.kind === 'user'
+			? `@${s.login}`
+			: s.kind === 'emoji'
+				? s.emoji
+				: `${s.repo ? `${s.repo}` : ''}#${String(s.number)}`;
 	const after = text.slice(caret);
 	const insert = /^\s/.test(after) ? word : `${word} `;
 	return {
@@ -115,4 +155,29 @@ export function rankRefs(refs: RefSuggestion[], query: string): RefSuggestion[] 
 		out.push(r);
 	}
 	return out.slice(0, MAX);
+}
+
+export function rankEmoji(list: EmojiEntry[], query: string): EmojiSuggestion[] {
+	const q = query.toLowerCase();
+	const nameStarts: EmojiSuggestion[] = [];
+	const nameContains: EmojiSuggestion[] = [];
+	const tagStarts: EmojiSuggestion[] = [];
+	for (const e of list) {
+		const prefixName = e.names.find((n) => n.startsWith(q));
+		const innerName = e.names.find((n) => n.includes(q));
+		const suggestion = (shortcode: string): EmojiSuggestion => ({
+			kind: 'emoji',
+			emoji: e.emoji,
+			shortcode
+		});
+		if (prefixName) nameStarts.push(suggestion(prefixName));
+		else if (innerName) nameContains.push(suggestion(innerName));
+		else if (e.tags.some((t) => t.startsWith(q))) tagStarts.push(suggestion(e.names[0]));
+	}
+	nameStarts.sort((a, b) => a.shortcode.length - b.shortcode.length);
+	return [...nameStarts, ...nameContains, ...tagStarts].slice(0, MAX);
+}
+
+export function emojiForShortcode(list: EmojiEntry[], shortcode: string): string | null {
+	return list.find((e) => e.names.includes(shortcode))?.emoji ?? null;
 }
