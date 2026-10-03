@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
 	import { MediaQuery } from 'svelte/reactivity';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { signalColor, type Signal } from './mock';
@@ -104,6 +105,7 @@
 	];
 	const LAST = INCOMING.length - 1;
 	const STEP_MS = 650;
+	const ROW_GROW_MS = 420;
 	const HOLD_MS = 3200;
 	const ROW_REM = 2.25;
 
@@ -196,12 +198,17 @@
 		</div>
 		<ul class="needs">
 			{#each sent as row (row.title)}
-				<li style:--signal={signalColor(row.signal ?? 'review')} in:fly={{ x: -16, duration: 350 }}>
-					<span class="line">
-						<span class="t">{row.title}</span>
-						<span class="r">{row.repo}</span>
+				<li
+					style:--signal={signalColor(row.signal ?? 'review')}
+					in:slide={{ duration: ROW_GROW_MS, easing: cubicOut }}
+				>
+					<span class="row" in:fade={{ delay: ROW_GROW_MS / 2, duration: ROW_GROW_MS }}>
+						<span class="line">
+							<span class="t">{row.title}</span>
+							<span class="r">{row.repo}</span>
+						</span>
+						<span class="go">{row.action}</span>
 					</span>
-					<span class="go">{row.action}</span>
 				</li>
 			{/each}
 		</ul>
@@ -345,7 +352,7 @@
 	}
 
 	.after {
-		align-self: start;
+		align-self: center;
 		display: grid;
 	}
 	.needs {
@@ -353,16 +360,15 @@
 		align-content: start;
 		padding: 0.375rem;
 	}
-	.needs li {
+	.needs .row {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.7rem 0.75rem;
-		border-radius: 0.625rem;
 	}
 	.needs li + li {
-		box-shadow: 0 -1px 0 var(--border);
+		border-top: 1px solid var(--border);
 	}
 	.needs .t {
 		font-weight: 500;

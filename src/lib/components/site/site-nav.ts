@@ -20,7 +20,7 @@ export const GUIDES_SECTION: SiteLink = { href: GUIDES_PATH, label: 'Guides' };
 const DOCS_SECTION: SiteLink = { href: '/docs', label: 'Docs' };
 const PRICING_SECTION: SiteLink = { href: '/pricing', label: 'Pricing' };
 
-export const HEADER_SECTIONS: readonly SiteLink[] = [DOCS_SECTION, COMPARE_INDEX];
+export const HEADER_SECTIONS: readonly SiteLink[] = [DOCS_SECTION, PRICING_SECTION];
 
 export const SITE_SECTIONS: readonly SiteLink[] = [
 	DOCS_SECTION,

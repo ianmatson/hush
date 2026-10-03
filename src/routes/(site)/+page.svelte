@@ -125,13 +125,17 @@
 				</p>
 			</div>
 			<NoiseSort />
+		</div>
+	</section>
 
+	<section class="band" aria-labelledby="calm-title">
+		<div class="wrap">
 			<div class="calm">
 				<div class="calm-phone">
 					<QuietPhone />
 				</div>
 				<div class="calm-copy">
-					<h3>A push only when it is your turn.</h3>
+					<h3 id="calm-title">A push only when it is your turn.</h3>
 					<p class="sub">
 						Busy PRs change all day. Hush keeps them from buzzing your phone each time.
 					</p>
@@ -148,7 +152,7 @@
 		</div>
 	</section>
 
-	<section class="config" aria-labelledby="config-title">
+	<section class="config tint" aria-labelledby="config-title">
 		<div class="wrap">
 			<div class="split">
 				<div class="intro">
@@ -183,7 +187,7 @@
 		</div>
 	</section>
 
-	<section class="band tint" aria-labelledby="act-title">
+	<section class="band" aria-labelledby="act-title">
 		<div class="wrap split reverse">
 			<PeekActions />
 			<div class="intro">
@@ -458,7 +462,6 @@
 		grid-template-columns: auto minmax(0, 1fr);
 		align-items: center;
 		gap: clamp(2.5rem, 7vw, 6rem);
-		margin-top: clamp(5rem, 9vw, 7.5rem);
 		padding: 0 clamp(0rem, 4vw, 3rem);
 	}
 	.calm-copy {
