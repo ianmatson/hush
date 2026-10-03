@@ -500,8 +500,8 @@
 							{#each visible as t (t.id)}
 								<li
 									data-demo-row={t.id}
+									class="row-enter"
 									animate:flip={{ duration: motion }}
-									in:fly={{ y: -8, duration: motion }}
 									out:slide={{ duration: motion }}
 								>
 									<DemoRow
@@ -612,8 +612,7 @@
 			{#if toast}
 				{#key toast.key}
 					<div
-						class="toast relative flex items-center gap-3 overflow-hidden rounded-lg border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg"
-						in:fly={{ y: 12, duration: motion }}
+						class="toast toast-enter relative flex items-center gap-3 overflow-hidden rounded-lg border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg"
 						out:fly={{ y: 12, duration: motion }}
 					>
 						<span class="min-w-0 flex-1">{toast.text}</span>
@@ -634,7 +633,7 @@
 	</div>
 
 	{#if alertShown}
-		<div class="float" transition:fly={{ y: -12, duration: motion }}>
+		<div class="float float-enter" out:fly={{ y: -12, duration: motion }}>
 			<PushAlert
 				title="@alice requests your review"
 				body="acme/web#482 · Fix token refresh race in session middleware"
@@ -800,6 +799,30 @@
 			translate: 0 0 !important;
 		}
 		.fuse {
+			animation: none;
+		}
+	}
+	.row-enter {
+		animation: demo-rise 0.2s ease-out both;
+	}
+	.toast-enter {
+		animation: demo-rise 0.2s ease-out both;
+		--rise-from: 0.75rem;
+	}
+	.float-enter {
+		animation: demo-rise 0.3s ease-out both;
+		--rise-from: -0.75rem;
+	}
+	@keyframes demo-rise {
+		from {
+			opacity: 0;
+			translate: 0 var(--rise-from, -0.5rem);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.row-enter,
+		.toast-enter,
+		.float-enter {
 			animation: none;
 		}
 	}

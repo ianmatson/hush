@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { fade, slide } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
 	import { MediaQuery } from 'svelte/reactivity';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { signalColor, type Signal } from './mock';
@@ -105,7 +103,6 @@
 	];
 	const LAST = INCOMING.length - 1;
 	const STEP_MS = 650;
-	const ROW_GROW_MS = 420;
 	const HOLD_MS = 3200;
 	const ROW_REM = 2.25;
 
@@ -198,16 +195,15 @@
 		</div>
 		<ul class="needs">
 			{#each sent as row (row.title)}
-				<li
-					style:--signal={signalColor(row.signal ?? 'review')}
-					in:slide={{ duration: ROW_GROW_MS, easing: cubicOut }}
-				>
-					<span class="row" in:fade={{ delay: ROW_GROW_MS / 2, duration: ROW_GROW_MS }}>
-						<span class="line">
-							<span class="t">{row.title}</span>
-							<span class="r">{row.repo}</span>
+				<li style:--signal={signalColor(row.signal ?? 'review')}>
+					<span class="clip">
+						<span class="row">
+							<span class="line">
+								<span class="t">{row.title}</span>
+								<span class="r">{row.repo}</span>
+							</span>
+							<span class="go">{row.action}</span>
 						</span>
-						<span class="go">{row.action}</span>
 					</span>
 				</li>
 			{/each}
@@ -360,7 +356,17 @@
 		align-content: start;
 		padding: 0.375rem;
 	}
+	.needs li {
+		display: grid;
+		grid-template-rows: 1fr;
+		animation: row-grow 0.42s var(--ease) both;
+	}
+	.needs .clip {
+		min-height: 0;
+		overflow: hidden;
+	}
 	.needs .row {
+		animation: row-fade 0.42s 0.2s var(--ease) both;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
@@ -413,6 +419,23 @@
 	@media (max-width: 30rem) {
 		.incoming .r {
 			display: none;
+		}
+	}
+	@keyframes row-grow {
+		from {
+			grid-template-rows: 0fr;
+		}
+	}
+	@keyframes row-fade {
+		from {
+			opacity: 0;
+			translate: -0.5rem 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.needs li,
+		.needs .row {
+			animation: none;
 		}
 	}
 </style>

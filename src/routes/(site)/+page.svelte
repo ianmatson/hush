@@ -209,7 +209,7 @@
 		</div>
 	</section>
 
-	<section class="open" aria-labelledby="open-title">
+	<section class="open tint" aria-labelledby="open-title">
 		<div class="wrap open-grid">
 			<h2 id="open-title">Open source. <em>Free while in beta.</em></h2>
 			<div class="open-copy">
@@ -245,7 +245,7 @@
 		</div>
 	</section>
 
-	<section class="final" aria-labelledby="final-title">
+	<section class="final tint" aria-labelledby="final-title">
 		<div class="wrap center">
 			<h2 id="final-title">Five things need you. <em>Start there.</em></h2>
 			<div class="ctas">
@@ -521,9 +521,9 @@
 	.duo {
 		display: grid;
 		grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-		align-items: end;
+		align-items: start;
 		gap: clamp(2rem, 5vw, 4rem);
-		margin-top: clamp(4.5rem, 9vw, 7rem);
+		margin-top: clamp(2rem, 4vw, 3rem);
 	}
 	figure {
 		display: grid;
@@ -550,7 +550,7 @@
 	}
 
 	.open {
-		padding: clamp(5.5rem, 11vw, 9rem) 0 clamp(3rem, 6vw, 4rem);
+		padding: clamp(5rem, 10vw, 8rem) 0;
 	}
 	.open-grid {
 		display: grid;
@@ -579,7 +579,7 @@
 	}
 
 	.faq {
-		padding: clamp(3rem, 6vw, 4rem) 0 clamp(2rem, 4vw, 3rem);
+		padding: clamp(5rem, 10vw, 8rem) 0;
 	}
 	.faq-grid {
 		display: grid;
@@ -658,7 +658,7 @@
 	}
 
 	.final {
-		padding: clamp(5rem, 10vw, 8rem) 0 clamp(6rem, 12vw, 9rem);
+		padding: clamp(5rem, 10vw, 8rem) 0;
 	}
 	.final .wrap {
 		display: grid;
