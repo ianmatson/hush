@@ -13,19 +13,19 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 
 ## At a glance
 
-|                          | GitHub notifications                                                        | Hush                                                                  |
-| ------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Where it runs            | github.com, GitHub Mobile (iOS, Android), email                             | Web app (installable), on Cloudflare                                  |
-| Price                    | Included with GitHub                                                        | Free in beta; planned $3 a month or $30 a year                        |
-| Open source              | No                                                                          | Yes                                                                   |
-| Sort order               | Time (newest or oldest first)                                               | Needs you, FYI, Muted, by whose turn it is                            |
-| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters       | Rules, a query language, up to 12 saved views                         |
-| Push                     | GitHub Mobile: mentions, assignments, review requests, deployment approvals | Web Push for "Needs you" items, with quiet hours, digests, and limits |
-| Review a PR              | Yes, with the full diff (web and Mobile)                                    | Approve, comment, merge, close, re-run CI; no diff view               |
-| GitHub Enterprise Server | Yes                                                                         | No (github.com only)                                                  |
-| Several accounts         | Yes, in GitHub Mobile                                                       | No (one GitHub account per Hush account)                              |
-| How fast                 | At once                                                                     | Checks GitHub every 5 minutes                                         |
-| History kept             | Web notifications for 3 months; saved ones without a limit                  | Done threads until 30 days with no activity                           |
+|                          | GitHub notifications                                                                      | Hush                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Where it runs            | github.com, GitHub Mobile (iOS, Android), email                                           | Web app (installable), on Cloudflare                                  |
+| Price                    | Included with GitHub                                                                      | Free in beta; planned $3 a month or $30 a year                        |
+| Open source              | No                                                                                        | Yes                                                                   |
+| Sort order               | Time (newest or oldest first)                                                             | Needs you, FYI, Muted, by whose turn it is                            |
+| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Rules, a query language, up to 12 saved views                         |
+| Push                     | GitHub Mobile: mentions, assignments, review requests, deployment approvals, Actions runs | Web Push for "Needs you" items, with quiet hours, digests, and limits |
+| Review a PR              | Yes, with the full diff (web and Mobile)                                                  | Approve, comment, merge, close, re-run CI; no diff view               |
+| GitHub Enterprise Server | Yes                                                                                       | No (github.com only)                                                  |
+| Several accounts         | Yes, in GitHub Mobile                                                                     | No (one GitHub account per Hush account)                              |
+| How fast                 | At once                                                                                   | Checks GitHub every 5 minutes                                         |
+| History kept             | Web notifications for 3 months; saved ones without a limit                                | Done threads until 30 days with no activity                           |
 
 ## How they sort
 
@@ -45,7 +45,7 @@ You can change the defaults with [rules](/docs/rules): for example, a repository
 
 ## Push and alerts
 
-**GitHub Mobile** pushes four kinds of events, each with its own switch: direct mentions, assignments, review requests, and deployment approvals. On iOS you can set working hours for pushes. Email can go to a different address for each organization, and has headers that a mail filter can use. GitHub does not document browser push for the web inbox.
+**GitHub Mobile** pushes direct mentions, assignments, review requests, and deployment approvals, each with its own switch. It can also push GitHub Actions workflow runs that you started, with an option for failed runs only. On iOS you can set working hours for pushes. Email can go to a different address for each organization, and has headers that a mail filter can use. GitHub does not document browser push for the web inbox.
 
 **Hush** sends Web Push to browsers and installed web apps on desktop and Android, and on iPhone or iPad only from a Home Screen web app (iOS 16.4 or later). By default it pushes only what arrives in Needs you, including events that come with no notification, such as new commits after your review. It has [quiet hours, digests, a limit, and one alert per pull request](/docs/notifications#how-often), and an alert history for 30 days. It also has private [Atom feeds](/docs/feeds) for each tab.
 
@@ -92,6 +92,7 @@ You can change the defaults with [rules](/docs/rules): for example, a repository
 - [Inbox filters](https://docs.github.com/en/subscriptions-and-notifications/reference/inbox-filters), GitHub Docs
 - [Managing notifications from your inbox](https://docs.github.com/en/subscriptions-and-notifications/how-tos/viewing-and-triaging-notifications/managing-notifications-from-your-inbox), GitHub Docs
 - [GitHub Mobile](https://docs.github.com/en/get-started/using-github/github-mobile), GitHub Docs
+- [Push Notifications for Actions on Mobile](https://github.blog/changelog/2023-01-17-push-notifications-for-actions-on-mobile/), GitHub Changelog, 17 January 2023
 - [New Sort by control added to notifications](https://github.blog/changelog/2026-04-09-new-sort-by-control-added-to-notifications/), GitHub Changelog, 9 April 2026
 - [Changes to notification retention and archived repository watches](https://github.blog/changelog/2026-04-24-changes-to-notification-retention-and-archived-repository-watches/), GitHub Changelog, 24 April 2026
 - [New pull requests dashboard is now generally available](https://github.blog/changelog/2026-07-09-new-pull-requests-dashboard-is-now-generally-available/), GitHub Changelog, 9 July 2026
