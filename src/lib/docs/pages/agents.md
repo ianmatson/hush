@@ -26,7 +26,7 @@ Hush checks the JSON and shows an error if something is wrong; nothing is saved 
 
 - Write only what differs from the defaults. Leave out every setting that you do not change.
 - **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their rules deletes their rules.
-- `rules`, `views`, `dash.pr`, `dash.issue`, and the menus are lists: write the whole list. `dash` and `menus` are groups: write only the keys that you change.
+- `rules`, `views`, `dash.pr`, `dash.issue`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
 - Every key, type, default, and limit is in [settings.json](/docs/settings). The conditions of rules and views are queries (text): every word is in the [query language](/docs/query-language#words).
 
@@ -47,6 +47,8 @@ Check these, or Hush refuses the file:
 - Section ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters; at most 20 sections for each tab.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
+- `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.
+- `pushDigestMinutes` is `null` or a whole number from 5 to 240. `pushLimit` is `null` or `{ "count", "minutes" }`: `count` is 1 to 50, and `minutes` is 5 to 240.
 
 ## Recipes
 
@@ -86,6 +88,12 @@ A thread that needs you in acme/web or acme/api matches the first rule and stays
 
 ```json settings
 { "quietHours": { "from": 1260, "to": 480, "weekends": true, "timeZone": "Europe/Berlin" } }
+```
+
+**“Push less: one push each hour, and push an item again when its reason changes.”**
+
+```json settings
+{ "pushDigestMinutes": 60, "pushRepeat": "reason" }
 ```
 
 **“Done on D, Mute on Shift+D, and no key for Snooze.”**

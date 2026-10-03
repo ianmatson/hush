@@ -14,6 +14,8 @@ The **Pull requests** and **Issues** tabs show open work that involves you, also
 | **Waiting on others** | You did your part. Someone else must act.     |
 | **Other**             | Drafts, and threads that only mention you.    |
 
+The Issues tab shows **Your team's turn** only when you [move](#move-an-item-to-another-group) an issue there, because GitHub requests reviews only on pull requests. Choose the name of a group to close it or open it. **Other** is closed at first. This browser remembers your choice.
+
 Inside a group, the most urgent items come first (failing CI before a comment), then the ones that waited longest. Each item says why it is in its group:
 
 | Group             | Pull requests                                                                                                                                                                                                | Issues                                                     |
@@ -49,6 +51,10 @@ Change them in **Settings → PRs & issues**:
 - **Defaults** puts back the default sections. Nothing changes until you choose **Save**.
 
 More options are only in [settings.json](/docs/settings): hide others' drafts ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)), hide bots' PRs ([`dash.hideBots`](/docs/settings#dash-hidebots)), and the stale days.
+
+## Filter
+
+The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box. The query words of the inbox (`repo:`, `needs:`…) do not work here.
 
 ## Actions
 

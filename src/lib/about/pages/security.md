@@ -10,7 +10,7 @@ Hush needs access to your GitHub notifications and repositories. This page says 
 Hush signs you in with a GitHub OAuth app, with the scopes `notifications`, `repo`, and `read:org`. GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
 
 - **Hush reads** your notifications, the pull requests and issues behind them, the results of your saved searches, and your teams.
-- **Hush writes only when you do it.** Each write is one choice that you make in Hush: Done, Mute, or Read on a notification; or approve, request changes, comment, merge, auto-merge, re-run failed jobs, close, or reopen in the [peek](/docs/peek). A thread that you read in the peek is marked as read on GitHub; you can [turn this off](/docs/settings#peekmarksread).
+- **Hush writes only when you do it.** Each write is one choice that you make in Hush: Done, Mute, or Read on a notification (also with the buttons on a push alert); or approve, request changes, comment, react, merge, auto-merge, re-run failed jobs, close, or reopen in the [peek](/docs/peek). A thread that you read in the peek is marked as read on GitHub; you can [turn this off](/docs/settings#peekmarksread).
 - Hush never writes by itself: no rule, schedule, or background job changes anything on GitHub.
 - Hush does not read code, change repositories or settings, or use admin rights.
 

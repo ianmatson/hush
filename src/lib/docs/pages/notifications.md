@@ -27,17 +27,17 @@ The list under **Devices** has every device that gets push, with “(this device
 
 Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 items arrive in one check, they come as one push: “5 things need you”.
 
-A push opens the item's main action (the PR's files to review, its checks…). In Chrome, Edge, and on Android, the alert also has **Done** and **Snooze 3h** buttons, which act without opening Hush. Other browsers do not show buttons on alerts.
+A push opens the item's main action (the PR's files to review, its checks…). In Chrome, Edge, and on Android, the alert also has **Done** and **Snooze 3h** buttons, which act on the item's threads without opening Hush. If the action fails, Hush opens the item. Other browsers do not show buttons on alerts.
 
 ## How often
 
 Busy PRs change many times a day. These settings, in **Settings → Notifications → How often**, keep that from buzzing your phone each time.
 
 - **One alert for each PR or issue.** All its threads (a review request, a CI failure, a reply) share one alert, and a later push replaces it.
-- **Push the same item again** ([`pushRepeat`](/docs/settings#pushrepeat)): by default, an item pushes once, and then not again until you open Hush, read it on GitHub, or act on it. **Again when the reason changes** also pushes when, for example, “Review requested” becomes “Changes requested”. **Each update** pushes every time.
+- **Push the same item again** ([`pushRepeat`](/docs/settings#pushrepeat)): by default, an item pushes once, and then not again until you open Hush, read it on GitHub, or act on it. **Again when the reason changes** also pushes when, for example, “Review requested” becomes “Changes requested”. **Each update** pushes every time. A snooze that ends always pushes.
 - **Digest** ([`pushDigestMinutes`](/docs/settings#pushdigestminutes)): pushes wait, and one push lists them every 5 to 240 minutes.
 - **Limit** ([`pushLimit`](/docs/settings#pushlimit)): after this many pushes in this many minutes, the rest wait and go as one push.
-- **Push while Hush is open** ([`pushWhileOpen`](/docs/settings#pushwhileopen)): off by default. While you use Hush on any device, new items show in Hush and do not push.
+- **Push while Hush is open** ([`pushWhileOpen`](/docs/settings#pushwhileopen)): off by default. While you use Hush on any device, new items show in Hush and do not push. They still go in the [alert history](#alert-history). Hush is in use when its tab or app has focus and you used it in the last 5 minutes.
 - **Clear notifications** ([`clearNotifications`](/docs/settings#clearnotifications)): by default, Hush removes its alerts from a device when you open Hush there. **Each one, when you open its item** removes only the alert of the item that you peek at.
 
 A browser must show something for each push, so Hush cannot remove an alert from another device. iPhone and iPad can show a new alert in place of a replaced one, and can keep alerts that Hush asks to remove.

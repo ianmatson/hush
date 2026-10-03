@@ -29,8 +29,12 @@ Hush sees your own review, reply, or push within 15 minutes, because GitHub send
 1. In **Settings → Notifications**, check that this device says “Receives push notifications.”, and choose **Send test**.
 2. Check that your system allows notifications from the browser, and that focus modes or Do Not Disturb are off.
 3. Check [quiet hours](/docs/notifications#quiet-hours), and that the thread is one that gets pushed: by default only Needs you. A rule with `"push": false` stops pushes too.
-4. On iPhone and iPad, push works only when Hush is on the Home Screen.
-5. Turn push off and on again for the device.
+4. Check [How often](/docs/notifications#how-often):
+   - An item pushes once, and then not again until you open Hush or act on it ([`pushRepeat`](/docs/settings#pushrepeat)).
+   - While Hush is open and in use on any device, it does not push ([`pushWhileOpen`](/docs/settings#pushwhileopen)).
+   - A digest or a limit makes pushes wait.
+5. On iPhone and iPad, push works only when Hush is on the Home Screen.
+6. Turn push off and on again for the device.
 
 Pushes can come a few minutes after the event: Hush checks GitHub every 5 minutes while push is on.
 
@@ -49,6 +53,10 @@ Hush shows the first error under the box, and saves nothing until the file is va
 ## An action in the peek is not there
 
 Hush shows only the actions that you can do now. Look in **More**: a blocked action is there with the reason, such as “It has merge conflicts.” or “You cannot merge in this repository.” See [Actions on GitHub](/docs/peek#actions-on-github).
+
+## Hush looks out of date
+
+An installed app can stay in the background for days. Each time Hush comes back to the screen, it checks for a new version and loads it. To load it at once, reload the page, or close the app and open it again.
 
 ## Still stuck
 
