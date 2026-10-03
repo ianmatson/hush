@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
 	import MockAvatar from './mock-avatar.svelte';
-	import { PEOPLE } from './mock';
+	import { DEMO_GH } from './demo-data';
 
 	const KEYS = [
 		{ cap: 'J', does: 'Next' },
@@ -26,10 +26,10 @@
 	<div class="swipe">
 		<span class="under"><Check size={15} /> Done</span>
 		<span class="row">
-			<MockAvatar person={PEOPLE.bo} size={1.375} />
+			<MockAvatar person={DEMO_GH.ivanagas} size={1.375} />
 			<span class="line">
-				<span class="t">Search results flicker on slow networks</span>
-				<span class="r">acme/web #477 · @bo replied</span>
+				<span class="t">Add filters to customer stories</span>
+				<span class="r">posthog.com#20700 · @ivanagas replied</span>
 			</span>
 		</span>
 	</div>

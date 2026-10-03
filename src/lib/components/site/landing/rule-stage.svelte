@@ -1,23 +1,23 @@
 <script lang="ts">
 	import MockAvatar from './mock-avatar.svelte';
-	import { PEOPLE } from './mock';
+	import { DEMO_GH } from './demo-data';
 
 	const SETTINGS_JSON = `{
   "pushRepeat": "reason",
   "pushDigestMinutes": 30,
   "rules": [
     {
-      "name": "Mute dependabot on web",
-      "when": "repo:acme/web author:dependabot*",
+      "name": "Mute dependabot",
+      "when": "repo:PostHog/* author:dependabot*",
       "then": { "category": "muted" }
     },
-    { "when": "from:alice", "then": { "push": true } }
+    { "when": "from:joethreepwood", "then": { "push": true } }
   ],
   "views": [
-    { "id": "web", "name": "Web reviews",
-      "base": "action", "query": "repo:acme/web-*" }
+    { "id": "docs", "name": "Docs reviews",
+      "base": "action", "query": "label:docs" }
   ],
-  "dash": { "scope": "org:acme", "staleDays": 5 },
+  "dash": { "scope": "org:PostHog", "staleDays": 5 },
   "keys": { "inbox.done": ["d"] },
   "swipe": { "inbox": { "right": "done" } }
 }`;
@@ -46,16 +46,32 @@
 	const RULE_LINE = 6;
 
 	const QUERY = [
-		{ key: 'repo:', value: 'acme/web ' },
+		{ key: 'repo:', value: 'PostHog/* ' },
 		{ key: 'author:', value: 'dependabot*' }
 	];
 	const QUERY_LENGTH = QUERY.reduce((n, part) => n + part.key.length + part.value.length, 0);
 
 	const THREADS = [
-		{ title: 'Bump eslint from 9.11 to 9.12', person: PEOPLE.dependabot, caught: true },
-		{ title: 'Fix token refresh race in session middleware', person: PEOPLE.alice, caught: false },
-		{ title: 'Bump vite from 7.1.3 to 7.1.4', person: PEOPLE.dependabot, caught: true },
-		{ title: 'Bump @types/node from 22.7 to 22.8', person: PEOPLE.dependabot, caught: true }
+		{
+			title: 'chore(deps): bump urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm',
+			person: DEMO_GH.dependabot,
+			caught: true
+		},
+		{
+			title: 'Add Juno customer case study and cross-links',
+			person: DEMO_GH.joethreepwood,
+			caught: false
+		},
+		{
+			title: 'chore(deps): bump anyio from 4.11.0 to 4.14.2 in /scripts/hogfm',
+			person: DEMO_GH.dependabot,
+			caught: true
+		},
+		{
+			title: 'chore(deps): bump pyasn1 from 0.6.1 to 0.6.4 in /scripts/hogfm',
+			person: DEMO_GH.dependabot,
+			caught: true
+		}
 	];
 </script>
 
@@ -79,7 +95,7 @@
 
 	<div class="rule">
 		<div class="rule-head">
-			<b>Mute dependabot on web</b>
+			<b>Mute dependabot</b>
 			<span class="switch"></span>
 		</div>
 		<div class="field">

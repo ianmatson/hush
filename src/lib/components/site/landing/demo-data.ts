@@ -118,7 +118,7 @@ const person = (login: string, initials: string, hue: number, avatarFile: string
 
 export const DEMO_ME = person('ianmatson', 'IM', 256, 'ianmatson.jpg');
 
-const GH = {
+export const DEMO_GH = {
 	nataliaAmorim: person('natalia-amorim', 'NA', 30, 'natalia-amorim.jpg'),
 	cleoPleurodon: person('cleo-pleurodon', 'CL', 180, 'cleo-pleurodon.jpg'),
 	rafaeelaudibert: person('rafaeelaudibert', 'RA', 150, 'rafaeelaudibert.png'),
@@ -147,7 +147,7 @@ const PREVIEW_CHECKS: DemoCheck[] = [
 const JUNO_PEEK: DemoPeek = {
 	kind: 'pr',
 	state: 'open',
-	author: GH.joethreepwood,
+	author: DEMO_GH.joethreepwood,
 	opened: '3h ago',
 	pr: {
 		additions: 123,
@@ -174,7 +174,7 @@ const FORUM_PEEK: DemoPeek = {
 		files: 43,
 		base: 'master',
 		head: 'forum-frontend',
-		reviews: [{ who: GH.brittanyjoiner, state: 'REQUESTED' }],
+		reviews: [{ who: DEMO_GH.brittanyjoiner, state: 'REQUESTED' }],
 		checks: [
 			{ name: 'Build & deploy preview', state: 'failure' },
 			{ name: 'Lint prose with Vale', state: 'failure' },
@@ -190,13 +190,13 @@ const FORUM_PEEK: DemoPeek = {
 const FILTERS_PEEK: DemoPeek = {
 	kind: 'issue',
 	state: 'open',
-	author: GH.ivanagas,
+	author: DEMO_GH.ivanagas,
 	opened: '1d ago',
 	labels: ['website'],
 	body: 'Add more filters to the customer stories table on /customers, and add the data for them to the existing customer stories.',
 	timeline: [
 		{
-			who: GH.ivanagas,
+			who: DEMO_GH.ivanagas,
 			verb: 'commented',
 			text: 'Today the table has two filters. Can we add industry, region, company size, and use case?',
 			ago: '40m'
@@ -216,12 +216,12 @@ const CALCULATOR_PEEK: DemoPeek = {
 		files: 4,
 		base: 'master',
 		head: 'blog-pricing-calculator',
-		reviews: [{ who: GH.nataliaAmorim, state: 'APPROVED' }],
+		reviews: [{ who: DEMO_GH.nataliaAmorim, state: 'APPROVED' }],
 		checks: PREVIEW_CHECKS.map((check) => ({ ...check }))
 	},
 	labels: ['website'],
 	body: 'Makes the pricing calculator available in blog posts as PricingCalculator. Authors choose the first products, and readers can change usage and share an estimate.',
-	timeline: [{ who: GH.nataliaAmorim, verb: 'approved', tone: 'good', text: '', ago: '25m' }],
+	timeline: [{ who: DEMO_GH.nataliaAmorim, verb: 'approved', tone: 'good', text: '', ago: '25m' }],
 	main: 'merge'
 };
 
@@ -236,13 +236,15 @@ const PROFILE_PEEK: DemoPeek = {
 		files: 1,
 		base: 'master',
 		head: 'fix/20365-community-profile-save',
-		reviews: [{ who: GH.charlescook, state: 'CHANGES_REQUESTED' }],
+		reviews: [{ who: DEMO_GH.charlescook, state: 'CHANGES_REQUESTED' }],
 		checks: PREVIEW_CHECKS.map((check) => ({ ...check })),
 		openThreads: 2
 	},
 	labels: ['website'],
 	body: 'Keeps Edit profile, Cancel, and Save on the left side of the community profile window’s bottom bar, outside the scrolling form.',
-	timeline: [{ who: GH.charlescook, verb: 'requested changes', tone: 'bad', text: '', ago: '1h' }],
+	timeline: [
+		{ who: DEMO_GH.charlescook, verb: 'requested changes', tone: 'bad', text: '', ago: '1h' }
+	],
 	main: 'none'
 };
 
@@ -373,7 +375,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'pr',
 			'merged',
-			GH.charlescook,
+			DEMO_GH.charlescook,
 			'Changes the homepage hero headline from “Make your product self-driving” to “Your product’s context layer”.'
 		)
 	},
@@ -397,7 +399,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'issue',
 			'open',
-			GH.brittanyjoiner,
+			DEMO_GH.brittanyjoiner,
 			'A restructure of the forum at posthog.com/questions, so that it stops behaving like a public inbox.'
 		)
 	},
@@ -440,7 +442,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'pr',
 			'merged',
-			GH.lizzieepton,
+			DEMO_GH.lizzieepton,
 			'Adds text-primary to the headline on /context-warehouse/use-cases, so that its color follows the theme.'
 		)
 	},
@@ -464,7 +466,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'pr',
 			'open',
-			GH.posthogBot,
+			DEMO_GH.posthogBot,
 			'Visitors who open the old /open-positions URL get a 404 page. This sends them to /careers.'
 		)
 	},
@@ -489,7 +491,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'issue',
 			'open',
-			GH.posthogBot,
+			DEMO_GH.posthogBot,
 			'The TanStack Router tile links to /docs/libraries/tanstack-router. That page does not exist.'
 		)
 	},
@@ -513,7 +515,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'pr',
 			'open',
-			GH.rubychilds,
+			DEMO_GH.rubychilds,
 			'Explains how to test the Ashby API key, and replaces a reference to an archived Slack channel.'
 		)
 	},
@@ -537,7 +539,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'pr',
 			'merged',
-			GH.rafaeelaudibert,
+			DEMO_GH.rafaeelaudibert,
 			'Removes the Korean landing page at /ko and the three Korean newsletter translations.'
 		)
 	},
@@ -561,7 +563,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		peek: simplePeek(
 			'pr',
 			'open',
-			GH.dependabot,
+			DEMO_GH.dependabot,
 			'Bumps urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm.'
 		)
 	}
@@ -575,7 +577,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			title: 'Add Juno customer case study and cross-links',
 			repo: DEMO_REPO,
 			number: 20387,
-			person: GH.joethreepwood,
+			person: DEMO_GH.joethreepwood,
 			reason: 'Review requested',
 			group: 'yours',
 			sections: ['Review requested'],
@@ -650,7 +652,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			title: '[blog] How one runtime manages cloud agents for four PostHog products',
 			repo: DEMO_REPO,
 			number: 20454,
-			person: GH.cleoPleurodon,
+			person: DEMO_GH.cleoPleurodon,
 			reason: 'Review for your team',
 			group: 'team',
 			sections: ['Team reviews'],
@@ -664,7 +666,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			peek: simplePeek(
 				'pr',
 				'open',
-				GH.cleoPleurodon,
+				DEMO_GH.cleoPleurodon,
 				'A new blog post about how one runtime manages cloud agents for four PostHog products.'
 			)
 		},
@@ -696,7 +698,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			title: 'chore(pages): move components out of src/pages',
 			repo: DEMO_REPO,
 			number: 20438,
-			person: GH.sarahxsanders,
+			person: DEMO_GH.sarahxsanders,
 			reason: 'You approved',
 			group: 'waiting',
 			sections: ['You reviewed'],
@@ -711,7 +713,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			peek: simplePeek(
 				'pr',
 				'open',
-				GH.sarahxsanders,
+				DEMO_GH.sarahxsanders,
 				'Four files in src/pages are components, not pages. Gatsby made a public route for each one.'
 			)
 		}
@@ -724,7 +726,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 				'Website request - Add industry, region, company size, and use case filters to customer stories',
 			repo: DEMO_REPO,
 			number: 20700,
-			person: GH.ivanagas,
+			person: DEMO_GH.ivanagas,
 			reason: '@ivanagas replied',
 			group: 'yours',
 			sections: ['Assigned to you'],
@@ -760,7 +762,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			title: 'Website request - Add support product to pricing page',
 			repo: DEMO_REPO,
 			number: 20423,
-			person: GH.ivanagas,
+			person: DEMO_GH.ivanagas,
 			reason: 'Mentions you',
 			group: 'other',
 			sections: ['Mentions you'],
@@ -769,7 +771,12 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			url: issue(20423),
 			comments: 2,
 			labels: [LABEL.website],
-			peek: simplePeek('issue', 'open', GH.ivanagas, 'Add the support product to the pricing page.')
+			peek: simplePeek(
+				'issue',
+				'open',
+				DEMO_GH.ivanagas,
+				'Add the support product to the pricing page.'
+			)
 		}
 	]
 };
@@ -812,7 +819,7 @@ export const DEMO_REFS: RefSuggestion[] = [
 			]
 );
 
-export const DEMO_PEOPLE: UserSuggestion[] = [DEMO_ME, ...Object.values(GH)].map((who) => ({
+export const DEMO_PEOPLE: UserSuggestion[] = [DEMO_ME, ...Object.values(DEMO_GH)].map((who) => ({
 	kind: 'user',
 	login: who.login,
 	name: null,

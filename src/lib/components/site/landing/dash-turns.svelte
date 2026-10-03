@@ -1,6 +1,7 @@
 <script lang="ts">
 	import MockAvatar from './mock-avatar.svelte';
-	import { PEOPLE, type MockPerson } from './mock';
+	import type { MockPerson } from './mock';
+	import { DEMO_GH, DEMO_ME } from './demo-data';
 
 	interface Item {
 		title: string;
@@ -16,15 +17,15 @@
 			count: 3,
 			items: [
 				{
-					title: 'Fix token refresh race in session middleware',
-					repo: 'acme/web#482',
-					person: PEOPLE.alice,
+					title: 'Add Juno customer case study and cross-links',
+					repo: 'PostHog/posthog.com#20387',
+					person: DEMO_GH.joethreepwood,
 					why: 'Review requested'
 				},
 				{
-					title: 'Move billing webhooks to the queue worker',
-					repo: 'acme/api#1291',
-					person: PEOPLE.you,
+					title: 'Add the Forum app at /forum',
+					repo: 'PostHog/posthog.com#20508',
+					person: DEMO_ME,
 					why: 'CI failing',
 					tone: 'fail'
 				}
@@ -35,10 +36,10 @@
 			count: 1,
 			items: [
 				{
-					title: 'Dark mode tokens for charts',
-					repo: 'acme/design#61',
-					person: PEOPLE.mei,
-					why: 'Review for acme/web'
+					title: '[blog] How one runtime manages cloud agents for four PostHog products',
+					repo: 'PostHog/posthog.com#20454',
+					person: DEMO_GH.cleoPleurodon,
+					why: 'Review for your team'
 				}
 			]
 		},
@@ -47,9 +48,9 @@
 			count: 4,
 			items: [
 				{
-					title: 'Cache org teams for six hours',
-					repo: 'acme/api#1310',
-					person: PEOPLE.you,
+					title: 'Replace avatar fallback with DrakeHog',
+					repo: 'PostHog/posthog.com#20571',
+					person: DEMO_ME,
 					why: 'Waiting for review · 5d',
 					tone: 'stale'
 				}

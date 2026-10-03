@@ -16,79 +16,94 @@
 
 	const INCOMING: Incoming[] = [
 		{
-			repo: 'acme/web',
-			title: 'Bump eslint from 9.11 to 9.12',
+			repo: '#20631',
+			title: 'chore(deps): bump urllib3 from 2.5.0 to 2.8.0',
 			reason: 'subscribed',
 			sorted: 'done'
 		},
 		{
-			repo: 'acme/web',
-			title: 'Fix token refresh race in session middleware',
+			repo: '#20387',
+			title: 'Add Juno customer case study and cross-links',
 			reason: 'review requested',
 			sorted: 'action',
 			signal: 'review',
 			action: 'Review'
 		},
 		{
-			repo: 'acme/api',
-			title: 'Deploy preview: all checks passed',
-			reason: 'ci activity',
+			repo: '#20676',
+			title: 'fix(redirects): redirect /open-positions to /careers',
+			reason: 'subscribed',
 			sorted: 'done'
 		},
-		{ repo: 'acme/design', title: 'Release v4.2.0', reason: 'subscribed', sorted: 'fyi' },
 		{
-			repo: 'acme/api',
-			title: 'Move billing webhooks to the queue worker',
+			repo: '#20483',
+			title: 'feat(home): change hero headline',
+			reason: 'subscribed',
+			sorted: 'fyi'
+		},
+		{
+			repo: '#20508',
+			title: 'Add the Forum app at /forum',
 			reason: 'author',
 			sorted: 'action',
 			signal: 'fail',
 			action: 'Fix CI'
 		},
-		{ repo: 'acme/web', title: 'Update README badges', reason: 'state change', sorted: 'done' },
 		{
-			repo: 'acme/infra',
-			title: 'Update dependency vite to v7.1.4',
+			repo: '#20471',
+			title: 'Make the use cases headline visible in dark mode',
+			reason: 'state change',
+			sorted: 'done'
+		},
+		{
+			repo: '#20307',
+			title: 'chore(deps): bump anyio from 4.11.0 to 4.14.2',
 			reason: 'subscribed',
 			sorted: 'done'
 		},
 		{
-			repo: 'acme/web',
-			title: 'Search results flicker on slow networks',
+			repo: '#20700',
+			title: 'Add filters to customer stories',
 			reason: 'comment',
 			sorted: 'action',
 			signal: 'reply',
 			action: 'Reply'
 		},
-		{ repo: 'acme/handbook', title: 'Q4 planning notes', reason: 'team mention', sorted: 'fyi' },
 		{
-			repo: 'acme/api',
-			title: 'chore: regenerate OpenAPI client',
+			repo: '#19777',
+			title: 'Forum Facelift Meta Issue',
+			reason: 'team mention',
+			sorted: 'fyi'
+		},
+		{
+			repo: '#20710',
+			title: 'docs(self-driving): add an inbox example',
 			reason: 'subscribed',
 			sorted: 'done'
 		},
 		{
-			repo: 'acme/infra',
-			title: 'Bump Node to 22 in the CI images',
+			repo: '#20510',
+			title: 'Add an embeddable pricing calculator for blog posts',
 			reason: 'author',
 			sorted: 'action',
 			signal: 'merge',
 			action: 'Merge'
 		},
 		{
-			repo: 'acme/web',
-			title: 'Bump @types/node from 22.7 to 22.8',
+			repo: '#18774',
+			title: 'chore(deps): bump pyasn1 from 0.6.1 to 0.6.4',
 			reason: 'subscribed',
 			sorted: 'done'
 		},
 		{
-			repo: 'acme/docs',
-			title: 'Typo in the getting started guide',
+			repo: '#20579',
+			title: 'Remove the Korean landing page',
 			reason: 'state change',
 			sorted: 'done'
 		},
 		{
-			repo: 'acme/api',
-			title: 'Add a retry budget to the GitHub client',
+			repo: '#20524',
+			title: 'Keep community profile actions in the window bottom bar',
 			reason: 'author',
 			sorted: 'action',
 			signal: 'warn',
@@ -98,8 +113,16 @@
 
 	const LABEL: Record<Sorted, string> = { action: 'Needs you', fyi: 'FYI', done: 'Done' };
 	const TAIL = [
-		{ repo: 'acme/web', title: 'Bump prettier from 3.3 to 3.4', reason: 'subscribed' },
-		{ repo: 'acme/infra', title: 'Nightly build: all checks passed', reason: 'ci activity' }
+		{
+			repo: '#20708',
+			title: 'docs(endpoints): qualify compare mode materialization limit',
+			reason: 'subscribed'
+		},
+		{
+			repo: '#20711',
+			title: 'Update lead-scoring.md',
+			reason: 'subscribed'
+		}
 	];
 	const LAST = INCOMING.length - 1;
 	const STEP_MS = 650;

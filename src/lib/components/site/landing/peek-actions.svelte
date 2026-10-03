@@ -3,17 +3,12 @@
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import MockAvatar from './mock-avatar.svelte';
 	import PushAlert from './push-alert.svelte';
-	import { PEOPLE } from './mock';
+	import { DEMO_GH } from './demo-data';
 
-	const DRAFT = 'Thanks for chasing this, @ali';
+	const DRAFT = 'Thanks for the cross-links, @r';
 	const SUGGESTIONS = [
-		{ handle: '@alice', name: 'Alice Lin', person: PEOPLE.alice },
-		{
-			handle: '@alina-k',
-			name: 'Alina Kovac',
-			person: { ...PEOPLE.alice, initials: 'AK', hue: 20 }
-		},
-		{ handle: '@acme/web', name: 'Team', person: { ...PEOPLE.alice, initials: 'AW', hue: 256 } }
+		{ handle: '@rafaeelaudibert', name: 'Rafael Audibert', person: DEMO_GH.rafaeelaudibert },
+		{ handle: '@rubychilds', name: 'ruby childs', person: DEMO_GH.rubychilds }
 	];
 	const MORE = [
 		{ label: 'Request changes', key: '⇧A' },
@@ -29,29 +24,29 @@
 	<div class="peek">
 		<div class="top">
 			<p class="reason"><b>Your turn:</b> Review requested, for 3h</p>
-			<p class="title">Fix token refresh race in session middleware</p>
+			<p class="title">Add Juno customer case study and cross-links</p>
 			<p class="meta">
 				<span class="state">Open</span>
-				<span>acme/web#482</span>
+				<span>PostHog/posthog.com#20387</span>
 				<span class="ok"><CircleCheck size={13} /> 12 checks passed</span>
 			</p>
 		</div>
 
 		<div class="thread">
 			<div class="comment">
-				<MockAvatar person={PEOPLE.alice} size={1.5} />
+				<MockAvatar person={DEMO_GH.joethreepwood} size={1.5} />
 				<div>
-					<p class="by"><b>alice</b> opened this · 3h</p>
+					<p class="by"><b>joethreepwood</b> opened this · 3h</p>
 					<p>
-						Two tabs could refresh the token at the same time, and the second one signed you out.
-						This takes a short lock for each session.
+						Adds a customer case study for Juno, an AI health assistant for people who live with
+						chronic illness, with cross-links from the customer pages.
 					</p>
 					<p class="react"><span>👍 3</span><span>🚀 1</span></p>
 				</div>
 			</div>
 			<div class="event">
-				<MockAvatar person={PEOPLE.mei} size={1.125} />
-				<span><b>mei</b> approved these changes</span>
+				<MockAvatar person={DEMO_GH.cleoPleurodon} size={1.125} />
+				<span><b>cleo-pleurodon</b> reviewed these changes</span>
 			</div>
 		</div>
 
@@ -90,7 +85,7 @@
 		<div class="alert">
 			<PushAlert
 				title="CI failed on your PR"
-				body="acme/api#1291 · Move billing webhooks to the queue worker"
+				body="PostHog/posthog.com#20508 · Add the Forum app at /forum"
 			/>
 		</div>
 		<div class="menu">

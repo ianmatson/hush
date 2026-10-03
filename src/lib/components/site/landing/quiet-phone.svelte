@@ -11,7 +11,7 @@
 		<div class="stack">
 			<PushAlert
 				title="4 alerts while quiet"
-				body="@alice requests your review, and 3 more"
+				body="@joethreepwood requests your review, and 3 more"
 				actions={[]}
 			/>
 			<span class="behind"></span>
