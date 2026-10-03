@@ -87,10 +87,6 @@
 	structuredData={[websiteData(), softwareData(), faqData(FAQ)]}
 />
 
-{#snippet tag(label: string, hint: string, isCount = false)}
-	<span class="tag">{label}<span class={['tag-hint', isCount && 'tag-count']}>{hint}</span></span>
-{/snippet}
-
 <div class="page">
 	<section class="hero" aria-labelledby="hero-title">
 		<div class="wrap hero-copy">
@@ -119,7 +115,6 @@
 	<section class="band tint" aria-labelledby="noise-title">
 		<div class="wrap">
 			<div class="intro center">
-				{@render tag('Inbox', '5', true)}
 				<h2 id="noise-title">47 notifications. <em>Five need you.</em></h2>
 				<p>
 					Hush reads the PR or issue behind each notification, and puts it where it belongs: <b
@@ -140,7 +135,6 @@
 					<QuietPhone />
 				</div>
 				<div class="calm-copy">
-					{@render tag('Push alerts', '1', true)}
 					<h3 id="calm-title">A push only when it is your turn.</h3>
 					<p class="sub">
 						Busy PRs change all day. Hush keeps them from buzzing your phone each time.
@@ -162,7 +156,6 @@
 		<div class="wrap">
 			<div class="split">
 				<div class="intro">
-					{@render tag('Rules', 'settings.json')}
 					<h2 id="config-title">Sorted <em>your way.</em></h2>
 					<p>
 						Write a rule in one line, such as <code>author:dependabot*</code>, and send what it
@@ -198,7 +191,6 @@
 		<div class="wrap split reverse">
 			<PeekActions />
 			<div class="intro">
-				{@render tag('Peek', 'Space')}
 				<h2 id="act-title">Approve, reply, merge. <em>From the inbox.</em></h2>
 				<p>
 					Press <kbd>Space</kbd> to peek at a thread: the checks, the reviews, and the conversation. Approve,
@@ -454,9 +446,6 @@
 		justify-items: center;
 		margin: 0 auto clamp(3rem, 6vw, 4.5rem);
 	}
-	.intro.center .tag {
-		justify-self: center;
-	}
 	.intro p {
 		max-width: 36rem;
 		font-size: 1.0625rem;
@@ -580,41 +569,8 @@
 	.band.tint {
 		border-top: none;
 	}
-	.final.tint {
-		border-bottom: none;
-	}
-	.tag {
-		justify-self: start;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		height: 1.75rem;
-		padding: 0 0.3rem 0 0.65rem;
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		background: var(--background);
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--muted-foreground);
-	}
-	.tag-hint {
-		display: inline-grid;
-		place-items: center;
-		min-width: 1.25rem;
-		height: 1.25rem;
-		padding: 0 0.4rem;
-		border-radius: 999px;
-		background: color-mix(in oklab, var(--foreground) 7%, transparent);
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.6875rem;
-		color: var(--foreground);
-	}
-	.tag-count {
-		background: var(--primary);
-		font-family: inherit;
-		font-weight: 600;
-		color: var(--primary-foreground);
-		font-variant-numeric: tabular-nums;
+	:global(main:has(> .page) + .foot::before) {
+		display: none;
 	}
 	.note {
 		font-weight: 500;
