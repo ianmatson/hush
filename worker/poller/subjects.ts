@@ -9,8 +9,7 @@ import {
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
 import { fetchSubjects } from '../github';
-import type { PushMessage } from '../webpush';
-import { PollerAlerts } from './alerts';
+import { PollerAlerts, SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
 import { subjectRefOf, type ThreadRow } from './schema';
 import { MAX_INDIVIDUAL_PUSHES, type Resolved, type Who } from './shared';
 
@@ -156,7 +155,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 	): Promise<{ resolved: Resolved[]; wrote: number }> {
 		const { me, settings, inboxTeams: myTeams } = who;
 		const writes: (() => void)[] = [];
-		const messages: PushMessage[] = [];
+		const candidates: PushCandidate[] = [];
 		const resolved: Resolved[] = [];
 		const now = Date.now();
 		for (const { row: r, fresh, before } of items) {
@@ -253,18 +252,18 @@ export abstract class PollerSubjects extends PollerAlerts {
 				? settings.pushAction
 				: settings.pushTurnChanges && shouldPush(c, settings);
 			if (out.push && wanted && !moved)
-				messages.push({
-					title: out.push,
-					body: `${r.title}\n${r.repo}`,
-					url: c.actionUrl,
-					tag: r.id
+				candidates.push({
+					itemKey: r.subject_key ?? r.id,
+					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,
+					ignoresRepeatSetting: snoozeOver,
+					message: { title: out.push, body: `${r.title}\n${r.repo}`, url: c.actionUrl }
 				});
 		}
 		if (writes.length) {
 			this.transaction(() => writes.forEach((w) => w()));
 			await this.bumpVersion();
 		}
-		if (messages.length && !opts.quiet) await this.send(messages.slice(0, MAX_INDIVIDUAL_PUSHES));
+		if (!opts.quiet) await this.deliver(candidates.slice(0, MAX_INDIVIDUAL_PUSHES));
 		return { resolved, wrote: writes.length };
 	}
 

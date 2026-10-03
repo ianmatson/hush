@@ -11,6 +11,8 @@
 	import AlertsPanel from './alerts-panel.svelte';
 	import { watchReturns } from '$lib/recheck';
 	import { connectLive } from '$lib/live.svelte';
+	import { clearNotificationsFor, clearNotificationsWhileAppIsOpen } from '$lib/notification-clear';
+	import { subjectKey } from '$lib/shared/subject';
 	import { openOrgNote } from '$lib/org-note.svelte';
 	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
@@ -53,6 +55,16 @@
 			liveStarted = true;
 			connectLive();
 		}
+	});
+
+	const clearMode = $derived(me.data?.settings.clearNotifications);
+	$effect(() => {
+		if (clearMode === 'open') return clearNotificationsWhileAppIsOpen();
+	});
+	$effect(() => {
+		const target = peek.target;
+		if (clearMode !== 'item' || !target) return;
+		clearNotificationsFor(target.number ? subjectKey(target.repo, target.number) : target.id);
 	});
 
 	// Check the session once per page load, even when the cached profile is fresh.

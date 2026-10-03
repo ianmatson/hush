@@ -176,6 +176,11 @@ export interface Settings {
 	pushTurnChanges: boolean;
 	/** No pushes during these hours (they still go in the alert history). Null: off. */
 	quietHours: QuietHours | null;
+	pushRepeat: import('./push-policy').PushRepeat;
+	pushDigestMinutes: number | null;
+	pushLimit: import('./push-policy').PushLimit | null;
+	pushWhileOpen: boolean;
+	clearNotifications: import('./push-policy').ClearNotifications;
 	/** A thread open in the peek for a moment is marked as read. */
 	peekMarksRead: boolean;
 	/**

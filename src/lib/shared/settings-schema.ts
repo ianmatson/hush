@@ -5,6 +5,13 @@ import { validateSwipe } from './swipe';
 import { validateKeys } from './keymap';
 import { formatQuery } from './query';
 import { validateQuietHours } from './quiet';
+import {
+	DIGEST_MINUTES,
+	validateClearNotifications,
+	validateDigestMinutes,
+	validatePushLimit,
+	validatePushRepeat
+} from './push-policy';
 import { DEFAULT_SETTINGS } from './settings';
 import type { RuleMatch, Settings } from './types';
 import { validateViews } from './views';
@@ -42,6 +49,35 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		page: 'notifications',
 		description:
 			'No pushes at these times: { "from": minutes after midnight, "to": minutes, "weekends": true or false, "timeZone": "Europe/London" }, or null for off.'
+	},
+	{
+		key: 'pushRepeat',
+		page: 'notifications',
+		description:
+			'When one PR or issue can push again. "once": not until you open Hush (or read it on GitHub). "reason": also when the reason changes, such as review requested → changes requested. "every": each update.'
+	},
+	{
+		key: 'pushDigestMinutes',
+		page: 'notifications',
+		description: `Send pushes together, as one digest every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}), or null to send each one at once.`
+	},
+	{
+		key: 'pushLimit',
+		page: 'notifications',
+		description:
+			'After { "count" } pushes in { "minutes" }, the rest wait and go as one digest when the time is over. null: no limit.'
+	},
+	{
+		key: 'pushWhileOpen',
+		page: 'notifications',
+		description:
+			'Push also while Hush is open and in use on a device. Off: what happens then shows only in Hush.'
+	},
+	{
+		key: 'clearNotifications',
+		page: 'notifications',
+		description:
+			'Remove Hush notifications from this device: "open" all of them when Hush opens, "item" each one when you open its PR or issue, or "never".'
 	},
 	{
 		key: 'peekMarksRead',
@@ -188,6 +224,11 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	botsAreFyi: bool('botsAreFyi'),
 	teamReviewsAreAction: bool('teamReviewsAreAction'),
 	quietHours: validateQuietHours,
+	pushRepeat: validatePushRepeat,
+	pushDigestMinutes: validateDigestMinutes,
+	pushLimit: validatePushLimit,
+	pushWhileOpen: bool('pushWhileOpen'),
+	clearNotifications: validateClearNotifications,
 	reviewResolution: (v) =>
 		v === 'strict' || v === 'any_review'
 			? null

@@ -1,7 +1,7 @@
 import { classify, ruleTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
-import type { Classification, ThreadFacts } from '../../src/lib/shared/types';
+import type { ThreadFacts } from '../../src/lib/shared/types';
 import { enrichmentOf, subjectKey } from '../../src/lib/shared/subject';
 import {
 	fetchSubjects,
@@ -13,7 +13,7 @@ import {
 	type GhNotification,
 	type SubjectRef
 } from '../github';
-import type { PushMessage } from '../webpush';
+import { SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
 import { enrichmentFor, WATCHED, type ThreadRow, type ThreadWithFacts } from './schema';
 import {
 	MIN,
@@ -80,8 +80,7 @@ export abstract class PollerSync extends PollerSubjects {
 		await this.record(who, [...fetched.values()], { threads: false });
 
 		const now = Date.now();
-		const toPush: { n: GhNotification; c: Classification }[] = [];
-		const woken: PushMessage[] = [];
+		const candidates: PushCandidate[] = [];
 		const writes: (() => void)[] = [];
 		for (const n of changed) {
 			const ex = existing.get(n.id);
@@ -129,12 +128,14 @@ export abstract class PollerSync extends PollerSubjects {
 			const keepSnooze = triage === 'snoozed' && !moved;
 
 			let pushed = ex?.pushed_updated_at ?? null;
+			const itemKey = key ?? n.id;
+			const body = `${n.subject.title}\n${n.repository.full_name}`;
 			if (wokeBy && settings.pushAction) {
-				woken.push({
-					title: `Snooze over: ${wokeBy}`,
-					body: `${n.subject.title}\n${n.repository.full_name}`,
-					url: c.actionUrl,
-					tag: n.id
+				candidates.push({
+					itemKey,
+					reason: SNOOZE_OVER_REASON,
+					ignoresRepeatSetting: true,
+					message: { title: `Snooze over: ${wokeBy}`, body, url: c.actionUrl }
 				});
 				pushed = n.updated_at;
 			} else if (
@@ -145,7 +146,11 @@ export abstract class PollerSync extends PollerSubjects {
 				shouldPush(c, settings) &&
 				pushed !== n.updated_at
 			) {
-				toPush.push({ n, c });
+				candidates.push({
+					itemKey,
+					reason: c.kind,
+					message: { title: c.summary, body, url: c.actionUrl }
+				});
 				pushed = n.updated_at;
 			}
 
@@ -197,8 +202,7 @@ export abstract class PollerSync extends PollerSubjects {
 		}
 		this.transaction(() => writes.forEach((w) => w()));
 		await this.bumpVersion();
-		if (toPush.length) await this.push(toPush);
-		if (woken.length) await this.send(woken);
+		await this.deliver(candidates);
 		return changed.map((n) => n.id);
 	}
 
@@ -336,6 +340,7 @@ export abstract class PollerSync extends PollerSubjects {
 			this.transaction(() => {
 				for (const id of read)
 					this.run(`UPDATE threads SET unread = 0, marked_unread_at = NULL WHERE id = ?`, id);
+				this.clearPushMarks(this.itemKeysOf(read));
 				for (const { id } of doneOnGitHub)
 					this.run(
 						`UPDATE threads SET triage = 'done', unread = 0, snoozed_until = NULL, snooze_event = NULL,
@@ -395,6 +400,7 @@ export abstract class PollerSync extends PollerSubjects {
        AND key NOT IN (SELECT subject_key FROM threads WHERE subject_key IS NOT NULL)`,
 			cutoff
 		);
+		this.forgetOldPushMarks(Date.now());
 		if (threads) await this.bumpVersion();
 		await this.ctx.storage.put('lastCleanup', Date.now());
 	}

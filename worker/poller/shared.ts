@@ -1,6 +1,11 @@
 import type { Settings } from '../../src/lib/shared/types';
+import { APP_FOCUS_LASTS_MS } from '../../src/lib/shared/push-policy';
+
+export { APP_BLUR_MESSAGE, APP_FOCUS_MESSAGE } from '../../src/lib/shared/push-policy';
 
 export const MIN = 60_000;
+export const FOCUS_COUNTS_FOR = APP_FOCUS_LASTS_MS;
+export const PUSH_MARK_KEEP = 30 * 24 * 60 * MIN;
 export const ACTIVE_WINDOW = 15 * MIN;
 export const FIRST_SYNC_DAYS = 14;
 export const MAX_INDIVIDUAL_PUSHES = 3;

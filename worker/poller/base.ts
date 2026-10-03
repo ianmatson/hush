@@ -4,10 +4,18 @@ import { settingsOverrides } from '../../src/lib/shared/settings-schema';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
 import { MIGRATIONS, SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
-import { TEAMS_TTL, type Who } from './shared';
+import {
+	APP_BLUR_MESSAGE,
+	APP_FOCUS_MESSAGE,
+	FOCUS_COUNTS_FOR,
+	TEAMS_TTL,
+	type Who
+} from './shared';
 
 /** A value SQLite can bind: strings, numbers, null (no booleans, no undefined). */
 export type SqlValue = string | number | null;
+
+type SocketFocus = { focusedAt: number };
 
 /**
  * One Durable Object per user. This base has the user's own SQLite database (schema.ts), their
@@ -37,13 +45,47 @@ export abstract class PollerBase extends DurableObject<Env> {
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	/** Tabs send only "ping", which the auto-response answers; anything else is ignored. */
-	async webSocketMessage(): Promise<void> {}
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+		if (message !== APP_FOCUS_MESSAGE && message !== APP_BLUR_MESSAGE) return;
+		if (message === APP_FOCUS_MESSAGE)
+			return ws.serializeAttachment({ focusedAt: Date.now() } satisfies SocketFocus);
+		await this.rememberFocusEnded(ws);
+	}
+
+	async webSocketError(ws: WebSocket): Promise<void> {
+		await this.rememberFocusEnded(ws);
+	}
+
+	private async rememberFocusEnded(ws: WebSocket) {
+		const attachment = ws.deserializeAttachment() as Partial<SocketFocus> | null;
+		if (!attachment?.focusedAt) return;
+		ws.serializeAttachment({ focusedAt: 0 } satisfies SocketFocus);
+		await this.ctx.storage.put('appSeenAt', Date.now());
+	}
+
+	protected focusedAt(): number {
+		let latest = 0;
+		for (const ws of this.ctx.getWebSockets()) {
+			const attachment = ws.deserializeAttachment() as Partial<SocketFocus> | null;
+			latest = Math.max(latest, attachment?.focusedAt ?? 0);
+		}
+		return latest;
+	}
+
+	protected appInFocus(now: number): boolean {
+		return now - this.focusedAt() < FOCUS_COUNTS_FOR;
+	}
+
+	protected async appSeenAt(): Promise<number> {
+		const stored = (await this.ctx.storage.get<number>('appSeenAt')) ?? 0;
+		return Math.max(stored, this.focusedAt());
+	}
 
 	async webSocketClose(ws: WebSocket, code: number): Promise<void> {
 		// Echo the tab's close. Codes such as 1005 (no code) and 1006 (connection lost) are only
 		// reported, never sent: answer those with a normal close.
 		const sendable = (code === 1000 || (code >= 3000 && code < 5000)) as boolean;
+		await this.rememberFocusEnded(ws);
 		ws.close(sendable ? code : 1000);
 	}
 

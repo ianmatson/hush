@@ -75,7 +75,7 @@ export class Poller extends PollerData {
 	async pollNow(): Promise<PollStatus> {
 		await this.ctx.storage.put('lastActive', Date.now());
 		await this.runOnce();
-		await this.flushQuiet();
+		await this.flushHeld();
 		await this.schedule();
 		await this.broadcastStatus();
 		const resolved = await this.checkInbox().catch((err) => {
@@ -117,6 +117,7 @@ export class Poller extends PollerData {
 
 	async alarm(): Promise<void> {
 		await this.runOnce();
+		await this.flushHeld();
 		await this.schedule();
 		await this.broadcastStatus();
 	}

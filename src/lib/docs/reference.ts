@@ -23,6 +23,12 @@ import {
 	TEAMS_TTL,
 	WATCH_EVERY
 } from '../../../worker/poller/shared';
+import {
+	APP_FOCUS_LASTS_MS,
+	DIGEST_MINUTES,
+	LIMIT_COUNT,
+	LIMIT_MINUTES
+} from '$lib/shared/push-policy';
 
 /**
  * The generated parts of the docs: tables built from the same tables the app uses (settings,
@@ -89,6 +95,50 @@ export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
 \`\`\`json settings
 { "quietHours": { "from": 1320, "to": 420, "weekends": true, "timeZone": "Europe/London" } }
 \`\`\``
+	},
+	pushRepeat: {
+		type: '"once", "reason", or "every"',
+		body: `When one PR or issue can push again. Hush keeps one notification for each PR or issue, and a later push replaces it.
+
+- \`"once"\` (default): one push, then nothing more for that item until you open Hush, read the item on GitHub, or act on it (Done, Read, Snooze, Mute).
+- \`"reason"\`: the same, but a new reason pushes again, for example when "Review requested" becomes "Changes requested".
+- \`"every"\`: each update pushes.
+
+A snooze that ends always pushes.
+
+\`\`\`json settings
+{ "pushRepeat": "reason" }
+\`\`\``
+	},
+	pushDigestMinutes: {
+		type: 'number or null',
+		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${POLL_ACTIVE / MIN} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
+
+\`\`\`json settings
+{ "pushDigestMinutes": 60 }
+\`\`\``
+	},
+	pushLimit: {
+		type: 'object or null',
+		body: `A limit for busy days: after \`count\` pushes in \`minutes\`, the rest wait, and one push lists them when there is room again. \`count\` is ${LIMIT_COUNT.min} to ${LIMIT_COUNT.max}; \`minutes\` is ${LIMIT_MINUTES.min} to ${LIMIT_MINUTES.max}. \`null\` (default): no limit.
+
+\`\`\`json settings
+{ "pushLimit": { "count": 6, "minutes": 30 } }
+\`\`\``
+	},
+	pushWhileOpen: {
+		type: 'boolean',
+		body: `Off (default): while you use Hush on any device, new items show in Hush and do not push. Hush counts as in use when its tab or app has focus and you used it in the last ${APP_FOCUS_LASTS_MS / MIN} minutes. On: pushes go at all times.`
+	},
+	clearNotifications: {
+		type: '"open", "item", or "never"',
+		body: `Remove Hush notifications from a device when you use Hush there.
+
+- \`"open"\` (default): all of them, each time Hush opens or comes to the front.
+- \`"item"\`: each one when you open its PR or issue in the peek.
+- \`"never"\`: they stay until you close them.
+
+iPhone and iPad can ignore this: Safari on iOS does not always remove a notification when Hush asks.`
 	},
 	peekMarksRead: {
 		type: 'boolean',

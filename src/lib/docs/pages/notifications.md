@@ -25,9 +25,22 @@ The list under **Devices** has every device that gets push, with “(this device
 
 [Rules](/docs/rules) decide for the threads they match: `"push": true` pushes even FYI threads, and `"push": false` stops the push even for Needs you. This is the best way to hear about one repository or one person.
 
-Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 threads arrive in one check, they come as one push: “5 things need you”.
+Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 items arrive in one check, they come as one push: “5 things need you”.
 
-A push opens the thread's main action (the PR's files to review, its checks…). An alert stays until you close it: Done, Mute, or Snooze in Hush does not change it. (A browser must show something for each push, so Hush cannot remove an alert without showing a new one.)
+A push opens the item's main action (the PR's files to review, its checks…). In Chrome, Edge, and on Android, the alert also has **Done** and **Snooze 3h** buttons, which act without opening Hush. Other browsers do not show buttons on alerts.
+
+## How often
+
+Busy PRs change many times a day. These settings, in **Settings → Notifications → How often**, keep that from buzzing your phone each time.
+
+- **One alert for each PR or issue.** All its threads (a review request, a CI failure, a reply) share one alert, and a later push replaces it.
+- **Push the same item again** ([`pushRepeat`](/docs/settings#pushrepeat)): by default, an item pushes once, and then not again until you open Hush, read it on GitHub, or act on it. **Again when the reason changes** also pushes when, for example, “Review requested” becomes “Changes requested”. **Each update** pushes every time.
+- **Digest** ([`pushDigestMinutes`](/docs/settings#pushdigestminutes)): pushes wait, and one push lists them every 5 to 240 minutes.
+- **Limit** ([`pushLimit`](/docs/settings#pushlimit)): after this many pushes in this many minutes, the rest wait and go as one push.
+- **Push while Hush is open** ([`pushWhileOpen`](/docs/settings#pushwhileopen)): off by default. While you use Hush on any device, new items show in Hush and do not push.
+- **Clear notifications** ([`clearNotifications`](/docs/settings#clearnotifications)): by default, Hush removes its alerts from a device when you open Hush there. **Each one, when you open its item** removes only the alert of the item that you peek at.
+
+A browser must show something for each push, so Hush cannot remove an alert from another device. iPhone and iPad can show a new alert in place of a replaced one, and can keep alerts that Hush asks to remove.
 
 ## Quiet hours
 

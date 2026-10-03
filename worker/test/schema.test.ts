@@ -107,6 +107,7 @@ describe('schema migrations', () => {
 			''
 		)
 			.replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n')
+			.replace(/\nCREATE TABLE push_marks[^\n]*\n/, '\n')
 			// Schema 1 still had pushed_at (a later step drops it).
 			.replace(/(\n\s*pushed_updated_at TEXT,[^\n]*)/, '$1\n  pushed_at INTEGER,');
 		expect(v1).toContain('pushed_at INTEGER');

@@ -14,6 +14,28 @@
 	import { saveSettings } from '$lib/save-settings';
 	import { fromClock, inQuietHours, toClock } from '$lib/shared/quiet';
 	import type { QuietHours } from '$lib/shared/types';
+	import {
+		CLEAR_NOTIFICATIONS_OPTIONS,
+		DIGEST_MINUTES,
+		LIMIT_COUNT,
+		LIMIT_MINUTES,
+		PUSH_REPEAT_OPTIONS,
+		type ClearNotifications,
+		type PushLimit,
+		type PushRepeat
+	} from '$lib/shared/push-policy';
+	import * as Select from '$lib/components/ui/select';
+
+	const DEFAULT_DIGEST_MINUTES = 30;
+	const DEFAULT_PUSH_LIMIT: PushLimit = { count: 6, minutes: 30 };
+
+	const labelOf = <T extends string>(options: { id: T; label: string }[], id: T) =>
+		options.find((o) => o.id === id)?.label ?? id;
+
+	function wholeIn(value: string, range: { min: number; max: number }): number | null {
+		const n = Number(value);
+		return Number.isInteger(n) && n >= range.min && n <= range.max ? n : null;
+	}
 
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
@@ -218,6 +240,136 @@
 						checked={settings.pushFyi}
 						onCheckedChange={(v) => saveSettings({ pushFyi: v })}
 					/>
+				</SettingRow>
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>How often</Card.Title>
+				<Card.Description
+					>Fewer buzzes on busy days. Each PR or issue has one notification, which later pushes
+					replace.</Card.Description
+				>
+			</Card.Header>
+			<Card.Content class="divide-y">
+				<SettingRow
+					label="Push the same item again"
+					description="Opening Hush, or reading the item on GitHub, lets it push again."
+				>
+					<Select.Root
+						type="single"
+						value={settings.pushRepeat}
+						onValueChange={(v) => saveSettings({ pushRepeat: v as PushRepeat })}
+					>
+						<Select.Trigger class="w-64" aria-label="Push the same item again"
+							>{labelOf(PUSH_REPEAT_OPTIONS, settings.pushRepeat)}</Select.Trigger
+						>
+						<Select.Content>
+							{#each PUSH_REPEAT_OPTIONS as o (o.id)}
+								<Select.Item value={o.id} label={o.label} />
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</SettingRow>
+				<SettingRow
+					id="push-digest"
+					label="Digest"
+					description="Send pushes together, as one notification at a fixed interval."
+				>
+					<Switch
+						id="push-digest"
+						checked={settings.pushDigestMinutes !== null}
+						onCheckedChange={(v) =>
+							saveSettings({ pushDigestMinutes: v ? DEFAULT_DIGEST_MINUTES : null })}
+					/>
+				</SettingRow>
+				{#if settings.pushDigestMinutes !== null}
+					<label class="flex items-center gap-2 py-3 text-sm"
+						>Every <Input
+							type="number"
+							class="h-8 w-20"
+							min={DIGEST_MINUTES.min}
+							max={DIGEST_MINUTES.max}
+							value={settings.pushDigestMinutes}
+							onchange={(e) => {
+								const minutes = wholeIn(e.currentTarget.value, DIGEST_MINUTES);
+								if (minutes !== null) saveSettings({ pushDigestMinutes: minutes });
+							}}
+						/> minutes</label
+					>
+				{/if}
+				<SettingRow
+					id="push-limit"
+					label="Limit"
+					description="After this many pushes, the rest wait and go as one digest."
+				>
+					<Switch
+						id="push-limit"
+						checked={settings.pushLimit !== null}
+						onCheckedChange={(v) => saveSettings({ pushLimit: v ? DEFAULT_PUSH_LIMIT : null })}
+					/>
+				</SettingRow>
+				{#if settings.pushLimit}
+					{@const limit = settings.pushLimit}
+					<div class="flex flex-wrap items-center gap-2 py-3 text-sm">
+						<label class="flex items-center gap-2"
+							>At most <Input
+								type="number"
+								class="h-8 w-20"
+								min={LIMIT_COUNT.min}
+								max={LIMIT_COUNT.max}
+								value={limit.count}
+								onchange={(e) => {
+									const count = wholeIn(e.currentTarget.value, LIMIT_COUNT);
+									if (count !== null) saveSettings({ pushLimit: { ...limit, count } });
+								}}
+							/> pushes</label
+						>
+						<label class="flex items-center gap-2"
+							>in <Input
+								type="number"
+								class="h-8 w-20"
+								min={LIMIT_MINUTES.min}
+								max={LIMIT_MINUTES.max}
+								value={limit.minutes}
+								onchange={(e) => {
+									const minutes = wholeIn(e.currentTarget.value, LIMIT_MINUTES);
+									if (minutes !== null) saveSettings({ pushLimit: { ...limit, minutes } });
+								}}
+							/> minutes</label
+						>
+					</div>
+				{/if}
+				<SettingRow
+					id="push-while-open"
+					label="Push while Hush is open"
+					description="Off: while you use Hush on a device, new items show only in Hush."
+				>
+					<Switch
+						id="push-while-open"
+						checked={settings.pushWhileOpen}
+						onCheckedChange={(v) => saveSettings({ pushWhileOpen: v })}
+					/>
+				</SettingRow>
+				<SettingRow
+					label="Clear notifications"
+					description="Remove Hush notifications from a device when you use Hush there."
+				>
+					<Select.Root
+						type="single"
+						value={settings.clearNotifications}
+						onValueChange={(v) => saveSettings({ clearNotifications: v as ClearNotifications })}
+					>
+						<Select.Trigger class="w-64" aria-label="Clear notifications"
+							>{labelOf(CLEAR_NOTIFICATIONS_OPTIONS, settings.clearNotifications)}</Select.Trigger
+						>
+						<Select.Content>
+							{#each CLEAR_NOTIFICATIONS_OPTIONS as o (o.id)}
+								<Select.Item value={o.id} label={o.label} />
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</SettingRow>
 			</Card.Content>
 		</Card.Root>

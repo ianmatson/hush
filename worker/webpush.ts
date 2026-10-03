@@ -155,8 +155,15 @@ export interface PushMessage {
 	title: string;
 	body: string;
 	url: string;
-	/** The thread id, so a later push can replace this alert (or "digest", "test"). */
 	tag?: string;
+	threadIds?: string[];
+}
+
+const TOPIC_MAX_LENGTH = 32;
+
+async function pushTopic(tag: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', enc.encode(tag));
+	return b64urlEncode(digest).slice(0, TOPIC_MAX_LENGTH);
 }
 
 /** Send one push. Returns the push service's HTTP status (404/410 = subscription is gone). */
@@ -179,7 +186,7 @@ export async function sendPush(
 			'Content-Type': 'application/octet-stream',
 			TTL: String(24 * 3600),
 			Urgency: urgency,
-			...(msg.tag ? { Topic: msg.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) } : {})
+			...(msg.tag ? { Topic: await pushTopic(msg.tag) } : {})
 		},
 		body
 	});

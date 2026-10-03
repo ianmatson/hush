@@ -57,6 +57,7 @@ export type Refusal = { error: string; status: 400 | 404 | 500 };
 
 export type ThreadAction =
 	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
+const ACTIONS_THAT_SEE_THE_ITEM = new Set<ThreadAction>(['done', 'read', 'snooze', 'mute']);
 const THREAD_ACTIONS = new Set<ThreadAction>([
 	'done',
 	'undone',
@@ -368,6 +369,8 @@ export abstract class PollerData extends PollerDashboard {
 		const keys = [...new Set(threads.flatMap((t) => (t.subject_key ? [t.subject_key] : [])))];
 		if (action === 'mute') this.markDashboards(keys, true);
 		if (action === 'unmute') this.markDashboards(keys, false);
+		if (ACTIONS_THAT_SEE_THE_ITEM.has(action))
+			this.clearPushMarks(this.itemKeysOf(threads.map((t) => t.id)));
 
 		if (action === 'done' || action === 'read' || action === 'mute')
 			await this.mirrorOnGitHub(

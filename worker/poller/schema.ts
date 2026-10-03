@@ -9,7 +9,7 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -77,6 +77,8 @@ CREATE TABLE dash_order (item_id TEXT PRIMARY KEY, rank INTEGER NOT NULL);
 
 -- "Since you looked": each PR or issue's facts when you last looked at it (shared/changes.ts).
 CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT NULL);
+
+CREATE TABLE push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);
 `;
 
 /** How to get from an older version of this layout to SCHEMA_VERSION. */
@@ -106,7 +108,11 @@ ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 		resetKeys: ['lastModified', 'initialized']
 	},
 	// No more "✓ Done" pushes that replace an alert: Hush no longer keeps when it pushed.
-	5: { to: 6, sql: `ALTER TABLE threads DROP COLUMN pushed_at;` }
+	5: { to: 6, sql: `ALTER TABLE threads DROP COLUMN pushed_at;` },
+	6: {
+		to: 7,
+		sql: `CREATE TABLE push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);`
+	}
 };
 
 export interface ThreadRow {
