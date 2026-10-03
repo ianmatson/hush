@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
-	import { GUIDES, GUIDES_INDEX, GUIDES_INTRO, guidePath } from '$lib/guides';
+	import { GUIDES_INTRO, guidePath } from '$lib/guides';
+	import { GUIDES, GUIDES_INDEX } from '$lib/guides/content';
 	import { SITE_NAME } from '$lib/site';
 	import { articleData } from '$lib/structured-data';
 </script>

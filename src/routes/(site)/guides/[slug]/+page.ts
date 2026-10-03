@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { GUIDES, guideBySlug } from '$lib/guides';
+import { GUIDES, guideBySlug } from '$lib/guides/content';
 
 export const entries = () => GUIDES.map((p) => ({ slug: p.slug }));
 

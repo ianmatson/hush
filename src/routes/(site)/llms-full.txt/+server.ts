@@ -1,7 +1,9 @@
 import { ABOUT } from '$lib/about';
-import { COMPARE, COMPARE_INDEX, comparePath } from '$lib/compare';
+import { comparePath } from '$lib/compare';
+import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
 import { DOCS, asMarkdown, docAsMarkdown } from '$lib/docs';
-import { GUIDES, GUIDES_INDEX, guidePath } from '$lib/guides';
+import { guidePath } from '$lib/guides';
+import { GUIDES, GUIDES_INDEX } from '$lib/guides/content';
 
 // Every docs page in one Markdown file, in the order of the navigation, then the about pages.
 export const prerender = true;

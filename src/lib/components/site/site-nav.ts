@@ -1,5 +1,5 @@
 import { COMPARE_ORDER, COMPARE_OVERVIEW, comparePath } from '$lib/compare';
-import { GUIDE_LABELS, GUIDE_ORDER, GUIDES_INDEX, guidePath } from '$lib/guides';
+import { GUIDE_LABELS, GUIDE_ORDER, GUIDES_PATH, guidePath } from '$lib/guides';
 
 export type SiteLink = { href: string; label: string };
 
@@ -15,7 +15,7 @@ export const GUIDE_PAGES: readonly SiteLink[] = GUIDE_ORDER.map((slug) => ({
 
 export const COMPARE_INDEX: SiteLink = { href: '/compare', label: 'Compare' };
 
-export const GUIDES_SECTION: SiteLink = { href: GUIDES_INDEX.path, label: 'Guides' };
+export const GUIDES_SECTION: SiteLink = { href: GUIDES_PATH, label: 'Guides' };
 
 const DOCS_SECTION: SiteLink = { href: '/docs', label: 'Docs' };
 const PRICING_SECTION: SiteLink = { href: '/pricing', label: 'Pricing' };

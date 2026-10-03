@@ -10,34 +10,20 @@
 	import Timer from '@lucide/svelte/icons/timer';
 	import Moon from '@lucide/svelte/icons/moon';
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
-	import HeroInbox from '$lib/components/site/landing/hero-inbox.svelte';
+	import HeroDemo from '$lib/components/site/landing/hero-demo.svelte';
 	import NoiseSort from '$lib/components/site/landing/noise-sort.svelte';
 	import QuietPhone from '$lib/components/site/landing/quiet-phone.svelte';
 	import RuleStage from '$lib/components/site/landing/rule-stage.svelte';
 	import DashTurns from '$lib/components/site/landing/dash-turns.svelte';
 	import KeysSwipe from '$lib/components/site/landing/keys-swipe.svelte';
 	import PeekActions from '$lib/components/site/landing/peek-actions.svelte';
-	import { signalColor, type Signal } from '$lib/components/site/landing/mock';
 	import { PRICING_NOTE } from '$lib/pricing';
 	import { APP_URL, REPO_URL } from '$lib/site';
-	import { SOFTWARE_DESCRIPTION, softwareData, websiteData } from '$lib/structured-data';
+	import { faqData, softwareData, websiteData, type FaqItem } from '$lib/structured-data';
 
 	const SIGN_IN_URL = `${APP_URL}/login`;
-
-	const SIGNALS: { label: string; signal: Signal }[] = [
-		{ label: 'Review requested', signal: 'review' },
-		{ label: 'CI failed on your PR', signal: 'fail' },
-		{ label: 'Changes requested', signal: 'warn' },
-		{ label: 'Ready to merge', signal: 'merge' },
-		{ label: '@alice replied', signal: 'reply' },
-		{ label: 'Merge conflict', signal: 'fail' },
-		{ label: 'New commits since your review', signal: 'review' },
-		{ label: 'Assigned to you', signal: 'review' },
-		{ label: 'You were mentioned', signal: 'reply' },
-		{ label: 'Deployment waits for you', signal: 'warn' },
-		{ label: 'Approved, threads still open', signal: 'warn' },
-		{ label: 'Dependabot alert', signal: 'fail' }
-	];
+	const DESCRIPTION =
+		'Hush for GitHub is an open-source web app that keeps the clutter out of your GitHub notifications: a short Needs you list sorted by whose turn it is, rules and views that you control, and approve, comment, and merge from the inbox.';
 
 	const CALM = [
 		{
@@ -62,43 +48,43 @@
 		}
 	];
 
-	const FAQ = [
+	const FAQ: FaqItem[] = [
 		{
-			q: 'What is Hush for GitHub?',
-			a: `Hush is a web app for your GitHub notifications. It reads the pull request or issue behind each one, decides whose turn it is, and keeps a short <b>Needs you</b> list. You can read, approve, comment, and merge from it, and get a push only for what waits on you.`
+			question: 'What is Hush for GitHub?',
+			answerHtml: `Hush is a web app for your GitHub notifications. It reads the pull request or issue behind each one, decides whose turn it is, and keeps a short <b>Needs you</b> list. You can read, approve, comment, and merge from it, and get a push only for what waits on you.`
 		},
 		{
-			q: 'Is it free?',
-			a: `${PRICING_NOTE} See <a href="/pricing">pricing</a> for the plans that come after the beta.`
+			question: 'Is it free?',
+			answerHtml: `${PRICING_NOTE} See <a href="/pricing">pricing</a> for the plans that come after the beta.`
 		},
 		{
-			q: 'What access does it need?',
-			a: `You sign in with GitHub. Hush asks for the <code>notifications</code>, <code>repo</code>, and <code>read:org</code> scopes, because GitHub’s Notifications API accepts only these classic scopes. Hush stores the token encrypted, and it acts on GitHub only when you do. See <a href="/docs/github-access">GitHub access</a> and <a href="/security">security</a>.`
+			question: 'What access does it need?',
+			answerHtml: `You sign in with GitHub. Hush asks for the <code>notifications</code>, <code>repo</code>, and <code>read:org</code> scopes, because GitHub’s Notifications API accepts only these classic scopes. Hush stores the token encrypted, and it acts on GitHub only when you do. See <a href="/docs/github-access">GitHub access</a> and <a href="/security">security</a>.`
 		},
 		{
-			q: 'Does my org need to approve it?',
-			a: `Only if your org allows just the OAuth apps that an owner approved. Until an owner approves Hush, GitHub hides that org from it. Choose <b>Request approval</b> after you sign in, or, until then, give Hush a custom token, such as the one from <code>gh auth token</code>. See <a href="/docs/github-access#when-an-org-is-missing">when an org is missing</a>.`
+			question: 'Does my org need to approve it?',
+			answerHtml: `Only if your org allows just the OAuth apps that an owner approved. Until an owner approves Hush, GitHub hides that org from it. Choose <b>Request approval</b> after you sign in, or, until then, give Hush a custom token, such as the one from <code>gh auth token</code>. See <a href="/docs/github-access#when-an-org-is-missing">when an org is missing</a>.`
 		},
 		{
-			q: 'Does it work on my phone?',
-			a: `Yes. Hush is a web app that you can install, with push alerts on each device where you turn them on. On iPhone and iPad, push works only after you add Hush to the Home Screen (iOS 16.4 or later): Share, then <b>Add to Home Screen</b>. See <a href="/docs/notifications">notifications</a>.`
+			question: 'Does it work on my phone?',
+			answerHtml: `Yes. Hush is a web app that you can install, with push alerts on each device where you turn them on. On iPhone and iPad, push works only after you add Hush to the Home Screen (iOS 16.4 or later): Share, then <b>Add to Home Screen</b>. See <a href="/docs/notifications">notifications</a>.`
 		},
 		{
-			q: 'Is it open source? Can I host it myself?',
-			a: `Yes. All of Hush, the app, the server, and this site, is open source under AGPL‑3.0, at <a href="${REPO_URL}" rel="noreferrer">github.com/ianmatson/hush</a>. You can run your own copy on your own Cloudflare account; the README tells you how.`
+			question: 'Is it open source? Can I host it myself?',
+			answerHtml: `Yes. All of Hush, the app, the server, and this site, is open source under AGPL‑3.0, at <a href="${REPO_URL}" rel="noreferrer">github.com/ianmatson/hush</a>. You can run your own copy on your own Cloudflare account; the README tells you how.`
 		},
 		{
-			q: 'How is it different from GitHub’s own inbox?',
-			a: `GitHub lists every notification by time. Hush sorts them by who must act next, pushes only what needs you, and lets you act from a side panel. GitHub’s inbox has the full diff, GitHub Enterprise Server, and native mobile apps. You can use both: Hush marks threads read and done on GitHub too. See <a href="/compare/github-notifications">Hush vs. GitHub notifications</a> and <a href="/compare">other tools</a>.`
+			question: 'How is it different from GitHub’s own inbox?',
+			answerHtml: `GitHub lists every notification by time. Hush sorts them by who must act next, pushes only what needs you, and lets you act from a side panel. You can use both: Hush marks threads read and done on GitHub too. See <a href="/compare/github-notifications">Hush vs. GitHub notifications</a> and <a href="/compare">other tools</a>.`
 		}
 	];
 </script>
 
 <SiteMeta
-	title="Hush for GitHub · GitHub notifications sorted by whose turn it is"
-	description={SOFTWARE_DESCRIPTION}
+	title="Hush for GitHub · Keep the clutter out of your GitHub notifications"
+	description={DESCRIPTION}
 	path="/"
-	structuredData={[websiteData(), softwareData()]}
+	structuredData={[websiteData(), softwareData(), faqData(FAQ)]}
 />
 
 <div class="page">
@@ -122,20 +108,7 @@
 			</p>
 		</div>
 		<div class="wrap hero-stage">
-			<HeroInbox />
-		</div>
-	</section>
-
-	<section class="signals" aria-labelledby="signals-title">
-		<h2 id="signals-title" class="wrap">Hush knows what each thread asks of you</h2>
-		<div class="marquee">
-			{#each [false, true] as copy (copy)}
-				<ul class="track" aria-hidden={copy || undefined}>
-					{#each SIGNALS as s (s.label)}
-						<li style:--signal={signalColor(s.signal)}>{s.label}</li>
-					{/each}
-				</ul>
-			{/each}
+			<HeroDemo />
 		</div>
 	</section>
 
@@ -258,10 +231,10 @@
 		<div class="wrap faq-grid">
 			<h2 id="faq-title">Questions</h2>
 			<div class="qs">
-				{#each FAQ as item (item.q)}
+				{#each FAQ as item (item.question)}
 					<details>
-						<summary>{item.q}</summary>
-						<p>{@html item.a}</p>
+						<summary>{item.question}</summary>
+						<p>{@html item.answerHtml}</p>
 					</details>
 				{/each}
 			</div>
@@ -402,7 +375,7 @@
 
 	.hero {
 		position: relative;
-		padding-top: clamp(2.5rem, 6vw, 5rem);
+		padding: clamp(2.5rem, 6vw, 5rem) 0 clamp(4.5rem, 9vw, 7rem);
 	}
 	.hero::after {
 		content: '';
@@ -453,58 +426,6 @@
 	}
 	.hero-stage {
 		margin-top: clamp(3rem, 6vw, 4.5rem);
-	}
-
-	.signals {
-		display: grid;
-		gap: 1.25rem;
-		padding: clamp(4rem, 7vw, 5.5rem) 0 clamp(3.5rem, 6vw, 4.5rem);
-		background: var(--tint);
-	}
-	.signals h2 {
-		font-size: 0.9375rem;
-		font-weight: 500;
-		letter-spacing: 0;
-		text-align: center;
-		color: var(--muted-foreground);
-	}
-	.marquee {
-		display: flex;
-		overflow: hidden;
-		mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-	}
-	.track {
-		display: flex;
-		flex: none;
-		gap: 0.625rem;
-		padding-right: 0.625rem;
-		animation: marquee 60s linear infinite;
-	}
-	.marquee:hover .track {
-		animation-play-state: paused;
-	}
-	.track li {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.9rem;
-		border-radius: 999px;
-		border: 1px solid color-mix(in oklab, var(--signal) 22%, var(--border));
-		background: var(--background);
-		font-size: 0.875rem;
-		white-space: nowrap;
-	}
-	.track li::before {
-		content: '';
-		width: 0.45rem;
-		height: 0.45rem;
-		border-radius: 999px;
-		background: var(--signal);
-	}
-	@keyframes marquee {
-		to {
-			translate: -100% 0;
-		}
 	}
 
 	.band {
@@ -786,24 +707,6 @@
 		}
 		.ctas {
 			flex-direction: column;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.track {
-			animation: none;
-		}
-		.marquee {
-			flex-wrap: wrap;
-			justify-content: center;
-			mask-image: none;
-			padding: 0 1.5rem;
-		}
-		.track {
-			flex-wrap: wrap;
-			justify-content: center;
-		}
-		.track[aria-hidden] {
-			display: none;
 		}
 	}
 </style>

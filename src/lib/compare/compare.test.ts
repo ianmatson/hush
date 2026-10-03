@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ABOUT } from '$lib/about';
 import { DOCS, docPath, renderMarkdown } from '$lib/docs';
-import { COMPARE, COMPARE_INDEX, LAST_CHECKED, comparePath } from '.';
+import { LAST_CHECKED, comparePath } from '.';
+import { COMPARE, COMPARE_INDEX } from './content';
 
 const sectionTitles = (markdown: string) =>
 	[...markdown.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());

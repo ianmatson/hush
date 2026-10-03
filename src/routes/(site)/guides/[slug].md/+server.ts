@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { GUIDES, guideBySlug, guidePath } from '$lib/guides';
+import { guidePath } from '$lib/guides';
+import { GUIDES, guideBySlug } from '$lib/guides/content';
 import { asMarkdown } from '$lib/docs';
 
 export const prerender = true;

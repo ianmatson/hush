@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ABOUT } from '$lib/about';
-import { COMPARE, COMPARE_INDEX, comparePath } from '$lib/compare';
+import { comparePath } from '$lib/compare';
+import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
 import { DOCS, docPath, renderMarkdown } from '$lib/docs';
 import { parseQuery } from '$lib/shared/query';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { mergeSettings, validateSettings } from '$lib/shared/settings-schema';
 import type { Settings } from '$lib/shared/types';
-import { GUIDES, GUIDES_INDEX, LAST_CHECKED, guidePath } from '.';
+import { LAST_CHECKED, guidePath } from '.';
+import { GUIDES, GUIDES_INDEX } from './content';
 
 const SOURCES_HEADING = '## Sources';
 

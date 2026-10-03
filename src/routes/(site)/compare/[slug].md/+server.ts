@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { COMPARE, compareBySlug, comparePath } from '$lib/compare';
+import { comparePath } from '$lib/compare';
+import { COMPARE, compareBySlug } from '$lib/compare/content';
 import { asMarkdown } from '$lib/docs';
 
 export const prerender = true;

@@ -1,7 +1,9 @@
 import { ABOUT } from '$lib/about';
-import { COMPARE, COMPARE_INDEX, compareMarkdownPath } from '$lib/compare';
+import { compareMarkdownPath } from '$lib/compare';
+import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
 import { DOCS, NAV, docMarkdownPath } from '$lib/docs';
-import { GUIDES, GUIDES_INDEX, guideMarkdownPath } from '$lib/guides';
+import { guideMarkdownPath } from '$lib/guides';
+import { GUIDES, GUIDES_INDEX } from '$lib/guides/content';
 import { SITE_URL } from '$lib/site';
 
 // The docs for agents, as https://llmstxt.org describes: what Hush is, then every page in

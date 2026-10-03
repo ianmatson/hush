@@ -4,14 +4,8 @@
 	import { REPO_URL, SITE_NAME } from '$lib/site';
 	import { articleData } from '$lib/structured-data';
 	import { renderMarkdown } from '$lib/docs';
-	import {
-		GUIDES,
-		GUIDES_INDEX,
-		guideMarkdownPath,
-		guidePath,
-		guideSourceFile,
-		type GuidePage
-	} from '$lib/guides';
+	import { guideMarkdownPath, guidePath, guideSourceFile, type GuidePage } from '$lib/guides';
+	import { GUIDES, GUIDES_INDEX } from '$lib/guides/content';
 
 	let { page }: { page: GuidePage } = $props();
 	const rendered = $derived(renderMarkdown(page.markdown));

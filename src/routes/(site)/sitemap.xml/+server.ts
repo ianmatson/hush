@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { COMPARE, comparePath } from '$lib/compare';
+import { comparePath } from '$lib/compare';
+import { COMPARE } from '$lib/compare/content';
 import { DOCS, docPath } from '$lib/docs';
-import { GUIDES, guidePath, guideSourceFile } from '$lib/guides';
+import { guidePath, guideSourceFile } from '$lib/guides';
+import { GUIDES } from '$lib/guides/content';
 import { SITE_URL } from '$lib/site';
 
 // Written once at build time, like the pages it lists.
@@ -21,7 +23,7 @@ const CONTENT_SOURCES: Record<string, string[]> = {
 	'/privacy': ['src/lib/about/pages/privacy.md'],
 	'/security': ['src/lib/about/pages/security.md'],
 	'/pricing': ['src/lib/pricing.ts'],
-	'/compare': ['src/lib/compare/index.ts'],
+	'/compare': ['src/lib/compare/index.ts', 'src/lib/compare/content.ts'],
 	'/guides': ['src/lib/guides/index.ts', ...GUIDES.map(guideSourceFile)]
 };
 
