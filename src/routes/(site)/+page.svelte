@@ -112,7 +112,7 @@
 		</div>
 	</section>
 
-	<section class="band ink dark" aria-labelledby="noise-title">
+	<section class="band tint" aria-labelledby="noise-title">
 		<div class="wrap">
 			<div class="intro center">
 				<h2 id="noise-title">47 notifications. <em>Five need you.</em></h2>
@@ -261,7 +261,7 @@
 	.page {
 		--ease: cubic-bezier(0.16, 1, 0.3, 1);
 		--serif: 'Newsreader Variable', Georgia, serif;
-		--tint: color-mix(in oklab, var(--signal-review) 7%, var(--background));
+		--tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
 		overflow-x: clip;
 	}
 	.wrap {
@@ -430,14 +430,6 @@
 
 	.band {
 		padding: clamp(5rem, 10vw, 8.5rem) 0;
-	}
-	.ink {
-		--background: oklch(0.205 0.014 265);
-		--popover: oklch(0.235 0.014 265);
-		--muted: oklch(0.27 0.014 265);
-		--border: oklch(1 0 0 / 9%);
-		background: oklch(0.165 0.014 265);
-		color: var(--foreground);
 	}
 	.intro {
 		display: grid;
@@ -664,7 +656,6 @@
 
 	.final {
 		padding: clamp(5rem, 10vw, 8rem) 0 clamp(6rem, 12vw, 9rem);
-		background: linear-gradient(var(--background), var(--tint));
 	}
 	.final .wrap {
 		display: grid;

@@ -345,9 +345,8 @@
 	}
 
 	.after {
-		align-self: stretch;
+		align-self: start;
 		display: grid;
-		grid-template-rows: auto 1fr auto;
 	}
 	.needs {
 		display: grid;

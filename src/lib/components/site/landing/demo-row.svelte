@@ -38,12 +38,13 @@
 	data-selected={selected || undefined}
 	class={cx(
 		'row group relative flex items-start gap-1 rounded-xl border border-transparent px-1 transition-colors',
-		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60'
+		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
+		'has-[.row-main:focus-visible]:ring-3 has-[.row-main:focus-visible]:ring-ring/50'
 	)}
 >
 	<button
 		type="button"
-		class="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+		class="row-main flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-3 text-left outline-none"
 		aria-current={selected || undefined}
 		onclick={onselect}
 	>
