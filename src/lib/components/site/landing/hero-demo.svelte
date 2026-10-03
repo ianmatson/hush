@@ -738,7 +738,7 @@
 		font-size: 0.75rem;
 	}
 
-	@media (max-width: 72rem) {
+	@media (max-width: 92rem) {
 		.float {
 			right: -0.75rem;
 		}

@@ -430,6 +430,7 @@
 		color: var(--foreground);
 	}
 	.hero-stage {
+		max-width: 86rem;
 		margin-top: clamp(3rem, 6vw, 4.5rem);
 	}
 
