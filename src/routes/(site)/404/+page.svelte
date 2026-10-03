@@ -4,7 +4,7 @@
 </script>
 
 <SiteMeta
-	title="Page not found · Hush"
+	title="Page not found · Hush for GitHub"
 	description="There is no page at this address."
 	path="/404"
 	noindex

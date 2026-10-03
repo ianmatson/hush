@@ -1,7 +1,8 @@
 <script lang="ts">
 	import SiteMeta from './site-meta.svelte';
 	import MarkdownBody from './markdown-body.svelte';
-	import { REPO_URL } from '$lib/site';
+	import { REPO_URL, SITE_NAME } from '$lib/site';
+	import { articleData } from '$lib/structured-data';
 	import { DOCS, docMarkdownPath, docPath, renderMarkdown, type DocPage } from '$lib/docs';
 
 	/** One docs page: its title, its sections ("On this page"), the text, and the next pages. */
@@ -14,9 +15,22 @@
 </script>
 
 <SiteMeta
-	title={doc.slug ? `${doc.title} · Hush docs` : 'Hush docs'}
+	title={doc.slug ? `${doc.title} · ${SITE_NAME} docs` : `${SITE_NAME} docs`}
 	description={doc.description}
 	path={docPath(doc)}
+	ogType="article"
+	markdownPath={docMarkdownPath(doc)}
+	structuredData={articleData({
+		type: 'TechArticle',
+		title: doc.title,
+		description: doc.description,
+		path: docPath(doc),
+		crumbs: [
+			{ name: SITE_NAME, path: '/' },
+			{ name: 'Docs', path: '/docs' },
+			...(doc.slug ? [{ name: doc.title, path: docPath(doc) }] : [])
+		]
+	})}
 />
 
 <div class="page">

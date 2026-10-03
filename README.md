@@ -1,6 +1,16 @@
-# Hush
+# Hush for GitHub
 
-GitHub notifications that only show what needs you. A SvelteKit app (shadcn-svelte) on Cloudflare Workers: one Durable Object per user that owns that user's data (its own SQLite), D1 for accounts and sessions only, Web Push, and Atom feeds.
+GitHub notifications that only show what needs you. **[hush-gh.com](https://hush-gh.com)** · [Docs](https://hush-gh.com/docs) · [Compare](https://hush-gh.com/compare)
+
+- **Needs you, or FYI.** Hush reads the pull request or issue behind each notification and sorts it: review requests, failed CI on your PRs, replies, and mentions need you; the rest is FYI.
+- **Whose turn is it?** The Pull requests and Issues tabs group your work into your turn, your team's turn, and waiting on others.
+- **Push that respects you.** One alert per PR or issue, no repeats until you look, digests, limits, and quiet hours.
+- **Act in place.** Review, comment, approve, and merge from the peek panel, with the keyboard.
+- **Open source**, and free while it is in beta.
+
+## Architecture
+
+A SvelteKit app (shadcn-svelte) on Cloudflare Workers: one Durable Object per user that owns that user's data (its own SQLite), D1 for accounts and sessions only, Web Push, and Atom feeds.
 
 ## How it works
 

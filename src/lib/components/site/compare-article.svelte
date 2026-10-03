@@ -1,7 +1,8 @@
 <script lang="ts">
 	import SiteMeta from './site-meta.svelte';
 	import MarkdownBody from './markdown-body.svelte';
-	import { REPO_URL } from '$lib/site';
+	import { REPO_URL, SITE_NAME } from '$lib/site';
+	import { articleData } from '$lib/structured-data';
 	import { renderMarkdown } from '$lib/docs';
 	import {
 		COMPARE,
@@ -17,7 +18,24 @@
 	const source = $derived(`${REPO_URL}/blob/main/src/lib/compare/pages/${page.slug}.md`);
 </script>
 
-<SiteMeta title="{page.title} · Hush" description={page.description} path={comparePath(page)} />
+<SiteMeta
+	title="{page.title} · {SITE_NAME}"
+	description={page.description}
+	path={comparePath(page)}
+	ogType="article"
+	markdownPath={compareMarkdownPath(page)}
+	structuredData={articleData({
+		type: 'Article',
+		title: page.title,
+		description: page.description,
+		path: comparePath(page),
+		crumbs: [
+			{ name: SITE_NAME, path: '/' },
+			{ name: 'Compare', path: COMPARE_INDEX.path },
+			{ name: page.title, path: comparePath(page) }
+		]
+	})}
+/>
 
 <div class="compare">
 	<article>

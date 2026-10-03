@@ -3,14 +3,27 @@
 	import MarkdownBody from '$lib/components/site/markdown-body.svelte';
 	import { COMPARE, COMPARE_INDEX, comparePath } from '$lib/compare';
 	import { renderMarkdown } from '$lib/docs';
+	import { SITE_NAME } from '$lib/site';
+	import { articleData } from '$lib/structured-data';
 
 	const rendered = renderMarkdown(COMPARE_INDEX.markdown);
 </script>
 
 <SiteMeta
-	title="{COMPARE_INDEX.title} · Hush"
+	title="{COMPARE_INDEX.title} · {SITE_NAME}"
 	description={COMPARE_INDEX.description}
 	path={COMPARE_INDEX.path}
+	ogType="article"
+	structuredData={articleData({
+		type: 'Article',
+		title: COMPARE_INDEX.title,
+		description: COMPARE_INDEX.description,
+		path: COMPARE_INDEX.path,
+		crumbs: [
+			{ name: SITE_NAME, path: '/' },
+			{ name: 'Compare', path: COMPARE_INDEX.path }
+		]
+	})}
 />
 
 <div class="compare">

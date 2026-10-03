@@ -7,6 +7,7 @@
 	import RuleTyper from '$lib/components/site/landing/rule-typer.svelte';
 	import { PLANS } from '$lib/pricing';
 	import { APP_URL, REPO_URL } from '$lib/site';
+	import { SOFTWARE_DESCRIPTION, softwareData, websiteData } from '$lib/structured-data';
 
 	const price = PLANS.map((p) => `$${p.price} a ${p.per}`).join(' or ');
 	/** The pages for the questions people ask before they sign in. */
@@ -27,9 +28,10 @@
 </script>
 
 <SiteMeta
-	title="Hush · GitHub notifications that only show what needs you"
-	description="Hush sorts your GitHub notifications into what needs you and what is only FYI, shows whose turn it is on every pull request, and pushes only what waits on you."
+	title="Hush for GitHub · GitHub notifications that only show what needs you"
+	description={SOFTWARE_DESCRIPTION}
 	path="/"
+	structuredData={[websiteData(), softwareData()]}
 />
 
 <div class="page">

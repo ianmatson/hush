@@ -3,14 +3,19 @@
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
 	import { aboutBySlug } from '$lib/about';
 	import { INCLUDED, PLANS, PRICING_NOTE } from '$lib/pricing';
-	import { APP_URL, REPO_URL } from '$lib/site';
+	import { APP_URL, REPO_URL, SITE_NAME } from '$lib/site';
 
 	// The plans are placeholders (lib/pricing.ts): nothing can be bought yet.
 	const about = aboutBySlug('pricing')!;
 	const monthly = PLANS.find((p) => p.per === 'month')!;
 </script>
 
-<SiteMeta title="Pricing · Hush" description={about.description} path="/pricing" />
+<SiteMeta
+	title="Pricing · {SITE_NAME}"
+	description={about.description}
+	path="/pricing"
+	markdownPath="/pricing.md"
+/>
 
 <div class="page">
 	<div class="content">
