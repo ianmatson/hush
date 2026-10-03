@@ -1,320 +1,809 @@
+<script module lang="ts">
+	const GITHUB_MARK =
+		'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z';
+</script>
+
 <script lang="ts">
 	import '@fontsource-variable/newsreader/opsz-italic.css';
+	import Layers from '@lucide/svelte/icons/layers';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import Timer from '@lucide/svelte/icons/timer';
+	import Moon from '@lucide/svelte/icons/moon';
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
-	import HushWave from '$lib/components/site/landing/hush-wave.svelte';
-	import TurnLanes from '$lib/components/site/landing/turn-lanes.svelte';
-	import DayDial from '$lib/components/site/landing/day-dial.svelte';
-	import RuleTyper from '$lib/components/site/landing/rule-typer.svelte';
-	import { PLANS } from '$lib/pricing';
+	import HeroInbox from '$lib/components/site/landing/hero-inbox.svelte';
+	import NoiseSort from '$lib/components/site/landing/noise-sort.svelte';
+	import QuietPhone from '$lib/components/site/landing/quiet-phone.svelte';
+	import RuleStage from '$lib/components/site/landing/rule-stage.svelte';
+	import DashTurns from '$lib/components/site/landing/dash-turns.svelte';
+	import KeysSwipe from '$lib/components/site/landing/keys-swipe.svelte';
+	import PeekActions from '$lib/components/site/landing/peek-actions.svelte';
+	import { signalColor, type Signal } from '$lib/components/site/landing/mock';
+	import { PRICING_NOTE } from '$lib/pricing';
 	import { APP_URL, REPO_URL } from '$lib/site';
 	import { SOFTWARE_DESCRIPTION, softwareData, websiteData } from '$lib/structured-data';
 
-	const price = PLANS.map((p) => `$${p.price} a ${p.per}`).join(' or ');
-	/** The pages for the questions people ask before they sign in. */
-	const ANSWERS = [
+	const SIGN_IN_URL = `${APP_URL}/login`;
+
+	const SIGNALS: { label: string; signal: Signal }[] = [
+		{ label: 'Review requested', signal: 'review' },
+		{ label: 'CI failed on your PR', signal: 'fail' },
+		{ label: 'Changes requested', signal: 'warn' },
+		{ label: 'Ready to merge', signal: 'merge' },
+		{ label: '@alice replied', signal: 'reply' },
+		{ label: 'Merge conflict', signal: 'fail' },
+		{ label: 'New commits since your review', signal: 'review' },
+		{ label: 'Assigned to you', signal: 'review' },
+		{ label: 'You were mentioned', signal: 'reply' },
+		{ label: 'Deployment waits for you', signal: 'warn' },
+		{ label: 'Approved, threads still open', signal: 'warn' },
+		{ label: 'Dependabot alert', signal: 'fail' }
+	];
+
+	const CALM = [
 		{
-			href: '/privacy',
-			title: 'Privacy',
-			text: 'What Hush stores, who sees it, and how to delete all of it.'
+			icon: Layers,
+			title: 'One alert for each PR',
+			text: 'A review request, a CI failure, and a reply on the same PR share one alert.'
 		},
 		{
-			href: '/security',
-			title: 'Security',
-			text: 'What Hush can do with your GitHub access, for you and your org’s owners.'
+			icon: BellOff,
+			title: 'No repeats until you look',
+			text: 'An item pushes once, then waits until you open Hush or act on it.'
 		},
-		{ href: '/pricing', title: 'Pricing', text: `Free during the beta. Later, ${price}.` },
-		{ href: '/docs', title: 'Docs', text: 'Every tab, rule, key, and setting, explained.' }
+		{
+			icon: Timer,
+			title: 'Digests and limits',
+			text: 'Collect pushes into one every 5 to 240 minutes, or cap how many can come in a set time.'
+		},
+		{
+			icon: Moon,
+			title: 'Quiet hours',
+			text: 'Nights and weekends stay silent. One push in the morning lists what waited.'
+		}
+	];
+
+	const FAQ = [
+		{
+			q: 'What is Hush for GitHub?',
+			a: `Hush is a web app for your GitHub notifications. It reads the pull request or issue behind each one, decides whose turn it is, and keeps a short <b>Needs you</b> list. You can read, approve, comment, and merge from it, and get a push only for what waits on you.`
+		},
+		{
+			q: 'Is it free?',
+			a: `${PRICING_NOTE} See <a href="/pricing">pricing</a> for the plans that come after the beta.`
+		},
+		{
+			q: 'What access does it need?',
+			a: `You sign in with GitHub. Hush asks for the <code>notifications</code>, <code>repo</code>, and <code>read:org</code> scopes, because GitHub’s Notifications API accepts only these classic scopes. Hush stores the token encrypted, and it acts on GitHub only when you do. See <a href="/docs/github-access">GitHub access</a> and <a href="/security">security</a>.`
+		},
+		{
+			q: 'Does my org need to approve it?',
+			a: `Only if your org allows just the OAuth apps that an owner approved. Until an owner approves Hush, GitHub hides that org from it. Choose <b>Request approval</b> after you sign in, or, until then, give Hush a custom token, such as the one from <code>gh auth token</code>. See <a href="/docs/github-access#when-an-org-is-missing">when an org is missing</a>.`
+		},
+		{
+			q: 'Does it work on my phone?',
+			a: `Yes. Hush is a web app that you can install, with push alerts on each device where you turn them on. On iPhone and iPad, push works only after you add Hush to the Home Screen (iOS 16.4 or later): Share, then <b>Add to Home Screen</b>. See <a href="/docs/notifications">notifications</a>.`
+		},
+		{
+			q: 'Is it open source? Can I host it myself?',
+			a: `Yes. All of Hush, the app, the server, and this site, is open source under AGPL‑3.0, at <a href="${REPO_URL}" rel="noreferrer">github.com/ianmatson/hush</a>. You can run your own copy on your own Cloudflare account; the README tells you how.`
+		},
+		{
+			q: 'How is it different from GitHub’s own inbox?',
+			a: `GitHub lists every notification by time. Hush sorts them by who must act next, pushes only what needs you, and lets you act from a side panel. GitHub’s inbox has the full diff, GitHub Enterprise Server, and native mobile apps. You can use both: Hush marks threads read and done on GitHub too. See <a href="/compare/github-notifications">Hush vs. GitHub notifications</a> and <a href="/compare">other tools</a>.`
+		}
 	];
 </script>
 
 <SiteMeta
-	title="Hush for GitHub · GitHub notifications that only show what needs you"
+	title="Hush for GitHub · GitHub notifications sorted by whose turn it is"
 	description={SOFTWARE_DESCRIPTION}
 	path="/"
 	structuredData={[websiteData(), softwareData()]}
 />
 
 <div class="page">
-	<div class="content">
-		<section class="hero">
-			<h1 class="in" style:--d="0">
-				GitHub sends you everything. Hush keeps <em>quiet</em> about most of it.
-			</h1>
-			<p class="lede in" style:--d="1">
-				It sorts your notifications into what needs you and what is only FYI, follows whose turn it
-				is on every pull request, and sends a push only when something waits on you.
+	<section class="hero" aria-labelledby="hero-title">
+		<div class="wrap hero-copy">
+			<h1 id="hero-title">See what needs you on GitHub. <em>Then get it done.</em></h1>
+			<p class="lede">
+				Hush for GitHub is an open-source web app that reads the pull request or issue behind each
+				GitHub notification, keeps a short list of what needs you, and lets you approve, comment,
+				and merge without leaving it.
 			</p>
-			<p class="links in" style:--d="2">
-				<a class="open big" href="{APP_URL}/inbox">Open Hush</a>
-				<a class="quiet" href={REPO_URL} rel="noreferrer">Read the source <span>→</span></a>
-			</p>
-			<div class="in" style:--d="3">
-				<HushWave />
+			<div class="ctas">
+				<a class="button" href={SIGN_IN_URL}>
+					<svg viewBox="0 0 16 16" aria-hidden="true"><path d={GITHUB_MARK} /></svg>
+					Sign in with GitHub
+				</a>
+				<a class="link" href="/docs">Read the docs <span aria-hidden="true">→</span></a>
 			</div>
-		</section>
-
-		<section class="specimens">
-			<article class="reveal">
-				<TurnLanes />
-				<p>
-					<b>Whose turn it is.</b> Hush follows each pull request as it moves between you and your team,
-					and puts your turn on top. Work that waits too long turns amber.
-				</p>
-			</article>
-			<article class="reveal">
-				<DayDial />
-				<p>
-					<b>A push only when it matters.</b> What needs you buzzes; FYI stays silent. At night, quiet
-					hours hold everything, and one push brings it in the morning.
-				</p>
-			</article>
-			<article class="reveal">
-				<RuleTyper />
-				<p>
-					<b>Rules in one line.</b> One short syntax filters the inbox, saves views, and writes rules
-					that clean up by themselves.
-				</p>
-			</article>
-		</section>
-
-		<section class="answers reveal" aria-labelledby="answers">
-			<h2 id="answers">Before you sign in</h2>
-			<ul>
-				{#each ANSWERS as a (a.href)}
-					<li>
-						<a href={a.href}>
-							<b>{a.title} <span>→</span></b>
-							{a.text}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</section>
-
-		<section class="close reveal">
-			<p>
-				Hush acts on GitHub only when you do: <em>approve</em>, <em>comment</em>,
-				<em>merge</em>, or mark it <em>Done</em>, without leaving your inbox. It is open source, and
-				it takes a minute to set up.
+			<p class="fine">
+				Free while in beta · <a href={REPO_URL} rel="noreferrer">Open source, AGPL‑3.0</a>
 			</p>
-			<a class="quiet" href="{APP_URL}/inbox">Open Hush <span>→</span></a>
-		</section>
-	</div>
+		</div>
+		<div class="wrap hero-stage">
+			<HeroInbox />
+		</div>
+	</section>
+
+	<section class="signals" aria-labelledby="signals-title">
+		<h2 id="signals-title" class="wrap">Hush knows what each thread asks of you</h2>
+		<div class="marquee">
+			{#each [false, true] as copy (copy)}
+				<ul class="track" aria-hidden={copy || undefined}>
+					{#each SIGNALS as s (s.label)}
+						<li style:--signal={signalColor(s.signal)}>{s.label}</li>
+					{/each}
+				</ul>
+			{/each}
+		</div>
+	</section>
+
+	<section class="band ink dark" aria-labelledby="noise-title">
+		<div class="wrap">
+			<div class="intro center">
+				<h2 id="noise-title">47 notifications. <em>Five need you.</em></h2>
+				<p>
+					Hush reads the PR or issue behind each notification, and puts it where it belongs: <b
+						>Needs you</b
+					>
+					when you are next to act, <b>FYI</b> when you only want to know, and muted when your rules say
+					so.
+				</p>
+			</div>
+			<NoiseSort />
+
+			<div class="calm">
+				<div class="calm-phone">
+					<QuietPhone />
+				</div>
+				<div class="calm-copy">
+					<h3>A push only when it is your turn.</h3>
+					<p class="sub">
+						Busy PRs change all day. Hush keeps them from buzzing your phone each time.
+					</p>
+					<ul>
+						{#each CALM as item (item.title)}
+							<li>
+								<item.icon size={18} aria-hidden="true" />
+								<span><b>{item.title}.</b> {item.text}</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="config" aria-labelledby="config-title">
+		<div class="wrap">
+			<div class="split">
+				<div class="intro">
+					<h2 id="config-title">Sorted <em>your way.</em></h2>
+					<p>
+						Write a rule in one line, such as <code>author:dependabot*</code>, and send what it
+						catches to <b>Muted</b>. Save any filter as its own tab. Change every key, menu, and
+						swipe. All of it lives in one <code>settings.json</code> that you can edit, export, or hand
+						to an agent.
+					</p>
+					<a class="link" href="/docs/rules">How rules work <span aria-hidden="true">→</span></a>
+				</div>
+				<RuleStage />
+			</div>
+
+			<div class="duo">
+				<figure class="wide-fig">
+					<DashTurns />
+					<figcaption>
+						<b>Pull requests and issues, by whose turn it is.</b> Each section is a GitHub search that
+						you choose. Work that waits too long turns amber.
+					</figcaption>
+				</figure>
+				<figure>
+					<KeysSwipe />
+					<figcaption>
+						<b>Your keys, your swipes.</b> Every command has a key that you can change. On a phone, swipe
+						a row to finish it.
+					</figcaption>
+				</figure>
+			</div>
+		</div>
+	</section>
+
+	<section class="band tint" aria-labelledby="act-title">
+		<div class="wrap split reverse">
+			<PeekActions />
+			<div class="intro">
+				<h2 id="act-title">Approve, reply, merge. <em>From the inbox.</em></h2>
+				<p>
+					Press <kbd>Space</kbd> to peek at a thread: the checks, the reviews, and the conversation. Approve,
+					request changes, comment with @mentions, # links, and :emoji, or merge. Your draft waits if
+					you close it.
+				</p>
+				<p>
+					Finished? <kbd>E</kbd> for Done, <kbd>S</kbd> to snooze, <kbd>M</kbd> to mute. On Chrome, Edge,
+					and Android, push alerts have Done and Snooze buttons too.
+				</p>
+				<p class="note">Hush writes to GitHub only when you do.</p>
+				<a class="link" href="/docs/peek"
+					>The peek, step by step <span aria-hidden="true">→</span></a
+				>
+			</div>
+		</div>
+	</section>
+
+	<section class="open" aria-labelledby="open-title">
+		<div class="wrap open-grid">
+			<h2 id="open-title">Open source. <em>Free while in beta.</em></h2>
+			<div class="open-copy">
+				<p>
+					The app, the server, and this site are on GitHub under AGPL‑3.0. Read what Hush does with
+					your token, or run your own copy on your own Cloudflare account. Hush has no analytics,
+					and it shares nothing.
+				</p>
+				<p class="muted">{PRICING_NOTE}</p>
+				<p class="links">
+					<a class="link" href={REPO_URL} rel="noreferrer"
+						>Read the source <span aria-hidden="true">→</span></a
+					>
+					<a class="link" href="/privacy">Privacy <span aria-hidden="true">→</span></a>
+					<a class="link" href="/security">Security <span aria-hidden="true">→</span></a>
+					<a class="link" href="/pricing">Pricing <span aria-hidden="true">→</span></a>
+				</p>
+			</div>
+		</div>
+	</section>
+
+	<section class="faq" aria-labelledby="faq-title">
+		<div class="wrap faq-grid">
+			<h2 id="faq-title">Questions</h2>
+			<div class="qs">
+				{#each FAQ as item (item.q)}
+					<details>
+						<summary>{item.q}</summary>
+						<p>{@html item.a}</p>
+					</details>
+				{/each}
+			</div>
+		</div>
+	</section>
+
+	<section class="final" aria-labelledby="final-title">
+		<div class="wrap center">
+			<h2 id="final-title">Five things need you. <em>Start there.</em></h2>
+			<div class="ctas">
+				<a class="button" href={SIGN_IN_URL}>
+					<svg viewBox="0 0 16 16" aria-hidden="true"><path d={GITHUB_MARK} /></svg>
+					Sign in with GitHub
+				</a>
+				<a class="link" href="/docs/getting-started"
+					>Getting started <span aria-hidden="true">→</span></a
+				>
+			</div>
+		</div>
+	</section>
 </div>
 
 <style>
 	.page {
-		--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+		--ease: cubic-bezier(0.16, 1, 0.3, 1);
 		--serif: 'Newsreader Variable', Georgia, serif;
+		--tint: color-mix(in oklab, var(--signal-review) 7%, var(--background));
 		overflow-x: clip;
 	}
-	a {
-		transition: color 0.2s;
+	.wrap {
+		width: 100%;
+		max-width: var(--width);
+		margin: 0 auto;
+		padding: 0 1.5rem;
 	}
-
-	.open {
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.5rem;
-		background: var(--foreground);
-		color: var(--background);
-		font-weight: 500;
-		transition: opacity 0.2s;
-	}
-	.open:hover {
-		opacity: 0.85;
-	}
-	.open.big {
-		padding: 0.625rem 1rem;
-		font-size: 0.9375rem;
-	}
-	.quiet {
-		font-size: 0.9375rem;
-		color: var(--muted-foreground);
-	}
-	.quiet span {
-		display: inline-block;
-		transition: translate 0.25s var(--ease);
-	}
-	.quiet:hover {
-		color: var(--foreground);
-	}
-	.quiet:hover span {
-		translate: 0.2rem 0;
+	.center {
+		text-align: center;
 	}
 	em {
 		font-family: var(--serif);
 		font-style: italic;
 		font-weight: 400;
-		letter-spacing: -0.01em;
+		letter-spacing: -0.015em;
 	}
-
-	.content {
-		max-width: var(--width);
-		margin: 0 auto;
-		padding: 0 1.5rem;
+	h1 em,
+	h2 em {
+		font-size: 1.06em;
 	}
-	.hero {
-		display: grid;
-		gap: 1.75rem;
-		padding: clamp(3rem, 9vw, 7.5rem) 0 clamp(3rem, 7vw, 5rem);
-	}
-	h1 {
-		max-width: 15em;
-		font-size: clamp(2.25rem, 5.4vw, 4.25rem);
-		line-height: 1.02;
+	h2 {
+		font-size: clamp(2rem, 4.6vw, 3.5rem);
 		font-weight: 550;
+		line-height: 1.04;
 		letter-spacing: -0.04em;
 		text-wrap: balance;
 	}
-	h1 em {
-		font-size: 1.08em;
-		letter-spacing: -0.02em;
+	code,
+	kbd {
+		padding: 0.05em 0.35em;
+		border-radius: 0.3rem;
+		background: color-mix(in oklab, var(--foreground) 7%, transparent);
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: 0.84em;
+		color: var(--foreground);
 	}
-	.lede {
-		max-width: 34rem;
-		font-size: 1.125rem;
-		line-height: 1.6;
-		color: var(--muted-foreground);
-		text-wrap: pretty;
+	code {
+		white-space: nowrap;
 	}
-	.links {
+	kbd {
+		border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+		border-bottom-width: 2px;
+		background: var(--background);
+	}
+	a:focus-visible,
+	summary:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 3px;
+		border-radius: 0.375rem;
+	}
+	::selection {
+		background: color-mix(in oklab, var(--signal-review) 30%, transparent);
+	}
+
+	.button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.75rem 1.2rem;
+		border-radius: 0.75rem;
+		background: var(--foreground);
+		color: var(--background);
+		font-size: 0.9875rem;
+		font-weight: 500;
+		box-shadow: 0 10px 24px -14px rgb(0 0 0 / 0.6);
+		transition:
+			translate 0.25s var(--ease),
+			box-shadow 0.25s var(--ease),
+			opacity 0.2s;
+	}
+	.button:hover {
+		translate: 0 -1px;
+		box-shadow: 0 14px 28px -14px rgb(0 0 0 / 0.65);
+	}
+	.button:active {
+		translate: 0 0;
+		opacity: 0.9;
+	}
+	.button svg {
+		width: 1.0625rem;
+		height: 1.0625rem;
+		fill: currentColor;
+	}
+	.link {
+		font-size: 0.9375rem;
+		font-weight: 500;
+		color: var(--foreground);
+		text-decoration: underline;
+		text-decoration-color: color-mix(in oklab, currentColor 25%, transparent);
+		text-underline-offset: 0.3em;
+		transition: text-decoration-color 0.2s;
+	}
+	.link span {
+		display: inline-block;
+		transition: translate 0.25s var(--ease);
+	}
+	.link:hover {
+		text-decoration-color: currentColor;
+	}
+	.link:hover span {
+		translate: 0.2rem 0;
+	}
+	.ctas {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 1.5rem;
-		margin-bottom: clamp(1.5rem, 5vw, 3.5rem);
-	}
-	.in {
-		animation: rise 1s var(--ease) both;
-		animation-delay: calc(var(--d) * 110ms + 80ms);
+		justify-content: center;
+		gap: 1rem 1.75rem;
 	}
 
-	.specimens {
-		display: grid;
-		gap: 3.5rem;
-		padding: 4rem 0 6rem;
-		border-top: 1px solid var(--border);
+	.hero {
+		position: relative;
+		padding-top: clamp(2.5rem, 6vw, 5rem);
 	}
-	@media (min-width: 60rem) {
-		.specimens {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-			gap: 2.5rem;
+	.hero::after {
+		content: '';
+		position: absolute;
+		inset: auto 0 0;
+		z-index: -1;
+		height: clamp(10rem, 22vw, 17rem);
+		background: var(--tint);
+	}
+	.hero-copy {
+		display: grid;
+		justify-items: center;
+		gap: 1.5rem;
+		text-align: center;
+	}
+	h1 {
+		max-width: 13em;
+		font-size: clamp(2.5rem, 6.2vw, 4.75rem);
+		font-weight: 560;
+		line-height: 1;
+		letter-spacing: -0.045em;
+		text-wrap: balance;
+	}
+	h1 em {
+		display: block;
+	}
+	.lede {
+		max-width: 43rem;
+		font-size: clamp(1.0625rem, 1.6vw, 1.1875rem);
+		line-height: 1.55;
+		color: var(--muted-foreground);
+		text-wrap: pretty;
+	}
+	.hero .ctas {
+		margin-top: 0.5rem;
+	}
+	.fine {
+		font-size: 0.8125rem;
+		color: var(--muted-foreground);
+	}
+	.fine a {
+		text-decoration: underline;
+		text-decoration-color: color-mix(in oklab, currentColor 35%, transparent);
+		text-underline-offset: 0.25em;
+	}
+	.fine a:hover {
+		color: var(--foreground);
+	}
+	.hero-stage {
+		margin-top: clamp(3rem, 6vw, 4.5rem);
+	}
+
+	.signals {
+		display: grid;
+		gap: 1.25rem;
+		padding: clamp(4rem, 7vw, 5.5rem) 0 clamp(3.5rem, 6vw, 4.5rem);
+		background: var(--tint);
+	}
+	.signals h2 {
+		font-size: 0.9375rem;
+		font-weight: 500;
+		letter-spacing: 0;
+		text-align: center;
+		color: var(--muted-foreground);
+	}
+	.marquee {
+		display: flex;
+		overflow: hidden;
+		mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+	}
+	.track {
+		display: flex;
+		flex: none;
+		gap: 0.625rem;
+		padding-right: 0.625rem;
+		animation: marquee 60s linear infinite;
+	}
+	.marquee:hover .track {
+		animation-play-state: paused;
+	}
+	.track li {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid color-mix(in oklab, var(--signal) 22%, var(--border));
+		background: var(--background);
+		font-size: 0.875rem;
+		white-space: nowrap;
+	}
+	.track li::before {
+		content: '';
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 999px;
+		background: var(--signal);
+	}
+	@keyframes marquee {
+		to {
+			translate: -100% 0;
 		}
 	}
-	.specimens article {
+
+	.band {
+		padding: clamp(5rem, 10vw, 8.5rem) 0;
+	}
+	.ink {
+		--background: oklch(0.205 0.014 265);
+		--popover: oklch(0.235 0.014 265);
+		--muted: oklch(0.27 0.014 265);
+		--border: oklch(1 0 0 / 9%);
+		background: oklch(0.165 0.014 265);
+		color: var(--foreground);
+	}
+	.intro {
 		display: grid;
 		align-content: start;
+		justify-items: start;
 		gap: 1.25rem;
 	}
-	.specimens p {
-		font-size: 0.9875rem;
+	.intro.center {
+		justify-items: center;
+		margin: 0 auto clamp(3rem, 6vw, 4.5rem);
+	}
+	.intro p {
+		max-width: 36rem;
+		font-size: 1.0625rem;
 		line-height: 1.6;
 		color: var(--muted-foreground);
 		text-wrap: pretty;
 	}
-	.specimens b {
+	.intro b {
 		font-weight: 550;
 		color: var(--foreground);
 	}
 
-	.answers {
+	.calm {
 		display: grid;
-		gap: 1.5rem;
-		padding: 4rem 0 5rem;
-		border-top: 1px solid var(--border);
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: clamp(2.5rem, 7vw, 6rem);
+		margin-top: clamp(5rem, 9vw, 7.5rem);
+		padding: 0 clamp(0rem, 4vw, 3rem);
 	}
-	.answers h2 {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--muted-foreground);
-	}
-	.answers ul {
+	.calm-copy {
 		display: grid;
 		gap: 1rem;
+		max-width: 32rem;
 	}
-	@media (min-width: 40rem) {
-		.answers ul {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
+	h3 {
+		font-size: clamp(1.5rem, 2.8vw, 2.125rem);
+		font-weight: 550;
+		line-height: 1.1;
+		letter-spacing: -0.03em;
+		text-wrap: balance;
 	}
-	@media (min-width: 60rem) {
-		.answers ul {
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-		}
-	}
-	.answers a {
-		display: grid;
-		gap: 0.375rem;
-		height: 100%;
-		padding: 1.125rem 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 0.875rem;
-		font-size: 0.9rem;
-		line-height: 1.5;
+	.sub {
+		font-size: 1.0625rem;
+		line-height: 1.55;
 		color: var(--muted-foreground);
-		transition:
-			border-color 0.2s,
-			background 0.2s;
 	}
-	.answers a:hover {
-		border-color: color-mix(in oklab, var(--foreground) 30%, var(--border));
-		background: color-mix(in oklab, var(--muted) 50%, transparent);
+	.calm ul {
+		display: grid;
+		gap: 1.1rem;
+		margin-top: 0.75rem;
 	}
-	.answers b {
-		font-size: 1rem;
+	.calm li {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.875rem;
+		font-size: 0.9875rem;
+		line-height: 1.55;
+		color: var(--muted-foreground);
+	}
+	.calm li :global(svg) {
+		margin-top: 0.15rem;
+		color: var(--signal-review);
+	}
+	.calm li b {
 		font-weight: 550;
 		color: var(--foreground);
 	}
-	.answers b span {
-		display: inline-block;
-		color: var(--muted-foreground);
-		transition: translate 0.25s var(--ease);
-	}
-	.answers a:hover b span {
-		translate: 0.2rem 0;
-	}
 
-	.close {
-		display: grid;
-		justify-items: start;
-		gap: 1.5rem;
-		padding: 5rem 0 7rem;
-		border-top: 1px solid var(--border);
+	.config {
+		padding: clamp(5.5rem, 11vw, 9rem) 0 clamp(4rem, 8vw, 6rem);
 	}
-	.close p {
-		max-width: 30em;
-		font-size: clamp(1.375rem, 2.6vw, 1.875rem);
-		line-height: 1.35;
-		letter-spacing: -0.02em;
+	.split {
+		display: grid;
+		grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+		align-items: center;
+		gap: clamp(2.5rem, 6vw, 5rem);
+	}
+	.split h2 {
+		font-size: clamp(2rem, 4vw, 3rem);
+	}
+	.split.reverse {
+		grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+	}
+	.duo {
+		display: grid;
+		grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+		align-items: end;
+		gap: clamp(2rem, 5vw, 4rem);
+		margin-top: clamp(4.5rem, 9vw, 7rem);
+	}
+	figure {
+		display: grid;
+		gap: 1.25rem;
+	}
+	figcaption {
+		max-width: 30rem;
+		font-size: 0.9375rem;
+		line-height: 1.55;
+		color: var(--muted-foreground);
 		text-wrap: pretty;
 	}
-	.close em {
-		font-size: 1.06em;
+	figcaption b {
+		font-weight: 550;
+		color: var(--foreground);
 	}
-	@keyframes rise {
-		from {
-			opacity: 0;
-			translate: 0 1rem;
-			filter: blur(6px);
+
+	.tint {
+		background: var(--tint);
+	}
+	.note {
+		font-weight: 500;
+		color: var(--foreground) !important;
+	}
+
+	.open {
+		padding: clamp(5.5rem, 11vw, 9rem) 0 clamp(3rem, 6vw, 4rem);
+	}
+	.open-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: clamp(2rem, 6vw, 5rem);
+		align-items: start;
+	}
+	.open-copy {
+		display: grid;
+		gap: 1rem;
+		padding-top: 0.5rem;
+	}
+	.open-copy p {
+		font-size: 1.0625rem;
+		line-height: 1.6;
+		text-wrap: pretty;
+	}
+	.open-copy .muted {
+		color: var(--muted-foreground);
+	}
+	.open-copy .links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.5rem;
+		margin-top: 0.5rem;
+	}
+
+	.faq {
+		padding: clamp(3rem, 6vw, 4rem) 0 clamp(2rem, 4vw, 3rem);
+	}
+	.faq-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+		gap: clamp(2rem, 6vw, 5rem);
+	}
+	.faq h2 {
+		font-size: clamp(1.75rem, 3.4vw, 2.5rem);
+	}
+	.qs {
+		display: grid;
+	}
+	details {
+		border-bottom: 1px solid var(--border);
+	}
+	details:first-child {
+		border-top: 1px solid var(--border);
+	}
+	summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1.15rem 0;
+		font-size: 1.0625rem;
+		font-weight: 500;
+		cursor: pointer;
+		list-style: none;
+	}
+	summary::-webkit-details-marker {
+		display: none;
+	}
+	summary::after {
+		content: '+';
+		flex: none;
+		font-size: 1.375rem;
+		font-weight: 300;
+		line-height: 1;
+		color: var(--muted-foreground);
+		transition: rotate 0.25s var(--ease);
+	}
+	details[open] summary::after {
+		rotate: 45deg;
+	}
+	summary:hover::after {
+		color: var(--foreground);
+	}
+	details p {
+		max-width: 40rem;
+		padding: 0 0 1.4rem;
+		font-size: 0.9875rem;
+		line-height: 1.65;
+		color: var(--muted-foreground);
+		text-wrap: pretty;
+	}
+	details p :global(a) {
+		color: var(--foreground);
+		text-decoration: underline;
+		text-decoration-color: color-mix(in oklab, currentColor 30%, transparent);
+		text-underline-offset: 0.25em;
+	}
+	details p :global(a:hover) {
+		text-decoration-color: currentColor;
+	}
+	details p :global(b) {
+		font-weight: 550;
+		color: var(--foreground);
+	}
+	details p :global(code) {
+		padding: 0.05em 0.35em;
+		border-radius: 0.3rem;
+		background: color-mix(in oklab, var(--foreground) 7%, transparent);
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: 0.84em;
+		color: var(--foreground);
+	}
+
+	.final {
+		padding: clamp(5rem, 10vw, 8rem) 0 clamp(6rem, 12vw, 9rem);
+		background: linear-gradient(var(--background), var(--tint));
+	}
+	.final .wrap {
+		display: grid;
+		justify-items: center;
+		gap: 2rem;
+	}
+	.final h2 {
+		max-width: 12em;
+		font-size: clamp(2.25rem, 5.6vw, 4.25rem);
+	}
+	.final h2 em {
+		display: block;
+	}
+
+	@media (max-width: 72rem) {
+		.split.reverse {
+			grid-template-columns: minmax(0, 1fr);
 		}
-		to {
-			opacity: 1;
-			translate: 0 0;
-			filter: blur(0);
+		.split.reverse > .intro {
+			order: -1;
+			max-width: 40rem;
 		}
 	}
-	/* Blocks rise into view as you scroll (where the browser supports scroll timelines). */
-	@supports (animation-timeline: view()) {
-		.reveal {
-			animation: rise linear both;
-			animation-timeline: view();
-			animation-range: entry 0% cover 25%;
+	@media (max-width: 60rem) {
+		.split,
+		.duo,
+		.open-grid,
+		.faq-grid {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.calm {
+			grid-template-columns: minmax(0, 1fr);
+			justify-items: center;
+			padding: 0;
+		}
+	}
+	@media (max-width: 40rem) {
+		.calm-phone {
+			zoom: 0.9;
+		}
+		.ctas {
+			flex-direction: column;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.in,
-		.reveal {
+		.track {
 			animation: none;
+		}
+		.marquee {
+			flex-wrap: wrap;
+			justify-content: center;
+			mask-image: none;
+			padding: 0 1.5rem;
+		}
+		.track {
+			flex-wrap: wrap;
+			justify-content: center;
+		}
+		.track[aria-hidden] {
+			display: none;
 		}
 	}
 </style>
