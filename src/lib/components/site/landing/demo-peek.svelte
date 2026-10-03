@@ -22,8 +22,32 @@
 	import Workflow from '@lucide/svelte/icons/workflow';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import { tick } from 'svelte';
 	import MockAvatar from './mock-avatar.svelte';
-	import type { DemoChange, DemoCheckState, DemoPeek } from './demo-data';
+	import SuggestMenu from '$lib/components/app/suggest-menu.svelte';
+	import { caretXY } from '$lib/caret';
+	import { loadEmojiList } from '$lib/emoji';
+	import {
+		applyPick,
+		closedShortcodeBefore,
+		emojiForShortcode,
+		rankEmoji,
+		rankRefs,
+		rankUsers,
+		replaceWithEmoji,
+		triggerAt,
+		type Suggestion,
+		type Trigger,
+		type UserSuggestion
+	} from '$lib/shared/suggest';
+	import {
+		DEMO_ME,
+		DEMO_PEOPLE,
+		DEMO_REFS,
+		type DemoChange,
+		type DemoCheckState,
+		type DemoPeek
+	} from './demo-data';
 
 	let {
 		lead,
@@ -141,7 +165,127 @@
 		mode = 'comment';
 	}
 
+	const SUGGEST_MENU_WIDTH_PX = 296;
+	const ROOM_BELOW_MENU_PX = 340;
+
+	let trigger = $state<Trigger | null>(null);
+	let suggestions = $state<Suggestion[]>([]);
+	let activeSuggestion = $state(0);
+	let menuPos = $state<{ x: number; top?: number; bottom?: number }>({ x: 0 });
+	let closedAt = -1;
+	let asked = 0;
+
+	const participants = $derived(
+		[peek.author, ...peek.timeline.map((e) => e.who), ...(peek.pr?.reviews ?? []).map((r) => r.who)]
+			.reverse()
+			.map((who): UserSuggestion => ({
+				kind: 'user',
+				login: who.login,
+				name: null,
+				avatar: null,
+				team: false
+			}))
+	);
+
+	function placeMenu(el: HTMLTextAreaElement, t: Trigger) {
+		const c = caretXY(el, t.start);
+		const rect = el.getBoundingClientRect();
+		const x = Math.max(8, Math.min(rect.left + c.x, window.innerWidth - SUGGEST_MENU_WIDTH_PX));
+		const y = rect.top + c.y;
+		menuPos =
+			window.innerHeight - (y + c.line) > ROOM_BELOW_MENU_PX
+				? { x, top: y + c.line + 4 }
+				: { x, bottom: window.innerHeight - y + 4 };
+	}
+
+	function refsMatching(query: string) {
+		const q = query.toLowerCase();
+		return DEMO_REFS.filter(
+			(r) =>
+				!q ||
+				String(r.number).startsWith(q) ||
+				r.title
+					.toLowerCase()
+					.split(/\s+/)
+					.some((w) => w.startsWith(q))
+		);
+	}
+
+	function updateSuggestions() {
+		const el = box;
+		if (!el || el.selectionStart !== el.selectionEnd) return closeSuggestions();
+		const t = triggerAt(draft, el.selectionStart);
+		if (!t) closedAt = -1;
+		if (!t || t.start === closedAt) return closeSuggestions();
+		if (!trigger || trigger.kind !== t.kind || trigger.start !== t.start) activeSuggestion = 0;
+		trigger = t;
+		placeMenu(el, t);
+		const n = ++asked;
+		if (t.kind === 'user')
+			suggestions = rankUsers(participants, DEMO_PEOPLE, t.query, DEMO_ME.login);
+		else if (t.kind === 'ref') suggestions = rankRefs(refsMatching(t.query), t.query);
+		else
+			loadEmojiList().then((list) => {
+				if (n === asked) suggestions = rankEmoji(list, t.query);
+			});
+		activeSuggestion = Math.min(activeSuggestion, Math.max(0, suggestions.length - 1));
+	}
+
+	async function expandClosedShortcode() {
+		const el = box;
+		if (!el || el.selectionStart !== el.selectionEnd) return;
+		const caret = el.selectionStart;
+		const closed = closedShortcodeBefore(draft, caret);
+		if (!closed) return;
+		const typed = draft;
+		const emoji = emojiForShortcode(await loadEmojiList(), closed.shortcode);
+		if (!emoji || draft !== typed) return;
+		const r = replaceWithEmoji(draft, caret, closed.start, emoji);
+		draft = r.text;
+		await tick();
+		el.setSelectionRange(r.caret, r.caret);
+	}
+
+	function closeSuggestions() {
+		trigger = null;
+		suggestions = [];
+		asked++;
+	}
+
+	async function pickSuggestion(s: Suggestion) {
+		const el = box;
+		if (!el || !trigger) return;
+		const r = applyPick(draft, el.selectionStart, trigger, s);
+		draft = r.text;
+		closeSuggestions();
+		await tick();
+		el.focus();
+		el.setSelectionRange(r.caret, r.caret);
+	}
+
+	function suggestionKey(e: KeyboardEvent) {
+		if (!trigger || e.isComposing) return false;
+		if (e.key === 'Escape') {
+			closedAt = trigger.start;
+			closeSuggestions();
+			return true;
+		}
+		if (!suggestions.length) return false;
+		const count = suggestions.length;
+		if (e.key === 'ArrowDown') activeSuggestion = (activeSuggestion + 1) % count;
+		else if (e.key === 'ArrowUp') activeSuggestion = (activeSuggestion - 1 + count) % count;
+		else if (e.key === 'Enter' || e.key === 'Tab')
+			void pickSuggestion(suggestions[activeSuggestion]);
+		else return false;
+		return true;
+	}
+
 	function onBoxKey(e: KeyboardEvent) {
+		if (suggestionKey(e)) {
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
 			send();
@@ -307,11 +451,28 @@
 					bind:this={box}
 					bind:value={draft}
 					onkeydown={onBoxKey}
+					oninput={() => {
+						updateSuggestions();
+						void expandClosedShortcode();
+					}}
+					onclick={updateSuggestions}
+					onblur={closeSuggestions}
+					aria-autocomplete="list"
 					rows="2"
 					aria-label="Comment on {reference}"
 					placeholder="Leave a comment. @ mentions, # issues, : emoji"
 					class="w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-[0.85rem] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 				></textarea>
+				{#if trigger && (suggestions.length || (trigger.query && trigger.kind !== 'emoji'))}
+					<SuggestMenu
+						items={suggestions}
+						active={activeSuggestion}
+						loading={false}
+						pos={menuPos}
+						onpick={pickSuggestion}
+						onhover={(i) => (activeSuggestion = i)}
+					/>
+				{/if}
 				<div class="flex items-center gap-2 text-xs text-muted-foreground">
 					<span>{draft.trim() ? 'Draft saved' : '⌘↵ to send'}</span>
 					<button

@@ -12,19 +12,19 @@
 	import DemoRow from './demo-row.svelte';
 	import DemoPeek, { type CommentMode } from './demo-peek.svelte';
 	import DemoDash from './demo-dash.svelte';
-	import { PEOPLE } from './mock';
 	import {
 		DEMO_DASH,
 		DEMO_THREADS,
 		DASH_SECTIONS,
 		type DemoDashItem,
+		DEMO_ME,
 		type DemoEntry,
 		type DemoPeek as PeekData,
 		type DemoThread
 	} from './demo-data';
 
 	type Page = 'inbox' | 'pulls' | 'issues';
-	type ViewId = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'web';
+	type ViewId = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'mine';
 	interface Toast {
 		key: number;
 		text: string;
@@ -37,14 +37,13 @@
 	const RERUN_MS = 3500;
 	const MERGE_CONFIRM_MS = 4000;
 	const ALERT_THREAD = 't-review';
-	const SAVED_VIEW_REPO = 'acme/web';
 	const VIEWS: { id: ViewId; label: string; strong?: boolean; counted?: boolean }[] = [
 		{ id: 'action', label: 'Needs you', strong: true, counted: true },
 		{ id: 'fyi', label: 'FYI', counted: true },
 		{ id: 'snoozed', label: 'Snoozed' },
 		{ id: 'done', label: 'Done' },
 		{ id: 'muted', label: 'Muted' },
-		{ id: 'web', label: 'Web', counted: true }
+		{ id: 'mine', label: 'Mine', counted: true }
 	];
 
 	const reducedMotion = new MediaQuery('prefers-reduced-motion: reduce');
@@ -106,7 +105,7 @@
 		if (v === 'snoozed') return t.triage === 'snoozed';
 		if (v === 'done') return t.triage === 'done';
 		if (t.triage !== 'inbox') return false;
-		if (v === 'web') return t.repo === SAVED_VIEW_REPO;
+		if (v === 'mine') return t.peek.author.login === DEMO_ME.login;
 		return t.list === v;
 	}
 
@@ -130,6 +129,7 @@
 	]);
 
 	const byId = (id: string) => threads.find((t) => t.id === id);
+	const alertThread = $derived(byId(ALERT_THREAD)!);
 	const refOf = (t: { repo: string; number: number | null }) =>
 		t.number ? `${t.repo}#${t.number}` : t.repo;
 	const end = (s: string) => (/[.!?…]$/.test(s) ? s : `${s}.`);
@@ -218,7 +218,7 @@
 
 	function openOnGitHub(t: DemoThread) {
 		t.unread = false;
-		showToast(`Opens ${t.opensTo} of ${refOf(t)} on GitHub.`);
+		window.open(t.url, '_blank', 'noopener');
 	}
 
 	function resolve(id: string | undefined, note: string) {
@@ -247,10 +247,10 @@
 		);
 		approveTimer = setTimeout(() => {
 			approvingId = null;
-			const mine = peek.pr?.reviews.find((r) => r.who.login === PEOPLE.you.login);
+			const mine = peek.pr?.reviews.find((r) => r.who.login === DEMO_ME.login);
 			if (mine) mine.state = 'APPROVED';
-			else peek.pr?.reviews.push({ who: PEOPLE.you, state: 'APPROVED' });
-			addEntry(peek, { who: PEOPLE.you, verb: 'approved', tone: 'good', text: '' });
+			else peek.pr?.reviews.push({ who: DEMO_ME, state: 'APPROVED' });
+			addEntry(peek, { who: DEMO_ME, verb: 'approved', tone: 'good', text: '' });
 			resolve(threadId, 'You approved');
 			showToast(`Approved ${reference}.`);
 		}, APPROVE_DELAY_MS);
@@ -294,7 +294,7 @@
 		const verb =
 			mode === 'approve' ? 'approved' : mode === 'changes' ? 'requested changes' : 'commented';
 		const tone = mode === 'approve' ? 'good' : mode === 'changes' ? 'bad' : undefined;
-		addEntry(peek, { who: PEOPLE.you, verb, tone, text: body });
+		addEntry(peek, { who: DEMO_ME, verb, tone, text: body });
 		if (mode === 'approve') resolve(thread?.id, 'You approved');
 		else if (mode === 'changes') resolve(thread?.id, 'You requested changes');
 		else if (thread?.kind === 'reply') resolve(thread.id, 'You replied');
@@ -305,13 +305,29 @@
 		);
 	}
 
-	function hideDash(item: DemoDashItem) {
+	function leaveDash(item: DemoDashItem, message: string) {
+		if (page === 'inbox') return;
+		const dashPage = page;
+		const before = dashItems.slice();
+		const wasCurrent = currentDash?.id === item.id;
 		hiddenDash = [...hiddenDash, item.id];
-		showToast(`Hidden until it changes: ${item.title}`, () => {
+		if (wasCurrent) {
+			const at = before.findIndex((i) => i.id === item.id);
+			selectedDash[dashPage] = (before[at + 1] ?? before[at - 1])?.id ?? null;
+		}
+		showToast(message, () => {
 			hiddenDash = hiddenDash.filter((id) => id !== item.id);
+			selectedDash[dashPage] = item.id;
 			toast = null;
 		});
 	}
+
+	const hideDash = (item: DemoDashItem) =>
+		leaveDash(item, `Hidden until it changes: ${item.title}`);
+	const muteDash = (item: DemoDashItem) => leaveDash(item, `Muted: ${item.title}`);
+	const copyDash = (item: DemoDashItem) =>
+		showToast(`Copied the link to ${item.repo}#${item.number}.`);
+	const openDash = (item: DemoDashItem) => window.open(item.url, '_blank', 'noopener');
 
 	function goTo(next: Page) {
 		page = next;
@@ -355,6 +371,8 @@
 		);
 		const next = dashItems[Math.min(dashItems.length - 1, Math.max(0, at + step))];
 		selectedDash[page] = next.id;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-demo-dash-row="${next.id}"] .row-main`)?.focus();
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -363,7 +381,11 @@
 		const key = e.key.toLowerCase();
 		const t = page === 'inbox' ? current : null;
 		const inInbox = !!t && t.triage === 'inbox' && !t.muted;
+		const item = page === 'inbox' ? null : currentDash;
 		if (key === 'j' || e.key === 'ArrowDown') moveCursor(1);
+		else if (key === 'e' && item) hideDash(item);
+		else if (key === 'm' && item) muteDash(item);
+		else if (key === 'c' && item) copyDash(item);
 		else if (key === 'k' || e.key === 'ArrowUp') moveCursor(-1);
 		else if (key === 'e' && inInbox) markDone(t.id);
 		else if (key === 's' && inInbox) snooze(t.id);
@@ -452,7 +474,7 @@
 				>
 					<Bell class="size-4" />
 				</button>
-				<MockAvatar person={PEOPLE.you} size={1.75} />
+				<MockAvatar person={DEMO_ME} size={1.75} />
 			</div>
 		</header>
 
@@ -487,8 +509,8 @@
 						{/each}
 					</nav>
 					<p class="mt-3 mb-2 px-1 text-xs text-muted-foreground">
-						Synced 1m ago{#if view === 'web'}
-							· Needs you + FYI, repo:acme/web{:else if view === 'fyi'}
+						Synced 1m ago{#if view === 'mine'}
+							· Needs you + FYI, author:@me{:else if view === 'fyi'}
 							· Activity you may want to know about, but that does not need you.{/if}
 					</p>
 					{#if visible.length}
@@ -537,6 +559,10 @@
 						selectedId={currentDash?.id ?? null}
 						{motion}
 						onselect={selectDash}
+						onhide={hideDash}
+						onmute={muteDash}
+						oncopy={copyDash}
+						onopen={openDash}
 					/>
 				{/if}
 			</div>
@@ -590,14 +616,14 @@
 						confirmingMerge={confirmingMergeId === reference}
 						ondone={() => {}}
 						onsnooze={() => {}}
-						onmute={() => {}}
+						onmute={() => muteDash(item)}
 						onrestore={() => {}}
 						onhide={() => hideDash(item)}
 						onapprove={() => approve(peek, reference, item.threadId)}
 						onrerun={() => rerun(peek, reference, item.threadId)}
 						onmerge={() => merge(peek, reference, item.threadId)}
 						oncomment={(body, mode) => comment(peek, reference, body, mode, linked)}
-						onopen={() => showToast(`Opens ${reference} on GitHub.`)}
+						onopen={() => openDash(item)}
 						onclose={() => (peekOpen = false)}
 					/>
 				{:else}
@@ -635,8 +661,8 @@
 	{#if alertShown}
 		<div class="float float-enter" out:fly={{ y: -12, duration: motion }}>
 			<PushAlert
-				title="@alice requests your review"
-				body="acme/web#482 · Fix token refresh race in session middleware"
+				title={alertThread.summary}
+				body="{refOf(alertThread)} · {alertThread.title}"
 				onopen={alertOpen}
 				actions={[
 					{ label: 'Done', run: alertDone },
@@ -647,7 +673,10 @@
 	{/if}
 </div>
 <p class="hint">
-	A working demo with sample data. Click a row, or use <kbd>J</kbd> <kbd>K</kbd> to move,
+	A working demo with real pull requests and issues from <a
+		href="https://github.com/PostHog/posthog.com"
+		rel="noreferrer">PostHog/posthog.com</a
+	>. Click a row, or use <kbd>J</kbd> <kbd>K</kbd> to move,
 	<kbd>E</kbd> for Done, and <kbd>S</kbd> to snooze.
 </p>
 
@@ -728,6 +757,10 @@
 		font-size: 0.8125rem;
 		text-align: center;
 		color: var(--muted-foreground);
+	}
+	.hint a {
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 	.hint kbd {
 		padding: 0 0.3em;

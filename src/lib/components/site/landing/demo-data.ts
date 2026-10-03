@@ -1,4 +1,5 @@
-import { PEOPLE, type MockPerson } from './mock';
+import type { MockPerson } from './mock';
+import type { RefSuggestion, UserSuggestion } from '$lib/shared/suggest';
 
 export type DemoKind = 'review' | 'fix_ci' | 'address_review' | 'merge' | 'reply' | 'none';
 export type DemoSubject = 'PullRequest' | 'Issue' | 'Release' | 'CheckSuite' | 'Discussion';
@@ -70,6 +71,7 @@ export interface DemoThread {
 	rule?: string;
 	note?: string;
 	snoozedLabel?: string;
+	url: string;
 	peek: DemoPeek;
 }
 
@@ -84,143 +86,160 @@ export interface DemoDashItem {
 	tone?: 'bad' | 'stale';
 	group: 'yours' | 'team' | 'waiting' | 'other';
 	sections: string[];
+	ago: string;
+	actionLabel: string;
+	url: string;
+	diff?: { additions: number; deletions: number };
+	comments?: number;
+	ci?: 'pass' | 'fail' | 'running';
+	review?: 'approved' | 'changes';
+	labels?: DemoLabel[];
 	peek: DemoPeek;
 }
 
-const ALICE_PEEK: DemoPeek = {
+export interface DemoLabel {
+	name: string;
+	color: string;
+}
+
+export const DEMO_REPO = 'PostHog/posthog.com';
+const REPO_URL = `https://github.com/${DEMO_REPO}`;
+const pull = (n: number, tab = '') => `${REPO_URL}/pull/${n}${tab}`;
+const issue = (n: number) => `${REPO_URL}/issues/${n}`;
+
+const person = (login: string, initials: string, hue: number): MockPerson => ({
+	login,
+	initials,
+	hue
+});
+
+export const DEMO_ME = person('ianmatson', 'IM', 256);
+
+const GH = {
+	nataliaAmorim: person('natalia-amorim', 'NA', 30),
+	cleoPleurodon: person('cleo-pleurodon', 'CL', 180),
+	rafaeelaudibert: person('rafaeelaudibert', 'RA', 150),
+	ivanagas: person('ivanagas', 'IV', 200),
+	charlescook: person('charlescook-ph', 'CC', 300),
+	joethreepwood: person('joethreepwood', 'JT', 90),
+	rubychilds: person('rubychilds', 'RC', 0),
+	sarahxsanders: person('sarahxsanders', 'SS', 330),
+	brittanyjoiner: person('brittanyjoiner15', 'BJ', 120),
+	lizzieepton: person('Lizzieepton', 'LE', 60),
+	posthogBot: person('posthog[bot]', 'PH', 40),
+	dependabot: person('dependabot[bot]', 'DB', 256)
+} satisfies Record<string, MockPerson>;
+
+const LABEL = {
+	website: { name: 'website', color: '3F0331' },
+	blog: { name: 'blog', color: '7892DC' }
+} satisfies Record<string, DemoLabel>;
+
+const PREVIEW_CHECKS: DemoCheck[] = [
+	{ name: 'Build & deploy preview', state: 'success' },
+	{ name: 'Lint Markdown Files', state: 'success' },
+	{ name: 'Spelling', state: 'success' }
+];
+
+const JUNO_PEEK: DemoPeek = {
 	kind: 'pr',
 	state: 'open',
-	author: PEOPLE.alice,
+	author: GH.joethreepwood,
 	opened: '3h ago',
 	pr: {
-		additions: 84,
-		deletions: 21,
-		files: 4,
-		base: 'main',
-		head: 'alice/token-race',
-		reviews: [
-			{ who: PEOPLE.mei, state: 'APPROVED' },
-			{ who: PEOPLE.you, state: 'REQUESTED' }
-		],
-		checks: [
-			{ name: 'test (node 22)', state: 'success' },
-			{ name: 'lint', state: 'success' },
-			{ name: 'e2e / auth', state: 'success' }
-		]
+		additions: 123,
+		deletions: 1,
+		files: 14,
+		base: 'master',
+		head: 'posthog/juno-case-study',
+		reviews: [{ who: DEMO_ME, state: 'REQUESTED' }],
+		checks: PREVIEW_CHECKS.map((check) => ({ ...check }))
 	},
-	labels: ['bug', 'auth'],
-	body: 'Two tabs could refresh the token at the same time, and the second one signed you out. This takes a short lock for each session, so only one refresh runs.',
-	timeline: [
-		{
-			who: PEOPLE.mei,
-			verb: 'approved',
-			tone: 'good',
-			text: 'The lock timeout matches the gateway. Ship it.',
-			ago: '1h'
-		}
-	],
+	body: 'Adds a customer case study for Juno, an AI health assistant for people who live with chronic illness, with cross-links from the customer pages.',
+	timeline: [],
 	main: 'approve'
 };
 
-const BILLING_PEEK: DemoPeek = {
+const FORUM_PEEK: DemoPeek = {
 	kind: 'pr',
 	state: 'open',
-	author: PEOPLE.you,
+	author: DEMO_ME,
 	opened: '5h ago',
 	pr: {
-		additions: 212,
-		deletions: 140,
-		files: 9,
-		base: 'main',
-		head: 'you/billing-queue',
-		reviews: [{ who: PEOPLE.sam, state: 'REQUESTED' }],
+		additions: 4110,
+		deletions: 268,
+		files: 43,
+		base: 'master',
+		head: 'forum-frontend',
+		reviews: [{ who: GH.brittanyjoiner, state: 'REQUESTED' }],
 		checks: [
-			{ name: 'test (node 22)', state: 'failure' },
-			{ name: 'e2e / billing', state: 'failure' },
-			{ name: 'lint', state: 'success' },
-			{ name: 'typecheck', state: 'success' }
+			{ name: 'Build & deploy preview', state: 'failure' },
+			{ name: 'Lint prose with Vale', state: 'failure' },
+			{ name: 'Spelling', state: 'success' },
+			{ name: 'CodeQL', state: 'success' }
 		]
 	},
-	body: 'Stripe webhooks now go to the queue worker, so a slow handler no longer times out the request.',
-	timeline: [
-		{
-			who: PEOPLE.sam,
-			verb: 'commented',
-			text: 'Can the retry keep the original event id?',
-			ago: '2h'
-		}
-	],
+	body: 'Adds a Forum app at /forum. The forum replaces /questions with channels, in the style of Slack or Discourse, and keeps the posts in Squeak questions.',
+	timeline: [],
 	main: 'rerun'
 };
 
-const FLICKER_PEEK: DemoPeek = {
+const FILTERS_PEEK: DemoPeek = {
 	kind: 'issue',
 	state: 'open',
-	author: PEOPLE.bo,
-	opened: '2d ago',
-	labels: ['bug', 'search'],
-	body: 'On a slow 3G profile, the results list empties and fills again on each keystroke.',
+	author: GH.ivanagas,
+	opened: '1d ago',
+	labels: ['website'],
+	body: 'Add more filters to the customer stories table on /customers, and add the data for them to the existing customer stories.',
 	timeline: [
 		{
-			who: PEOPLE.bo,
+			who: GH.ivanagas,
 			verb: 'commented',
-			text: 'Still happens on main. A recording is in the thread above. Can you take a look this week?',
+			text: 'Today the table has two filters. Can we add industry, region, company size, and use case?',
 			ago: '40m'
 		}
 	],
 	main: 'none'
 };
 
-const NODE_PEEK: DemoPeek = {
+const CALCULATOR_PEEK: DemoPeek = {
 	kind: 'pr',
 	state: 'open',
-	author: PEOPLE.you,
+	author: DEMO_ME,
 	opened: '1d ago',
 	pr: {
-		additions: 6,
-		deletions: 6,
-		files: 3,
-		base: 'main',
-		head: 'you/node-22',
-		reviews: [{ who: PEOPLE.mei, state: 'APPROVED' }],
-		checks: [
-			{ name: 'build images', state: 'success' },
-			{ name: 'smoke test', state: 'success' }
-		]
+		additions: 51,
+		deletions: 10,
+		files: 4,
+		base: 'master',
+		head: 'blog-pricing-calculator',
+		reviews: [{ who: GH.nataliaAmorim, state: 'APPROVED' }],
+		checks: PREVIEW_CHECKS.map((check) => ({ ...check }))
 	},
-	body: 'Moves the CI base images from Node 20 to Node 22.',
-	timeline: [{ who: PEOPLE.mei, verb: 'approved', tone: 'good', text: 'Looks good.', ago: '25m' }],
+	labels: ['website'],
+	body: 'Makes the pricing calculator available in blog posts as PricingCalculator. Authors choose the first products, and readers can change usage and share an estimate.',
+	timeline: [{ who: GH.nataliaAmorim, verb: 'approved', tone: 'good', text: '', ago: '25m' }],
 	main: 'merge'
 };
 
-const RETRY_PEEK: DemoPeek = {
+const PROFILE_PEEK: DemoPeek = {
 	kind: 'pr',
 	state: 'open',
-	author: PEOPLE.you,
+	author: DEMO_ME,
 	opened: '2d ago',
 	pr: {
-		additions: 96,
-		deletions: 12,
-		files: 5,
-		base: 'main',
-		head: 'you/retry-budget',
-		reviews: [{ who: PEOPLE.sam, state: 'CHANGES_REQUESTED' }],
-		checks: [
-			{ name: 'test (node 22)', state: 'success' },
-			{ name: 'lint', state: 'success' }
-		],
-		openThreads: 3
+		additions: 32,
+		deletions: 35,
+		files: 1,
+		base: 'master',
+		head: 'fix/20365-community-profile-save',
+		reviews: [{ who: GH.charlescook, state: 'CHANGES_REQUESTED' }],
+		checks: PREVIEW_CHECKS.map((check) => ({ ...check })),
+		openThreads: 2
 	},
-	body: 'Caps retries to the GitHub API at 10% of requests in each minute.',
-	timeline: [
-		{
-			who: PEOPLE.sam,
-			verb: 'requested changes',
-			tone: 'bad',
-			text: 'The budget should reset per installation, not per process.',
-			ago: '1h'
-		}
-	],
+	labels: ['website'],
+	body: 'Keeps Edit profile, Cancel, and Save on the left side of the community profile window’s bottom bar, outside the scrolling form.',
+	timeline: [{ who: GH.charlescook, verb: 'requested changes', tone: 'bad', text: '', ago: '1h' }],
 	main: 'none'
 };
 
@@ -241,17 +260,18 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'PullRequest',
 		kind: 'review',
-		summary: '@alice requests your review',
-		repo: 'acme/web',
-		number: 482,
-		title: 'Fix token refresh race in session middleware',
+		summary: '@joethreepwood requests your review',
+		repo: DEMO_REPO,
+		number: 20387,
+		title: 'Add Juno customer case study and cross-links',
 		why: 'Review requested',
 		changes: [{ text: '+2 commits' }],
 		unread: true,
 		ago: '3m',
 		actionLabel: 'Review',
 		opensTo: 'the files to review',
-		peek: ALICE_PEEK
+		url: pull(20387, '/files'),
+		peek: JUNO_PEEK
 	},
 	{
 		id: 't-ci',
@@ -261,15 +281,16 @@ export const DEMO_THREADS: DemoThread[] = [
 		subject: 'PullRequest',
 		kind: 'fix_ci',
 		summary: 'CI failed on your PR',
-		repo: 'acme/api',
-		number: 1291,
-		title: 'Move billing webhooks to the queue worker',
-		changes: [{ text: '@sam commented' }],
+		repo: DEMO_REPO,
+		number: 20508,
+		title: 'Add the Forum app at /forum',
+		changes: [{ text: '2 checks failed', tone: 'bad' }],
 		unread: true,
 		ago: '12m',
 		actionLabel: 'Fix CI',
 		opensTo: 'the failing checks',
-		peek: BILLING_PEEK
+		url: pull(20508, '/checks'),
+		peek: FORUM_PEEK
 	},
 	{
 		id: 't-reply',
@@ -278,16 +299,18 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'Issue',
 		kind: 'reply',
-		summary: '@bo replied',
-		repo: 'acme/web',
-		number: 477,
-		title: 'Search results flicker on slow networks',
+		summary: '@ivanagas replied',
+		repo: DEMO_REPO,
+		number: 20700,
+		title:
+			'Website request - Add industry, region, company size, and use case filters to customer stories',
 		why: 'Assigned to you',
 		unread: false,
 		ago: '40m',
 		actionLabel: 'Reply',
 		opensTo: 'the new comment',
-		peek: FLICKER_PEEK
+		url: issue(20700),
+		peek: FILTERS_PEEK
 	},
 	{
 		id: 't-merge',
@@ -297,15 +320,16 @@ export const DEMO_THREADS: DemoThread[] = [
 		subject: 'PullRequest',
 		kind: 'merge',
 		summary: 'Ready to merge',
-		repo: 'acme/infra',
-		number: 88,
-		title: 'Bump Node to 22 in the CI images',
-		changes: [{ text: '@mei approved', tone: 'good' }],
+		repo: DEMO_REPO,
+		number: 20510,
+		title: 'Add an embeddable pricing calculator for blog posts',
+		changes: [{ text: '@natalia-amorim approved', tone: 'good' }],
 		unread: false,
 		ago: '25m',
 		actionLabel: 'Merge',
 		opensTo: 'the merge box',
-		peek: NODE_PEEK
+		url: pull(20510),
+		peek: CALCULATOR_PEEK
 	},
 	{
 		id: 't-changes',
@@ -314,38 +338,40 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'PullRequest',
 		kind: 'address_review',
-		summary: '@sam requested changes',
-		repo: 'acme/api',
-		number: 1302,
-		title: 'Add a retry budget to the GitHub client',
-		changes: [{ text: '3 new comments' }],
+		summary: '@charlescook-ph requested changes',
+		repo: DEMO_REPO,
+		number: 20524,
+		title: 'Keep community profile actions in the window bottom bar',
+		changes: [{ text: '2 new comments' }],
 		unread: false,
 		ago: '1h',
 		actionLabel: 'Address',
 		opensTo: 'the review comments',
-		peek: RETRY_PEEK
+		url: pull(20524, '/files'),
+		peek: PROFILE_PEEK
 	},
 	{
-		id: 't-release',
+		id: 't-headline',
 		list: 'fyi',
 		triage: 'inbox',
 		muted: false,
-		subject: 'Release',
+		subject: 'PullRequest',
 		kind: 'none',
-		summary: 'Release v4.2.0',
-		repo: 'acme/design',
-		number: null,
-		title: 'Design tokens v4.2.0',
-		why: 'Watching repo',
+		summary: '@charlescook-ph merged it',
+		repo: DEMO_REPO,
+		number: 20483,
+		title: 'feat(home): change hero headline to “Your product’s context layer”',
+		why: 'You approved',
 		unread: true,
 		ago: '2h',
 		actionLabel: 'Open',
-		opensTo: 'the release notes',
+		opensTo: 'the pull request',
+		url: pull(20483),
 		peek: simplePeek(
-			'release',
-			'published',
-			PEOPLE.mei,
-			'New chart colors for dark mode, and a tighter type scale for tables.'
+			'pr',
+			'merged',
+			GH.charlescook,
+			'Changes the homepage hero headline from “Make your product self-driving” to “Your product’s context layer”.'
 		)
 	},
 	{
@@ -353,22 +379,23 @@ export const DEMO_THREADS: DemoThread[] = [
 		list: 'fyi',
 		triage: 'inbox',
 		muted: false,
-		subject: 'Discussion',
+		subject: 'Issue',
 		kind: 'none',
-		summary: '@acme/web-team was mentioned',
-		repo: 'acme/web',
-		number: 501,
-		title: 'Q4 plan for the web app',
+		summary: 'Your team was mentioned',
+		repo: DEMO_REPO,
+		number: 19777,
+		title: 'Forum Facelift Meta Issue: Make /questions a place builders come back to',
 		why: 'Team mention',
 		unread: true,
 		ago: '3h',
 		actionLabel: 'Open',
-		opensTo: 'the discussion',
+		opensTo: 'the issue',
+		url: issue(19777),
 		peek: simplePeek(
 			'issue',
 			'open',
-			PEOPLE.sam,
-			'A draft of the Q4 plan. Comments are open until Friday.'
+			GH.brittanyjoiner,
+			'A restructure of the forum at posthog.com/questions, so that it stops behaving like a public inbox.'
 		)
 	},
 	{
@@ -379,15 +406,16 @@ export const DEMO_THREADS: DemoThread[] = [
 		subject: 'CheckSuite',
 		kind: 'none',
 		summary: 'CI passed',
-		repo: 'acme/web',
+		repo: DEMO_REPO,
 		number: null,
-		title: 'Deploy preview for main',
+		title: 'Build & deploy preview on master',
 		why: 'CI activity',
 		unread: false,
 		ago: '3h',
 		actionLabel: 'Open',
-		opensTo: 'the workflow run',
-		peek: simplePeek('run', 'passed', PEOPLE.you, 'All 6 jobs passed in 4m 12s.')
+		opensTo: 'the workflow runs',
+		url: `${REPO_URL}/actions`,
+		peek: simplePeek('run', 'passed', DEMO_ME, 'All 12 checks passed.')
 	},
 	{
 		id: 't-merged',
@@ -396,16 +424,22 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'PullRequest',
 		kind: 'none',
-		summary: '@mei merged it',
-		repo: 'acme/design',
-		number: 61,
-		title: 'Dark mode tokens for charts',
-		why: 'Subscribed',
+		summary: '@Lizzieepton merged it',
+		repo: DEMO_REPO,
+		number: 20471,
+		title: 'Make the use cases headline visible in dark mode',
+		why: 'You approved',
 		unread: false,
 		ago: '4h',
 		actionLabel: 'Open',
 		opensTo: 'the pull request',
-		peek: simplePeek('pr', 'merged', PEOPLE.mei, 'Adds dark variants for the five chart colors.')
+		url: pull(20471),
+		peek: simplePeek(
+			'pr',
+			'merged',
+			GH.lizzieepton,
+			'Adds text-primary to the headline on /context-warehouse/use-cases, so that its color follows the theme.'
+		)
 	},
 	{
 		id: 't-bot',
@@ -414,34 +448,47 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'PullRequest',
 		kind: 'none',
-		summary: '@dependabot opened it',
-		repo: 'acme/api',
-		number: 1307,
-		title: 'Bump eslint from 9.11 to 9.12',
+		summary: '@posthog[bot] opened it',
+		repo: DEMO_REPO,
+		number: 20676,
+		title: 'fix(redirects): redirect /open-positions to /careers',
 		why: 'Subscribed',
 		unread: false,
 		ago: '5h',
 		actionLabel: 'Open',
 		opensTo: 'the pull request',
-		peek: simplePeek('pr', 'open', PEOPLE.dependabot, 'Bumps eslint from 9.11 to 9.12.')
+		url: pull(20676),
+		peek: simplePeek(
+			'pr',
+			'open',
+			GH.posthogBot,
+			'Visitors who open the old /open-positions URL get a 404 page. This sends them to /careers.'
+		)
 	},
 	{
-		id: 't-typo',
+		id: 't-bug',
 		list: 'fyi',
 		triage: 'inbox',
 		muted: false,
 		subject: 'Issue',
 		kind: 'none',
 		summary: 'New issue',
-		repo: 'acme/docs',
-		number: 212,
-		title: 'Typo in the getting started guide',
+		repo: DEMO_REPO,
+		number: 20709,
+		title:
+			'Bug Report: TanStack Router tile in product installation grids links to a missing docs page',
 		why: 'Watching repo',
 		unread: false,
 		ago: '6h',
 		actionLabel: 'Open',
 		opensTo: 'the issue',
-		peek: simplePeek('issue', 'open', PEOPLE.bo, '“recieve” in step 3.')
+		url: issue(20709),
+		peek: simplePeek(
+			'issue',
+			'open',
+			GH.posthogBot,
+			'The TanStack Router tile links to /docs/libraries/tanstack-router. That page does not exist.'
+		)
 	},
 	{
 		id: 't-snoozed',
@@ -450,16 +497,22 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'PullRequest',
 		kind: 'review',
-		summary: '@sam requests your review',
-		repo: 'acme/api',
-		number: 1310,
-		title: 'Cache org teams for six hours',
+		summary: '@rubychilds requests your review',
+		repo: DEMO_REPO,
+		number: 20202,
+		title: 'docs(handbook): explain how to test the Ashby API, replace archived channel',
 		unread: false,
 		ago: '1d',
 		actionLabel: 'Review',
 		opensTo: 'the files to review',
 		snoozedLabel: 'until CI passes (or Mon 9:00)',
-		peek: simplePeek('pr', 'open', PEOPLE.sam, 'Caches the team list for six hours.')
+		url: pull(20202, '/files'),
+		peek: simplePeek(
+			'pr',
+			'open',
+			GH.rubychilds,
+			'Explains how to test the Ashby API key, and replaces a reference to an archived Slack channel.'
+		)
 	},
 	{
 		id: 't-done',
@@ -468,16 +521,22 @@ export const DEMO_THREADS: DemoThread[] = [
 		muted: false,
 		subject: 'PullRequest',
 		kind: 'review',
-		summary: '@mei requests your review',
-		repo: 'acme/web',
-		number: 470,
-		title: 'Upgrade Svelte to 5.40',
+		summary: '@rafaeelaudibert requests your review',
+		repo: DEMO_REPO,
+		number: 20579,
+		title: 'Remove the Korean landing page and newsletter translations',
 		note: 'You approved',
 		unread: false,
 		ago: '1d',
 		actionLabel: 'Open',
 		opensTo: 'the pull request',
-		peek: simplePeek('pr', 'merged', PEOPLE.mei, 'Upgrades Svelte and fixes two warnings.')
+		url: pull(20579),
+		peek: simplePeek(
+			'pr',
+			'merged',
+			GH.rafaeelaudibert,
+			'Removes the Korean landing page at /ko and the three Korean newsletter translations.'
+		)
 	},
 	{
 		id: 't-muted',
@@ -487,143 +546,227 @@ export const DEMO_THREADS: DemoThread[] = [
 		subject: 'PullRequest',
 		kind: 'none',
 		summary: '@dependabot opened it',
-		repo: 'acme/web',
-		number: 488,
-		title: 'Bump vite from 7.1.3 to 7.1.4',
-		rule: 'Mute dependabot on web',
+		repo: DEMO_REPO,
+		number: 20631,
+		title: 'chore(deps): bump urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm',
+		rule: 'Mute dependabot',
 		unread: false,
 		ago: '2h',
 		actionLabel: 'Open',
 		opensTo: 'the pull request',
-		peek: simplePeek('pr', 'open', PEOPLE.dependabot, 'Bumps vite from 7.1.3 to 7.1.4.')
+		url: pull(20631),
+		peek: simplePeek(
+			'pr',
+			'open',
+			GH.dependabot,
+			'Bumps urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm.'
+		)
 	}
 ];
 
 export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 	pulls: [
 		{
-			id: 'p-482',
+			id: 'p-20387',
 			threadId: 't-review',
-			title: 'Fix token refresh race in session middleware',
-			repo: 'acme/web',
-			number: 482,
-			person: PEOPLE.alice,
+			title: 'Add Juno customer case study and cross-links',
+			repo: DEMO_REPO,
+			number: 20387,
+			person: GH.joethreepwood,
 			reason: 'Review requested',
 			group: 'yours',
 			sections: ['Review requested'],
-			peek: ALICE_PEEK
+			ago: '3m',
+			actionLabel: 'Review',
+			url: pull(20387, '/files'),
+			diff: { additions: 123, deletions: 1 },
+			comments: 6,
+			ci: 'pass',
+			peek: JUNO_PEEK
 		},
 		{
-			id: 'p-1291',
+			id: 'p-20508',
 			threadId: 't-ci',
-			title: 'Move billing webhooks to the queue worker',
-			repo: 'acme/api',
-			number: 1291,
-			person: PEOPLE.you,
+			title: 'Add the Forum app at /forum',
+			repo: DEMO_REPO,
+			number: 20508,
+			person: DEMO_ME,
 			reason: 'CI failing',
 			tone: 'bad',
 			group: 'yours',
 			sections: ['Your PRs'],
-			peek: BILLING_PEEK
+			ago: '12m',
+			actionLabel: 'Fix CI',
+			url: pull(20508, '/checks'),
+			diff: { additions: 4110, deletions: 268 },
+			comments: 3,
+			ci: 'fail',
+			peek: FORUM_PEEK
 		},
 		{
-			id: 'p-88',
+			id: 'p-20510',
 			threadId: 't-merge',
-			title: 'Bump Node to 22 in the CI images',
-			repo: 'acme/infra',
-			number: 88,
-			person: PEOPLE.you,
+			title: 'Add an embeddable pricing calculator for blog posts',
+			repo: DEMO_REPO,
+			number: 20510,
+			person: DEMO_ME,
 			reason: 'Ready to merge',
 			group: 'yours',
 			sections: ['Your PRs'],
-			peek: NODE_PEEK
+			ago: '25m',
+			actionLabel: 'Merge',
+			url: pull(20510),
+			diff: { additions: 51, deletions: 10 },
+			ci: 'pass',
+			review: 'approved',
+			labels: [LABEL.website],
+			peek: CALCULATOR_PEEK
 		},
 		{
-			id: 'p-1302',
+			id: 'p-20524',
 			threadId: 't-changes',
-			title: 'Add a retry budget to the GitHub client',
-			repo: 'acme/api',
-			number: 1302,
-			person: PEOPLE.you,
+			title: 'Keep community profile actions in the window bottom bar',
+			repo: DEMO_REPO,
+			number: 20524,
+			person: DEMO_ME,
 			reason: 'Changes requested',
 			group: 'yours',
 			sections: ['Your PRs'],
-			peek: RETRY_PEEK
+			ago: '1h',
+			actionLabel: 'Address',
+			url: pull(20524, '/files'),
+			diff: { additions: 32, deletions: 35 },
+			comments: 2,
+			ci: 'pass',
+			review: 'changes',
+			labels: [LABEL.website],
+			peek: PROFILE_PEEK
 		},
 		{
-			id: 'p-63',
-			title: 'Chart legend wraps on small screens',
-			repo: 'acme/design',
-			number: 63,
-			person: PEOPLE.mei,
-			reason: 'Review for acme/web-team',
+			id: 'p-20454',
+			title: '[blog] How one runtime manages cloud agents for four PostHog products',
+			repo: DEMO_REPO,
+			number: 20454,
+			person: GH.cleoPleurodon,
+			reason: 'Review for your team',
 			group: 'team',
 			sections: ['Team reviews'],
-			peek: simplePeek('pr', 'open', PEOPLE.mei, 'Lets the legend wrap to two lines.')
+			ago: '2h',
+			actionLabel: 'Review',
+			url: pull(20454, '/files'),
+			diff: { additions: 148, deletions: 0 },
+			comments: 3,
+			ci: 'running',
+			labels: [LABEL.blog],
+			peek: simplePeek(
+				'pr',
+				'open',
+				GH.cleoPleurodon,
+				'A new blog post about how one runtime manages cloud agents for four PostHog products.'
+			)
 		},
 		{
-			id: 'p-1310',
-			title: 'Cache org teams for six hours',
-			repo: 'acme/api',
-			number: 1310,
-			person: PEOPLE.you,
+			id: 'p-20571',
+			title: 'Replace avatar fallback with DrakeHog',
+			repo: DEMO_REPO,
+			number: 20571,
+			person: DEMO_ME,
 			reason: 'Waiting for review',
 			tone: 'stale',
 			group: 'waiting',
 			sections: ['Your PRs'],
-			peek: simplePeek('pr', 'open', PEOPLE.you, 'Caches the team list for six hours.')
+			ago: '5d',
+			actionLabel: 'Open',
+			url: pull(20571),
+			diff: { additions: 2, deletions: 2 },
+			ci: 'pass',
+			labels: [LABEL.website],
+			peek: simplePeek(
+				'pr',
+				'open',
+				DEMO_ME,
+				'Replaces the default avatar fallback, Max the hedgehog, with DrakeHog.'
+			)
 		},
 		{
-			id: 'p-468',
-			title: 'Fix the flaky login test',
-			repo: 'acme/web',
-			number: 468,
-			person: PEOPLE.bo,
+			id: 'p-20438',
+			title: 'chore(pages): move components out of src/pages',
+			repo: DEMO_REPO,
+			number: 20438,
+			person: GH.sarahxsanders,
 			reason: 'You approved',
 			group: 'waiting',
 			sections: ['You reviewed'],
-			peek: simplePeek('pr', 'open', PEOPLE.bo, 'Waits for the session cookie before it clicks.')
+			ago: '1d',
+			actionLabel: 'Open',
+			url: pull(20438),
+			diff: { additions: 8, deletions: 115 },
+			comments: 1,
+			ci: 'pass',
+			review: 'approved',
+			labels: [LABEL.website],
+			peek: simplePeek(
+				'pr',
+				'open',
+				GH.sarahxsanders,
+				'Four files in src/pages are components, not pages. Gatsby made a public route for each one.'
+			)
 		}
 	],
 	issues: [
 		{
-			id: 'i-477',
+			id: 'i-20700',
 			threadId: 't-reply',
-			title: 'Search results flicker on slow networks',
-			repo: 'acme/web',
-			number: 477,
-			person: PEOPLE.bo,
-			reason: '@bo replied',
+			title:
+				'Website request - Add industry, region, company size, and use case filters to customer stories',
+			repo: DEMO_REPO,
+			number: 20700,
+			person: GH.ivanagas,
+			reason: '@ivanagas replied',
 			group: 'yours',
 			sections: ['Assigned to you'],
-			peek: FLICKER_PEEK
+			ago: '40m',
+			actionLabel: 'Reply',
+			url: issue(20700),
+			comments: 1,
+			labels: [LABEL.website],
+			peek: FILTERS_PEEK
 		},
 		{
-			id: 'i-455',
-			title: 'Rate limit banner covers the header',
-			repo: 'acme/web',
-			number: 455,
-			person: PEOPLE.you,
+			id: 'i-19783',
+			title: 'fix /docs layout shift from searchbar and searchbar not showing before hydration',
+			repo: DEMO_REPO,
+			number: 19783,
+			person: DEMO_ME,
 			reason: 'Waiting for a reply',
 			group: 'waiting',
 			sections: ['You opened'],
-			peek: simplePeek('issue', 'open', PEOPLE.you, 'The banner sits on top of the header on iPad.')
-		},
-		{
-			id: 'i-401',
-			title: 'Dark mode for the digest email',
-			repo: 'acme/web',
-			number: 401,
-			person: PEOPLE.sam,
-			reason: 'Mentions you',
-			group: 'other',
-			sections: ['Mentions you'],
+			ago: '2d',
+			actionLabel: 'Open',
+			url: issue(19783),
+			comments: 1,
 			peek: simplePeek(
 				'issue',
 				'open',
-				PEOPLE.sam,
-				'The digest email is hard to read in dark mode.'
+				DEMO_ME,
+				'The search bar on /docs moves the layout, and it does not show before hydration.'
 			)
+		},
+		{
+			id: 'i-20423',
+			title: 'Website request - Add support product to pricing page',
+			repo: DEMO_REPO,
+			number: 20423,
+			person: GH.ivanagas,
+			reason: 'Mentions you',
+			group: 'other',
+			sections: ['Mentions you'],
+			ago: '3d',
+			actionLabel: 'Open',
+			url: issue(20423),
+			comments: 2,
+			labels: [LABEL.website],
+			peek: simplePeek('issue', 'open', GH.ivanagas, 'Add the support product to the pricing page.')
 		}
 	]
 };
@@ -639,3 +782,37 @@ export const DASH_GROUPS = [
 	{ id: 'waiting', label: 'Waiting on others' },
 	{ id: 'other', label: 'Other' }
 ] as const;
+
+const REF_STATE: Partial<Record<DemoPeek['state'], RefSuggestion['state']>> = {
+	open: 'open',
+	draft: 'draft',
+	merged: 'merged',
+	closed: 'closed'
+};
+
+export const DEMO_REFS: RefSuggestion[] = [
+	...DEMO_THREADS,
+	...DEMO_DASH.pulls,
+	...DEMO_DASH.issues
+].flatMap((item) =>
+	item.number === null || (item.peek.kind !== 'pr' && item.peek.kind !== 'issue')
+		? []
+		: [
+				{
+					kind: 'ref' as const,
+					number: item.number,
+					title: item.title,
+					type: item.peek.kind,
+					state: REF_STATE[item.peek.state] ?? 'open',
+					repo: null
+				}
+			]
+);
+
+export const DEMO_PEOPLE: UserSuggestion[] = [DEMO_ME, ...Object.values(GH)].map((who) => ({
+	kind: 'user',
+	login: who.login,
+	name: null,
+	avatar: null,
+	team: false
+}));
