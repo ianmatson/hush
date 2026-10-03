@@ -37,7 +37,6 @@
 	"workers_dev": false,
 	"preview_urls": false,
 	"routes": [{ "pattern": "app.hush-gh.com", "custom_domain": true }],
-	// Only members of these GitHub orgs can sign in (comma-separated). Empty = anyone with a token.
 	"vars": {
 		// Sign in with GitHub (OAuth app; its secret is GITHUB_CLIENT_SECRET). .dev.vars sets the
 		// development app and APP_URL=http://localhost:5173.
