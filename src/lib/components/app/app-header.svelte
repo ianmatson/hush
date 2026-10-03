@@ -51,7 +51,11 @@
 
 <header class="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
 	<div class="mx-auto flex h-12 max-w-4xl items-center gap-4 px-4">
-		<a href="/inbox" class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
+		<a
+			href={SITE_URL}
+			aria-label="Hush for GitHub home page"
+			class="flex shrink-0 items-center gap-2 font-semibold tracking-tight"
+		>
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
