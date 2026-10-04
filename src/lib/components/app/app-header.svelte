@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { keysOf } from '$lib/keys.svelte';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { alertsQuery, dashQuery, leaveTo, meQuery, turnCount } from '$lib/queries';
+	import { alertsQuery, leaveTo, meQuery } from '$lib/queries';
 	import { alertsSeen } from '$lib/alerts.svelte';
 	import { ui } from '$lib/ui.svelte';
 	import { cn } from '$lib/utils';
@@ -20,15 +19,10 @@
 	import { palette } from '$lib/palette.svelte';
 
 	const me = createQuery(meQuery);
-	const prTurns = createQuery(() => ({ ...dashQuery('pr'), select: turnCount }));
-	const issueTurns = createQuery(() => ({ ...dashQuery('issue'), select: turnCount }));
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);
 	const newAlerts = $derived(alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0);
-
-	const yourTurn = $derived((prTurns.data ?? 0) + (issueTurns.data ?? 0));
-	const onItems = $derived(page.url.pathname === '/items');
 
 	async function signOut() {
 		await api.logout().catch(() => {});
@@ -39,31 +33,13 @@
 <header class="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
 	<div class="mx-auto flex h-12 max-w-4xl items-center gap-4 px-4">
 		<a
-			href={SITE_URL}
-			aria-label="Hush for GitHub home page"
+			href="/items"
+			aria-label="Items"
 			class="flex shrink-0 items-center gap-2 font-semibold tracking-tight"
 		>
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
-		<nav class="flex min-w-0 items-center text-sm">
-			<a
-				href="/items"
-				aria-current={onItems ? 'page' : undefined}
-				class={cn(
-					'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:text-foreground',
-					onItems && 'bg-muted text-foreground'
-				)}
-			>
-				Items
-				{#if yourTurn}
-					<span
-						class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-						title="Your turn">{yourTurn}</span
-					>
-				{/if}
-			</a>
-		</nav>
 		<div class="ml-auto flex items-center gap-1">
 			<button
 				type="button"
