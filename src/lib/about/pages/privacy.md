@@ -5,13 +5,13 @@ description: What Hush stores about you, where it keeps it, who else sees it, an
 
 Hush is a small open-source app. It reads your GitHub notifications so that it can sort them for you, and that is all it uses your data for. It has no ads and no analytics, and it does not sell or share your data. Everything below is also in [the source code](https://github.com/ianmatson/hush).
 
-_Last updated: 3 October 2026._
+_Last updated: 4 October 2026._
 
 ## The short version
 
 - Hush stores only what it needs to sort your notifications and show your lists.
 - Your GitHub token is encrypted. It never goes to your browser.
-- Nobody else gets your data, except the services that Hush runs on, and TypeSafe if you turn on smart decisions (below).
+- Nobody else gets your data, except the services that Hush runs on, and TypeSafe unless you turn off smart decisions (below).
 - **Delete account** deletes all of it at once.
 
 ## What Hush stores
@@ -26,7 +26,7 @@ _Last updated: 3 October 2026._
 
 - Your notification threads: the repository, the title, the link, why GitHub notified you, read or unread, and what you did with it (Done, Snoozed, Muted).
 - For each pull request and issue behind them: its state, author, labels, CI result, reviews and review requests, size, the first 500 characters of its description, and the 2 newest comments (their author, time, and text).
-- If you turn on [smart decisions](/docs/settings#smartdecisions): Jev's answers for each pull request and issue (whether the newest comments need a reply from you, how urgent it is, and which of your `about:` conditions it matches), and how many tokens your account used today.
+- Unless you turn off [smart decisions](/docs/settings#smartdecisions): Jev's answers for each pull request and issue (whether the newest comments need a reply from you, how urgent it is, which category fits it, and which of your `about:` conditions it matches), and how many tokens your account used today.
 - The results of your Pull requests and Issues searches, and the items that you hid or moved there.
 - Your teams (their names), for team review requests.
 
@@ -51,7 +51,7 @@ Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your notification
 - **GitHub**, where your data comes from. Hush sends GitHub only the requests that it needs, with your token. The app shows avatars and the images in comments from GitHub's own servers, so GitHub also sees those requests from your browser.
 - **Cloudflare**, which runs Hush and stores its data. Cloudflare also keeps request logs (addresses, status codes, and errors) for a few days, which Hush uses to find bugs.
 - **Your browser's push service** (Apple, Google, Mozilla, or Microsoft) carries each push to your device. The message is encrypted for your device, so the push service cannot read it; it sees only that a message went to it.
-- **TypeSafe**, only if you turn on [smart decisions](/docs/settings#smartdecisions) (off by default). Hush sends TypeSafe's Jev model, through Cloudflare Workers AI, the title, repository, author, labels, first 500 characters of the description, and 2 newest comments of your pull requests and issues, your GitHub login, and the text of your `about:` conditions. Cloudflare lists Jev with zero data retention: TypeSafe does not keep what it reads. Turn smart decisions off to stop this; Hush then deletes Jev's answers.
+- **TypeSafe**, unless you turn off [smart decisions](/docs/settings#smartdecisions) (on by default). Hush sends TypeSafe's Jev model, through Cloudflare Workers AI, the title, repository, author, labels, first 500 characters of the description, and 2 newest comments of your pull requests and issues, your GitHub login, and the text of your `about:` conditions. Cloudflare lists Jev with zero data retention: TypeSafe does not keep what it reads. Turn smart decisions off to stop this; Hush then deletes Jev's answers.
 
 That is all. There are no analytics, tracking, or advertising services, and no third-party scripts on the site or in the app.
 

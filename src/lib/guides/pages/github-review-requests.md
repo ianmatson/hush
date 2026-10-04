@@ -55,34 +55,34 @@ If you review for one or two teams, a saved view with `user-review-requested:@me
 
 ## Where Hush helps
 
-GitHub's searches know who was asked. They do not know if the request still waits on you: if the author pushed new commits since your review, or if someone else already reviewed. Hush looks at the reviews, commits, and CI of each pull request, and puts a review request in **Needs you** when it is your turn:
+GitHub's searches know who was asked. They do not know if the request still waits on you: if the author pushed new commits since your review, or if someone else already reviewed. Hush looks at the reviews, commits, and CI of each pull request, and puts a review request in **Your turn** when it waits on you:
 
 - Your review is requested from you by name, or again after your review.
 - New commits arrived since your review.
 - The pull request is assigned to you.
 
-When you approve or request changes, Hush moves the thread to **Done** by itself. See [what needs you](/docs/inbox#what-needs-you).
+When you approve or request changes, the pull request leaves Your turn by itself. See [what is your turn](/docs/turns#what-is-your-turn).
 
-Team requests are **FYI** by default. On the [Pull requests tab](/docs/pull-requests-and-issues), they are in their own group, **Your team's turn**. You can change this:
+Team requests are not your turn by default. On the [Pull requests tab](/docs/pull-requests-and-issues), they are in their own group, **Your team's turn**. You can change this:
 
-- [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests go to Needs you, and push.
+- [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests are your turn, and push.
 - [`reviewResolution`](/docs/settings#reviewresolution) `"any_review"`: a review by someone else settles a request. Use it on teams where one review is enough.
 - [`dash.excludedTeams`](/docs/settings#dash-excludedteams): leave out big teams, such as "everyone".
 
-A [saved view](/docs/views) with only review requests from people, and the settings above:
+A [tag](/docs/pull-requests-and-issues#categories-and-tags) for review requests from people, and the settings above:
 
 ```json settings
 {
 	"teamReviewsAreAction": false,
 	"reviewResolution": "any_review",
 	"dash": { "excludedTeams": ["acme/everyone"] },
-	"views": [
-		{ "id": "reviews", "name": "Reviews", "base": "action", "query": "needs:review -author:bots" }
+	"tags": [
+		{ "id": "reviews", "name": "Reviews", "color": "blue", "rule": "needs:review -author:bots" }
 	]
 }
 ```
 
-`needs:review` also matches deployments that wait for your approval. To read the pull request and approve it without leaving Hush, use the [peek](/docs/peek). For the diff and line comments, Hush sends you to GitHub.
+A change to `tags` replaces the whole list, so write the tags that you keep too. To read the pull request and approve it without leaving Hush, use the [peek](/docs/peek). For the diff and line comments, Hush sends you to GitHub.
 
 ## Sources
 

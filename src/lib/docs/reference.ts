@@ -25,7 +25,6 @@ import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
-import { MAX_VIEWS, VIEW_BASES } from '$lib/shared/views';
 import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
@@ -73,7 +72,7 @@ const table = (head: string[], rows: string[][]) =>
 
 const PAGE: Record<SettingsPage, string> = {
 	general: 'Settings → General',
-	inbox: 'Settings → Inbox',
+	inbox: 'Settings → Turns & Jev',
 	dashboards: 'Settings → Sources',
 	categories: 'Settings → Categories & tags',
 	notifications: 'Settings → Notifications',
@@ -94,15 +93,15 @@ export function defaultOf(key: string): unknown {
 export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
 	pushAction: {
 		type: 'boolean',
-		body: `When a thread arrives in **Needs you**, Hush sends a push to every device that has push on. A rule with \`"push": false\` stops the push for the threads it matches; with \`"push": true\` it sends one even when this is off.`
+		body: `When one of your pull requests or issues needs you, Hush sends a push to every device that has push on. A category's \`push\` setting can stop it (\`"off"\`) or send it even when this is off (\`"on"\`): see [categories](#categories). The bell lists it either way.`
 	},
 	pushFyi: {
 		type: 'boolean',
-		body: `Also push FYI threads. Most people leave this off and write a rule with \`"push": true\` for the few repositories or people they care about.`
+		body: `Also push changes that do not need you. Most people leave this off and set \`push: "on"\` on the few [categories](#categories) they care about.`
 	},
 	pushTurnChanges: {
 		type: 'boolean',
-		body: `GitHub sends no notification for some changes that make a thread your turn: new commits after your review, CI that fails later, a snooze that ends. The inbox watcher looks at open threads every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, Hush moves it to Needs you and, with this on, pushes it.`
+		body: `GitHub sends no notification for some changes that make an item your turn: new commits after your review, CI that fails later, a snooze that ends. Hush looks at your open items again every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, it shows in the bell and, with this on, pushes.`
 	},
 	quietHours: {
 		type: 'object or null',
@@ -179,10 +178,10 @@ This also applies to team review requests.`
 	},
 	smartDecisions: {
 		type: 'boolean',
-		body: `Off by default. On, Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
+		body: `On by default (turn it off in **Settings → Turns & Jev**). Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
 
 - **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
-- **\`about:\` conditions** in your rules and saved views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
+- **Categories and tags:** Jev picks a category among the ones with a description, and answers the \`about:\` conditions of your category and tag rules. See [categories](#categories) and [tags](#tags).
 - **Order:** on the Pull requests and Issues tabs, items whose text says they block something or are about an incident come first inside their group.
 
 When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and your other rules work as before. Turning it off deletes Jev's answers.`
@@ -193,53 +192,7 @@ When you turn it on, or add an \`about:\` condition, Hush checks your open threa
 	},
 	teamReviewsAreAction: {
 		type: 'boolean',
-		body: `A review request to a team you are in goes to **Needs you** (and is pushed). Off, it is FYI in the inbox, and it shows under “Your team's turn” on the Pull requests tab.`
-	},
-	rules: {
-		type: 'array of rules',
-		body: `Your inbox rules. Hush checks them from top to bottom, after its own defaults. The first enabled rule that matches a thread wins. A change to the rules sorts your stored threads again. See [Rules](/docs/rules) for the editor, and [the query language](/docs/query-language) for the conditions.
-
-A rule:
-
-- \`name\` (text, optional): shown on the thread as “rule: …”.
-- \`enabled\` (boolean, optional): \`false\` turns the rule off. Missing means on.
-- \`when\` (text): a [query](/docs/query-language), such as \`"repo:acme/* needs:review"\`. All of its conditions must match. \`""\` matches every thread. A query with a part that Hush does not understand is refused.
-- \`then\` (object): what to do. It needs at least one of \`category\`, \`push\`, or \`triage\`.
-  - \`category\`: \`"action"\` (Needs you), \`"fyi"\`, or \`"muted"\`.
-  - \`push\`: \`true\` or \`false\`, in place of the push settings.
-  - \`triage\`: \`"done"\` moves the thread to Done, \`"snooze"\` snoozes it for \`snoozeHours\` (a whole number from 1 to 720). Hush moves a thread only when it has new activity or when the rule starts to match, so a thread that you move back stays where you put it.
-
-\`\`\`json settings
-{
-  "rules": [
-    { "name": "Docs repo is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
-    { "name": "Mute dependabot", "when": "author:dependabot*", "then": { "category": "muted" } },
-    {
-      "name": "Nightly CI can wait",
-      "when": "type:ci repo:acme/nightly",
-      "then": { "triage": "snooze", "snoozeHours": 12, "push": false }
-    }
-  ]
-}
-\`\`\``
-	},
-	views: {
-		type: 'array of views',
-		body: `Saved views: extra tabs after the built-in inbox tabs, in this order. Up to ${MAX_VIEWS}.
-
-- \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
-- \`name\`: up to 40 characters. The tab label.
-- \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
-- \`query\`: a [query](/docs/query-language), the same words as rules. \`in:\` here is the thread's list now, after your rules. \`""\` shows every thread of the base.
-
-\`\`\`json settings
-{
-  "views": [
-    { "id": "web", "name": "Web team", "base": "inbox", "query": "repo:acme/web-*" },
-    { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" }
-  ]
-}
-\`\`\``
+		body: `A review request to a team you are in counts as **Your turn** (and can push). Off, it shows under **Your team's turn**.`
 	},
 	sources: {
 		type: 'array of sources',
@@ -268,6 +221,7 @@ ${table(
 - \`color\`: ${MARK_COLORS.map((c) => `\`"${c}"\``).join(', ')}.
 - \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev.
 - \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
+- \`push\` (optional): \`"inherit"\` (the default) follows the notification settings; \`"on"\` pushes this category's items that need you, also when the notification settings would not; \`"off"\` never pushes them. The bell lists them either way.
 
 Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description, when it is at least ${CHOICE_CONFIDENCE * 100}% sure; else \`"${FALLBACK_CATEGORY_ID}"\`. Jev chooses once for each item, and again only when its title, description, or labels change. After you change categories, **Re-evaluate items** asks again for your open items.
 
@@ -362,7 +316,7 @@ How to write a key:
 - Other characters are themselves, with no Shift: \`"?"\`, \`"/"\`, \`"1"\`.
 
 \`\`\`json settings
-{ "keys": { "inbox.done": ["d", "e"], "inbox.mute": [], "palette": ["Mod+k", "Mod+p"] } }
+{ "keys": { "dash.hide": ["d", "e"], "dash.mute": [], "palette": ["Mod+k", "Mod+p"] } }
 \`\`\``
 	}
 };
@@ -413,7 +367,7 @@ export function keyMention(id: string, where = 'docs'): string {
 	return c.keys.length ? c.keys.map(one).join(' or ') : '(no key)';
 }
 
-/** Some commands and their keys, in this order: {{ref:keys list.next inbox.done}}. */
+/** Some commands and their keys, in this order: {{ref:keys list.next dash.hide}}. */
 function someKeys(ids: string[]): string {
 	return table(
 		['Key', 'What it does'],
@@ -549,15 +503,13 @@ function limitsReference(): string {
 			],
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
 			['Done threads with no activity are forgotten after', '30 days'],
-			['Saved views', String(MAX_VIEWS)],
 			['Sources', String(MAX_SOURCES)],
 			['Tracked items', String(MAX_TRACKED)],
 			['GitHub searches per tab', String(MAX_QUERIES)],
 			['Items per menu', '60'],
 			['Keys per command', '4'],
 			['Push devices', '10'],
-			['Rule snooze (snoozeHours)', '1 to 720 hours'],
-			['Different about: conditions in rules and views', String(MAX_SMART_CONDITIONS)],
+			['Different about: conditions in categories and tags', String(MAX_SMART_CONDITIONS)],
 			['Length of one about: condition', `${MAX_CONDITION_CHARS} characters`],
 			[
 				'Smart decisions per account',

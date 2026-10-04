@@ -29,7 +29,7 @@ description: Octobox and Hush are both web apps for GitHub notifications. Octobo
 
 **Octobox** adds an **archive** state to GitHub notifications: you archive a thread when you finish, and Octobox brings it back to the inbox when new activity comes. You can also star and mute threads. Its search takes prefixes such as `repo:`, `owner:`, `type:`, `reason:`, `state:`, `label:`, `author:`, `status:` (CI), `bot:`, `draft:`, and `assignee:`, and combines them with free text. With its optional GitHub App, Octobox also gets the state, CI status, labels, and author of each item. The list is sorted by time; Octobox does not decide which threads need you.
 
-**Hush** reads the pull request or issue behind each notification and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When a thread stops needing you (you approved, CI passes now, it was merged), Hush moves it to Done with a note; if it needs you again, it comes back. [Rules](/docs/rules) change where threads go and whether they push.
+**Hush** reads the pull request or issue behind each notification and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When a thread stops needing you (you approved, CI passes now, it was merged), Hush moves it to Done with a note; if it needs you again, it comes back. [Categories and tags](/docs/pull-requests-and-issues#categories-and-tags) sort items, and decide whether they push.
 
 Both apps bring a finished thread back when there is new activity, and in both, Mute stops the notifications of that thread.
 
@@ -87,6 +87,6 @@ Both apps bring a finished thread back when there is new activity, and in both, 
 - [octobox/octobox on GitHub](https://github.com/octobox/octobox): README, AGPL-3.0 license, thread view, desktop use
 - [Octobox installation guide](https://github.com/octobox/octobox/blob/main/docs/INSTALLATION.md): self-hosting, GitHub App, GitHub Enterprise, live updates
 - [Octobox releases](https://github.com/octobox/octobox/releases): "october-2026", 1 October 2026
-- Hush: [inbox](/docs/inbox), [peek](/docs/peek), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
+- Hush: [whose turn](/docs/turns), [peek](/docs/peek), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

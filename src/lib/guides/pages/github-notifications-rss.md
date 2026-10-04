@@ -1,11 +1,11 @@
 ---
 title: How to follow GitHub notifications in an RSS or Atom reader
-description: GitHub has no documented feed for your notifications inbox. Use the Atom feeds for releases and commits, the REST API, or a private Hush feed of your Needs you list, FYI, or a saved view.
+description: GitHub has no documented feed for your notifications inbox. Use the Atom feeds for releases and commits, the REST API, or a private Hush feed of a category or a tag of your pull requests and issues.
 ---
 
 ## Short answer
 
-**GitHub does not give your notifications inbox an RSS or Atom feed. It has unsupported Atom feeds for public activity, such as `https://github.com/OWNER/REPO/releases.atom`, and a REST API for notifications. Hush gives each inbox tab and each saved view a private Atom feed that you can paste into any feed reader.**
+**GitHub does not give your notifications inbox an RSS or Atom feed. It has unsupported Atom feeds for public activity, such as `https://github.com/OWNER/REPO/releases.atom`, and a REST API for notifications. Hush gives each category and each tag of your pull requests and issues a private Atom feed that you can paste into any feed reader.**
 
 ## What GitHub has
 
@@ -27,13 +27,13 @@ If you only want to know about releases, you do not need a feed: open the reposi
 
 The notifications API (`GET /notifications`) lists your notification threads. A small script can turn it into a feed, but you must run it, keep a token for it, and decide what each entry says.
 
-## Get a feed of your notifications with Hush
+## Get a feed of your pull requests and issues with Hush
 
-Hush can make a private Atom feed of any inbox tab: **Needs you**, **FYI**, **Needs you + FYI**, or one of your [saved views](/docs/views).
+Hush sorts the pull requests and issues that involve you into [categories and tags](/docs/pull-requests-and-issues#categories-and-tags). Each category and each tag can have a private Atom feed.
 
 1. Sign in at [app.hush-gh.com](https://app.hush-gh.com).
-2. Go to **Settings → Inbox → Views and feeds**.
-3. Choose the feed button (the RSS icon) next to a tab. Hush makes the feed and copies its address.
+2. Go to **Settings → Categories & tags**.
+3. Choose the feed button (the RSS icon) next to a category or a tag. Hush makes the feed and copies its address.
 4. Paste the address in your feed reader, a Slack feed app, or a script.
 
 Hush shows the address **only once**: it keeps only a hash of it. If you lose it, make a new one.
@@ -42,32 +42,32 @@ Hush shows the address **only once**: it keeps only a hash of it. If you lose it
 
 ### What each entry has
 
-- The title: what happened and the title of the thread, such as "CI failed on your PR: Fix login".
-- The link: the thread's main action on GitHub, such as the files to review.
-- The repository, the number, why GitHub notified you, and the newest comment.
-- The author, and the list (`action` or `fyi`) as a category.
+- The title: the turn reason and the title of the item, such as "CI failing: Fix login".
+- The link: the item's main action on GitHub, such as the files to review.
+- The repository, the number, and who wrote the newest comment.
+- The author.
 
-The feed has the threads that are in the tab now, newest first. A thread that you mark Done leaves the feed. When a thread has new activity, its entry gets a new ID, so most readers show it as new again. The feed can be up to 2 minutes old. See [Feeds](/docs/feeds).
+The feed has the open items that are in the category or have the tag now, newest update first. An item that you hide leaves the feed. When an item changes, its entry gets a new ID, so most readers show it as new again. The feed can be up to 2 minutes old. See [Feeds](/docs/feeds).
 
 ### A feed for one topic
 
-Make a saved view, then make a feed of it. For example, a view of releases, and a view of failing CI:
+Make a tag, then make a feed of it. For example, a tag for one repository, and a tag for failing CI on your pull requests:
 
 ```json settings
 {
-	"views": [
-		{ "id": "releases", "name": "Releases", "base": "inbox", "query": "type:release" },
-		{ "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" }
+	"tags": [
+		{ "id": "web", "name": "Web", "color": "blue", "rule": "repo:acme/web" },
+		{ "id": "broken-ci", "name": "Broken CI", "color": "red", "rule": "needs:fix-ci" }
 	]
 }
 ```
 
-The feed of a view stops working when you delete the view.
+A change to `tags` replaces the whole list, so write the tags that you keep too. The feed of a tag stops working when you delete the tag.
 
 ## When to use what
 
 - **Releases of projects that you use:** GitHub's `releases.atom`. It needs no account.
-- **Your own notifications, sorted, in a reader:** a Hush feed of Needs you or a saved view.
+- **Your own pull requests and issues, sorted, in a reader:** a Hush feed of a category or a tag.
 - **Push to your phone in place of a reader:** see [push notifications for review requests and CI](/guides/github-push-notifications).
 
 ## Sources

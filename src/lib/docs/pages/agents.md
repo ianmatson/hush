@@ -9,7 +9,7 @@ This page is for AI agents, scripts, and people who automate their setup. It say
 
 - [/llms.txt](/llms.txt) lists every page, with its Markdown address.
 - [/llms-full.txt](/llms-full.txt) has every page in one file.
-- Every page is Markdown at its address plus `.md`: [/docs/settings.md](/docs/settings.md), [/docs/rules.md](/docs/rules.md)… The docs home is [/docs/index.md](/docs/index.md).
+- Every page is Markdown at its address plus `.md`: [/docs/settings.md](/docs/settings.md), [/docs/query-language.md](/docs/query-language.md)… The docs home is [/docs/index.md](/docs/index.md).
 
 The reference tables (settings, keys, query words, menu items) are made from Hush's own source code when the site is built, so they match the version that runs.
 
@@ -20,15 +20,15 @@ Hush has no public API. Its API accepts only a signed-in browser session, and it
 1. Write the user's settings as JSON (see below).
 2. Give it to the user, who pastes it into **Settings → General → Edit settings.json** and chooses **Save**, or imports it as a file in **Settings → General → Settings file**.
 
-Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about sorting, pushes, views, sources, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
+Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about turns, pushes, sources, categories, tags, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
 
 ## Write settings.json
 
 - Write only what differs from the defaults. Leave out every setting that you do not change.
-- **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their rules deletes their rules.
-- `rules`, `views`, `sources`, `tracked`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
+- **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their categories deletes their categories.
+- `sources`, `tracked`, `categories`, `tags`, and the menus are lists: write the whole list. A `categories` list must keep the fallback category, `"other"`. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
-- Every key, type, default, and limit is in [settings.json](/docs/settings). The conditions of rules and views are queries (text): every word is in the [query language](/docs/query-language#words).
+- Every key, type, default, and limit is in [settings.json](/docs/settings). The rules of categories and tags are queries (text): every word is in the [query language](/docs/query-language#words).
 
 To make a settings file to import, put the settings in this wrapper:
 
@@ -40,10 +40,10 @@ To make a settings file to import, put the settings in this wrapper:
 
 Check these, or Hush refuses the file:
 
-- Every rule has `when` (a query, as text; `""` matches every thread) and `then` with at least one of `category`, `push`, or `triage`.
-- `category` is `"action"`, `"fyi"`, or `"muted"`. `triage: "snooze"` has `snoozeHours`, a whole number from 1 to 720.
-- Queries (a rule's `when`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
-- View ids are 1 to 16 lower-case letters or digits, and unique; names are 1 to 40 characters; at most 12 views.
+- Category and tag ids are 1 to 40 lower-case letters, digits, or dashes, and unique; names are 1 to 40 characters; at most 20 categories and 20 tags.
+- Each category and tag has `color` (one of the [colors](/docs/settings#categories)) and `rule` (a query, as text, or `""` for none). Each category also has `description` (up to 200 characters, or `""`).
+- `categories` has the fallback category `{ "id": "other", … }`. A category's `push` is `"inherit"`, `"on"`, or `"off"`.
+- Rules use only the words and values of the [query language](/docs/query-language#words), such as `repo:acme/*`, `author:bots`, `type:pr`.
 - Source ids are 1 to 40 lower-case letters, digits, or dashes; searches are 1 to 256 characters; at most 20 sources and 50 tracked items.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
@@ -52,37 +52,50 @@ Check these, or Hush refuses the file:
 
 ## Recipes
 
-**“Only my repositories may need me.”** Rules have no “not”, so keep what needs you in your repositories with a first rule, and make everything else FYI with a wide rule after it:
+**“Put the web repositories in their own category, and never push bots' items.”**
 
 ```json settings
 {
-	"rules": [
+	"categories": [
 		{
-			"name": "My repos can need me",
-			"when": "repo:acme/web,acme/api in:needs-you",
-			"then": { "category": "action" }
+			"id": "web",
+			"name": "Web",
+			"color": "blue",
+			"rule": "repo:acme/web,acme/website",
+			"description": ""
 		},
-		{ "name": "Everything else is FYI", "when": "", "then": { "category": "fyi" } }
+		{
+			"id": "bots",
+			"name": "Bots",
+			"color": "gray",
+			"rule": "author:bots",
+			"description": "",
+			"push": "off"
+		},
+		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
 	]
 }
 ```
 
-A thread that needs you in acme/web or acme/api matches the first rule and stays in Needs you. Every other thread matches the second rule. A saved view per project is another way: it adds a tab and hides nothing.
+The first category whose rule matches wins, top to bottom. Items that no rule matches go to `"other"`.
 
-**“Push me only when someone reviews my PRs.”**
+**“Tag small pull requests, and the ones about the database.”**
 
 ```json settings
 {
-	"pushAction": false,
-	"rules": [
+	"tags": [
+		{ "id": "quick", "name": "Quick", "color": "green", "rule": "type:pr size:<50" },
 		{
-			"name": "Reviews on my PRs",
-			"when": "type:pr event:you-opened needs:changes,merge",
-			"then": { "push": true }
+			"id": "database",
+			"name": "Database",
+			"color": "violet",
+			"rule": "about:\"database migrations or schema changes\""
 		}
 	]
 }
 ```
+
+`about:` asks Jev, so it needs [smart decisions](/docs/settings#smartdecisions) on.
 
 **“Quiet at night and on weekends in Berlin.”**
 
@@ -96,10 +109,10 @@ A thread that needs you in acme/web or acme/api matches the first rule and stays
 { "pushDigestMinutes": 60, "pushRepeat": "reason" }
 ```
 
-**“Done on D, Mute on Shift+D, and no key for Snooze.”**
+**“Hide on D, Mute on Shift+D, and no key for Not my turn.”**
 
 ```json settings
-{ "keys": { "inbox.done": ["d"], "inbox.mute": ["Shift+d"], "inbox.snooze": [] } }
+{ "keys": { "dash.hide": ["d"], "dash.mute": ["Shift+d"], "dash.notNeeded": [] } }
 ```
 
 **“Show PRs in the acme org only, and skip the everyone team.”**
@@ -110,4 +123,4 @@ A thread that needs you in acme/web or acme/api matches the first rule and stays
 
 ## Explain Hush to a user
 
-When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”), and “rule: …” if a rule sorted it.
+When a user asks why an item is their turn, the answer is in [What is your turn](/docs/turns#what-is-your-turn) and the [turn reasons](/docs/pull-requests-and-issues#groups). The item's row also says it, with its turn reason (“CI failing”, “Review requested”).

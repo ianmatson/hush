@@ -72,6 +72,6 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 - [Polling](https://github.com/sindresorhus/notifier-for-github/blob/main/source/background.js), source code
 - [Chrome Web Store listing](https://chromewebstore.google.com/detail/notifier-for-github/lmjdlojahmbbcodnpecnjnmlddbkjhnn)
 - [Firefox Add-ons listing](https://addons.mozilla.org/en-US/firefox/addon/notifier-for-github/)
-- Hush: [inbox](/docs/inbox), [notifications](/docs/notifications), [GitHub access](/docs/github-access), [pricing](/pricing)
+- Hush: [whose turn](/docs/turns), [notifications](/docs/notifications), [GitHub access](/docs/github-access), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

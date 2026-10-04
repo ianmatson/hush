@@ -158,12 +158,14 @@
 				<div class="intro">
 					<h2 id="config-title">Sorted <em>your way.</em></h2>
 					<p>
-						Write a rule in one line, such as <code>author:dependabot*</code>, and send what it
-						catches to <b>Muted</b>. Save any filter as its own tab. Change every key, menu, and
-						swipe. All of it lives in one <code>settings.json</code> that you can edit, export, or hand
-						to an agent.
+						Sort your work into categories and tags with one-line rules, such as
+						<code>author:dependabot*</code>, or let Jev read each item and decide. Change every key,
+						menu, and swipe. All of it lives in one <code>settings.json</code> that you can edit, export,
+						or hand to an agent.
 					</p>
-					<a class="link" href="/docs/rules">How rules work <span aria-hidden="true">→</span></a>
+					<a class="link" href="/docs/pull-requests-and-issues#categories-and-tags"
+						>How categories and tags work <span aria-hidden="true">→</span></a
+					>
 				</div>
 				<RuleStage />
 			</div>

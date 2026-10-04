@@ -1,8 +1,10 @@
 import { queryMatches } from './classify';
 import type { CategoryOption } from './decisions';
-import { aboutTexts, queryError } from './query';
+import { aboutTexts, compileExpr, leavesOf, queryError } from './query';
 import type {
+	CategoryPush,
 	Classification,
+	DashItem,
 	ItemCategory,
 	ItemTag,
 	MarkColor,
@@ -15,6 +17,12 @@ export const MAX_CATEGORIES = 20;
 export const MAX_TAGS = 20;
 export const MAX_DESCRIPTION_CHARS = 200;
 export const MAX_MARK_NAME_CHARS = 40;
+
+export const CATEGORY_PUSH_OPTIONS: { id: CategoryPush; label: string }[] = [
+	{ id: 'inherit', label: 'Use the notification settings' },
+	{ id: 'on', label: 'Push what needs you' },
+	{ id: 'off', label: 'Never push' }
+];
 
 export const MARK_COLORS: MarkColor[] = [
 	'gray',
@@ -138,6 +146,48 @@ export function categoryChoiceOptions(categories: ItemCategory[]): CategoryOptio
 	];
 }
 
+export function itemQueryFacts(
+	i: DashItem,
+	me: string,
+	settings: Pick<Settings, 'categories' | 'tags' | 'sources'>
+): ThreadFacts {
+	const category = settings.categories.find((c) => c.id === i.category);
+	const sourceNames = new Map(settings.sources.map((s) => [s.id, s.name]));
+	return {
+		repo: i.repo,
+		subjectType: i.kind === 'pr' ? 'PullRequest' : 'Issue',
+		title: i.title,
+		reason: '',
+		htmlUrl: i.url,
+		me,
+		enrichment: {
+			kind: i.kind,
+			author: i.author,
+			authorIsBot: i.authorIsBot,
+			labels: i.labels.map((l) => l.name),
+			draft: i.draft,
+			state: i.state,
+			assignees: i.assignees,
+			reviewRequests: [...(i.requestedMe ? [me] : []), ...i.requestedTeams],
+			additions: i.kind === 'pr' ? i.additions : undefined,
+			deletions: i.kind === 'pr' ? i.deletions : undefined
+		},
+		activity: i.lastCommentBy
+			? {
+					by: i.lastCommentBy,
+					bot: i.lastCommentIsBot,
+					what: 'commented',
+					at: i.lastCommentAt ?? i.updatedAt
+				}
+			: null,
+		sources: i.sections.map((id) => sourceNames.get(id) ?? id),
+		itemCategory: category ? { id: category.id, name: category.name } : undefined,
+		itemTags: settings.tags
+			.filter((t) => i.tags?.includes(t.id))
+			.map((t) => ({ id: t.id, name: t.name }))
+	};
+}
+
 export const markQueries = (settings: Pick<Settings, 'categories' | 'tags'>) => [
 	...settings.categories.filter((c) => c.id !== FALLBACK_CATEGORY_ID).map((c) => c.rule),
 	...settings.tags.map((t) => t.rule)
@@ -163,6 +213,8 @@ function validateMark(
 	if (typeof m.rule !== 'string') return `"${m.name}": the rule must be text.`;
 	const err = m.rule.trim() ? queryError(m.rule) : null;
 	if (err) return `"${m.name}": ${err}`;
+	if (leavesOf(compileExpr(m.rule)).some((w) => w.itemCategory || w.itemTag))
+		return `"${m.name}": rules cannot use category: or tag:.`;
 	return null;
 }
 
@@ -175,6 +227,8 @@ export function validateCategories(categories: unknown): string | null {
 		if (err) return err;
 		if (typeof c.description !== 'string' || c.description.length > MAX_DESCRIPTION_CHARS)
 			return `"${c.name}": the description must be ${MAX_DESCRIPTION_CHARS} characters or fewer.`;
+		if (c.push !== undefined && !CATEGORY_PUSH_OPTIONS.some((o) => o.id === c.push))
+			return `"${c.name}": "push" must be "inherit", "on", or "off".`;
 	}
 	if (!ids.has(FALLBACK_CATEGORY_ID))
 		return `The fallback category ("${FALLBACK_CATEGORY_ID}") cannot be deleted.`;

@@ -9,9 +9,9 @@ Hush works from the keyboard. Press {{key:list.help}} on any list to see the sho
 
 {{key:palette}} opens the command palette. Type to find:
 
-- **Threads, pull requests, and issues** by title or repository. Enter peeks at it; `Mod`+Enter opens it on GitHub.
-- **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Peek, Move to…
-- **Pages**: every inbox tab and saved view, Pull requests, Issues, and each settings page.
+- **Pull requests and issues** by title or repository. Enter peeks at it; `Mod`+Enter opens it on GitHub.
+- **Actions** on the item under the cursor or the selection: Hide, Mute, Peek, Move to…
+- **Pages**: Items, each category and tag, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
 
 Before you type, the palette shows your **Recent** choices. It searches only what Hush already has, not all of GitHub.
@@ -29,18 +29,18 @@ Go to **Settings → Keybinds**. It lists every command by where it works.
 Your keys are saved at once, and follow you to every device. In settings.json they are the [`keys`](/docs/settings#keys) setting:
 
 ```json settings
-{ "keys": { "inbox.done": ["d"], "inbox.mute": [], "list.peek": ["Space", "p"] } }
+{ "keys": { "dash.hide": ["d"], "dash.mute": [], "list.peek": ["Space", "p"] } }
 ```
 
 Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row to the selection, Shift-click selects a range, and on the Pull requests and Issues tabs you drag ⋮⋮ to move an item.
 
 ## Where keys work
 
-A key works in one scope. Keys can repeat across scopes that are never active together ({{key:inbox.done}} is Done in the inbox and {{key:dash.hide}} is Hide on the Pull requests tab), but not inside scopes that are active at the same time.
+A key works in one scope. Keys can repeat across scopes that are never active together ({{key:editor.suggestNext}} goes to the next suggestion in a text box, and to the next item in a list), but not inside scopes that are active at the same time.
 
 - **Everywhere**: on every page.
-- **Lists**: the inbox and the Pull requests and Issues tabs.
-- **Inbox** and **Pull requests and issues**: only on those pages.
+- **Lists**: the Pull requests and Issues tabs.
+- **Pull requests and issues**: only on the Items page.
 - **Peek**: while the [peek](/docs/peek) is open.
 - **Text boxes**: while you type in the comment box or settings.json.
 

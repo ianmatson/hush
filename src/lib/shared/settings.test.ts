@@ -35,24 +35,16 @@ describe('settings file', () => {
 		expect(settingsFromFile('{"hush":3,"settings":{"pushFyi":true}}')).toMatch(/newer Hush/);
 	});
 
-	it('reads a version 1 file: JSON conditions become query text', () => {
-		const v1 = {
-			hush: 1,
+	it('drops settings Hush no longer has, such as inbox rules and views', () => {
+		const old = {
+			hush: 2,
 			settings: {
-				rules: [
-					{
-						name: 'Docs',
-						when: { repo: 'acme/website', kind: ['review'] },
-						then: { category: 'fyi' }
-					}
-				],
-				views: [{ id: 'web', name: 'Web', base: 'inbox', when: { repo: 'acme/web-*' } }]
+				rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }],
+				views: [],
+				botsAreFyi: false
 			}
 		};
-		expect(settingsFromFile(JSON.stringify(v1))).toEqual({
-			rules: [{ name: 'Docs', when: 'repo:acme/website needs:review', then: { category: 'fyi' } }],
-			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
-		});
+		expect(settingsFromFile(JSON.stringify(old))).toEqual({ botsAreFyi: false });
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
@@ -88,10 +80,11 @@ describe('settings schema', () => {
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);
 		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
-		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
-			/"A"/
-		);
-		expect(check({ rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }] })).toBeNull();
+		expect(check({ tags: [{ id: 'a', name: 'A', color: 'blue', rule: 'repo:' }] })).toMatch(/"A"/);
+		expect(
+			check({ tags: [{ id: 'a', name: 'A', color: 'blue', rule: 'repo:acme/*' }] })
+		).toBeNull();
+		expect(check({ rules: [] })).toMatch(/Unknown setting "rules"/);
 	});
 });
 

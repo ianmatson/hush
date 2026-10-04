@@ -61,9 +61,14 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { MARK_DOT } from '$lib/marks';
-	import type { MarkColor } from '$lib/shared/types';
+	import { parseExpr, exprMatches } from '$lib/shared/query';
+	import { ruleMatches } from '$lib/shared/classify';
+	import { itemQueryFacts } from '$lib/shared/categories';
+	import QuerySuggest from './query-suggest.svelte';
+	import type { Classification, MarkColor } from '$lib/shared/types';
 
 	const KINDS: DashKind[] = ['pr', 'issue'];
+	const JEV_NOTICE = 'jev-on-by-default';
 	const PAGE = 'items';
 	const COLLAPSED_KEY = 'hush:collapsed:items';
 	const KIND_LABEL: Record<DashKind, string> = { pr: 'Pull requests', issue: 'Issues' };
@@ -168,19 +173,22 @@
 		i.sections.map((id) => sectionNamesByKind[i.kind]?.[id] ?? id).join(', ');
 	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed).length ?? 0);
 
-	const filtered = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		return (data?.items ?? []).filter(
+	const filter = $derived(parseExpr(query));
+	const ITEM_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
+	function matchesFilter(i: DashItem): boolean {
+		if (!query.trim() || !me.data) return true;
+		const facts = itemQueryFacts(i, me.data.login, me.data.settings);
+		return exprMatches(filter.expr, (when) => ruleMatches(when, facts, ITEM_CLASSIFICATION));
+	}
+	const filtered = $derived.by(() =>
+		(data?.items ?? []).filter(
 			(i) =>
 				i.dismissed === showHidden &&
 				(!viewCategory || i.category === viewCategory) &&
 				(!viewTag || !!i.tags?.includes(viewTag)) &&
-				(!q ||
-					`${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
-						.toLowerCase()
-						.includes(q))
-		);
-	});
+				matchesFilter(i)
+		)
+	);
 
 	/** Groups in display order: new items on top, then your manual order. */
 	const columns = $derived(
@@ -811,8 +819,8 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="mx-auto flex max-w-7xl gap-6 px-4 pt-4 pb-24">
-	<nav aria-label="Views" class="sticky top-16 hidden w-52 shrink-0 self-start md:block">
+<div class="mx-auto flex max-w-7xl gap-3 px-4 pt-4 pb-24">
+	<nav aria-label="Views" class="sticky top-16 hidden w-48 shrink-0 self-start md:block">
 		<a
 			href="/items"
 			aria-current={!viewCategory && !viewTag ? 'page' : undefined}
@@ -871,17 +879,26 @@
 					>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
-			<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+			<div class="relative min-w-0 flex-1 sm:w-80 sm:flex-none">
 				<Search
 					class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
 				/>
 				<Input
 					bind:ref={searchEl}
 					bind:value={query}
-					placeholder="Filter {noun}"
+					placeholder="Filter: words, or repo:, category:, tag:…"
 					class="h-8 pl-8"
 					aria-label="Filter {noun}"
 				/>
+				<QuerySuggest input={searchEl} value={query} onpick={(next) => (query = next)} />
+				{#if filter.errors.length}
+					<p
+						class="absolute top-full right-0 z-10 mt-1 w-max max-w-72 rounded-md border bg-popover px-2.5 py-1 text-xs text-destructive shadow-md"
+						role="status"
+					>
+						{filter.errors[0]}
+					</p>
+				{/if}
 			</div>
 			<div class="ml-auto flex items-center gap-1">
 				<Button
@@ -951,6 +968,27 @@
 			{:else}Loading from GitHub…{/if}
 		</p>
 
+		{#if me.data?.settings.smartDecisions && !dismissedNotes.keys.includes(JEV_NOTICE)}
+			<Alert.Root class="mb-3">
+				<Alert.Title>Hush sorts your work with Jev</Alert.Title>
+				<Alert.Description>
+					Jev, a decision model from TypeSafe (through Cloudflare), reads the title, labels, start
+					of the description, and 2 newest comments of your pull requests and issues. It puts each
+					into a category and tags, and tells which comments need you. It keeps nothing.
+					<span class="mt-1 flex flex-wrap gap-x-3">
+						<a class="underline underline-offset-2" href="/settings/inbox">Turn it off</a>
+						<a class="underline underline-offset-2" href="/settings/categories"
+							>Change categories and tags</a
+						>
+						<button
+							type="button"
+							class="underline underline-offset-2 hover:text-foreground"
+							onclick={() => dismissNote(JEV_NOTICE)}>Got it</button
+						>
+					</span>
+				</Alert.Description>
+			</Alert.Root>
+		{/if}
 		{#if loadError}
 			<Alert.Root variant="destructive" class="mb-3"
 				><Alert.Description>{loadError.message}</Alert.Description></Alert.Root

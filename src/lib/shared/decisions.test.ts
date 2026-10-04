@@ -23,7 +23,7 @@ import { parseQuery } from './query';
 import { DEFAULT_SETTINGS } from './settings';
 import { validateSettings } from './settings-schema';
 import { enrichmentOf, type SubjectFacts } from './subject';
-import type { LastComment, Rule, Settings, ThreadFacts } from './types';
+import type { LastComment, Settings, ThreadFacts } from './types';
 
 const ME = 'ian';
 const T0 = '2026-09-10T00:00:00Z';
@@ -90,14 +90,13 @@ describe('conditionId', () => {
 });
 
 describe('smartConditions', () => {
-	it('collects each different about: text once, from enabled rules and views', () => {
-		const rules: Rule[] = [
-			{ when: 'about:"database migrations"', then: { category: 'action' } },
-			{ when: 'repo:acme/* about:"Database migrations"', then: { push: true } },
-			{ when: 'about:"docs"', enabled: false, then: { category: 'fyi' } }
+	it('collects each different about: text once', () => {
+		const queries = [
+			'about:"database migrations"',
+			'repo:acme/* about:"Database migrations"',
+			'about:"deps" OR label:deps'
 		];
-		const views = [{ id: 'v1', name: 'Deps', base: 'inbox' as const, query: 'about:"deps"' }];
-		expect(smartConditions(rules, views).map((c) => c.id)).toEqual([
+		expect(smartConditions(queries).map((c) => c.id)).toEqual([
 			conditionId('database migrations'),
 			conditionId('deps')
 		]);
@@ -425,13 +424,15 @@ describe('about: in queries and settings', () => {
 		expect(parseQuery(`about:"${'x'.repeat(201)}"`).errors[0]).toMatch(/200 characters/);
 	});
 	it(`refuses more than ${MAX_SMART_CONDITIONS} different conditions`, () => {
-		const rules: Rule[] = Array.from({ length: MAX_SMART_CONDITIONS + 1 }, (_, i) => ({
-			when: `about:"topic ${i}"`,
-			then: { category: 'fyi' }
+		const tags = Array.from({ length: MAX_SMART_CONDITIONS / 2 + 1 }, (_, i) => ({
+			id: `t${i}`,
+			name: `Topic ${i}`,
+			color: 'blue' as const,
+			rule: `about:"topic ${i}" OR about:"theme ${i}"`
 		}));
-		const next: Settings = { ...DEFAULT_SETTINGS, tags: [], rules };
-		expect(validateSettings(next, ['rules'])).toMatch(/up to 30 different about:/);
-		expect(validateSettings({ ...next, rules: rules.slice(1) }, ['rules'])).toBeNull();
+		const next: Settings = { ...DEFAULT_SETTINGS, tags };
+		expect(validateSettings(next, ['tags'])).toMatch(/up to 30 different about:/);
+		expect(validateSettings({ ...next, tags: tags.slice(1) }, ['tags'])).toBeNull();
 	});
 });
 

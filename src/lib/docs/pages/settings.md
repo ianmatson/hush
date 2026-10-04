@@ -12,9 +12,9 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **It has only your changes.** A setting that you did not change is not in the file; it uses its default. A new default in Hush then applies to you too.
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
-- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `Rule 2: "then" needs category, push, or triage.`, and saves nothing. Unknown keys are errors too.
-- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the rest of `dash`. A list, such as `sources` or `rules`, is always replaced as a whole.
-- **Changes apply at once**, on every device. A change to `rules`, `botsAreFyi`, `teamReviewsAreAction`, or `reviewResolution` sorts your stored threads again.
+- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Web": "push" must be "inherit", "on", or "off".`, and saves nothing. Unknown keys are errors too.
+- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the rest of `dash`. A list, such as `sources` or `categories`, is always replaced as a whole.
+- **Changes apply at once**, on every device. A change to `categories`, `tags`, `botsAreFyi`, `teamReviewsAreAction`, or `reviewResolution` sorts your items again.
 
 A complete example:
 
@@ -24,18 +24,32 @@ A complete example:
 	"quietHours": { "from": 1320, "to": 420, "weekends": true, "timeZone": "America/New_York" },
 	"reviewResolution": "any_review",
 	"teamReviewsAreAction": true,
-	"rules": [
-		{ "name": "Website is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
-		{ "name": "Mute renovate", "when": "author:renovate*", "then": { "category": "muted" } },
-		{ "name": "Always push Alice", "when": "from:alice", "then": { "push": true } }
+	"categories": [
+		{
+			"id": "web",
+			"name": "Web",
+			"color": "blue",
+			"rule": "repo:acme/web-*",
+			"description": "",
+			"push": "on"
+		},
+		{
+			"id": "website",
+			"name": "Website",
+			"color": "teal",
+			"rule": "repo:acme/website",
+			"description": "",
+			"push": "off"
+		},
+		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
 	],
-	"views": [{ "id": "web", "name": "Web", "base": "inbox", "query": "repo:acme/web-*" }],
+	"tags": [{ "id": "renovate", "name": "Renovate", "color": "gray", "rule": "author:renovate*" }],
 	"dash": {
 		"scope": "org:acme archived:false",
 		"excludedTeams": ["acme/everyone"],
 		"staleDays": 5
 	},
-	"keys": { "inbox.done": ["d"] }
+	"keys": { "dash.hide": ["d"] }
 }
 ```
 
@@ -43,13 +57,13 @@ A complete example:
 
 These are not settings of your account, so they are not in the file:
 
-- **This browser only:** the mode and theme, the start page, the tab title and icon counts, the closed groups on the Pull requests and Issues tabs, unsent comments, and notes that you chose “Don't show again” for.
-- **Your data:** push devices, feeds, and what you did to threads and items (Done, Snooze, Mute, hidden and moved items).
+- **This browser only:** the mode and theme, the tab title and icon counts, the closed groups on the Pull requests and Issues tabs, unsent comments, and notes that you chose “Don't show again” for.
+- **Your data:** push devices, feeds, and what you did to items (hidden, muted, and moved items, and the categories and tags that you chose by hand).
 - **Your GitHub access:** the custom token, if any.
 
 ## Settings file
 
-**Settings → General → Settings file** exports your settings to a file, and imports a file. Use it to keep a copy, to move to another account, or to share your rules.
+**Settings → General → Settings file** exports your settings to a file, and imports a file. Use it to keep a copy, to move to another account, or to share your categories and tags.
 
 The file is your settings.json in a small wrapper:
 
@@ -57,12 +71,12 @@ The file is your settings.json in a small wrapper:
 {
 	"hush": 2,
 	"exportedAt": "2026-09-28T09:00:00.000Z",
-	"settings": { "rules": [{ "when": "repo:acme/website", "then": { "category": "fyi" } }] }
+	"settings": { "tags": [{ "id": "web", "name": "Web", "color": "blue", "rule": "repo:acme/web" }] }
 }
 ```
 
-- `hush` is the file format version: `2`. A version `1` file (conditions as JSON objects) still imports: Hush writes its conditions as queries.
+- `hush` is the file format version: `2`. A version `1` file still imports.
 - `settings` has only the changes, the same as settings.json.
-- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many rules and views the file has. Settings that Hush no longer has are left out.
+- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many sources, categories, and tags the file has. Settings that Hush no longer has are left out.
 
 {{ref:settings}}

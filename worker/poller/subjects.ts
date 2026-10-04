@@ -1,11 +1,12 @@
+import { classify, classifyDefault, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import {
-	classify,
-	classifyDefault,
-	ruleTriage,
-	shouldPush,
-	withOverride
-} from '../../src/lib/shared/classify';
-import { FALLBACK_CATEGORY_ID, placeItem, type ItemPins } from '../../src/lib/shared/categories';
+	FALLBACK_CATEGORY_ID,
+	placeItem,
+	type ItemPins,
+	type Placement
+} from '../../src/lib/shared/categories';
+
+const NOT_YOUR_TURN = 'none';
 import { TRACKED_SOURCE } from '../../src/lib/shared/sources';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
@@ -45,7 +46,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 	protected async record(
 		who: Who,
 		subjects: SubjectFacts[],
-		opts: { dash?: boolean; threads?: boolean; quiet?: boolean; allAreInboxThreads?: boolean } = {}
+		opts: { dash?: boolean; threads?: boolean; quiet?: boolean } = {}
 	): Promise<{ changed: number; resolved: Resolved[]; wrote: number }> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
@@ -70,7 +71,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 					now
 				);
 		});
-		await this.decideSubjects(who, subjects, { allAreInboxThreads: opts.allAreInboxThreads });
+		await this.decideSubjects(who, subjects);
 		const decided = this.decisionsOf(who, subjects);
 		if (opts.dash !== false)
 			await this.patchDashCaches(
@@ -197,13 +198,14 @@ export abstract class PollerSubjects extends PollerDecisions {
 		return out;
 	}
 
-	protected placeItems(
+	private placements(
 		who: Who,
-		items: DashItem[],
+		entries: { key: string; sections: string[] }[],
 		known: Map<string, SubjectFacts> = new Map()
-	): DashItem[] {
-		if (!items.length) return items;
-		const keys = items.map((i) => i.id);
+	): Map<string, Placement> {
+		const out = new Map<string, Placement>();
+		if (!entries.length) return out;
+		const keys = entries.map((e) => e.key);
 		const facts = new Map(known);
 		const missing = keys.filter((k) => !facts.has(k));
 		for (const [k, f] of this.storedSubjectFacts(missing)) facts.set(k, f);
@@ -212,10 +214,10 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const sourceNames = new Map(
 			[...who.settings.sources, TRACKED_SOURCE].map((x) => [x.id, x.name])
 		);
-		return items.map((i) => {
-			const s = facts.get(i.id);
-			if (!s) return { ...i, category: FALLBACK_CATEGORY_ID, tags: [] };
-			const d = decided.get(i.id);
+		for (const { key, sections } of entries) {
+			const s = facts.get(key);
+			if (!s) continue;
+			const d = decided.get(key);
 			const t: ThreadFacts = {
 				repo: s.repo,
 				subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
@@ -225,17 +227,68 @@ export abstract class PollerSubjects extends PollerDecisions {
 				enrichment: enrichmentOf(s, who.me, d),
 				me: who.me,
 				myTeams: who.inboxTeams,
-				sources: i.sections.map((id) => sourceNames.get(id) ?? id)
+				sources: sections.map((id) => sourceNames.get(id) ?? id)
 			};
-			const placed = placeItem(
-				t,
-				classifyDefault(t, who.settings),
-				d?.category ?? null,
-				pins.get(i.id),
-				who.settings
+			out.set(
+				key,
+				placeItem(
+					t,
+					classifyDefault(t, who.settings),
+					d?.category ?? null,
+					pins.get(key),
+					who.settings
+				)
 			);
-			return { ...i, category: placed.category, tags: placed.tags };
+		}
+		return out;
+	}
+
+	protected placeItems(
+		who: Who,
+		items: DashItem[],
+		known: Map<string, SubjectFacts> = new Map()
+	): DashItem[] {
+		const placed = this.placements(
+			who,
+			items.map((i) => ({ key: i.id, sections: i.sections })),
+			known
+		);
+		return items.map((i) => {
+			const p = placed.get(i.id);
+			return { ...i, category: p?.category ?? FALLBACK_CATEGORY_ID, tags: p?.tags ?? [] };
 		});
+	}
+
+	protected async withCategoryPush(
+		who: Who,
+		candidates: PushCandidate[]
+	): Promise<PushCandidate[]> {
+		const modes = new Map(who.settings.categories.map((c) => [c.id, c.push ?? 'inherit'] as const));
+		if (!candidates.length || [...modes.values()].every((m) => m === 'inherit')) return candidates;
+		const sections = await this.cachedSectionsByKey();
+		const placed = this.placements(
+			who,
+			[...new Set(candidates.map((c) => c.itemKey))].map((key) => ({
+				key,
+				sections: sections.get(key) ?? []
+			}))
+		);
+		return candidates.map((c) => {
+			if (c.reason === SNOOZE_OVER_REASON) return c;
+			const mode = modes.get(placed.get(c.itemKey)?.category ?? FALLBACK_CATEGORY_ID) ?? 'inherit';
+			if (mode === 'off') return { ...c, pushes: false };
+			if (mode === 'on') return { ...c, pushes: c.reason !== NOT_YOUR_TURN };
+			return c;
+		});
+	}
+
+	private async cachedSectionsByKey(): Promise<Map<string, string[]>> {
+		const out = new Map<string, string[]>();
+		for (const kind of ['pr', 'issue'] as const) {
+			const cached = await this.ctx.storage.get<{ data: DashResponse }>(`dash:${kind}`);
+			for (const i of cached?.data.items ?? []) out.set(i.id, i.sections);
+		}
+		return out;
 	}
 
 	protected async rePlaceCachedItems(who: Who): Promise<void> {
@@ -306,20 +359,10 @@ export abstract class PollerSubjects extends PollerDecisions {
 				e,
 				me
 			);
-			// A rule that moves threads acts when it starts to match (and not again after you moved
-			// the thread back yourself: then the rule already matched).
-			const moved =
-				out.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
-			const triage = moved?.triage ?? out.triage;
-			const resolvedAt = moved ? null : out.resolvedAt;
-			const note =
-				moved?.triage === 'done'
-					? moved.note
-					: triage === 'done'
-						? (out.resolvedNote ?? r.resolved_note)
-						: null;
-			// Snooze columns: 1 = a rule snoozes it now, 2 = clear them, 0 = keep.
-			const snooze = moved?.triage === 'snoozed' ? 1 : out.clearSnooze ? 2 : 0;
+			const triage = out.triage;
+			const resolvedAt = out.resolvedAt;
+			const note = triage === 'done' ? (out.resolvedNote ?? r.resolved_note) : null;
+			const clearSnooze = out.clearSnooze;
 			const same =
 				c.category === r.category &&
 				c.kind === r.kind &&
@@ -331,15 +374,14 @@ export abstract class PollerSubjects extends PollerDecisions {
 				triage === r.triage &&
 				resolvedAt === r.resolved_at &&
 				note === r.resolved_note &&
-				!snooze;
+				!clearSnooze;
 			if (same) continue;
 			writes.push(() =>
 				this.run(
 					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
              rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
-             snoozed_until = CASE ? WHEN 1 THEN ? WHEN 2 THEN NULL ELSE snoozed_until END,
-             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END,
-             snoozed_at = CASE ? WHEN 1 THEN ? ELSE snoozed_at END
+             snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
+             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
            WHERE id = ?`,
 					c.category,
 					c.kind,
@@ -351,22 +393,17 @@ export abstract class PollerSubjects extends PollerDecisions {
 					triage,
 					resolvedAt,
 					note,
-					snooze,
-					moved?.triage === 'snoozed' ? moved.until : null,
-					snooze,
-					snooze,
-					now,
+					clearSnooze ? 1 : 0,
+					clearSnooze ? 1 : 0,
 					r.id
 				)
 			);
-			if (moved?.triage === 'done') resolved.push({ id: r.id, title: r.title, note: moved.note });
-			else if (out.resolvedNote && !moved)
-				resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
+			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
 			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
 			const wanted = snoozeOver
 				? settings.pushAction
 				: settings.pushTurnChanges && shouldPush(c, settings);
-			if (out.push && !moved && r.subject_key)
+			if (out.push && r.subject_key)
 				candidates.push({
 					itemKey: r.subject_key,
 					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,
@@ -380,7 +417,10 @@ export abstract class PollerSubjects extends PollerDecisions {
 			this.transaction(() => writes.forEach((w) => w()));
 			await this.bumpVersion();
 		}
-		if (!opts.quiet) await this.deliver(candidates.slice(0, MAX_INDIVIDUAL_PUSHES));
+		if (!opts.quiet)
+			await this.deliver(
+				(await this.withCategoryPush(who, candidates)).slice(0, MAX_INDIVIDUAL_PUSHES)
+			);
 		return { resolved, wrote: writes.length };
 	}
 

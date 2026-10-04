@@ -33,9 +33,9 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 
 The reason that GitHub gives is fixed when the notification arrives. A thread with `reason:review-requested` keeps that reason after you review, and a thread with `reason:subscribed` does not say that CI failed on your pull request.
 
-**Hush** reads the same notifications, then reads the pull request or issue behind each one: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what needs you](/docs/inbox#what-needs-you).
+**Hush** reads the same notifications, then reads the pull request or issue behind each one: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what is your turn](/docs/turns#what-is-your-turn).
 
-You can change the defaults with [rules](/docs/rules): for example, a repository that is only FYI, or a bot to mute.
+You can sort items into [categories and tags](/docs/pull-requests-and-issues#categories-and-tags) with one-line rules: for example, a repository or a bot in a category that never pushes.
 
 ## Pull requests and reviews
 
@@ -47,7 +47,7 @@ You can change the defaults with [rules](/docs/rules): for example, a repository
 
 **GitHub Mobile** pushes direct mentions, assignments, review requests, and deployment approvals, each with its own switch. It can also push GitHub Actions workflow runs that you started, with an option for failed runs only. On iOS you can set working hours for pushes. Email can go to a different address for each organization, and has headers that a mail filter can use. GitHub does not document browser push for the web inbox.
 
-**Hush** sends Web Push to browsers and installed web apps on desktop and Android, and on iPhone or iPad only from a Home Screen web app (iOS 16.4 or later). By default it pushes only what arrives in Needs you, including events that come with no notification, such as new commits after your review. It has [quiet hours, digests, a limit, and one alert per pull request](/docs/notifications#how-often), and an alert history for 30 days. It also has private [Atom feeds](/docs/feeds) for each tab.
+**Hush** sends Web Push to browsers and installed web apps on desktop and Android, and on iPhone or iPad only from a Home Screen web app (iOS 16.4 or later). By default it pushes only what arrives in Needs you, including events that come with no notification, such as new commits after your review. It has [quiet hours, digests, a limit, and one alert per pull request](/docs/notifications#how-often), and an alert history for 30 days. It also has private [Atom feeds](/docs/feeds) for each category and tag.
 
 ## Accounts, Enterprise, and privacy
 

@@ -1,6 +1,6 @@
 import { aboutTexts } from './query';
 import type { SubjectFacts } from './subject';
-import type { LastComment, Rule, SavedView } from './types';
+import type { LastComment } from './types';
 
 export const YES_AT = 0.8;
 export const NO_AT = 0.2;
@@ -101,18 +101,9 @@ const normalizeCondition = (text: string) => text.trim().replace(/\s+/g, ' ').to
 
 export const conditionId = (text: string) => cyrb53(normalizeCondition(text));
 
-export function smartConditions(
-	rules: Rule[],
-	views: SavedView[],
-	markQueries: string[] = []
-): SmartCondition[] {
+export function smartConditions(markQueries: string[]): SmartCondition[] {
 	const byId = new Map<string, SmartCondition>();
-	const queries = [
-		...rules.filter((r) => r.enabled !== false).map((r) => r.when ?? ''),
-		...views.map((v) => v.query ?? ''),
-		...markQueries
-	];
-	for (const query of queries)
+	for (const query of markQueries)
 		for (const text of aboutTexts(query))
 			byId.set(conditionId(text), { id: conditionId(text), text });
 	return [...byId.values()];

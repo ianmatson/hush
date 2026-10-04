@@ -29,7 +29,7 @@ Know what GitHub Mobile does not push:
 
 ## Option 2: Hush (web push)
 
-Hush sends standard Web Push to browsers and installed web apps. It pushes only what arrives in **Needs you**: review requests to you, failed CI on your pull requests, replies to you, and direct mentions. Hush reads the checks of your pull request, so it does not matter who started the run.
+Hush sends standard Web Push to browsers and installed web apps. It pushes only what is **your turn**: review requests to you, failed CI on your pull requests, replies to you, and direct mentions. Hush reads the checks of your pull request, so it does not matter who started the run.
 
 ### On a computer or Android
 
@@ -68,16 +68,28 @@ Busy pull requests change many times a day. By default, Hush keeps **one alert f
 - [`quietHours`](/docs/settings#quiethours) holds pushes from 22:00 to 07:00 and on weekends. When quiet hours end, one push lists what waited.
 - [`pushLimit`](/docs/settings#pushlimit) sends at most 6 pushes in 30 minutes. The rest wait and go as one push.
 
-A [rule](/docs/rules) decides for the threads that it matches. This one pushes releases of one project, which are FYI by default:
+Each [category](/docs/pull-requests-and-issues#categories-and-tags) can change this for its items. This one always pushes what needs you in one project, and never pushes bot pull requests:
 
 ```json settings
 {
-	"rules": [
+	"categories": [
 		{
-			"name": "Svelte releases",
-			"when": "type:release repo:sveltejs/*",
-			"then": { "category": "fyi", "push": true }
-		}
+			"id": "web",
+			"name": "Web",
+			"color": "blue",
+			"rule": "repo:acme/web",
+			"description": "",
+			"push": "on"
+		},
+		{
+			"id": "bots",
+			"name": "Bots",
+			"color": "gray",
+			"rule": "author:bots",
+			"description": "",
+			"push": "off"
+		},
+		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
 	]
 }
 ```

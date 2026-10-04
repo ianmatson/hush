@@ -4,15 +4,17 @@ import {
 	DEFAULT_CATEGORIES,
 	DEFAULT_TAGS,
 	FALLBACK_CATEGORY_ID,
+	itemQueryFacts,
 	markAboutTexts,
 	placeItem,
 	validateCategories,
 	validateTags
 } from './categories';
-import { classifyDefault } from './classify';
+import { classifyDefault, queryMatches } from './classify';
+import { DEFAULT_SOURCES } from './sources';
 import { conditionId } from './decisions';
 import { DEFAULT_SETTINGS } from './settings';
-import type { Enrichment, ItemCategory, ItemTag, ThreadFacts } from './types';
+import type { DashItem, Enrichment, ItemCategory, ItemTag, ThreadFacts } from './types';
 
 const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<ThreadFacts> = {}) =>
 	({
@@ -149,5 +151,52 @@ describe('validation', () => {
 		expect(validateCategories([{ ...BUGS, rule: '(label:x' }, OTHER])).toMatch(/“\(”/);
 		expect(validateTags([{ id: 'a', name: 'A', color: 'black', rule: '' }])).toMatch(/colour/);
 		expect(validateCategories([BUGS, BUGS, OTHER])).toMatch(/Two categories/);
+	});
+});
+
+describe('category: and tag: in the Filter box', () => {
+	const item = {
+		id: 'acme/web#1',
+		kind: 'pr',
+		number: 1,
+		title: 'Fix the login timeout',
+		url: 'https://github.com/acme/web/pull/1',
+		repo: 'acme/web',
+		author: 'alice',
+		authorIsBot: false,
+		labels: [],
+		assignees: [],
+		requestedMe: false,
+		requestedTeams: [],
+		additions: 10,
+		deletions: 2,
+		draft: false,
+		state: 'open',
+		lastCommentBy: null,
+		lastCommentIsBot: false,
+		lastCommentAt: null,
+		updatedAt: '2026-10-01T00:00:00Z',
+		sections: ['mine'],
+		category: 'bugs',
+		tags: ['quick']
+	} as unknown as DashItem;
+	const facts = itemQueryFacts(item, 'ian', {
+		categories: DEFAULT_CATEGORIES,
+		tags: DEFAULT_TAGS,
+		sources: DEFAULT_SOURCES
+	});
+	const matches = (q: string) => queryMatches(q, facts, classifyDefault(facts, DEFAULT_SETTINGS));
+	it('matches a category or tag by id or name', () => {
+		expect(matches('category:bugs')).toBe(true);
+		expect(matches('category:Bugs')).toBe(true);
+		expect(matches('category:features')).toBe(false);
+		expect(matches('tag:quick')).toBe(true);
+		expect(matches('tag:"Breaking change"')).toBe(false);
+		expect(matches('-tag:blocked source:"You opened" size:<50')).toBe(true);
+	});
+	it('cannot be used inside category and tag rules', () => {
+		expect(validateTags([{ id: 'a', name: 'A', color: 'blue', rule: 'category:bugs' }])).toMatch(
+			/cannot use category: or tag:/
+		);
 	});
 });

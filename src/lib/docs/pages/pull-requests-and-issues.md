@@ -1,6 +1,6 @@
 ---
 title: Pull requests and issues
-description: The dashboards of open work that involves you, grouped by whose turn it is.
+description: The Items page: the open pull requests and issues that Hush tracks, grouped by whose turn it is, with categories and tags.
 ---
 
 The **Items** page shows the open pull requests and issues that Hush tracks, in two tabs: **Pull requests** and **Issues**. {{key:dash.section.0}} and {{key:dash.section.1}} switch between them. Your [sources](#sources) decide what Hush tracks; by default, open work that involves you. Hush groups the items by whose turn it is.
@@ -25,9 +25,9 @@ Inside a group, the most urgent items come first (failing CI before a comment), 
 | Waiting on others | CI running · Waiting for review · Waiting on author · You approved · Waiting for a reply · @alice reviewed (with [`any_review`](/docs/settings#reviewresolution))                                            | Waiting for replies · No replies yet · Waiting for a reply |
 | Other             | Draft · Bot PR · the source's name                                                                                                                                                                           | the source's name                                          |
 
-The rules are the same as for the inbox's [Needs you](/docs/inbox#what-needs-you).
+[Whose turn](/docs/turns#what-is-your-turn) lists every case.
 
-A row also lists what changed since you last looked at the item (“+2 commits”, “CI fails”), the same as in the inbox: see [Since you looked](/docs/inbox#since-you-looked).
+A row also lists what changed since you last looked at the item (“+2 commits”, “CI fails”): see [Since you looked](/docs/turns#since-you-looked).
 
 ### Stale
 
@@ -70,30 +70,35 @@ More options are only in [settings.json](/docs/settings): hide others' drafts ([
 
 ## Filter
 
-The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box. The query words of the inbox (`repo:`, `needs:`…) do not work here.
+The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box. [Query words](/docs/query-language) (`repo:`, `needs:`…) do not work here; to keep a set of items, make a category or a tag.
 
 ## Actions
 
-| Action                | Key                     | What it does                                                                                                                                                                                           |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Peek                  | {{key:list.peek}}       | Read it in the [peek](/docs/peek), and act on GitHub from there.                                                                                                                                       |
-| Main action           | {{key:list.open}}       | Review, Fix CI, Reply… on GitHub.                                                                                                                                                                      |
-| Open on GitHub        | {{key:list.openGitHub}} | The PR or issue itself.                                                                                                                                                                                |
-| Hide until it changes | {{key:dash.hide}}       | Hides the item until something new happens on it. The inbox does not change (Done there does not hide it here).                                                                                        |
-| Mute                  | {{key:dash.mute}}       | Hides the item until you unmute it, and mutes its thread in the inbox (you are unsubscribed on GitHub). Mute in the inbox mutes it here too. **Show hidden items** lists muted items, with **Unmute**. |
-| Show hidden items     | {{key:dash.showHidden}} | Shows hidden items, to show one again.                                                                                                                                                                 |
-| Copy link             | {{key:list.copy}}       | Copies the links of the item or the selection.                                                                                                                                                         |
-| Refresh               | {{key:list.refresh}}    | Searches GitHub again now.                                                                                                                                                                             |
+| Action                | Key                     | What it does                                                                                                                  |
+| --------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Peek                  | {{key:list.peek}}       | Read it in the [peek](/docs/peek), and act on GitHub from there.                                                              |
+| Main action           | {{key:list.open}}       | Review, Fix CI, Reply… on GitHub.                                                                                             |
+| Open on GitHub        | {{key:list.openGitHub}} | The PR or issue itself.                                                                                                       |
+| Hide until it changes | {{key:dash.hide}}       | Hides the item until something new happens on it.                                                                             |
+| Mute                  | {{key:dash.mute}}       | Hides the item until you unmute it, and unsubscribes you on GitHub. **Show hidden items** lists muted items, with **Unmute**. |
+| Show hidden items     | {{key:dash.showHidden}} | Shows hidden items, to show one again.                                                                                        |
+| Copy link             | {{key:list.copy}}       | Copies the links of the item or the selection.                                                                                |
+| Refresh               | {{key:list.refresh}}    | Searches GitHub again now.                                                                                                    |
 
 ### Not my turn
 
-When an item in **Your turn** is not your turn, press {{key:dash.notNeeded}}, or choose **Not my turn** at the top of the [peek](/docs/peek) or in its menu. The answers are the same as [Doesn't need me](/docs/inbox#doesnt-need-me) in the inbox: they fix a setting, add a rule, or move only this item to Other (and its thread in the inbox to FYI) until it changes.
+When an item in **Your turn** is not your turn, press {{key:dash.notNeeded}}, or choose **Not my turn** at the top of the [peek](/docs/peek) or in its menu. Hush asks why: each answer fixes a setting, or moves only this item to Other until it changes. See [Not my turn](/docs/turns#not-my-turn).
 
 ### Move an item to another group
 
 If Hush puts an item in the wrong group, drag it (by ⋮⋮) to another group or to another place in the list, or use **Move to** in its menu. The item stays where you put it **until it changes** on GitHub; then Hush sorts it again. “Moved by you” shows on it; **Undo move** puts it back. Your order inside a group stays too; new items come in on top.
 
-Select many items to move, hide, or copy them together, the same as in the [inbox](/docs/inbox#select-many).
+### Select many
+
+- {{key:list.select}} selects or deselects the item under the cursor. {{key:list.extendNext}} and {{key:list.extendPrev}} extend the selection.
+- ⌘-click (Ctrl-click) adds an item; Shift-click selects a range; {{key:list.selectAll}} selects all.
+- The keys and the right-click menu act on all selected items: move, hide, mute, or copy them together.
+- {{key:list.escape}} clears the selection.
 
 ## Refresh
 

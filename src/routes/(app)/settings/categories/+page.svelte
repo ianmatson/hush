@@ -5,9 +5,12 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { meQuery } from '$lib/queries';
+	import { feedsQuery, meQuery } from '$lib/queries';
+	import { feedViewOf } from '$lib/shared/views';
+	import FeedButton from '$lib/components/app/feed-button.svelte';
 	import { saveSettings } from '$lib/save-settings';
 	import {
+		CATEGORY_PUSH_OPTIONS,
 		DEFAULT_CATEGORIES,
 		DEFAULT_TAGS,
 		FALLBACK_CATEGORY_ID,
@@ -18,7 +21,7 @@
 		validateCategories,
 		validateTags
 	} from '$lib/shared/categories';
-	import type { ItemCategory, ItemTag, MarkColor } from '$lib/shared/types';
+	import type { CategoryPush, ItemCategory, ItemTag, MarkColor } from '$lib/shared/types';
 	import { MARK_DOT } from '$lib/marks';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
@@ -34,6 +37,7 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 
 	const me = createQuery(meQuery);
+	const feeds = createQuery(feedsQuery);
 
 	interface Draft {
 		categories: ItemCategory[];
@@ -200,6 +204,7 @@
 									aria-label="Category name"
 									class="h-8 min-w-0 flex-1"
 								/>
+								<FeedButton view={feedViewOf('category', c.id)} name={c.name} feeds={feeds.data} />
 								{#if !fallback}
 									<Button
 										variant="ghost"
@@ -240,6 +245,22 @@
 									label="Rule (optional)"
 									placeholder="repo:acme/api label:bug OR about:&quot;a crash&quot;"
 								/>
+								<div class="grid gap-1">
+									<label
+										for="category-{c.id}-push"
+										class="text-xs font-medium text-muted-foreground">Push</label
+									>
+									<select
+										id="category-{c.id}-push"
+										class="h-8 rounded-md border bg-background px-2 text-xs"
+										value={c.push ?? 'inherit'}
+										onchange={(e) => (c.push = e.currentTarget.value as CategoryPush)}
+									>
+										{#each CATEGORY_PUSH_OPTIONS as o (o.id)}
+											<option value={o.id}>{o.label}</option>
+										{/each}
+									</select>
+								</div>
 								<div class="grid gap-1">
 									<label
 										for="category-{c.id}-description"
@@ -299,6 +320,7 @@
 									aria-label="Tag name"
 									class="h-8 min-w-0 flex-1"
 								/>
+								<FeedButton view={feedViewOf('tag', t.id)} name={t.name} feeds={feeds.data} />
 								<Button
 									variant="ghost"
 									size="icon-xs"

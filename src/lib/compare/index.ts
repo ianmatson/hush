@@ -20,7 +20,7 @@ export const HUSH_OVERVIEW: CompareOverview = {
 	kind: 'Web app (installable), hosted',
 	price: 'Free in beta; planned $3 a month',
 	openSource: 'Yes',
-	chooseItFor: 'A “Needs you” list sorted by whose turn it is, with push alerts'
+	chooseItFor: 'Your pull requests and issues in categories, sorted by whose turn it is'
 };
 
 export const COMPARE_OVERVIEW: Record<string, CompareOverview> = {

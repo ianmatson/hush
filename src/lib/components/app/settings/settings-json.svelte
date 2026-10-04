@@ -53,8 +53,9 @@
 	}
 
 	const PAGE_LABEL: Record<string, string> = {
-		inbox: 'Inbox',
+		inbox: 'Turns & Jev',
 		dashboards: 'Sources',
+		categories: 'Categories & tags',
 		notifications: 'Notifications',
 		general: 'General',
 		keys: 'Keybinds'

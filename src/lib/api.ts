@@ -6,7 +6,6 @@ import type {
 	DashKind,
 	MergeMethod,
 	ReactionContent,
-	Rule,
 	Settings,
 	Turn,
 	View
@@ -56,7 +55,7 @@ export type ThreadsResponse = ThreadsBody & {
 };
 
 /** Why a thread does not need you (worker/poller/data.ts: notNeeded). */
-export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'repo' | 'once';
+export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'once';
 export type ThreadAction =
 	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
 /** The body of a thread action: snooze takes a time or a condition. */
@@ -115,7 +114,6 @@ export const api = {
 	notNeeded: (id: string, answer: NotNeededAnswer) =>
 		ok(client.api['not-needed'].$post({ json: { id, answer } })),
 	undoOnlyThisOne: (id: string) => ok(client.api['not-needed'].undo.$post({ json: { id } })),
-	previewRules: (rules: Rule[]) => ok(client.api.rules.preview.$post({ json: { rules } })),
 	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
 	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */
 	replaceSettings: (s: Partial<Settings>) => ok(client.api.settings.all.$put({ json: s })),

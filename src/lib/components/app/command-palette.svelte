@@ -99,7 +99,7 @@
 				['general', 'General', 'appearance menus account export import'],
 				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
-				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
+				['inbox', 'Turns & Jev', 'bots teams smart decisions jev'],
 				['dashboards', 'Sources', 'sources searches tracked teams'],
 				['categories', 'Categories & tags', 'categories tags rules jev re-evaluate'],
 				['notifications', 'Notifications', 'push quiet']

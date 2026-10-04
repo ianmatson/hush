@@ -1,6 +1,6 @@
 ---
 title: Appearance and menus
-description: Themes, light and dark mode, the start page, and the items of the right-click menus.
+description: Themes, light and dark mode, the items of the right-click menus, and swipe actions.
 ---
 
 ## Appearance
@@ -9,7 +9,6 @@ In **Settings → General → Appearance**. These settings are in this browser o
 
 - **Mode**: Light, Dark, or System (follows your computer).
 - **Theme**: choose **Change…** to see every theme. Each theme has a light and a dark version; the mode picks one. The command palette can change the theme too. The themes (from [tweakcn](https://tweakcn.com)) are listed [below](#themes).
-- **Start page**: the tab that Hush opens first: Inbox, Pull requests, or Issues.
 
 The counts on the browser tab and the app icon are here too: see [Tab title and icon](/docs/notifications#tab-title-and-icon).
 

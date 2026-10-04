@@ -1,9 +1,9 @@
 ---
 title: Query language
-description: The one-line syntax of the filter box, saved views, and rules, with every word and value.
+description: The one-line syntax of category and tag rules, with every word and value.
 ---
 
-One short syntax filters the inbox, defines [saved views](/docs/views), and writes the conditions of [rules](/docs/rules):
+One short syntax writes the rules of [categories and tags](/docs/pull-requests-and-issues#categories-and-tags):
 
 ```query
 repo:acme/* needs:review -author:bots label:"good first issue" login bug
@@ -46,9 +46,9 @@ about:"database migrations or schema changes"
 
 It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision model, reads the title, labels, start of the description, and last 2 comments, and decides whether the item is about what you wrote. It matches only when Jev is sure.
 
-- Use it in [rules](/docs/rules) and [saved views](/docs/views). Hush checks the condition when you save, and again when an item's text changes. In the filter box, `about:` finds only what a saved rule or view with the same words already checked.
+- Use it in the rules of categories and tags. Jev checks each item once, and again when its title, description, or labels change.
 - Put exact words first where you can: in `repo:acme/api about:"migrations"`, Jev reads only the items of acme/api.
-- Up to 10 different `about:` conditions in all your rules and views, each up to 200 characters.
+- Up to 30 different `about:` conditions in all your categories and tags, each up to 200 characters.
 
 ## Examples
 
@@ -70,8 +70,17 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 
 ## In settings.json
 
-Rules and saved views store the query as text: the `when` of a [rule](/docs/settings#rules) and the `query` of a [view](/docs/settings#views). Hush checks it when you save: a query with a part that it does not understand is refused, with the error.
+Categories and tags store the query as text: the `rule` of a [category](/docs/settings#categories) or a [tag](/docs/settings#tags). Hush checks it when you save: a query with a part that it does not understand is refused, with the error.
 
 ```json settings
-{ "rules": [{ "when": "repo:acme/* needs:review -author:bots", "then": { "push": true } }] }
+{
+	"tags": [
+		{
+			"id": "reviews",
+			"name": "Reviews",
+			"color": "blue",
+			"rule": "repo:acme/* needs:review -author:bots"
+		}
+	]
+}
 ```

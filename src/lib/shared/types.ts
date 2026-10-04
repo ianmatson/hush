@@ -5,18 +5,6 @@ export type Category = 'action' | 'fyi' | 'muted';
 export type Triage = 'inbox' | 'done' | 'snoozed';
 export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all' | 'inbox';
 
-/** What a saved view starts from. "inbox" is Needs you and FYI together. */
-export type ViewBase = 'inbox' | 'action' | 'fyi' | 'snoozed' | 'done';
-
-/** A named filter on the inbox, shown as a tab (see shared/views.ts). */
-export interface SavedView {
-	id: string;
-	name: string;
-	base: ViewBase;
-	/** A query: the same words as rules and the Filter box. "" shows every thread of the base. */
-	query: string;
-}
-
 export type ActionKind =
 	| 'review'
 	| 'fix_ci'
@@ -108,6 +96,8 @@ export interface ThreadFacts {
 	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
 	sources?: string[];
+	itemCategory?: { id: string; name: string };
+	itemTags?: { id: string; name: string }[];
 }
 
 export interface Classification {
@@ -119,12 +109,7 @@ export interface Classification {
 	why: string;
 	actionLabel: string;
 	actionUrl: string;
-	/** Set by a rule; overrides the default push decision. */
 	push?: boolean;
-	/** Set by a rule: move the thread to Done, or snooze it for `snoozeHours`. */
-	triage?: 'done' | 'snooze';
-	snoozeHours?: number;
-	/** Name of the rule that matched, if any. */
 	rule?: string;
 }
 
@@ -151,6 +136,8 @@ export interface RuleMatch {
 	byBot?: boolean;
 	about?: string[];
 	source?: string[];
+	itemCategory?: string[];
+	itemTag?: string[];
 	assignee?: string | string[];
 	reviewRequested?: string[];
 	size?: string[];
@@ -159,12 +146,15 @@ export interface RuleMatch {
 export type MarkColor =
 	'gray' | 'red' | 'orange' | 'amber' | 'green' | 'teal' | 'blue' | 'violet' | 'pink';
 
+export type CategoryPush = 'inherit' | 'on' | 'off';
+
 export interface ItemCategory {
 	id: string;
 	name: string;
 	color: MarkColor;
 	rule: string;
 	description: string;
+	push?: CategoryPush;
 }
 
 export interface ItemTag {
@@ -172,20 +162,6 @@ export interface ItemTag {
 	name: string;
 	color: MarkColor;
 	rule: string;
-}
-
-export interface Rule {
-	name?: string;
-	enabled?: boolean;
-	/** A query (shared/query.ts), such as "repo:acme/* needs:review". "" matches every thread. */
-	when: string;
-	then: {
-		category?: Category;
-		push?: boolean;
-		/** Also move the thread: to Done, or snoozed for `snoozeHours` (see ruleTriage). */
-		triage?: 'done' | 'snooze';
-		snoozeHours?: number;
-	};
 }
 
 /** Minutes after midnight, in `timeZone`. `from` after `to` crosses midnight. */
@@ -224,15 +200,11 @@ export interface Settings {
 	botsAreFyi: boolean;
 	/** A review request to one of your teams is "Needs you", not FYI. */
 	teamReviewsAreAction: boolean;
-	/** Evaluated top to bottom after the defaults; the first match wins. */
-	rules: Rule[];
 	dash: DashSettings;
 	sources: DashSection[];
 	tracked: string[];
 	categories: ItemCategory[];
 	tags: ItemTag[];
-	/** Saved views: extra inbox tabs, in order. */
-	views: SavedView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
 	keys: Record<string, string[]>;
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */

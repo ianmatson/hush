@@ -73,6 +73,18 @@ export const WORDS: QueryWord[] = [
 		example: 'size:<50'
 	},
 	{
+		key: 'category',
+		field: 'itemCategory',
+		help: 'Its category (name or id); not in category and tag rules',
+		example: 'category:bugs'
+	},
+	{
+		key: 'tag',
+		field: 'itemTag',
+		help: 'Has this tag (name or id); not in category and tag rules',
+		example: 'tag:blocked'
+	},
+	{
 		key: 'source',
 		field: 'source',
 		help: 'Which source found it (its name)',
@@ -165,7 +177,6 @@ export const IS_VALUES: Record<string, string> = {
 const RENAMED: Record<string, string> = {
 	kind: 'needs',
 	reason: 'event',
-	category: 'in',
 	why: 'event',
 	by: 'from'
 };

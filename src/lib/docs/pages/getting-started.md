@@ -1,58 +1,48 @@
 ---
 title: Getting started
-description: Sign in, learn the three tabs, turn on push, and triage your first threads.
+description: Sign in, learn the Items page, turn on push, and act on your first pull requests and issues.
 ---
 
 ## 1. Sign in
 
 Open [app.hush-gh.com](https://app.hush-gh.com) and choose **Sign in with GitHub**. Any GitHub account can sign in. GitHub asks you to let Hush read your notifications, your repositories, and your teams. If your org uses SAML single sign-on, GitHub also asks you to authorize Hush for it.
 
-After you sign in, Hush reads your notifications from the last 14 days. The first sync can take a minute; the inbox says “First sync in progress…” until it is done. After that, Hush checks GitHub every few minutes by itself (see [Limits](/docs/limits)).
-
-The first time, **Welcome to Hush** is at the top of the inbox. It says what Hush found (“From 47 notifications, Hush found 5 things that need you. It moved 6 to FYI, and 36 that are already finished to Done.”), and asks three questions:
-
-- **Review requests to my teams need me**: on or off. Off, team requests are FYI, and show under “Your team's turn” on the Pull requests tab.
-- **Repositories you only want to read about**: the repositories with the most notifications that do not need you. Everything from the ones that you check goes to FYI (Hush adds a [rule](/docs/rules) for each).
-- **Push to this device**: pushes what needs you.
-
-Choose **Done** to save, or **Skip**. You can change all of it later.
+After you sign in, Hush searches GitHub for the open pull requests and issues that involve you. After that, Hush checks GitHub every few minutes by itself (see [Limits](/docs/limits)).
 
 If an org that you work in is missing, its owners may not have approved Hush yet. Hush shows the orgs it can see in a note after sign-in. See [GitHub access](/docs/github-access).
 
-## 2. Know the three tabs
+## 2. Know the Items page
 
-- **Inbox**: your GitHub notifications, sorted. The **Needs you** tab has only what waits on you; **FYI** has the rest. Snoozed, Done, and Muted are there too. See [Inbox](/docs/inbox).
-- **Pull requests**: open PRs that involve you, from saved GitHub searches, grouped by whose turn it is. See [Pull requests and issues](/docs/pull-requests-and-issues).
-- **Issues**: the same for issues.
+The **Items** page has two tabs: **Pull requests** and **Issues**. Each one groups the items by whose turn it is: **Your turn**, **Your team's turn**, **Waiting on others**, and **Other**. See [Pull requests and issues](/docs/pull-requests-and-issues) and [Whose turn](/docs/turns).
 
-A number next to a tab is how many items are your turn there.
+A number next to a tab is how many items are your turn there. The sidebar lists your categories and tags; choose one to see only its items.
 
-## 3. Triage
+The bell in the header opens **Notifications**: the alerts about your pull requests and issues from the last 30 days.
 
-Each thread in Needs you asks for one thing, shown on its main button: **Review**, **Fix CI**, **Reply**, **Merge**… Choose it to go to the right place on GitHub, or press {{key:list.peek}} to read it in the [peek](/docs/peek) and act from there.
+## 3. Act
 
-When you are finished with a thread:
+Each item in Your turn asks for one thing, shown on its main button: **Review**, **Fix CI**, **Reply**, **Merge**… Choose it to go to the right place on GitHub, or press {{key:list.peek}} to read it in the [peek](/docs/peek) and act from there.
 
-- **Done** ({{key:inbox.done}}) moves it out of the inbox, and marks it done on GitHub. New activity brings it back.
-- **Snooze** ({{key:inbox.snooze}}) hides it until a time, or until something happens (“until CI passes”).
-- **Mute** ({{key:inbox.mute}}) stops GitHub notifications for the thread.
+Often you do not need to do more: when you approve, reply, or push a fix, Hush sees it and the item leaves Your turn by itself. You can also:
 
-Often you do not need Done: when you approve, reply, or push a fix, Hush sees it and moves the thread to Done by itself, with a note such as “✓ You approved”.
+- **Hide until it changes** ({{key:dash.hide}}): hides the item until something new happens on it.
+- **Mute** ({{key:dash.mute}}): hides the item until you unmute it, and stops GitHub notifications for it.
+- **Not my turn** ({{key:dash.notNeeded}}): tells Hush that it was wrong. See [Not my turn](/docs/turns#not-my-turn).
 
 ## 4. Turn on push
 
-Go to **Settings → Notifications** and choose **Turn on** for this device. Hush pushes only “Needs you” threads by default, and each PR or issue only once until you open Hush. Do this on each browser or phone that should get pushes.
+Go to **Settings → Notifications** and choose **Turn on** for this device. Hush pushes only what is your turn by default, and each PR or issue only once until you open Hush. Do this on each browser or phone that should get pushes.
 
 On iPhone and iPad, first add Hush to your Home Screen (Share → Add to Home Screen), open it from there, and then turn on push. See [Notifications](/docs/notifications).
 
 ## 5. Learn a few keys
 
-{{ref:keys list.next list.prev list.peek list.open inbox.done inbox.snooze palette list.help}}
+{{ref:keys list.next list.prev list.peek list.open dash.hide dash.mute palette list.help}}
 
 You can change every key. See [Keybinds](/docs/keybinds).
 
 ## 6. Make it yours
 
-- Too much in Needs you from one repository? Right-click a thread and choose **Make a rule…**. See [Rules](/docs/rules).
-- Want a tab for one project? Type a filter such as `repo:acme/web-*` and choose **Save this filter as a view**. See [Saved views](/docs/views).
+- Want to see one project together? Make a category or a tag with a rule such as `repo:acme/web-*` in **Settings → Categories & tags**. See [Categories and tags](/docs/pull-requests-and-issues#categories-and-tags).
+- Missing something, or too much? Change what Hush tracks in **Settings → Sources**. See [Sources](/docs/pull-requests-and-issues#sources).
 - Install Hush as an app: in Chrome or Edge, choose **Install** in the address bar; in Safari on macOS, choose **File → Add to Dock**. The app icon can show a badge (**Settings → General → Tab title & icon**).

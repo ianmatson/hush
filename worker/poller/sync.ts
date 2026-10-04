@@ -1,4 +1,4 @@
-import { classify, ruleTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { ThreadFacts } from '../../src/lib/shared/types';
@@ -77,7 +77,7 @@ export abstract class PollerSync extends PollerSubjects {
 		}
 		const fetched = await fetchSubjects(who.token, refs, me);
 		// Store the facts; this ingest writes these threads itself.
-		await this.record(who, [...fetched.values()], { threads: false, allAreInboxThreads: true });
+		await this.record(who, [...fetched.values()], { threads: false });
 		const decided = this.decisionsOf(who, [...fetched.values()]);
 
 		const now = Date.now();
@@ -127,10 +127,7 @@ export abstract class PollerSync extends PollerSubjects {
 					wokeBy = outcome.reason;
 				}
 			}
-			// New activity: a rule that moves threads acts now (not for a snooze that just woke).
-			const moved = triage === 'inbox' && !wokeBy ? ruleTriage(c, now) : null;
-			if (moved) triage = moved.triage;
-			const keepSnooze = triage === 'snoozed' && !moved;
+			const keepSnooze = triage === 'snoozed';
 
 			let pushed = ex?.pushed_updated_at ?? null;
 			const itemKey = key ?? n.id;
@@ -147,7 +144,6 @@ export abstract class PollerSync extends PollerSubjects {
 				pushed = n.updated_at;
 			} else if (
 				isItem &&
-				!moved &&
 				initialized &&
 				n.unread &&
 				triage === 'inbox' &&
@@ -203,16 +199,16 @@ export abstract class PollerSync extends PollerSubjects {
 					triage,
 					pushed,
 					now,
-					moved?.triage === 'snoozed' ? moved.until : null,
-					moved?.triage === 'snoozed' ? now : null,
-					moved?.triage === 'done' ? moved.note : null,
+					null,
+					null,
+					null,
 					n.subject.url ?? null
 				)
 			);
 		}
 		this.transaction(() => writes.forEach((w) => w()));
 		await this.bumpVersion();
-		await this.deliver(candidates);
+		await this.deliver(await this.withCategoryPush(who, candidates));
 		return changed.map((n) => n.id);
 	}
 

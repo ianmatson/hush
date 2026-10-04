@@ -19,15 +19,15 @@ Hush stores the token encrypted. It acts on GitHub **only when you do**: when yo
 
 ## What Hush does on GitHub
 
-| In Hush                             | On GitHub                                                                           |
-| ----------------------------------- | ----------------------------------------------------------------------------------- |
-| Done                                | Marks the notification as done.                                                     |
-| Mute                                | Unsubscribes you from the thread, and marks it as done.                             |
-| Read                                | Marks the notification as read.                                                     |
-| Unread                              | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
-| Snooze, Move to inbox, Unmute, Hide | Nothing. These stay in Hush.                                                        |
-| Actions in the peek                 | The action itself: a review, a comment, a merge, a re-run, a close.                 |
-| A reaction in the peek              | Adds your reaction, or removes it.                                                  |
+| In Hush                            | On GitHub                                                                           |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| Done                               | Marks the notification as done.                                                     |
+| Mute                               | Unsubscribes you from the thread, and marks it as done.                             |
+| Read                               | Marks the notification as read.                                                     |
+| Unread                             | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
+| Unmute, Hide, Move, Category, Tags | Nothing. These stay in Hush.                                                        |
+| Actions in the peek                | The action itself: a review, a comment, a merge, a re-run, a close.                 |
+| A reaction in the peek             | Adds your reaction, or removes it.                                                  |
 
 ## When an org is missing
 
@@ -42,7 +42,7 @@ After you sign in, a note lists the orgs that Hush can see. The same list is in 
 
 ### SAML single sign-on
 
-If an org uses SAML SSO, GitHub asks you to authorize Hush for it when you sign in. If you did not, the inbox shows “GitHub hides notifications from N orgs”. Sign in again and authorize the org. For a custom token, choose **Configure SSO** next to the token on github.com/settings/tokens.
+If an org uses SAML SSO, GitHub asks you to authorize Hush for it when you sign in. If you did not, Hush shows “GitHub hides notifications from N orgs”. Sign in again and authorize the org. For a custom token, choose **Configure SSO** next to the token on github.com/settings/tokens.
 
 ## Custom token
 

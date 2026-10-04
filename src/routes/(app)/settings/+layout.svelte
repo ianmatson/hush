@@ -12,7 +12,7 @@
 
 	const sections = [
 		{ href: '/settings/general', label: 'General', icon: Settings2 },
-		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
+		{ href: '/settings/inbox', label: 'Turns & Jev', icon: Inbox },
 		{ href: '/settings/dashboards', label: 'Sources', icon: GitPullRequest },
 		{ href: '/settings/categories', label: 'Categories & tags', icon: Tags },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
