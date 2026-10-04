@@ -30,17 +30,24 @@ export class GitHubError extends Error {
  */
 const GITHUB_WAIT_MS = 20_000;
 
-export function gh(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+export async function gh(token: string, path: string, init: RequestInit = {}): Promise<Response> {
 	const headers = new Headers(init.headers);
 	headers.set('Authorization', `Bearer ${token}`);
 	if (!headers.has('Accept')) headers.set('Accept', 'application/vnd.github+json');
 	headers.set('X-GitHub-Api-Version', '2022-11-28');
 	headers.set('User-Agent', UA);
-	return fetch(path.startsWith('http') ? path : `${API}${path}`, {
-		...init,
-		headers,
-		signal: init.signal ?? AbortSignal.timeout(GITHUB_WAIT_MS)
-	});
+	const url = path.startsWith('http') ? path : `${API}${path}`;
+	if (init.signal) return fetch(url, { ...init, headers });
+	const noAnswer = new AbortController();
+	const waitForAnswer = setTimeout(
+		() => noAnswer.abort(new DOMException('The operation timed out.', 'TimeoutError')),
+		GITHUB_WAIT_MS
+	);
+	try {
+		return await fetch(url, { ...init, headers, signal: noAnswer.signal });
+	} finally {
+		clearTimeout(waitForAnswer);
+	}
 }
 
 export interface GhUser {

@@ -9,7 +9,7 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -43,6 +43,7 @@ CREATE TABLE threads (
 );
 CREATE INDEX threads_view ON threads (category, triage);
 CREATE INDEX threads_subject ON threads (subject_key);
+CREATE INDEX threads_triage ON threads (triage, resolved_at);
 
 -- The one record of each PR or issue's facts (SubjectFacts JSON), for every view.
 CREATE TABLE subjects (
@@ -112,6 +113,12 @@ ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 	6: {
 		to: 7,
 		sql: `CREATE TABLE push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);`
+	},
+	7: {
+		to: 8,
+		sql: `
+CREATE TABLE IF NOT EXISTS push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS threads_triage ON threads (triage, resolved_at);`
 	}
 };
 

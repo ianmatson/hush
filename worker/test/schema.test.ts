@@ -6,6 +6,7 @@ import {
 	subjectRefOf,
 	toDTO,
 	viewWhere,
+	WATCHED,
 	type ThreadWithFacts
 } from '../poller/schema';
 
@@ -92,12 +93,20 @@ describe('schema migrations', () => {
 		const tables = db
 			.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
 			.all() as { name: string }[];
-		return Object.fromEntries(
-			tables.map(({ name }) => [
-				name,
-				(db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map((c) => c.name)
-			])
-		);
+		const indexes = db
+			.prepare(
+				`SELECT sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name`
+			)
+			.all() as { sql: string }[];
+		return {
+			tables: Object.fromEntries(
+				tables.map(({ name }) => [
+					name,
+					(db.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map((c) => c.name)
+				])
+			),
+			indexes: indexes.map((i) => i.sql)
+		};
 	};
 
 	it('schema 1 plus its steps equals a new schema', () => {
@@ -109,12 +118,62 @@ describe('schema migrations', () => {
 			.replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n')
 			.replace(/\nCREATE TABLE push_marks[^\n]*\n/, '\n')
 			// Schema 1 still had pushed_at (a later step drops it).
-			.replace(/(\n\s*pushed_updated_at TEXT,[^\n]*)/, '$1\n  pushed_at INTEGER,');
+			.replace(/(\n\s*pushed_updated_at TEXT,[^\n]*)/, '$1\n  pushed_at INTEGER,')
+			.replace(/\nCREATE INDEX threads_triage[^\n]*/, '');
 		expect(v1).toContain('pushed_at INTEGER');
 		expect(v1).not.toContain('override');
 		expect(v1).not.toContain('CREATE TABLE seen');
+		expect(v1).not.toContain('threads_triage');
 		const steps: string[] = [];
 		for (let v = 1; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
 		expect(columns([v1, ...steps])).toEqual(columns([SCHEMA]));
+	});
+
+	it.each([
+		['push_marks but no threads_triage', /\nCREATE INDEX threads_triage[^\n]*/],
+		['threads_triage but no push_marks', /\nCREATE TABLE push_marks[^\n]*/]
+	])('either schema 7 (%s) plus its steps equals a new schema', (_, missing) => {
+		const v7 = SCHEMA.replace(missing, '');
+		expect(v7).not.toEqual(SCHEMA);
+		const steps: string[] = [];
+		for (let v = 7; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
+		expect(columns([v7, ...steps])).toEqual(columns([SCHEMA]));
+	});
+});
+
+describe('queries that run on every poll or watch', () => {
+	const plan = (query: string, ...args: (string | number)[]) => {
+		const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+		const db = new DatabaseSync(':memory:');
+		db.exec(SCHEMA);
+		return (db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...args) as { detail: string }[]).map(
+			(r) => r.detail
+		);
+	};
+	const readsEveryThread = (details: string[]) => details.some((d) => /^SCAN threads\b/.test(d));
+
+	it.each([
+		[
+			'snoozes that are due',
+			`SELECT id FROM threads WHERE triage = 'snoozed' AND snoozed_until <= ?`,
+			[1]
+		],
+		[
+			'the oldest open thread',
+			`SELECT MIN(gh_updated_at) FROM threads WHERE triage IN ('inbox', 'snoozed')`,
+			[]
+		],
+		[
+			'open threads since a time',
+			`SELECT id FROM threads WHERE triage IN ('inbox', 'snoozed') AND gh_updated_at >= ?`,
+			['2026-01-01']
+		],
+		[
+			'watched threads',
+			`SELECT id FROM threads WHERE ${WATCHED} AND id > ? ORDER BY id LIMIT ?`,
+			[1, '', 80]
+		]
+	] as const)('%s do not read every thread', (_, query, args) => {
+		expect(readsEveryThread(plan(query, ...args))).toBe(false);
 	});
 });

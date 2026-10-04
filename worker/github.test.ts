@@ -1,11 +1,41 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DETAILS_TTL, fetchDetails, forTeams, needsDetails, searchShort } from './github';
+import { DETAILS_TTL, fetchDetails, forTeams, gh, needsDetails, searchShort } from './github';
 import type { SubjectFacts } from '../src/lib/shared/subject';
 
 afterEach(() => vi.unstubAllGlobals());
 
 const body = (init?: RequestInit) =>
 	JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
+
+describe('gh', () => {
+	afterEach(() => vi.useRealTimers());
+
+	it('leaves no timer behind once GitHub answers, so the Durable Object can sleep', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('{}'))
+		);
+		await gh('t', '/user');
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it('gives up when GitHub does not answer', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(_url: string, init?: RequestInit) =>
+					new Promise<Response>((_, reject) =>
+						init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+					)
+			)
+		);
+		const answer = gh('t', '/user');
+		vi.runAllTimers();
+		await expect(answer).rejects.toMatchObject({ name: 'TimeoutError' });
+	});
+});
 
 describe('searchShort', () => {
 	it('asks only for IDs and update times, and keys each hit', async () => {
