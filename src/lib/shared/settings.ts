@@ -1,13 +1,7 @@
 import { DEFAULT_DASH } from './dashboard';
-import { DEFAULT_SOURCES } from './sources';
-import { DEFAULT_CATEGORIES, DEFAULT_TAGS } from './categories';
 import { DEFAULT_MENUS, upgradeMenus } from './menus';
 import { DEFAULT_SWIPE } from './swipe';
 import type { Settings } from './types';
-
-const RETIRED_DASH_KEYS = ['pr', 'issue'];
-const withoutRetiredDashKeys = (dash: object | undefined) =>
-	Object.fromEntries(Object.entries(dash ?? {}).filter(([k]) => !RETIRED_DASH_KEYS.includes(k)));
 
 export const DEFAULT_SETTINGS: Settings = {
 	pushAction: true,
@@ -19,17 +13,15 @@ export const DEFAULT_SETTINGS: Settings = {
 	pushLimit: null,
 	pushWhileOpen: false,
 	pushUrgentNow: false,
-	smartDecisions: true,
+	smartDecisions: false,
 	clearNotifications: 'open',
 	peekMarksRead: true,
 	reviewResolution: 'strict',
 	botsAreFyi: true,
 	teamReviewsAreAction: false,
+	rules: [],
 	dash: DEFAULT_DASH,
-	sources: DEFAULT_SOURCES,
-	tracked: [],
-	categories: DEFAULT_CATEGORIES,
-	tags: DEFAULT_TAGS,
+	views: [],
 	menus: DEFAULT_MENUS,
 	keys: {},
 	swipe: DEFAULT_SWIPE
@@ -48,7 +40,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 		return {
 			...DEFAULT_SETTINGS,
 			...raw,
-			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
+			dash: { ...DEFAULT_DASH, ...(raw.dash ?? {}) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
 			swipe: {
 				inbox: { ...DEFAULT_SWIPE.inbox, ...(raw.swipe?.inbox ?? {}) },

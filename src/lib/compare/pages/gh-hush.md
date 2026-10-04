@@ -31,7 +31,7 @@ description: gh-hush is a GitHub CLI extension that clears GitHub notifications 
 
 **gh-hush** reads your unread notifications through the account that you signed in to with `gh`. It checks each one against the rules in your YAML file, in order. A rule matches on the repository, type, state, reason, author, assignee, review requests (to you or your teams), mentions, and age, and says `keep` or `hush`. gh-hush shows a preview with the rule that matched each notification. When you confirm, it unsubscribes from each hushed thread and marks it done on GitHub. Security alerts and types it does not support always stay. It works only on unread notifications, because of a limit in GitHub's API.
 
-**Hush** checks GitHub every few minutes on its servers. It reads the pull request or issue behind each notification and decides whose turn it is. Threads that wait on you go to **Needs you**, the rest to **FYI**, and your [categories and tags](/docs/pull-requests-and-issues#categories-and-tags) sort items and decide which ones push. Done and Mute also act on GitHub (see [GitHub access](/docs/github-access#what-hush-does-on-github)).
+**Hush** checks GitHub every few minutes on its servers. It reads the pull request or issue behind each notification and decides whose turn it is. Threads that wait on you go to **Needs you**, the rest to **FYI**, and your [rules](/docs/rules) can send threads to Muted, push them, or move them to Done or Snoozed. Done and Mute also act on GitHub (see [GitHub access](/docs/github-access#what-hush-does-on-github)).
 
 ## Where gh-hush is better
 
@@ -64,6 +64,6 @@ You can also use both: gh-hush to unsubscribe from noise, and Hush to sort what 
 
 - [maxbeizer/gh-hush on GitHub](https://github.com/maxbeizer/gh-hush): README, MIT license, rules, API limit
 - [gh-hush releases](https://github.com/maxbeizer/gh-hush/releases): v0.5.0, 13 September 2026
-- Hush: [whose turn](/docs/turns), [query language](/docs/query-language), [GitHub access](/docs/github-access), [pricing](/pricing)
+- Hush: [inbox](/docs/inbox), [rules](/docs/rules), [GitHub access](/docs/github-access), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

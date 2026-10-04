@@ -1,10 +1,10 @@
+import { validateRules } from './classify';
 import { validateDash } from './dashboard';
-import { validateSources, validateTracked } from './sources';
-import { markQueries, validateCategories, validateTags } from './categories';
 import { MAX_SMART_CONDITIONS, smartConditions } from './decisions';
 import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
 import { validateKeys } from './keymap';
+import { formatQuery } from './query';
 import { validateQuietHours } from './quiet';
 import {
 	DIGEST_MINUTES,
@@ -14,14 +14,14 @@ import {
 	validatePushRepeat
 } from './push-policy';
 import { DEFAULT_SETTINGS } from './settings';
-import type { Settings } from './types';
+import type { RuleMatch, Settings } from './types';
+import { validateViews } from './views';
 
 /**
  * Every setting, for the settings.json editor and the docs: one entry per key (and per key of
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
-export type SettingsPage =
-	'inbox' | 'dashboards' | 'categories' | 'notifications' | 'general' | 'keys';
+export type SettingsPage = 'inbox' | 'dashboards' | 'notifications' | 'general' | 'keys';
 export interface SettingInfo {
 	key: string;
 	page: SettingsPage | null;
@@ -113,28 +113,24 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, and checks the about: conditions of your rules and views (up to ${MAX_SMART_CONDITIONS}).`
 	},
 	{
-		key: 'sources',
+		key: 'rules',
+		page: 'inbox',
+		description:
+			'Inbox rules, top to bottom; the first match wins. Each is { "name", "enabled", "when": a query, "then": { "category", "push", "triage", "snoozeHours" } }.'
+	},
+	{
+		key: 'views',
+		page: 'inbox',
+		description:
+			'Saved views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
+	},
+	{
+		key: 'dash.pr',
 		page: 'dashboards',
 		description:
-			'The GitHub searches that decide which PRs and issues Hush tracks: { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue covers both.'
+			'Pull request sections: saved GitHub searches { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team.'
 	},
-	{
-		key: 'categories',
-		page: 'categories',
-		description:
-			'Where each PR and issue lives: exactly one category each. { "id", "name", "color", "rule": a query, "description": for Jev }. The first category whose rule matches wins; else Jev picks among categories with a description; else "other".'
-	},
-	{
-		key: 'tags',
-		page: 'categories',
-		description:
-			'Marks that cut across categories: zero or more each. { "id", "name", "color", "rule": a query }. A rule with about:"…" asks Jev.'
-	},
-	{
-		key: 'tracked',
-		page: 'dashboards',
-		description: 'Single PRs and issues to track, as "owner/repo#123", whatever the sources find.'
-	},
+	{ key: 'dash.issue', page: 'dashboards', description: 'Issue sections, the same as dash.pr.' },
 	{
 		key: 'dash.scope',
 		page: 'dashboards',
@@ -182,7 +178,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'keys',
 		page: 'keys',
 		description:
-			'Keyboard shortcuts you changed: { "command id": ["key", …] }, for example { "dash.hide": ["d"] }. [] turns a shortcut off. Keys: "j", "Shift+j", "Mod+k" (⌘ or Ctrl), "Enter", "Space", "?".'
+			'Keyboard shortcuts you changed: { "command id": ["key", …] }, for example { "inbox.done": ["d"] }. [] turns a shortcut off. Keys: "j", "Shift+j", "Mod+k" (⌘ or Ctrl), "Enter", "Space", "?".'
 	}
 ];
 
@@ -190,6 +186,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe']);
 /** Settings that change how threads are sorted: a change re-sorts the stored threads. */
 export const RECLASSIFY_KEYS: (keyof Settings)[] = [
+	'rules',
 	'botsAreFyi',
 	'reviewResolution',
 	'teamReviewsAreAction',
@@ -251,11 +248,9 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 		v === 'strict' || v === 'any_review'
 			? null
 			: '"reviewResolution" must be "strict" or "any_review".',
+	rules: validateRules,
+	views: validateViews,
 	dash: validateDash,
-	sources: validateSources,
-	categories: validateCategories,
-	tags: validateTags,
-	tracked: validateTracked,
 	menus: validateMenus,
 	keys: validateKeys,
 	swipe: validateSwipe
@@ -277,10 +272,10 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 					return `Unknown setting "${k}.${sub}".`;
 	}
 	if (
-		['categories', 'tags'].some((k) => keys.includes(k)) &&
-		smartConditions(markQueries(next)).length > MAX_SMART_CONDITIONS
+		(keys.includes('rules') || keys.includes('views')) &&
+		smartConditions(next.rules, next.views).length > MAX_SMART_CONDITIONS
 	)
-		return `Categories and tags can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
+		return `Rules and views can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
 	return null;
 }
 
@@ -313,11 +308,32 @@ export function settingsFromFile(text: string): Partial<Settings> | string {
 	if (!file || typeof file !== 'object' || typeof file.settings !== 'object')
 		return 'This is not a Hush settings file.';
 	if (file.hush !== 1 && file.hush !== 2) return 'This settings file is from a newer Hush.';
-	const raw = (file.settings ?? {}) as Record<string, unknown>;
+	const raw = (file.hush === 1 ? fromVersion1(file.settings) : (file.settings ?? {})) as Record<
+		string,
+		unknown
+	>;
 	const patch = Object.fromEntries(
 		Object.keys(DEFAULT_SETTINGS)
 			.filter((k) => raw[k] !== undefined)
 			.map((k) => [k, raw[k]])
 	) as Partial<Settings>;
 	return Object.keys(patch).length ? patch : 'The file has no settings.';
+}
+
+/** A version 1 file: the JSON conditions of rules and views as query text. */
+function fromVersion1(settings: unknown): Record<string, unknown> {
+	const s = { ...(settings as Record<string, unknown>) };
+	const asQuery = (when: unknown) =>
+		when && typeof when === 'object' ? formatQuery(when as RuleMatch) : when;
+	if (Array.isArray(s.rules))
+		s.rules = s.rules.map((r) =>
+			r && typeof r === 'object' ? { ...r, when: asQuery(r.when) } : r
+		);
+	if (Array.isArray(s.views))
+		s.views = s.views.map((v) => {
+			if (!v || typeof v !== 'object' || !('when' in v)) return v;
+			const { when, ...rest } = v as { when: unknown };
+			return { ...rest, query: asQuery(when) };
+		});
+	return s;
 }

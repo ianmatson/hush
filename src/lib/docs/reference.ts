@@ -1,30 +1,15 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
-import { MAX_QUERIES } from '$lib/shared/dashboard';
-import { DEFAULT_SOURCES, MAX_SOURCES, MAX_TRACKED } from '$lib/shared/sources';
-import {
-	DEFAULT_CATEGORIES,
-	DEFAULT_TAGS,
-	FALLBACK_CATEGORY_ID,
-	MARK_COLORS,
-	MAX_CATEGORIES,
-	MAX_DESCRIPTION_CHARS,
-	MAX_MARK_NAME_CHARS,
-	MAX_TAGS
-} from '$lib/shared/categories';
+import { DEFAULT_ISSUE_SECTIONS, DEFAULT_PR_SECTIONS, MAX_QUERIES } from '$lib/shared/dashboard';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import { IS_VALUES, MAX_CONDITION_CHARS, WORDS } from '$lib/shared/query';
-import {
-	BODY_EXCERPT_CHARS,
-	CHOICE_CONFIDENCE,
-	MAX_SMART_CONDITIONS,
-	YES_AT
-} from '$lib/shared/decisions';
+import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
 import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
+import { MAX_VIEWS, VIEW_BASES } from '$lib/shared/views';
 import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
@@ -72,9 +57,8 @@ const table = (head: string[], rows: string[][]) =>
 
 const PAGE: Record<SettingsPage, string> = {
 	general: 'Settings → General',
-	inbox: 'Settings → Turns & Jev',
-	dashboards: 'Settings → Sources',
-	categories: 'Settings → Categories & tags',
+	inbox: 'Settings → Inbox',
+	dashboards: 'Settings → PRs & issues',
 	notifications: 'Settings → Notifications',
 	keys: 'Settings → Keybinds'
 };
@@ -93,15 +77,15 @@ export function defaultOf(key: string): unknown {
 export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
 	pushAction: {
 		type: 'boolean',
-		body: `When one of your pull requests or issues needs you, Hush sends a push to every device that has push on. A category's \`push\` setting can stop it (\`"off"\`) or send it even when this is off (\`"on"\`): see [categories](#categories). The bell lists it either way.`
+		body: `When a thread arrives in **Needs you**, Hush sends a push to every device that has push on. A rule with \`"push": false\` stops the push for the threads it matches; with \`"push": true\` it sends one even when this is off.`
 	},
 	pushFyi: {
 		type: 'boolean',
-		body: `Also push changes that do not need you. Most people leave this off and set \`push: "on"\` on the few [categories](#categories) they care about.`
+		body: `Also push FYI threads. Most people leave this off and write a rule with \`"push": true\` for the few repositories or people they care about.`
 	},
 	pushTurnChanges: {
 		type: 'boolean',
-		body: `GitHub sends no notification for some changes that make an item your turn: new commits after your review, CI that fails later, a snooze that ends. Hush looks at your open items again every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, it shows in the bell and, with this on, pushes.`
+		body: `GitHub sends no notification for some changes that make a thread your turn: new commits after your review, CI that fails later, a snooze that ends. The inbox watcher looks at open threads every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, Hush moves it to Needs you and, with this on, pushes it.`
 	},
 	quietHours: {
 		type: 'object or null',
@@ -178,10 +162,10 @@ This also applies to team review requests.`
 	},
 	smartDecisions: {
 		type: 'boolean',
-		body: `On by default (turn it off in **Settings → Turns & Jev**). Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
+		body: `Off by default. On, Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
 
 - **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
-- **Categories and tags:** Jev picks a category among the ones with a description, and answers the \`about:\` conditions of your category and tag rules. See [categories](#categories) and [tags](#tags).
+- **\`about:\` conditions** in your rules and saved views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
 - **Order:** on the Pull requests and Issues tabs, items whose text says they block something or are about an incident come first inside their group.
 
 When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and your other rules work as before. Turning it off deletes Jev's answers.`
@@ -192,67 +176,80 @@ When you turn it on, or add an \`about:\` condition, Hush checks your open threa
 	},
 	teamReviewsAreAction: {
 		type: 'boolean',
-		body: `A review request to a team you are in counts as **Your turn** (and can push). Off, it shows under **Your team's turn**.`
+		body: `A review request to a team you are in goes to **Needs you** (and is pushed). Off, it is FYI in the inbox, and it shows under “Your team's turn” on the Pull requests tab.`
 	},
-	sources: {
-		type: 'array of sources',
-		body: `The GitHub searches that decide which PRs and issues Hush tracks. Up to ${MAX_SOURCES}.
+	rules: {
+		type: 'array of rules',
+		body: `Your inbox rules. Hush checks them from top to bottom, after its own defaults. The first enabled rule that matches a thread wins. A change to the rules sorts your stored threads again. See [Rules](/docs/rules) for the editor, and [the query language](/docs/query-language) for the conditions.
+
+A rule:
+
+- \`name\` (text, optional): shown on the thread as “rule: …”.
+- \`enabled\` (boolean, optional): \`false\` turns the rule off. Missing means on.
+- \`when\` (text): a [query](/docs/query-language), such as \`"repo:acme/* needs:review"\`. All of its conditions must match. \`""\` matches every thread. A query with a part that Hush does not understand is refused.
+- \`then\` (object): what to do. It needs at least one of \`category\`, \`push\`, or \`triage\`.
+  - \`category\`: \`"action"\` (Needs you), \`"fyi"\`, or \`"muted"\`.
+  - \`push\`: \`true\` or \`false\`, in place of the push settings.
+  - \`triage\`: \`"done"\` moves the thread to Done, \`"snooze"\` snoozes it for \`snoozeHours\` (a whole number from 1 to 720). Hush moves a thread only when it has new activity or when the rule starts to match, so a thread that you move back stays where you put it.
+
+\`\`\`json settings
+{
+  "rules": [
+    { "name": "Docs repo is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
+    { "name": "Mute dependabot", "when": "author:dependabot*", "then": { "category": "muted" } },
+    {
+      "name": "Nightly CI can wait",
+      "when": "type:ci repo:acme/nightly",
+      "then": { "triage": "snooze", "snoozeHours": 12, "push": false }
+    }
+  ]
+}
+\`\`\``
+	},
+	views: {
+		type: 'array of views',
+		body: `Saved views: extra tabs after the built-in inbox tabs, in this order. Up to ${MAX_VIEWS}.
+
+- \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
+- \`name\`: up to 40 characters. The tab label.
+- \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
+- \`query\`: a [query](/docs/query-language), the same words as rules. \`in:\` here is the thread's list now, after your rules. \`""\` shows every thread of the base.
+
+\`\`\`json settings
+{
+  "views": [
+    { "id": "web", "name": "Web team", "base": "inbox", "query": "repo:acme/web-*" },
+    { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" }
+  ]
+}
+\`\`\``
+	},
+	'dash.pr': {
+		type: 'array of sections',
+		body: `The sections of the Pull requests tab. Each is a saved GitHub search. Up to 20.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
-- \`name\`: up to 60 characters. Rules can test it with \`source:\`.
-- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both.
-- \`enabled\`: \`false\` skips the search.
+- \`name\`: up to 60 characters.
+- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track.
+- \`enabled\`: \`false\` hides the section and skips its search.
 
-A change to \`sources\` replaces the whole list. To add a source, write the defaults below and your new one.
+A change to \`dash.pr\` replaces the whole list. To add a section, write the defaults below and your new one.
 
 The defaults:
 
 ${table(
 	['id', 'name', 'query', 'enabled'],
-	DEFAULT_SOURCES.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
+	DEFAULT_PR_SECTIONS.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
 )}`
 	},
-	categories: {
-		type: 'array of categories',
-		body: `Where each PR and issue lives. Every item has exactly one category. Up to ${MAX_CATEGORIES}.
-
-- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. \`"${FALLBACK_CATEGORY_ID}"\` is the fallback and cannot be deleted.
-- \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
-- \`color\`: ${MARK_COLORS.map((c) => `\`"${c}"\``).join(', ')}.
-- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev.
-- \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
-- \`push\` (optional): \`"inherit"\` (the default) follows the notification settings; \`"on"\` pushes this category's items that need you, also when the notification settings would not; \`"off"\` never pushes them. The bell lists them either way.
-
-Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description, when it is at least ${CHOICE_CONFIDENCE * 100}% sure; else \`"${FALLBACK_CATEGORY_ID}"\`. Jev chooses once for each item, and again only when its title, description, or labels change. After you change categories, **Re-evaluate items** asks again for your open items.
-
-The defaults:
+	'dash.issue': {
+		type: 'array of sections',
+		body: `The sections of the Issues tab, the same as \`dash.pr\`. The defaults:
 
 ${table(
-	['id', 'name', 'rule', 'description'],
-	DEFAULT_CATEGORIES.map((c) => [code(c.id), c.name, c.rule ? code(c.rule) : '', c.description])
+	['id', 'name', 'query', 'enabled'],
+	DEFAULT_ISSUE_SECTIONS.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
 )}`
-	},
-	tags: {
-		type: 'array of tags',
-		body: `Marks that cut across categories: an item can have none, one, or several. Up to ${MAX_TAGS}.
-
-- \`id\`, \`name\`, \`color\`: as for categories.
-- \`rule\`: a [query](/docs/query-language). \`about:"…"\` asks Jev, once for each item (and again when its title, description, or labels change).
-
-The defaults:
-
-${table(
-	['id', 'name', 'rule'],
-	DEFAULT_TAGS.map((t) => [code(t.id), t.name, code(t.rule)])
-)}`
-	},
-	tracked: {
-		type: 'array of strings',
-		body: `Single PRs and issues that Hush tracks whatever the sources find, as \`"owner/repo#123"\`. Up to ${MAX_TRACKED}. They show while they are open.
-
-\`\`\`json settings
-{ "tracked": ["acme/web#482", "acme/api#77"] }
-\`\`\``
 	},
 	'dash.scope': {
 		type: 'string',
@@ -316,7 +313,7 @@ How to write a key:
 - Other characters are themselves, with no Shift: \`"?"\`, \`"/"\`, \`"1"\`.
 
 \`\`\`json settings
-{ "keys": { "dash.hide": ["d", "e"], "dash.mute": [], "palette": ["Mod+k", "Mod+p"] } }
+{ "keys": { "inbox.done": ["d", "e"], "inbox.mute": [], "palette": ["Mod+k", "Mod+p"] } }
 \`\`\``
 	}
 };
@@ -367,7 +364,7 @@ export function keyMention(id: string, where = 'docs'): string {
 	return c.keys.length ? c.keys.map(one).join(' or ') : '(no key)';
 }
 
-/** Some commands and their keys, in this order: {{ref:keys list.next dash.hide}}. */
+/** Some commands and their keys, in this order: {{ref:keys list.next inbox.done}}. */
 function someKeys(ids: string[]): string {
 	return table(
 		['Key', 'What it does'],
@@ -503,13 +500,14 @@ function limitsReference(): string {
 			],
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
 			['Done threads with no activity are forgotten after', '30 days'],
-			['Sources', String(MAX_SOURCES)],
-			['Tracked items', String(MAX_TRACKED)],
+			['Saved views', String(MAX_VIEWS)],
+			['Sections per tab (dash.pr, dash.issue)', '20'],
 			['GitHub searches per tab', String(MAX_QUERIES)],
 			['Items per menu', '60'],
 			['Keys per command', '4'],
 			['Push devices', '10'],
-			['Different about: conditions in categories and tags', String(MAX_SMART_CONDITIONS)],
+			['Rule snooze (snoozeHours)', '1 to 720 hours'],
+			['Different about: conditions in rules and views', String(MAX_SMART_CONDITIONS)],
 			['Length of one about: condition', `${MAX_CONDITION_CHARS} characters`],
 			[
 				'Smart decisions per account',
@@ -527,14 +525,7 @@ function limitsReference(): string {
 	);
 }
 
-const sourcesReference = () =>
-	table(
-		['Default source', 'Search', 'On'],
-		DEFAULT_SOURCES.map((s) => [s.name, code(s.query), s.enabled ? 'yes' : 'no'])
-	);
-
 export const REFERENCES: Record<string, (args: string[]) => string> = {
-	sources: sourcesReference,
 	keys: someKeys,
 	themes: () => ['Default', ...THEMES.map((t) => t.label)].map((l) => `- ${l}`).join('\n'),
 	settings: settingsReference,

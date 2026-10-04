@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { parseExpr } from '$lib/shared/query';
+	import { parseQuery } from '$lib/shared/query';
 	import { Input } from '$lib/components/ui/input';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import QuerySuggest from './query-suggest.svelte';
@@ -16,7 +16,7 @@
 	}: { value: string; id: string; label?: string; placeholder?: string } = $props();
 
 	let el = $state<HTMLInputElement | null>(null);
-	const errors = $derived(parseExpr(value ?? '').errors);
+	const errors = $derived(parseQuery(value ?? '').errors);
 	const oninput = (v: string) => (value = v);
 </script>
 

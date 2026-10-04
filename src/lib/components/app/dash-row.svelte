@@ -4,7 +4,7 @@
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import { newChanges, saidBy } from '$lib/shared/badges';
-	import { DEFAULT_SOURCE_IDS } from '$lib/shared/sources';
+	import { BUILT_IN_SECTIONS } from '$lib/shared/dashboard';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -28,8 +28,6 @@
 	import SelectMark from './select-mark.svelte';
 	import AppMenu from './app-menu.svelte';
 	import type { MenuEntry } from '$lib/menu';
-	import type { MarkColor } from '$lib/shared/types';
-	import { MARK_DOT } from '$lib/marks';
 
 	let {
 		item: i,
@@ -39,7 +37,6 @@
 		draggable = true,
 		showSections = false,
 		sectionNames,
-		marks = [],
 		onopen,
 		onhide,
 		onmute,
@@ -59,7 +56,6 @@
 		draggable?: boolean;
 		showSections?: boolean;
 		sectionNames: Record<string, string>;
-		marks?: { key: string; name: string; color: MarkColor }[];
 		onopen: (i: DashItem, url: string) => void;
 		onhide: (i: DashItem) => void;
 		/** Mute (hidden until unmuted, and its threads muted), or unmute. */
@@ -123,7 +119,7 @@
 	/** Your own searches say something the reason does not; the built-in ones only repeat it. */
 	const sections = $derived(
 		showSections
-			? i.sections.filter((s) => !DEFAULT_SOURCE_IDS.has(s) && sectionNames[s] !== i.turnReason)
+			? i.sections.filter((s) => !BUILT_IN_SECTIONS.has(s) && sectionNames[s] !== i.turnReason)
 			: []
 	);
 
@@ -268,12 +264,6 @@
 			{#if i.draft && !said.has('draft')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">Draft</span>
 			{/if}
-			{#each marks as m (m.key)}
-				<span class="flex max-w-40 items-center gap-1 rounded-full border px-1.5 py-0.5">
-					<span class={cn('size-1.5 shrink-0 rounded-full', MARK_DOT[m.color])}></span>
-					<span class="truncate">{m.name}</span>
-				</span>
-			{/each}
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
 			{#each i.labels.slice(0, 3) as l (l.name)}
 				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}

@@ -8,8 +8,6 @@ import {
 	bodyExcerpt,
 	conditionId,
 	contentHash,
-	forgetIdentityAnswers,
-	identityHash,
 	mergeDecisions,
 	newCommentsForYou,
 	planDecisions,
@@ -23,7 +21,7 @@ import { parseQuery } from './query';
 import { DEFAULT_SETTINGS } from './settings';
 import { validateSettings } from './settings-schema';
 import { enrichmentOf, type SubjectFacts } from './subject';
-import type { LastComment, Settings, ThreadFacts } from './types';
+import type { LastComment, Rule, Settings, ThreadFacts } from './types';
 
 const ME = 'ian';
 const T0 = '2026-09-10T00:00:00Z';
@@ -75,11 +73,6 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 	};
 }
 
-const CHOICES = [
-	{ id: 'bugs', label: 'Bugs: Defects' },
-	{ id: 'other', label: 'None of these' }
-];
-
 const MIGRATIONS = { id: conditionId('database migrations'), text: 'database migrations' };
 
 describe('conditionId', () => {
@@ -90,13 +83,14 @@ describe('conditionId', () => {
 });
 
 describe('smartConditions', () => {
-	it('collects each different about: text once', () => {
-		const queries = [
-			'about:"database migrations"',
-			'repo:acme/* about:"Database migrations"',
-			'about:"deps" OR label:deps'
+	it('collects each different about: text once, from enabled rules and views', () => {
+		const rules: Rule[] = [
+			{ when: 'about:"database migrations"', then: { category: 'action' } },
+			{ when: 'repo:acme/* about:"Database migrations"', then: { push: true } },
+			{ when: 'about:"docs"', enabled: false, then: { category: 'fyi' } }
 		];
-		expect(smartConditions(queries).map((c) => c.id)).toEqual([
+		const views = [{ id: 'v1', name: 'Deps', base: 'inbox' as const, query: 'about:"deps"' }];
+		expect(smartConditions(rules, views).map((c) => c.id)).toEqual([
 			conditionId('database migrations'),
 			conditionId('deps')
 		]);
@@ -157,62 +151,23 @@ describe('planDecisions', () => {
 			contentHash: contentHash(s),
 			reply: 0.1,
 			urgency: 0.2,
-			identityHash: identityHash(s),
 			about: { [MIGRATIONS.id]: 0.9 }
 		};
-		expect(planDecisions(s, ME, stored, [MIGRATIONS], CHOICES)).toBeNull();
+		expect(planDecisions(s, ME, stored, [MIGRATIONS])).toBeNull();
 	});
-	it('does not ask a new condition or a new category of an item it already read', () => {
+	it('asks only for a new condition when the text did not change', () => {
 		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s)
-		};
-		expect(planDecisions(s, ME, stored, [MIGRATIONS], CHOICES)).toBeNull();
+		const stored: StoredDecisions = { contentHash: contentHash(s), reply: 0.1, urgency: 0.2 };
+		const plan = planDecisions(s, ME, stored, [MIGRATIONS]);
+		expect(Object.keys(plan!.request.questions)).toEqual([`about_${MIGRATIONS.id}`]);
 	});
-	it('asks the category and the conditions of a new item', () => {
-		const plan = planDecisions(pr(), ME, null, [MIGRATIONS], CHOICES)!;
-		expect(Object.keys(plan.request.questions).sort()).toEqual([
-			`about_${MIGRATIONS.id}`,
-			'category',
+	it('asks everything again when the text changed', () => {
+		const stored: StoredDecisions = { contentHash: contentHash(pr()), reply: 0.1, urgency: 0.2 };
+		const changed = pr({ lastComment: comment('bob', 'Can you add a test?', T2) });
+		expect(Object.keys(planDecisions(changed, ME, stored, [])!.request.questions).sort()).toEqual([
 			'reply',
 			'urgency'
 		]);
-		expect(plan.request.questions.category).toMatchObject({
-			type: 'choice',
-			criteria: { bugs: 'Bugs: Defects', other: 'None of these' }
-		});
-	});
-	it('asks only the comment questions when a comment is new', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 }
-		};
-		const commented = pr({ lastComment: comment('bob', 'Can you add a test?', T2) });
-		expect(
-			Object.keys(
-				planDecisions(commented, ME, stored, [MIGRATIONS], CHOICES)!.request.questions
-			).sort()
-		).toEqual(['reply', 'urgency']);
-	});
-	it('asks the category and conditions again when the title, description, or labels change', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s)
-		};
-		const retitled = pr({ title: 'Revert the login change' });
-		expect(
-			Object.keys(planDecisions(retitled, ME, stored, [MIGRATIONS], CHOICES)!.request.questions)
-		).toEqual(expect.arrayContaining(['category', `about_${MIGRATIONS.id}`]));
 	});
 	it('does not ask again for new commits, CI, or reviews', () => {
 		const s = pr();
@@ -234,38 +189,10 @@ describe('readDecisions', () => {
 	});
 	it('reads the answers for the same text', () => {
 		const d = readDecisions(
-			answered({
-				reply: 0.05,
-				urgency: 1.8,
-				identityHash: identityHash(s),
-				about: { a: 0.95, b: 0.5, c: 0.1 },
-				category: { id: 'bugs', confidence: 0.7 }
-			}),
+			answered({ reply: 0.05, urgency: 1.8, about: { a: 0.95, b: 0.5, c: 0.1 } }),
 			s
 		);
-		expect(d).toEqual({ commentsNeedMe: false, urgent: true, smart: ['a'], category: 'bugs' });
-	});
-	it('ignores a category Jev was unsure about', () => {
-		const d = readDecisions(
-			answered({ identityHash: identityHash(s), category: { id: 'bugs', confidence: 0.4 } }),
-			s
-		);
-		expect(d.category).toBeNull();
-	});
-	it('keeps the category and conditions after a new comment', () => {
-		const stored = answered({
-			reply: 0.05,
-			identityHash: identityHash(s),
-			about: { a: 0.95 },
-			category: { id: 'bugs', confidence: 0.9 }
-		});
-		const commented = pr({ lastComment: comment('carol', 'Any news?', T2) });
-		expect(readDecisions(stored, commented)).toEqual({
-			commentsNeedMe: null,
-			urgent: false,
-			smart: ['a'],
-			category: 'bugs'
-		});
+		expect(d).toEqual({ commentsNeedMe: false, urgent: true, smart: ['a'] });
 	});
 	it('ignores answers for older text', () => {
 		const old = { contentHash: 'old', reply: 0.05, urgency: 1.8, about: { a: 0.95 } };
@@ -274,56 +201,29 @@ describe('readDecisions', () => {
 });
 
 describe('mergeDecisions', () => {
-	it('keeps the identity answers when only the comments were asked again', () => {
+	it('keeps the answers it did not ask again, and adds the new ones', () => {
 		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: 'old',
-			reply: 0.1,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 },
-			category: { id: 'bugs', confidence: 0.8 }
-		};
-		const plan = planDecisions(s, ME, stored, [MIGRATIONS], CHOICES)!;
+		const stored: StoredDecisions = { contentHash: contentHash(s), reply: 0.1, urgency: 0.2 };
+		const plan = planDecisions(s, ME, stored, [MIGRATIONS])!;
+		const merged = mergeDecisions(stored, plan, {
+			[`about_${MIGRATIONS.id}`]: { type: 'noul', noul: 0.9 }
+		});
+		expect(merged).toEqual({ ...stored, about: { [MIGRATIONS.id]: 0.9 } });
+	});
+	it('starts again for new text', () => {
+		const stored: StoredDecisions = { contentHash: 'old', reply: 0.1, urgency: 0.2 };
+		const s = pr();
+		const plan = planDecisions(s, ME, stored, [])!;
 		const merged = mergeDecisions(stored, plan, {
 			reply: { type: 'noul', noul: 0.95 },
 			urgency: { type: 'score', score: 0.3 }
 		});
-		expect(merged).toEqual({
-			contentHash: contentHash(s),
-			reply: 0.95,
-			urgency: 0.3,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 },
-			category: { id: 'bugs', confidence: 0.8 }
-		});
-	});
-	it('stores the category choice and the conditions of a new item', () => {
-		const s = pr();
-		const plan = planDecisions(s, ME, null, [MIGRATIONS], CHOICES)!;
-		const merged = mergeDecisions(null, plan, {
-			[`about_${MIGRATIONS.id}`]: { type: 'noul', noul: 0.1 },
-			category: { type: 'choice', choice: 'bugs', confidence: 0.75 }
-		});
-		expect(merged).toMatchObject({
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.1 },
-			category: { id: 'bugs', confidence: 0.75 }
-		});
-	});
-	it('forgets identity answers for a re-evaluation', () => {
-		const stored: StoredDecisions = {
-			contentHash: 'c',
-			reply: 0.1,
-			identityHash: 'i',
-			about: { a: 1 },
-			category: { id: 'bugs', confidence: 1 }
-		};
-		expect(forgetIdentityAnswers(stored)).toEqual({ contentHash: 'c', reply: 0.1 });
+		expect(merged).toEqual({ contentHash: contentHash(s), reply: 0.95, urgency: 0.3 });
 	});
 });
 
-const noComment = { commentsNeedMe: false, urgent: false, smart: [], category: null };
-const needsReply = { commentsNeedMe: true, urgent: false, smart: [], category: null };
+const noComment = { commentsNeedMe: false, urgent: false, smart: [] };
+const needsReply = { commentsNeedMe: true, urgent: false, smart: [] };
 
 describe('turns with comment answers', () => {
 	const turnOf = (s: SubjectFacts, d = NO_DECISIONS) =>
@@ -383,7 +283,7 @@ describe('inbox classification with comment answers', () => {
 		expect(classify(facts('comment', theirs, noComment), DEFAULT_SETTINGS).category).toBe('fyi');
 	});
 	it('unknown answers change nothing', () => {
-		const unknown = { commentsNeedMe: null, urgent: false, smart: [], category: null };
+		const unknown = { commentsNeedMe: null, urgent: false, smart: [] };
 		expect(classify(facts('comment', theirs, unknown), DEFAULT_SETTINGS).category).toBe('action');
 	});
 });
@@ -424,15 +324,13 @@ describe('about: in queries and settings', () => {
 		expect(parseQuery(`about:"${'x'.repeat(201)}"`).errors[0]).toMatch(/200 characters/);
 	});
 	it(`refuses more than ${MAX_SMART_CONDITIONS} different conditions`, () => {
-		const tags = Array.from({ length: MAX_SMART_CONDITIONS / 2 + 1 }, (_, i) => ({
-			id: `t${i}`,
-			name: `Topic ${i}`,
-			color: 'blue' as const,
-			rule: `about:"topic ${i}" OR about:"theme ${i}"`
+		const rules: Rule[] = Array.from({ length: MAX_SMART_CONDITIONS + 1 }, (_, i) => ({
+			when: `about:"topic ${i}"`,
+			then: { category: 'fyi' }
 		}));
-		const next: Settings = { ...DEFAULT_SETTINGS, tags };
-		expect(validateSettings(next, ['tags'])).toMatch(/up to 30 different about:/);
-		expect(validateSettings({ ...next, tags: tags.slice(1) }, ['tags'])).toBeNull();
+		const next: Settings = { ...DEFAULT_SETTINGS, rules };
+		expect(validateSettings(next, ['rules'])).toMatch(/up to 10 different about:/);
+		expect(validateSettings({ ...next, rules: rules.slice(1) }, ['rules'])).toBeNull();
 	});
 });
 

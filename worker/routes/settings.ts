@@ -1,9 +1,15 @@
-import type { Settings } from '../../src/lib/shared/types';
+import type { Rule, Settings } from '../../src/lib/shared/types';
 import { routes, poller, json } from '../app';
 
 // --- Settings (checked and saved in the user's Durable Object: poller/data.ts) ---------------
 
 const app = routes()
+	/** Try rules on your stored threads without saving them (see PollerData.previewRules). */
+	.post('/api/rules/preview', json<{ rules: Rule[] }>(), async (c) => {
+		const r = await poller(c.env, c.get('user').id).previewRules(c.req.valid('json').rules);
+		if ('error' in r) return c.json({ error: r.error }, r.status);
+		return c.json(r);
+	})
 	.put('/api/settings', json<Partial<Settings>>(), async (c) => {
 		const r = await poller(c.env, c.get('user').id).updateSettings(c.req.valid('json'));
 		if ('error' in r) return c.json({ error: r.error }, r.status);

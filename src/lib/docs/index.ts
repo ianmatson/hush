@@ -7,8 +7,8 @@ import { REFERENCES, keyMention, slug } from './reference';
  * starts with its title and description:
  *
  *   ---
- *   title: Feeds
- *   description: Read a category or a tag in any feed reader…
+ *   title: Rules
+ *   description: Sort threads your way…
  *   ---
  *
  * A line `{{ref:name}}` (or `{{ref:name args…}}`) is replaced by a table made from the app's own
@@ -31,11 +31,11 @@ export const NAV: { group: string; pages: string[] }[] = [
 	{ group: 'Start', pages: ['', 'getting-started', 'github-access'] },
 	{
 		group: 'Use Hush',
-		pages: ['pull-requests-and-issues', 'turns', 'peek', 'notifications', 'feeds']
+		pages: ['inbox', 'pull-requests-and-issues', 'peek', 'notifications', 'feeds']
 	},
 	{
 		group: 'Make it yours',
-		pages: ['query-language', 'keybinds', 'appearance-and-menus']
+		pages: ['rules', 'views', 'query-language', 'keybinds', 'appearance-and-menus']
 	},
 	{ group: 'Reference', pages: ['settings', 'limits', 'agents', 'troubleshooting'] }
 ];

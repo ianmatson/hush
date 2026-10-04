@@ -30,7 +30,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, for free, wit
 
 **Neat** shows your GitHub notifications in a menu bar window. It says it pings you "only when an issue needs your attention", and lets you choose which projects, users, and events get through, for example to stop a noisy bot. You can pin a notification to set its priority. Neat does not document how it decides what needs your attention.
 
-**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, comments) and decides if you are the next person who must act. [What is your turn](/docs/turns#what-is-your-turn) lists the cases. [Categories and tags](/docs/pull-requests-and-issues#categories-and-tags) sort items, and Hush moves a thread to Done by itself when it stops needing you.
+**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, comments) and decides if you are the next person who must act. [What needs you](/docs/inbox#what-needs-you) lists the cases. [Rules](/docs/rules) change where threads go, and Hush moves a thread to Done by itself when it stops needing you.
 
 ## Pull requests
 
@@ -82,6 +82,6 @@ Neat released seven versions from 18 to 20 August 2026 (v0.0.58 to v0.0.64). The
 - [Neat on GitHub Marketplace](https://github.com/marketplace/notifications-by-neat): price, "macOS only"
 - [Neat privacy policy](https://neat.run/privacy)
 - [Neat releases](https://github.com/neat-run/activity-feed-public/releases): v0.0.64, 20 August 2026
-- Hush: [whose turn](/docs/turns), [query language](/docs/query-language), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
+- Hush: [inbox](/docs/inbox), [rules](/docs/rules), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

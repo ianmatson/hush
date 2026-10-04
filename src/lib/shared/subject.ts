@@ -98,8 +98,6 @@ export function enrichmentOf(
 		authorIsBot: s.authorIsBot,
 		labels: s.labels.map((l) => l.name),
 		assignedToMe: s.assignees.some((a) => a.toLowerCase() === meL),
-		assignees: s.assignees,
-		reviewRequests: s.reviewRequests.map((r) => r.name),
 		lastComment: s.lastComment,
 		previousComment: s.previousComment ?? null,
 		commentsNeedMe: decisions.commentsNeedMe,

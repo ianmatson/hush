@@ -25,7 +25,7 @@ Other kinds (an invitation, for example) show what GitHub sent, and a link to it
 
 ## What it shows
 
-- **Why it is here**, at the top, in plain words: “Your turn: Review requested, for 2d. Found by: Review requested from you.” Under it, what changed since you last looked (see [Since you looked](/docs/turns#since-you-looked)).
+- **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: your workflow run. Rule: CI is FYI.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requested from you.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened.
 - For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
@@ -41,7 +41,7 @@ A thread that stays open in the peek for a moment is marked as read, also on Git
 
 The bar at the bottom of the peek has two parts:
 
-1. **Hide until it changes** and **Copy link**.
+1. The buttons of the page that you are on: **Done**, **Snooze**, **Mute**, and **Read** in the inbox; **Hide until it changes** and **Copy link** on the Pull requests and Issues tabs.
 2. The **actions on GitHub**: a main button, and **More** for the rest.
 
 The main button is the action that fits what the thread asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).

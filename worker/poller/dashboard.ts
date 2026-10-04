@@ -7,8 +7,7 @@ import {
 } from '../../src/lib/shared/dashboard';
 import type { DashKind, DashResponse } from '../../src/lib/shared/types';
 import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
-import { fetchDetails, fetchSubjects, forTeams, needsDetails, searchShort } from '../github';
-import { sectionsFor, TRACKED_SOURCE } from '../../src/lib/shared/sources';
+import { fetchDetails, forTeams, needsDetails, searchShort } from '../github';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
 
@@ -62,13 +61,11 @@ export abstract class PollerDashboard extends PollerSync {
 	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
-		const { dash, botsAreFyi, reviewResolution, tracked } = who.settings;
-		const sections = sectionsFor(kind, who.settings.sources);
+		const { dash, botsAreFyi, reviewResolution } = who.settings;
 		const sig = JSON.stringify([
 			botsAreFyi,
 			reviewResolution,
-			sections,
-			tracked,
+			dash[kind],
 			dash.scope,
 			dash.excludedTeams,
 			dash.staleDays,
@@ -84,7 +81,7 @@ export abstract class PollerDashboard extends PollerSync {
 		}
 
 		const { teams, error: teamError } = await this.teams();
-		const { queries, skipped } = expandSections(sections, dash, teams);
+		const { queries, skipped } = expandSections(dash[kind], dash, teams);
 		const { hits, errors: searchErrors } = await searchShort(who.token, queries);
 
 		// Details: what Hush has, and only what needs a new read from GitHub.
@@ -112,8 +109,6 @@ export abstract class PollerDashboard extends PollerSync {
 			if (use) facts.set(k, use);
 		}
 		await this.ctx.storage.put(readKey, nextRead);
-		const trackedFacts = await this.trackedSubjects(who.token, who.me, tracked, kind);
-		for (const [k, f] of trackedFacts) facts.set(k, f);
 		const errors = [...new Set([...searchErrors, ...detailErrors])].slice(0, 3);
 
 		await this.decideSubjects(who, [...facts.values()]);
@@ -130,15 +125,7 @@ export abstract class PollerDashboard extends PollerSync {
 			e.sections.add(h.query.section);
 			byId.set(h.key, e);
 		}
-		for (const [k, subject] of trackedFacts) {
-			const e = byId.get(k) ?? {
-				facts: dashFactsOf(subject, who.me, teamSet, decided.get(k)),
-				sections: new Set<string>()
-			};
-			e.sections.add(TRACKED_SOURCE.id);
-			byId.set(k, e);
-		}
-		const enabled = [...sections.filter((s) => s.enabled), TRACKED_SOURCE];
+		const enabled = dash[kind].filter((s) => s.enabled);
 		const items = sortItems(
 			[...byId.values()]
 				.filter(({ facts }) => keepItem(facts, who.me, dash))
@@ -155,41 +142,23 @@ export abstract class PollerDashboard extends PollerSync {
 					);
 				})
 		);
-		const placed = this.placeItems(who, items, facts);
 		const data: DashResponse = {
 			kind,
-			items: placed,
-			sections: enabled
-				.filter((s) => s.id !== TRACKED_SOURCE.id || trackedFacts.size)
-				.map((s) => ({
-					id: s.id,
-					name: s.name,
-					count: placed.filter((i) => i.sections.includes(s.id)).length,
-					...(skipped[s.id] ? { skipped: skipped[s.id] } : {})
-				})),
+			items,
+			sections: enabled.map((s) => ({
+				id: s.id,
+				name: s.name,
+				count: items.filter((i) => i.sections.includes(s.id)).length,
+				...(skipped[s.id] ? { skipped: skipped[s.id] } : {})
+			})),
 			teams,
 			fetchedAt: Date.now(),
 			errors: teamError ? [teamError, ...errors] : errors
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
-		await this.record(who, [...fresh.values(), ...trackedFacts.values()], { dash: false });
+		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
-	}
-
-	private async trackedSubjects(
-		token: string,
-		me: string,
-		tracked: string[],
-		kind: DashKind
-	): Promise<Map<string, SubjectFacts>> {
-		const refs = tracked.flatMap((key) => {
-			const m = /^([^/]+)\/([^#]+)#(\d+)$/.exec(key);
-			return m ? [{ key, owner: m[1], repo: m[2], number: Number(m[3]) }] : [];
-		});
-		if (!refs.length) return new Map();
-		const found = await fetchSubjects(token, refs, me);
-		return new Map([...found].filter(([, f]) => f.kind === kind && f.state === 'open'));
 	}
 
 	/** The stored facts of these PRs and issues ("owner/repo#123"). */

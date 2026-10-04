@@ -78,10 +78,22 @@
 	});
 	const signedOut = $derived(me.error instanceof ApiError && me.error.status === 401);
 	const onLogin = $derived(page.url.pathname === '/login');
+	let startChecked = false;
 
 	$effect(() => {
 		if (signedOut && !onLogin) leaveTo('/login');
-		else if (me.isSuccess && onLogin) goto('/items', { replaceState: true });
+		else if (me.isSuccess && onLogin) goto('/inbox', { replaceState: true });
+		else if (me.isSuccess && !startChecked) {
+			startChecked = true;
+			// Start page preference (Settings → Appearance).
+			const start = localStorage.getItem('hush:start');
+			if (
+				page.url.pathname === '/inbox' &&
+				!page.url.search &&
+				(start === '/pulls' || start === '/issues')
+			)
+				goto(start, { replaceState: true });
+		}
 	});
 
 	// Show the page as soon as we know who you are (the persisted cache usually knows at once).

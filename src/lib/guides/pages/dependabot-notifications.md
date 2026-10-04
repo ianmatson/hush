@@ -1,11 +1,11 @@
 ---
 title: How to stop Dependabot and bot notification noise on GitHub
-description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and keep bot pull requests out of your turn and your pushes with Hush.
+description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and send bot pull requests to FYI or Muted with Hush rules.
 ---
 
 ## Short answer
 
-**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are not your turn by default, and a category with the rule `author:dependabot*` and push off keeps them quiet.**
+**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are FYI by default, and the rule `author:dependabot*` → Muted hides them.**
 
 ## Why Dependabot is noisy
 
@@ -65,35 +65,39 @@ Grouped updates and a weekly schedule often cut Dependabot's pull requests to a 
 
 Hush treats bots differently by default, with [`botsAreFyi`](/docs/settings#botsarefyi) on:
 
-- Pull requests that bots open are **not your turn**, unless they ask for your review by name.
+- Pull requests that bots open are **FYI**, unless they ask for your review by name.
 - Comments and mentions by bots do not count as replies to you.
 - On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name.
 
 A bot is a login that ends in `[bot]`, or that starts with dependabot, renovate, github-actions, or codecov.
 
-To see bot pull requests in one place, turn off `dash.hideBots`, and make a [category](/docs/pull-requests-and-issues#categories-and-tags) for them in **Settings → Categories & tags**. The first category whose rule matches wins. With push **off**, Hush never pushes its items, but the bell still lists them:
+Dependabot **alerts** are different: they go to **Needs you**, because a vulnerability usually needs someone to act. The [peek](/docs/peek) lists the open alerts of the repository, with the severity and the version that fixes each one.
+
+To change this, write [rules](/docs/rules). The first rule that matches wins:
 
 ```json settings
 {
-	"categories": [
+	"rules": [
 		{
-			"id": "dependencies",
-			"name": "Dependencies",
-			"color": "teal",
-			"rule": "author:dependabot*,renovate*",
-			"description": "",
-			"push": "off"
+			"name": "Mute Dependabot PRs",
+			"when": "author:dependabot* in:fyi",
+			"then": { "category": "muted" }
 		},
-		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
-	],
-	"dash": { "hideBots": false }
+		{ "name": "Renovate is done", "when": "author:renovate* in:fyi", "then": { "triage": "done" } },
+		{
+			"name": "Sandbox alerts can wait",
+			"when": "type:dependabot repo:acme/sandbox",
+			"then": { "category": "fyi", "push": false }
+		}
+	]
 }
 ```
 
-- `author:dependabot*` matches the login `dependabot[bot]`. `author:bots` matches every bot.
-- A change to `categories` replaces the whole list, so write the categories that you keep too. `"other"` is the fallback, and must stay.
-- To mark bot pull requests in every category, make a [tag](/docs/settings#tags) with the rule `author:bots` in place of a category.
-- To hide one pull request until you unmute it, press {{key:dash.mute}} (**Mute**): Hush also unsubscribes you on GitHub.
+- `author:dependabot*` matches the login `dependabot[bot]`. With `in:fyi`, a Dependabot pull request that asks for your review by name still needs you.
+- `author:` matches who opened a pull request or issue. To match alerts, use `type:dependabot` (Dependabot alerts) or `type:vulnerability` (vulnerability alerts).
+- To see bot activity in one place, make a [saved view](/docs/views) with `from:bots`, or leave bots out of a view with `-author:bots`.
+
+A rule that mutes a thread acts in Hush only. To stop GitHub from sending a thread, choose **Mute** on the thread: Hush also unsubscribes you on GitHub.
 
 ## Sources
 

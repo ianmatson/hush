@@ -2,6 +2,7 @@ import type {
 	ActionKind,
 	Category,
 	Classification,
+	Rule,
 	RuleMatch,
 	Settings,
 	ThreadFacts
@@ -10,7 +11,7 @@ import { isBot } from './bots';
 import { textMatches } from './text-match';
 import { activityText, latestActivity } from './activity';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
-import { compileExpr, exprMatches, ME, queryError, sizeMatches } from './query';
+import { compileQuery, queryError } from './query';
 import { conditionId } from './decisions';
 
 /** Notification reasons, as Hush shows them. */
@@ -176,38 +177,12 @@ function matchGlobs(value: string | undefined, globs: string | string[] | undefi
 	return list.some((g) => globToRegExp(g).test(value));
 }
 
-function withMe(globs: string | string[] | undefined, me: string): string[] | undefined {
-	if (globs === undefined) return undefined;
-	return (Array.isArray(globs) ? globs : [globs]).map((g) => (g.toLowerCase() === ME ? me : g));
-}
-
 export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): boolean {
 	const e = t.enrichment;
 	if (!matchGlobs(t.repo, m.repo)) return false;
 	if (m.reason && !m.reason.includes(t.reason)) return false;
 	if (m.type && !m.type.includes(t.subjectType)) return false;
-	if (!matchGlobs(e?.author, withMe(m.author, t.me))) return false;
-	if (m.assignee !== undefined) {
-		const assignees = e?.assignees ?? (e?.assignedToMe ? [t.me] : []);
-		const wanted = withMe(m.assignee, t.me);
-		if (!assignees.some((a) => matchGlobs(a, wanted))) return false;
-	}
-	if (m.reviewRequested?.length) {
-		const requested = e?.reviewRequests ?? (e?.reviewRequestedFromMe ? [t.me] : []);
-		const wanted = withMe(m.reviewRequested, t.me);
-		if (!requested.some((r) => matchGlobs(r, wanted))) return false;
-	}
-	if (m.source?.length && !t.sources?.some((name) => matchGlobs(name, m.source))) return false;
-	const named = (mark: { id: string; name: string }, globs: string[]) =>
-		matchGlobs(mark.id, globs) || matchGlobs(mark.name, globs);
-	if (m.itemCategory?.length && !(t.itemCategory && named(t.itemCategory, m.itemCategory)))
-		return false;
-	if (m.itemTag?.length && !t.itemTags?.some((tag) => named(tag, m.itemTag!))) return false;
-	if (m.size?.length) {
-		if (e?.additions === undefined) return false;
-		const lines = e.additions + (e.deletions ?? 0);
-		if (!m.size.some((spec) => sizeMatches(spec, lines))) return false;
-	}
+	if (!matchGlobs(e?.author, m.author)) return false;
 	if (!textMatches(m.text, [t.title, t.repo, e?.author])) return false;
 	if (m.kind && !m.kind.includes(c.kind)) return false;
 	if (m.category && !m.category.includes(c.category)) return false;
@@ -218,7 +193,7 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	if (m.state && !(e?.state && m.state.includes(e.state))) return false;
 	if (m.by !== undefined || m.byBot !== undefined) {
 		const a = t.activity !== undefined ? t.activity : latestActivity(e);
-		if (!matchGlobs(a?.by ?? undefined, withMe(m.by, t.me))) return false;
+		if (!matchGlobs(a?.by ?? undefined, m.by)) return false;
 		if (m.byBot !== undefined && m.byBot !== !!a?.bot) return false;
 	}
 	if (m.about?.length) {
@@ -226,10 +201,6 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 		if (!m.about.some((text) => smart.includes(conditionId(text)))) return false;
 	}
 	return true;
-}
-
-export function queryMatches(query: string, t: ThreadFacts, c: Classification): boolean {
-	return exprMatches(compileExpr(query), (when) => ruleMatches(when, t, c));
 }
 
 /**
@@ -246,8 +217,36 @@ export function withOverride(
 	return { ...c, category: 'fyi', push: false };
 }
 
+/** Index of the first enabled rule that matches (the one that wins), or -1. */
+export function firstMatchingRule(t: ThreadFacts, rules: Rule[], base: Classification): number {
+	return rules.findIndex(
+		(r) => r.enabled !== false && ruleMatches(compileQuery(r.when ?? ''), t, base)
+	);
+}
+
 export function classify(t: ThreadFacts, settings: Settings): Classification {
-	return classifyDefault(t, settings);
+	const base = classifyDefault(t, settings);
+	const i = firstMatchingRule(t, settings.rules, base);
+	if (i < 0) return base;
+	const rule = settings.rules[i];
+	const category: Category = rule.then.category ?? base.category;
+	const { push, triage, snoozeHours } = rule.then;
+	return { ...base, category, push, triage, snoozeHours, rule: rule.name || `Rule ${i + 1}` };
+}
+
+/**
+ * Where a rule moves a thread that is in the inbox: to Done, or snoozed for some hours. Null when
+ * the rule does not move threads (or no rule matched). Callers apply it only on new activity or
+ * when the rule starts to match, so a thread you moved back yourself stays where you put it.
+ */
+export function ruleTriage(
+	c: Classification,
+	now = Date.now()
+): null | { triage: 'done'; note: string } | { triage: 'snoozed'; until: number; note: string } {
+	if (!c.rule || !c.triage) return null;
+	const note = `Rule: ${c.rule}`;
+	if (c.triage === 'done') return { triage: 'done', note };
+	return { triage: 'snoozed', until: now + (c.snoozeHours ?? 24) * 3_600_000, note };
 }
 
 export function shouldPush(c: Classification, settings: Settings): boolean {
@@ -255,4 +254,39 @@ export function shouldPush(c: Classification, settings: Settings): boolean {
 	if (c.category === 'action') return settings.pushAction;
 	if (c.category === 'fyi') return settings.pushFyi;
 	return false;
+}
+
+const CATEGORIES = new Set(['action', 'fyi', 'muted']);
+/** A rule may snooze for 1 hour to 30 days. */
+const MAX_SNOOZE_HOURS = 30 * 24;
+
+/** Validate user-supplied rules. Returns an error message, or null when valid. */
+export function validateRules(rules: unknown): string | null {
+	if (!Array.isArray(rules)) return 'Rules must be a JSON array.';
+	for (const [i, r] of rules.entries()) {
+		const at = `Rule ${i + 1}`;
+		if (typeof r !== 'object' || r === null) return `${at}: must be an object.`;
+		const { when, then } = r as Rule;
+		const err = queryError(when);
+		if (err) return `${at}: ${typeof when === 'string' ? err : `"when" ${err}`}`;
+		if (typeof then !== 'object' || then === null) return `${at}: "then" must be an object.`;
+		if (then.category !== undefined && !CATEGORIES.has(then.category))
+			return `${at}: "then.category" must be action, fyi, or muted.`;
+		if (then.push !== undefined && typeof then.push !== 'boolean')
+			return `${at}: "then.push" must be true or false.`;
+		if (then.triage !== undefined && then.triage !== 'done' && then.triage !== 'snooze')
+			return `${at}: "then.triage" must be done or snooze.`;
+		if (
+			then.triage === 'snooze' &&
+			!(
+				Number.isInteger(then.snoozeHours) &&
+				then.snoozeHours! >= 1 &&
+				then.snoozeHours! <= MAX_SNOOZE_HOURS
+			)
+		)
+			return `${at}: "then.snoozeHours" must be a whole number of hours from 1 to ${MAX_SNOOZE_HOURS}.`;
+		if (then.category === undefined && then.push === undefined && then.triage === undefined)
+			return `${at}: "then" needs category, push, or triage.`;
+	}
+	return null;
 }

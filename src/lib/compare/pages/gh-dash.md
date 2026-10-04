@@ -78,6 +78,6 @@ description: gh-dash is a terminal dashboard for GitHub pull requests, issues, a
 - [Notification sections](https://www.gh-dash.dev/configuration/notification-section), gh-dash docs
 - [Selected notification keys](https://github.com/dlvhdr/gh-dash/blob/main/docs/src/content/docs/getting-started/keybindings/selected-notification.mdx), gh-dash docs source
 - [Selected pull request keys](https://github.com/dlvhdr/gh-dash/blob/main/docs/src/content/docs/getting-started/keybindings/selected-pr.mdx), gh-dash docs source
-- Hush: [whose turn](/docs/turns), [pull requests and issues](/docs/pull-requests-and-issues), [notifications](/docs/notifications), [pricing](/pricing)
+- Hush: [inbox](/docs/inbox), [pull requests and issues](/docs/pull-requests-and-issues), [notifications](/docs/notifications), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

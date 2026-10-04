@@ -6,16 +6,20 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, leaveTo, meQuery, queryClient } from '$lib/queries';
-	import FolderInput from '@lucide/svelte/icons/folder-input';
-	import TagIcon from '@lucide/svelte/icons/tag';
+	import { dashQuery, keys, leaveTo, meQuery, queryClient, threadsQuery } from '$lib/queries';
+	import Bookmark from '@lucide/svelte/icons/bookmark';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
 	import Palette from '@lucide/svelte/icons/palette';
+	import type { View } from '$lib/shared/types';
 	import * as Command from '$lib/components/ui/command';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import Folder from '@lucide/svelte/icons/folder';
+	import Inbox from '@lucide/svelte/icons/inbox';
+	import Bell from '@lucide/svelte/icons/bell';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+	import Check from '@lucide/svelte/icons/check';
+	import BellOff from '@lucide/svelte/icons/bell-off';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import CircleDot from '@lucide/svelte/icons/circle-dot';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -36,6 +40,19 @@
 		where?: string;
 	}
 
+	const VIEWS: { id: View; label: string }[] = [
+		{ id: 'action', label: 'Needs you' },
+		{ id: 'fyi', label: 'FYI' },
+		{ id: 'snoozed', label: 'Snoozed' },
+		{ id: 'done', label: 'Done' },
+		{ id: 'muted', label: 'Muted' }
+	];
+	// Lists Hush keeps fresh anyway are fetched when the palette opens; Done and Muted come from
+	// the cache only (they can be long, and you seldom look for them).
+	const FETCH: View[] = ['action', 'fyi', 'snoozed'];
+	const lists = VIEWS.map((v) =>
+		createQuery(() => ({ ...threadsQuery(v.id), enabled: palette.open && FETCH.includes(v.id) }))
+	);
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
 
@@ -47,6 +64,33 @@
 		goto(href);
 	}
 
+	const threadEntries = $derived.by((): Entry[] => {
+		if (!palette.open) return [];
+		const seen = new Set<string>();
+		return VIEWS.flatMap((v, k) =>
+			(lists[k].data?.threads ?? [])
+				.filter((t) => !seen.has(t.id) && seen.add(t.id))
+				.map((t) => ({
+					id: `thread:${t.id}`,
+					label: t.title,
+					detail: t.number ? `${t.repo}#${t.number}` : t.repo,
+					icon: (t.subjectType === 'PullRequest'
+						? GitPullRequest
+						: t.subjectType === 'Issue'
+							? CircleDot
+							: Bell) as Component,
+					keywords: [t.repo, t.number ? `#${t.number}` : '', t.author ?? '', t.summary, t.why],
+					url: t.htmlUrl,
+					where: v.label,
+					run: () =>
+						t.number
+							? peek({ page: 'inbox', view: v.id, id: t.id }, `/inbox?view=${v.id}`)
+							: window.open(t.htmlUrl, '_blank', 'noopener')
+				}))
+		);
+	});
+
+	const inboxUrls = $derived(new Set(threadEntries.map((e) => e.url)));
 	const dashEntries = $derived.by((): Entry[] => {
 		if (!palette.open) return [];
 		const turn = { you: 'Your turn', team: "Team's turn", them: 'Waiting', none: 'Other' };
@@ -56,52 +100,72 @@
 				['issues', issues.data]
 			] as const
 		).flatMap(([page, d]) =>
-			(d?.items ?? []).map((i) => ({
-				id: `dash:${i.id}`,
-				label: i.title,
-				detail: `${i.repo}#${i.number}`,
-				icon: (i.kind === 'pr' ? GitPullRequest : CircleDot) as Component,
-				keywords: [i.repo, `#${i.number}`, i.author, i.turnReason, ...i.labels.map((l) => l.name)],
-				url: i.url,
-				where: `${page === 'pulls' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
-				run: () => peek({ page: 'items', id: i.id }, '/items')
-			}))
+			(d?.items ?? [])
+				// A PR that is also an inbox thread shows once, as the thread.
+				.filter((i) => !inboxUrls.has(i.url))
+				.map((i) => ({
+					id: `dash:${i.id}`,
+					label: i.title,
+					detail: `${i.repo}#${i.number}`,
+					icon: (i.kind === 'pr' ? GitPullRequest : CircleDot) as Component,
+					keywords: [
+						i.repo,
+						`#${i.number}`,
+						i.author,
+						i.turnReason,
+						...i.labels.map((l) => l.name)
+					],
+					url: i.url,
+					where: `${page === 'pulls' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
+					run: () => peek({ page, id: i.id }, `/${page}`)
+				}))
 		);
 	});
 
 	const me = createQuery(meQuery);
 	const goEntries = $derived<Entry[]>([
+		...VIEWS.map((v) => ({
+			id: `go:${v.id}`,
+			label: v.label,
+			icon: (v.id === 'snoozed'
+				? AlarmClock
+				: v.id === 'done'
+					? Check
+					: v.id === 'muted'
+						? BellOff
+						: Inbox) as Component,
+			keywords: ['inbox', 'view'],
+			run: () => goto(`/inbox?view=${v.id}`)
+		})),
+		...(me.data?.settings.views ?? []).map((v) => ({
+			id: `go:view:${v.id}`,
+			label: v.name,
+			where: 'Saved view',
+			icon: Bookmark as Component,
+			keywords: ['view', 'saved', v.query],
+			run: () => goto(`/inbox?view=v:${v.id}`)
+		})),
 		{
-			id: 'go:items',
-			label: 'Items',
-			icon: Folder,
-			keywords: ['prs', 'pull requests', 'issues', 'all', 'dashboard'],
-			run: () => goto('/items')
+			id: 'go:pulls',
+			label: 'Pull requests',
+			icon: GitPullRequest,
+			keywords: ['prs', 'dashboard'],
+			run: () => goto('/pulls')
 		},
-		...(me.data?.settings.categories ?? []).map((c) => ({
-			id: `go:category:${c.id}`,
-			label: c.name,
-			where: 'Category',
-			icon: FolderInput as Component,
-			keywords: ['category', c.description],
-			run: () => goto(`/items?category=${c.id}`)
-		})),
-		...(me.data?.settings.tags ?? []).map((t) => ({
-			id: `go:tag:${t.id}`,
-			label: t.name,
-			where: 'Tag',
-			icon: TagIcon as Component,
-			keywords: ['tag'],
-			run: () => goto(`/items?tag=${t.id}`)
-		})),
+		{
+			id: 'go:issues',
+			label: 'Issues',
+			icon: CircleDot,
+			keywords: ['dashboard'],
+			run: () => goto('/issues')
+		},
 		...(
 			[
 				['general', 'General', 'appearance menus account export import'],
 				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
-				['inbox', 'Turns & Jev', 'bots teams smart decisions jev'],
-				['dashboards', 'Sources', 'sources searches tracked teams'],
-				['categories', 'Categories & tags', 'categories tags rules jev re-evaluate'],
+				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
+				['dashboards', 'PR and issue dashboards', 'sections teams'],
 				['notifications', 'Notifications', 'push quiet']
 			] as const
 		).map(([slug, name, more]) => ({
@@ -117,7 +181,7 @@
 		const t = toast.loading('Syncing with GitHub…');
 		try {
 			const status = await api.sync();
-			await queryClient.invalidateQueries({ queryKey: keys.dashAll });
+			await queryClient.invalidateQueries({ queryKey: keys.threadsAll });
 			await queryClient.invalidateQueries({ queryKey: keys.me });
 			if (status.lastError) toast.error(status.lastError, { id: t });
 			else toast.success('Synced', { id: t });
@@ -161,7 +225,13 @@
 	]);
 
 	const pageCommands = $derived<Entry[]>(palette.open ? palette.pageCommands : []);
-	const all = $derived([...pageCommands, ...dashEntries, ...goEntries, ...globalCommands]);
+	const all = $derived([
+		...pageCommands,
+		...threadEntries,
+		...dashEntries,
+		...goEntries,
+		...globalCommands
+	]);
 	const byId = $derived(new Map(all.map((e) => [e.id, e])));
 	const recent = $derived(
 		palette.recent
@@ -234,8 +304,10 @@
 			items: pageCommands
 		},
 		// Threads and PRs only once you type: hundreds of rows are noise in the empty palette.
+		{ heading: 'Saved views', items: goEntries.filter((e) => e.id.startsWith('go:view:')) },
+		{ heading: 'Inbox', items: search.trim() ? threadEntries : [] },
 		{ heading: 'Pull requests and issues', items: search.trim() ? dashEntries : [] },
-		{ heading: 'Go to', items: goEntries },
+		{ heading: 'Go to', items: goEntries.filter((e) => !e.id.startsWith('go:view:')) },
 		{
 			heading: 'Commands',
 			// Themes only once you type ("theme", "gruvbox"…): 15 rows are noise otherwise.

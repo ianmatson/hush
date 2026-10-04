@@ -4,10 +4,7 @@ import { buildMenu, type MenuEntry } from '$lib/menu';
 import type { PaletteCommand } from '$lib/palette.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS } from '$lib/shared/menus';
-import type { DashItem, ItemCategory, ItemTag, Turn } from '$lib/shared/types';
-import FolderInput from '@lucide/svelte/icons/folder-input';
-import TagIcon from '@lucide/svelte/icons/tag';
-import Sparkles from '@lucide/svelte/icons/sparkles';
+import type { DashItem, Turn } from '$lib/shared/types';
 import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 import Eye from '@lucide/svelte/icons/eye';
 import EyeOff from '@lucide/svelte/icons/eye-off';
@@ -57,10 +54,6 @@ export interface DashActionContext {
 	toggleShowHidden(): void;
 	/** Ask why an item in Your turn is not your turn ("Not my turn…"). */
 	notNeeded(i: DashItem): void;
-	readonly categories: ItemCategory[];
-	readonly tags: ItemTag[];
-	setCategory(ids: string[], category: string | null): unknown;
-	setTag(ids: string[], tag: string, state: 'on' | 'off'): unknown;
 }
 
 /** ⌘K commands: refresh and hidden items, then actions on the cursor row or the selection. */
@@ -199,49 +192,6 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					icon: ArrowRightLeft,
 					items: ctx.groups.map((g) => moveItem(g, `move-${g.turn}`, g.label))
 				};
-			case 'category':
-				return ctx.categories.length
-					? {
-							type: 'sub',
-							key: id,
-							label: n('Category'),
-							icon: FolderInput,
-							items: [
-								item('category-auto', 'Let Hush decide', Sparkles, () =>
-									ctx.setCategory(ids, null)
-								),
-								{ type: 'sep', key: 'category-sep' },
-								...ctx.categories.map((c) =>
-									item(
-										`category-${c.id}`,
-										c.name,
-										FolderInput,
-										() => ctx.setCategory(ids, c.id),
-										undefined,
-										ids.every((x) => ctx.byId(x)?.category === c.id)
-									)
-								)
-							]
-						}
-					: null;
-			case 'tags':
-				return ctx.tags.length
-					? {
-							type: 'sub',
-							key: id,
-							label: n('Tags'),
-							icon: TagIcon,
-							items: ctx.tags.map((t) => {
-								const tagged = ids.every((x) => ctx.byId(x)?.tags?.includes(t.id));
-								return item(
-									`tag-${t.id}`,
-									tagged ? `Remove ${t.name}` : `Add ${t.name}`,
-									TagIcon,
-									() => ctx.setTag(ids, t.id, tagged ? 'off' : 'on')
-								);
-							})
-						}
-					: null;
 			case 'undoMove':
 				return ids.some((x) => ctx.byId(x)?.movedByYou)
 					? item(id, n('Undo move'), Undo, () => ctx.arrange(ids, null))

@@ -1,14 +1,71 @@
-export type FeedSubject = 'category' | 'tag';
+import { ruleMatches } from './classify';
+import { compileQuery, queryError } from './query';
+import type { Classification, RuleMatch, SavedView, ThreadDTO, ViewBase } from './types';
 
-const FEED_PREFIX: Record<FeedSubject, string> = { category: 'c', tag: 't' };
-const FEED_VIEW = /^([ct]):([a-z0-9-]{1,40})$/;
+export const VIEW_BASES: { id: ViewBase; label: string }[] = [
+	{ id: 'inbox', label: 'Needs you + FYI' },
+	{ id: 'action', label: 'Needs you' },
+	{ id: 'fyi', label: 'FYI' },
+	{ id: 'snoozed', label: 'Snoozed' },
+	{ id: 'done', label: 'Done' }
+];
+export const MAX_VIEWS = 12;
 
-export const feedViewOf = (subject: FeedSubject, id: string) => `${FEED_PREFIX[subject]}:${id}`;
+/** The built-in tabs that can be a feed, and their names. Saved views are 'v:<id>'. */
+export const FEED_TABS: { id: string; label: string }[] = [
+	{ id: 'action', label: 'Needs you' },
+	{ id: 'fyi', label: 'FYI' },
+	{ id: 'inbox', label: 'Needs you + FYI' }
+];
+export const feedViewOk = (view: string) =>
+	FEED_TABS.some((t) => t.id === view) || /^v:[a-z0-9]{1,16}$/.test(view);
 
-export function parseFeedView(view: string): { subject: FeedSubject; id: string } | null {
-	const m = FEED_VIEW.exec(view);
-	if (!m) return null;
-	return { subject: m[1] === 'c' ? 'category' : 'tag', id: m[2] };
+/**
+ * Does a thread match a query (a saved view, or the Filter box)? The words mean the same as in
+ * rules; "in:" is the thread's list now (the view's base already picks it).
+ */
+export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: string): boolean {
+	const when = typeof query === 'string' ? compileQuery(query) : query;
+	const c = { category: t.category, kind: t.kind } as Classification;
+	return ruleMatches(
+		when,
+		{
+			repo: t.repo,
+			subjectType: t.subjectType,
+			title: t.title,
+			reason: t.reason,
+			htmlUrl: t.htmlUrl,
+			me,
+			activity: t.activity,
+			enrichment: {
+				kind: 'other',
+				author: t.author ?? undefined,
+				authorIsBot: t.authorIsBot,
+				labels: t.labels,
+				draft: t.draft,
+				state: t.state ?? undefined,
+				smart: t.smart
+			}
+		},
+		c
+	);
 }
 
-export const feedViewOk = (view: string) => parseFeedView(view) !== null;
+/** Validate saved views from the client. Returns an error message, or null. */
+export function validateViews(views: unknown) {
+	if (!Array.isArray(views)) return 'Views must be a list.';
+	if (views.length > MAX_VIEWS) return `Up to ${MAX_VIEWS} views are allowed.`;
+	const ids = new Set<string>();
+	for (const v of views as SavedView[]) {
+		if (typeof v?.id !== 'string' || !/^[a-z0-9]{1,16}$/.test(v.id))
+			return 'Each view needs an id.';
+		if (ids.has(v.id)) return 'Two views have the same id.';
+		ids.add(v.id);
+		if (typeof v.name !== 'string' || !v.name.trim() || v.name.length > 40)
+			return 'Each view needs a name (40 characters or fewer).';
+		if (!VIEW_BASES.some((b) => b.id === v.base)) return `"${v.name}": unknown base.`;
+		const err = queryError(v.query);
+		if (err) return `"${v.name}": ${typeof v.query === 'string' ? err : `"query" ${err}`}`;
+	}
+	return null;
+}

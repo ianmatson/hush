@@ -48,7 +48,7 @@ describe('query language', () => {
 	it('names the new word for an old one', () => {
 		expect(parseQuery('kind:review').errors).toEqual(['Use needs: instead of kind:.']);
 		expect(parseQuery('reason:author').errors).toEqual(['Use event: instead of reason:.']);
-		expect(parseQuery('category:bugs').errors).toEqual([]);
+		expect(parseQuery('category:fyi').errors).toEqual(['Use in: instead of category:.']);
 		expect(parseQuery('is:bot').errors).toEqual(['Use author:bots instead of is:bot.']);
 	});
 

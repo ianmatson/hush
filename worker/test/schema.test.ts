@@ -139,6 +139,13 @@ describe('schema migrations', () => {
 		for (let v = 7; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
 		expect(columns([v7, ...steps])).toEqual(columns([SCHEMA]));
 	});
+
+	it('moves schema 10 (with item_pins) to the current schema without a wipe', () => {
+		const v10 = `${SCHEMA}\nCREATE TABLE item_pins (key TEXT PRIMARY KEY, category TEXT, tags_on TEXT NOT NULL DEFAULT '[]', tags_off TEXT NOT NULL DEFAULT '[]');`;
+		expect(MIGRATIONS[10]?.to).toBe(SCHEMA_VERSION);
+		expect(MIGRATIONS[9]?.to).toBe(SCHEMA_VERSION);
+		expect(columns([v10, MIGRATIONS[10].sql])).toEqual(columns([SCHEMA]));
+	});
 });
 
 describe('queries that run on every poll or watch', () => {

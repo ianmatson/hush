@@ -32,7 +32,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 
 **Gitify** shows your GitHub notifications in a small window from the menu bar or tray. You narrow the list with filters: the reason GitHub gives, the type, the state (open, closed, merged, draft), the user type (for example, to hide bots), the review request type (direct or team), the account, and include or exclude tokens such as `author:`, `org:`, and `repo:`. Filters combine with AND. You can group by repository or by date, and show only threads you participate in. Gitify does not decide which threads need you; it shows what GitHub sends, filtered your way.
 
-**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, new comments) and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve or push a fix, Hush moves the thread to Done by itself. [Categories and tags](/docs/pull-requests-and-issues#categories-and-tags) sort items by repository, author, label, or what they are about.
+**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, new comments) and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve or push a fix, Hush moves the thread to Done by itself. [Rules](/docs/rules) change the defaults per repository, author, type, or reason.
 
 ## Pull requests
 
@@ -86,6 +86,6 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 - [gitify-app/gitify on GitHub](https://github.com/gitify-app/gitify): README, MIT license, supported forges
 - [Gitify releases](https://github.com/gitify-app/gitify/releases): v7.8.0, 6 September 2026
 - [Gitify settings and filter types](https://github.com/gitify-app/gitify/blob/main/src/renderer/stores/types.ts), source code
-- Hush: [whose turn](/docs/turns), [notifications](/docs/notifications), [GitHub access](/docs/github-access), [pricing](/pricing)
+- Hush: [inbox](/docs/inbox), [notifications](/docs/notifications), [GitHub access](/docs/github-access), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

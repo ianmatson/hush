@@ -21,7 +21,7 @@
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
-	import { arrangeGroup, orderAfterDrop, sortItems } from '$lib/shared/dashboard';
+	import { arrangeGroup, orderAfterDrop } from '$lib/shared/dashboard';
 	import type { DashItem, DashKind, DashResponse, Turn } from '$lib/shared/types';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -55,66 +55,17 @@
 	import Link from '@lucide/svelte/icons/link';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
-	import Folder from '@lucide/svelte/icons/folder';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Settings2 from '@lucide/svelte/icons/settings-2';
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { MARK_DOT } from '$lib/marks';
-	import { parseExpr, exprMatches } from '$lib/shared/query';
-	import { ruleMatches } from '$lib/shared/classify';
-	import { itemQueryFacts } from '$lib/shared/categories';
-	import QuerySuggest from './query-suggest.svelte';
-	import type { Classification, MarkColor } from '$lib/shared/types';
 
-	const KINDS: DashKind[] = ['pr', 'issue'];
-	const JEV_NOTICE = 'jev-on-by-default';
-	const PAGE = 'items';
-	const COLLAPSED_KEY = 'hush:collapsed:items';
-	const KIND_LABEL: Record<DashKind, string> = { pr: 'Pull requests', issue: 'Issues' };
-	type Zone = `${DashKind}:${Turn}`;
-	const zoneOf = (kind: DashKind, turn: Turn): Zone => `${kind}:${turn}`;
-	const parseZone = (zone: string) => {
-		const [kind, turn] = zone.split(':') as [DashKind, Turn];
-		return { kind, turn };
-	};
+	let { kind }: { kind: DashKind } = $props();
+	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
 
-	const prQ = createQuery(() => dashQuery('pr'));
-	const issueQ = createQuery(() => dashQuery('issue'));
+	const dashQ = createQuery(() => dashQuery(kind));
 	const me = createQuery(meQuery);
-	const categories = $derived(me.data?.settings.categories ?? []);
-	const tags = $derived(me.data?.settings.tags ?? []);
-	const viewCategory = $derived(page.url.searchParams.get('category'));
-	const viewTag = $derived(page.url.searchParams.get('tag'));
-	const viewName = $derived(
-		viewCategory
-			? categories.find((c) => c.id === viewCategory)?.name
-			: viewTag
-				? tags.find((t) => t.id === viewTag)?.name
-				: null
-	);
-	const dashQs = [prQ, issueQ];
-	const loading = $derived(dashQs.some((q) => q.isPending));
-	const fetching = $derived(dashQs.some((q) => q.isFetching || q.data?.refreshing));
-	const loadError = $derived(dashQs.find((q) => q.isError)?.error ?? null);
-	const data = $derived.by((): DashResponse | null => {
-		const parts = dashQs.flatMap((q) => (q.data ? [q.data] : []));
-		if (!parts.length) return null;
-		return {
-			...parts[0],
-			items: sortItems(parts.flatMap((p) => p.items)),
-			sections: parts.flatMap((p) => p.sections),
-			errors: [...new Set(parts.flatMap((p) => p.errors))],
-			fetchedAt: Math.min(...parts.map((p) => p.fetchedAt)),
-			refreshing: parts.some((p) => p.refreshing)
-		};
-	});
+	const data = $derived(dashQ.data ?? null);
 	let refreshing = $state(false);
-	let activeKind = $state<DashKind>('pr');
-	const shownKinds = $derived([activeKind]);
-	const noun = $derived(activeKind === 'pr' ? 'pull requests' : 'issues');
+	let section = $state<string | null>(null);
 	let query = $state('');
 	let showHidden = $state(false);
 	let selectedId = $state<string | null>(null);
@@ -122,25 +73,15 @@
 	let searchEl = $state<HTMLInputElement | null>(null);
 	// Collapsed groups are read at once (not after the first paint), and they slide only after
 	// you open or close one: a page that loads shows them as they are, with no motion.
-	const readCollapsed = (): Record<string, boolean> => {
-		const closedAtFirst: Record<Turn, boolean> = {
-			you: false,
-			team: false,
-			them: false,
-			none: true
-		};
-		const base = Object.fromEntries(
-			KINDS.flatMap((k) =>
-				(Object.keys(closedAtFirst) as Turn[]).map((t) => [zoneOf(k, t), closedAtFirst[t]])
-			)
-		);
+	const readCollapsed = (k: DashKind): Record<Turn, boolean> => {
+		const base = { you: false, team: false, them: false, none: true };
 		try {
-			return { ...base, ...JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}') };
+			return { ...base, ...JSON.parse(localStorage.getItem(`hush:collapsed:${k}`) ?? '{}') };
 		} catch {
 			return base;
 		}
 	};
-	let collapsed = $state<Record<string, boolean>>(readCollapsed());
+	let collapsed = $state<Record<Turn, boolean>>(readCollapsed(untrack(() => kind)));
 	let groupMotion = $state(false);
 	const sel = new Selection();
 
@@ -154,165 +95,72 @@
 		{ turn: 'them', label: 'Waiting on others', hint: 'You did your part. Someone else must act.' },
 		{ turn: 'none', label: 'Other', hint: 'Drafts, and threads that only mention you.' }
 	];
-	const GROUPS = ALL_GROUPS;
-	const groupsFor = (kind: DashKind) =>
-		kind === 'pr' || data?.items.some((i) => i.kind === 'issue' && i.turn === 'team')
+	// Only a team review request makes it the team's turn, and only PRs have review requests (GitHub
+	// assigns issues to people, not teams). Issues show the group only if you moved one there.
+	const GROUPS = $derived(
+		kind === 'pr' || dashQ.data?.items.some((i) => i.turn === 'team')
 			? ALL_GROUPS
-			: ALL_GROUPS.filter((g) => g.turn !== 'team');
+			: ALL_GROUPS.filter((g) => g.turn !== 'team')
+	);
 	const groupLabel = (t: Turn) => ALL_GROUPS.find((g) => g.turn === t)!.label;
 
-	const sectionNamesByKind = $derived(
-		Object.fromEntries(
-			KINDS.map((k, n) => [
-				k,
-				Object.fromEntries((dashQs[n].data?.sections ?? []).map((s) => [s.id, s.name]))
-			])
-		) as Record<DashKind, Record<string, string>>
+	const sectionNames = $derived(
+		Object.fromEntries((data?.sections ?? []).map((s) => [s.id, s.name]))
 	);
-	const foundBy = (i: DashItem) =>
-		i.sections.map((id) => sectionNamesByKind[i.kind]?.[id] ?? id).join(', ');
 	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed).length ?? 0);
 
-	const filter = $derived(parseExpr(query));
-	const ITEM_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
-	function matchesFilter(i: DashItem): boolean {
-		if (!query.trim() || !me.data) return true;
-		const facts = itemQueryFacts(i, me.data.login, me.data.settings);
-		return exprMatches(filter.expr, (when) => ruleMatches(when, facts, ITEM_CLASSIFICATION));
-	}
-	const filtered = $derived.by(() =>
-		(data?.items ?? []).filter(
+	const filtered = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		return (data?.items ?? []).filter(
 			(i) =>
 				i.dismissed === showHidden &&
-				(!viewCategory || i.category === viewCategory) &&
-				(!viewTag || !!i.tags?.includes(viewTag)) &&
-				matchesFilter(i)
-		)
-	);
+				(!section || i.sections.includes(section)) &&
+				(!q ||
+					`${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
+						.toLowerCase()
+						.includes(q))
+		);
+	});
 
 	/** Groups in display order: new items on top, then your manual order. */
-	const columns = $derived(
-		shownKinds.map((kind) => ({
-			kind,
-			label: KIND_LABEL[kind],
-			groups: groupsFor(kind).map((g) => ({
-				...g,
-				zone: zoneOf(kind, g.turn),
-				items: arrangeGroup(filtered.filter((i) => i.kind === kind && i.turn === g.turn))
-			}))
+	const baseGroups = $derived(
+		GROUPS.map((g) => ({
+			...g,
+			items: arrangeGroup(filtered.filter((i) => i.turn === g.turn))
 		}))
 	);
-	const baseGroups = $derived(columns.flatMap((c) => c.groups));
-
-	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
-	const allCount = () => visibleItems.length;
-	const categoryCount = (id: string) => visibleItems.filter((i) => i.category === id).length;
-	const tagCount = (id: string) => visibleItems.filter((i) => i.tags?.includes(id)).length;
-
-	function marksFor(i: DashItem): { key: string; name: string; color: MarkColor }[] {
-		const category = viewCategory ? null : categories.find((c) => c.id === i.category);
-		return [
-			...(category
-				? [{ key: `c:${category.id}`, name: category.name, color: category.color }]
-				: []),
-			...tags
-				.filter((t) => t.id !== viewTag && i.tags?.includes(t.id))
-				.map((t) => ({ key: `t:${t.id}`, name: t.name, color: t.color }))
-		];
-	}
-
-	async function pin(
-		ids: string[],
-		change: { category?: string | null; tag?: string; tagState?: 'on' | 'off' },
-		patch: (x: DashItem) => DashItem,
-		message: string
-	) {
-		const set = new Set(ids);
-		await cancelDash();
-		updateDash((x) => (set.has(x.id) ? patch(x) : x));
-		sel.clear();
-		try {
-			await api.pinItems(ids, change);
-			toast(message, {
-				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} items`
-			});
-		} catch (err) {
-			toast.error((err as Error).message);
-		} finally {
-			reloadDash();
-		}
-	}
-
-	function setCategory(ids: string[], category: string | null) {
-		const name = categories.find((c) => c.id === category)?.name;
-		return pin(
-			ids,
-			{ category },
-			(x) => (category ? { ...x, category } : x),
-			name ? `Moved to “${name}”` : 'Hush decides the category again'
-		);
-	}
-
-	function setTag(ids: string[], tag: string, state: 'on' | 'off') {
-		const name = tags.find((t) => t.id === tag)?.name ?? tag;
-		return pin(
-			ids,
-			{ tag, tagState: state },
-			(x) => ({
-				...x,
-				tags:
-					state === 'on'
-						? [...new Set([...(x.tags ?? []), tag])]
-						: (x.tags ?? []).filter((t) => t !== tag)
-			}),
-			state === 'on' ? `Tagged “${name}”` : `Removed “${name}”`
-		);
-	}
-
-	const cancelDash = () => queryClient.cancelQueries({ queryKey: keys.dashAll });
-	const reloadDash = () => queryClient.invalidateQueries({ queryKey: keys.dashAll });
-	function updateDash(fn: (x: DashItem) => DashItem) {
-		for (const k of KINDS)
-			queryClient.setQueryData<DashResponse>(keys.dash(k), (old) =>
-				old ? { ...old, items: old.items.map(fn) } : old
-			);
-	}
 
 	// --- Drag and drop ----------------------------------------------------------------
 	const drag = new ListDrag({
 		enabled: () => !showHidden,
 		// Dragging a selected row moves the whole selection, in list order.
 		pick: (id) => (sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id]),
-		isCollapsed: (zone) => collapsed[zone],
-		drop: (ids, zone, index) => dropAt(ids, zone, index)
+		isCollapsed: (zone) => collapsed[zone as Turn],
+		drop: (ids, zone, index) => dropAt(ids, zone as Turn, index)
 	});
 	const dragging = $derived(new Set(drag.ids));
 
 	/** Rows to render: dragged rows leave their lists; the placeholder opens where they land. */
-	const columnRows = $derived(
-		columns.map((c) => ({
-			...c,
-			count: c.groups.reduce((n, g) => n + g.items.length, 0),
-			groups: c.groups.map((g) => {
-				const rows: { key: string; item: DashItem | null }[] = g.items
-					.filter((i) => !dragging.has(i.id))
-					.map((i) => ({ key: i.id, item: i }));
-				if (drag.active && drag.zone === g.zone && !collapsed[g.zone])
-					rows.splice(Math.min(drag.index, rows.length), 0, { key: '__placeholder', item: null });
-				return { ...g, rows };
-			})
-		}))
+	const groups = $derived(
+		baseGroups.map((g) => {
+			const rows: { key: string; item: DashItem | null }[] = g.items
+				.filter((i) => !dragging.has(i.id))
+				.map((i) => ({ key: i.id, item: i }));
+			if (drag.active && drag.zone === g.turn && !collapsed[g.turn])
+				rows.splice(Math.min(drag.index, rows.length), 0, { key: '__placeholder', item: null });
+			return { ...g, rows };
+		})
 	);
 
 	/** Keyboard order: only rows in open groups. */
-	const navigable = $derived(baseGroups.flatMap((g) => (collapsed[g.zone] ? [] : g.items)));
+	const navigable = $derived(baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.items)));
 	const order = $derived(navigable.map((i) => i.id));
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
 	const byId = (id: string) => data?.items.find((i) => i.id === id);
 
 	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this page
 	// owns it ------------------------------------------------------------------------------
-	const peekOwner = PAGE;
+	const peekOwner = $derived(kind === 'pr' ? 'pulls' : 'issues');
 	const owns = $derived(peek.owner === peekOwner);
 	const peekOpen = $derived(peek.owner !== null);
 	// Read the cursor row even while not owned: a derived whose dependencies change between runs
@@ -377,15 +225,12 @@
 	}
 
 	/** `index` counts the visible rows left in the group once the dragged rows are out. */
-	function dropAt(ids: string[], zone: string, index: number) {
-		const { kind, turn } = parseZone(zone);
-		const movable = ids.filter((id) => byId(id)?.kind === kind);
-		if (!movable.length) return;
-		const left = (baseGroups.find((g) => g.zone === zone)?.items ?? [])
+	function dropAt(ids: string[], turn: Turn, index: number) {
+		const left = (baseGroups.find((g) => g.turn === turn)?.items ?? [])
 			.map((i) => i.id)
-			.filter((id) => !movable.includes(id));
-		const visible = [...left.slice(0, index), ...movable, ...left.slice(index)];
-		return arrange(movable, turn, orderAfterDrop(fullGroup(kind, turn), visible, movable));
+			.filter((id) => !ids.includes(id));
+		const visible = [...left.slice(0, index), ...ids, ...left.slice(index)];
+		return arrange(ids, turn, orderAfterDrop(fullGroup(turn), visible, ids));
 	}
 
 	// Enter and leave animations that know about dragging.
@@ -412,12 +257,23 @@
 	}
 
 	/** Full order of a group, including rows hidden by the current filter. */
-	const fullGroup = (kind: DashKind, turn: Turn) =>
+	const fullGroup = (turn: Turn) =>
 		arrangeGroup(
-			(data?.items ?? []).filter(
-				(i) => i.kind === kind && i.turn === turn && i.dismissed === showHidden
-			)
+			(data?.items ?? []).filter((i) => i.turn === turn && i.dismissed === showHidden)
 		).map((i) => i.id);
+
+	function dropped(id: string, turn: Turn, visible: string[]) {
+		// Dragging a selected row moves the whole selection, in list order.
+		const moved = sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id];
+		const block = new Set(moved);
+		const vis = visible.filter((x) => x === id || !block.has(x));
+		vis.splice(vis.indexOf(id), 1, ...moved);
+		const before = fullGroup(turn);
+		const next = orderAfterDrop(before, vis, moved);
+		const sameGroup = moved.every((m) => byId(m)?.turn === turn);
+		if (sameGroup && next.join() === before.join()) return;
+		arrange(moved, turn, next);
+	}
 
 	/**
 	 * Move items into a group at a given order: update the cache now, then save.
@@ -429,8 +285,11 @@
 		const prev = new Map(items.map((i) => [i.id, i]));
 		const target = (i: DashItem) => turn ?? i.autoTurn;
 		const rank = new Map((groupOrder ?? []).map((x, n) => [x, n]));
-		await cancelDash();
-		const set = updateDash;
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
+		const set = (fn: (x: DashItem) => DashItem) =>
+			queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
+				old ? { ...old, items: old.items.map(fn) } : old
+			);
 		set((x) =>
 			prev.has(x.id)
 				? {
@@ -488,7 +347,7 @@
 				});
 		} catch (err) {
 			toast.error((err as Error).message);
-			reloadDash();
+			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
 		}
 	}
 
@@ -502,15 +361,11 @@
 	async function refresh() {
 		refreshing = true;
 		try {
-			await Promise.all(
-				KINDS.map((k) =>
-					queryClient.fetchQuery({
-						queryKey: keys.dash(k),
-						queryFn: () => api.dashboard(k, true),
-						staleTime: 0
-					})
-				)
-			);
+			await queryClient.fetchQuery({
+				queryKey: keys.dash(kind),
+				queryFn: () => api.dashboard(kind, true),
+				staleTime: 0
+			});
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -518,19 +373,30 @@
 		}
 	}
 
+	$effect(() => {
+		const k = kind;
+		untrack(() => {
+			section = null;
+			selectedId = null;
+			sel.clear();
+			groupMotion = false;
+			collapsed = readCollapsed(k);
+		});
+	});
+	// (After the effect above, which resets the cursor when the page opens.)
 	// The command palette chose an item on this dashboard: show it (clear filters, open its
 	// group) and peek it.
 	$effect(() => {
 		const r = palette.peekRequest;
-		if (!r || r.page !== PAGE || !data) return;
+		if (!r || r.page !== (kind === 'pr' ? 'pulls' : 'issues') || !data) return;
 		const item = data.items.find((x) => x.id === r.id);
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
 			query = '';
-			activeKind = item.kind;
+			section = null;
 			showHidden = !!item.dismissed;
-			collapsed[zoneOf(item.kind, item.turn)] = false;
+			collapsed[item.turn] = false;
 			sel.clear();
 			selectedId = item.id;
 			take();
@@ -538,15 +404,18 @@
 	});
 
 	$effect(() => {
-		localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed));
+		localStorage.setItem(`hush:collapsed:${kind}`, JSON.stringify(collapsed));
 	});
 
-	function kindCount(kind: DashKind | null) {
-		return (data?.items ?? []).filter((i) => !i.dismissed && (!kind || i.kind === kind)).length;
+	function sectionCount(id: string | null) {
+		return (data?.items ?? []).filter((i) => !i.dismissed && (!id || i.sections.includes(id)))
+			.length;
 	}
 
 	function setDismissed(ids: Set<string>, dismissed: boolean) {
-		updateDash((x) => (ids.has(x.id) ? { ...x, dismissed } : x));
+		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
+			old ? { ...old, items: old.items.map((x) => (ids.has(x.id) ? { ...x, dismissed } : x)) } : old
+		);
 	}
 
 	/** Mute: hidden until you unmute it, and its threads muted (see PollerData.mute). */
@@ -558,8 +427,17 @@
 		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
 		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
 		sel.clear();
-		await cancelDash();
-		updateDash((x) => (set.has(x.id) ? { ...x, dismissed: mute, muted: mute } : x));
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
+		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
+			old
+				? {
+						...old,
+						items: old.items.map((x) =>
+							set.has(x.id) ? { ...x, dismissed: mute, muted: mute } : x
+						)
+					}
+				: old
+		);
 		try {
 			if (mute) await api.muteItems([...set]);
 			else await api.unhide([...set]);
@@ -572,14 +450,14 @@
 							onClick: () => {
 								api
 									.unhide([...set])
-									.then(() => reloadDash())
+									.then(() => queryClient.invalidateQueries({ queryKey: keys.dash(kind) }))
 									.catch((e) => toast.error(e.message));
 							}
 						}
 					: undefined
 			});
 		} catch (err) {
-			reloadDash();
+			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
 			toast.error((err as Error).message);
 		}
 	}
@@ -592,7 +470,7 @@
 		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
 		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
 		sel.clear();
-		await cancelDash();
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
 		setDismissed(set, hide);
 		try {
 			if (hide) await api.hide(items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })));
@@ -631,14 +509,11 @@
 
 	/** Move to the top of another group (menu and bulk bar). */
 	function moveTo(ids: string[], turn: Turn) {
-		for (const kind of KINDS) {
-			const block = new Set(ids.filter((id) => byId(id)?.kind === kind));
-			if (!block.size) continue;
-			arrange([...block], turn, [
-				...order.filter((x) => block.has(x)),
-				...fullGroup(kind, turn).filter((x) => !block.has(x))
-			]);
-		}
+		const block = new Set(ids);
+		arrange(ids, turn, [
+			...order.filter((x) => block.has(x)),
+			...fullGroup(turn).filter((x) => !block.has(x))
+		]);
 	}
 
 	const targets = () => sel.targets(order, selectedId);
@@ -685,7 +560,7 @@
 		const cmd = commandFor(e, ['list', 'dash']);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
-		const chips = KINDS;
+		const chips = [null, ...(data?.sections ?? []).map((s) => s.id)];
 		// Each command's keys: shared/keymap.ts (and Settings → Keybinds).
 		const run: Record<string, () => void> = {
 			'list.next': () => move(1),
@@ -707,7 +582,7 @@
 			'dash.mute': () => toggleMute(targets()),
 			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i)
 		};
-		chips.forEach((k, n) => (run[`dash.section.${n}`] = () => (activeKind = k)));
+		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
 		const fn = run[cmd];
 		if (fn) {
 			e.preventDefault();
@@ -803,15 +678,7 @@
 		copyLinks,
 		refresh,
 		toggleShowHidden: () => (showHidden = !showHidden),
-		notNeeded: sayNotNeeded,
-		get categories() {
-			return categories;
-		},
-		get tags() {
-			return tags;
-		},
-		setCategory,
-		setTag
+		notNeeded: sayNotNeeded
 	};
 	const menuFor = (ids: string[]) => dashMenu(actions, ids);
 	$effect(() => palette.register(() => dashCommands(actions, targets())));
@@ -819,357 +686,259 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="mx-auto flex max-w-7xl gap-3 px-4 pt-4 pb-24">
-	<nav aria-label="Views" class="sticky top-16 hidden w-48 shrink-0 self-start md:block">
-		<a
-			href="/items"
-			aria-current={!viewCategory && !viewTag ? 'page' : undefined}
-			class={cn(
-				'flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
-				!viewCategory && !viewTag && 'bg-muted text-foreground'
-			)}
-		>
-			<span class="flex items-center gap-2"><Folder class="size-4" />All</span>
-			<span class="text-xs tabular-nums">{allCount()}</span>
-		</a>
-		{@render markList('Categories', 'category', categories, viewCategory, categoryCount)}
-		{@render markList('Tags', 'tag', tags, viewTag, tagCount)}
-	</nav>
-	<main data-page class="min-w-0 flex-1">
-		{#if viewName}
-			<h1 class="mb-3 hidden text-lg font-semibold tracking-tight md:block">{viewName}</h1>
-		{/if}
-		<div class="flex flex-wrap items-center gap-2">
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger
-					class="flex h-8 max-w-44 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm md:hidden"
-				>
-					<span class="truncate">{viewName ?? 'All'}</span>
-					<ChevronDown class="size-3.5 shrink-0 text-muted-foreground" />
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="start" class="min-w-52">
-					<DropdownMenu.Item onclick={() => goto('/items')}>All</DropdownMenu.Item>
-					{#if categories.length}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label>Categories</DropdownMenu.Label>
-						{#each categories as c (c.id)}
-							<DropdownMenu.Item onclick={() => goto(`/items?category=${c.id}`)}>
-								<span class={cn('size-2 rounded-full', MARK_DOT[c.color])}></span>{c.name}
-								<span class="ml-auto text-xs text-muted-foreground tabular-nums"
-									>{categoryCount(c.id)}</span
-								>
-							</DropdownMenu.Item>
-						{/each}
-					{/if}
-					{#if tags.length}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Label>Tags</DropdownMenu.Label>
-						{#each tags as t (t.id)}
-							<DropdownMenu.Item onclick={() => goto(`/items?tag=${t.id}`)}>
-								<span class={cn('size-2 rounded-full', MARK_DOT[t.color])}></span>{t.name}
-								<span class="ml-auto text-xs text-muted-foreground tabular-nums"
-									>{tagCount(t.id)}</span
-								>
-							</DropdownMenu.Item>
-						{/each}
-					{/if}
-					<DropdownMenu.Separator />
-					<DropdownMenu.Item onclick={() => goto('/settings/categories')}
-						><Settings2 />Categories and tags</DropdownMenu.Item
-					>
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-			<div class="relative min-w-0 flex-1 sm:w-80 sm:flex-none">
-				<Search
-					class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-				/>
-				<Input
-					bind:ref={searchEl}
-					bind:value={query}
-					placeholder="Filter: words, or repo:, category:, tag:…"
-					class="h-8 pl-8"
-					aria-label="Filter {noun}"
-				/>
-				<QuerySuggest input={searchEl} value={query} onpick={(next) => (query = next)} />
-				{#if filter.errors.length}
-					<p
-						class="absolute top-full right-0 z-10 mt-1 w-max max-w-72 rounded-md border bg-popover px-2.5 py-1 text-xs text-destructive shadow-md"
-						role="status"
-					>
-						{filter.errors[0]}
-					</p>
-				{/if}
-			</div>
-			<div class="ml-auto flex items-center gap-1">
-				<Button
-					variant={showHidden ? 'secondary' : 'ghost'}
-					size="sm"
-					onclick={() => (showHidden = !showHidden)}
-					disabled={!hiddenCount && !showHidden}
-				>
-					<EyeOff /><span class="hidden sm:inline">{showHidden ? 'Showing hidden' : 'Hidden'}</span>
-					{#if hiddenCount}<span class="tabular-nums opacity-70">{hiddenCount}</span>{/if}
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Refresh from GitHub"
-					onclick={refresh}
-					disabled={refreshing}
-				>
-					<RefreshCw class={cn(refreshing && 'animate-spin')} />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					class="hidden sm:inline-flex"
-					aria-label="Keyboard shortcuts"
-					onclick={() => (helpOpen = true)}><Keyboard /></Button
-				>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Edit sections"
-					href="/settings/dashboards"><SlidersHorizontal /></Button
-				>
-			</div>
+<main data-page class="mx-auto max-w-4xl px-4 pt-4 pb-24">
+	<div class="flex flex-wrap items-center gap-2">
+		<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+			<Search
+				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+			/>
+			<Input
+				bind:ref={searchEl}
+				bind:value={query}
+				placeholder="Filter {noun}"
+				class="h-8 pl-8"
+				aria-label="Filter {noun}"
+			/>
 		</div>
+		<div class="ml-auto flex items-center gap-1">
+			<Button
+				variant={showHidden ? 'secondary' : 'ghost'}
+				size="sm"
+				onclick={() => (showHidden = !showHidden)}
+				disabled={!hiddenCount && !showHidden}
+			>
+				<EyeOff /><span class="hidden sm:inline">{showHidden ? 'Showing hidden' : 'Hidden'}</span>
+				{#if hiddenCount}<span class="tabular-nums opacity-70">{hiddenCount}</span>{/if}
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Refresh from GitHub"
+				onclick={refresh}
+				disabled={refreshing}
+			>
+				<RefreshCw class={cn(refreshing && 'animate-spin')} />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				class="hidden sm:inline-flex"
+				aria-label="Keyboard shortcuts"
+				onclick={() => (helpOpen = true)}><Keyboard /></Button
+			>
+			<Button variant="ghost" size="icon-sm" aria-label="Edit sections" href="/settings/dashboards"
+				><SlidersHorizontal /></Button
+			>
+		</div>
+	</div>
 
-		{#if data}
-			<div class="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Type">
-				{#each KINDS as k (k)}
-					{@const count = kindCount(k)}
-					<button
-						role="tab"
-						aria-selected={activeKind === k}
-						class={cn(
-							'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-							activeKind === k
-								? 'border-foreground/20 bg-foreground text-background'
-								: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-							!count && activeKind !== k && 'opacity-50'
-						)}
-						onclick={() => (activeKind = k)}
-					>
-						{KIND_LABEL[k]}
-						<span class="tabular-nums opacity-70">{count}</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
-
-		<p class="mt-2 mb-2 px-1 text-xs text-muted-foreground">
-			{#if data && (refreshing || fetching)}
-				<span class="inline-flex items-center gap-1"
-					><RefreshCw class="size-3 animate-spin" />Updating…</span
+	{#if data}
+		<div
+			class="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1"
+			role="tablist"
+			aria-label="Sections"
+		>
+			{#each [{ id: null, name: 'All' }, ...data.sections] as s (s.id ?? 'all')}
+				{@const count = sectionCount(s.id)}
+				<button
+					role="tab"
+					aria-selected={section === s.id}
+					class={cn(
+						'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+						section === s.id
+							? 'border-foreground/20 bg-foreground text-background'
+							: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+						!count && section !== s.id && 'opacity-50'
+					)}
+					onclick={() => (section = section === s.id ? null : s.id)}
 				>
-			{:else if data}
-				Updated {ago(data.fetchedAt)}
-			{:else}Loading from GitHub…{/if}
-		</p>
+					{s.name}
+					<span class="tabular-nums opacity-70">{count}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
 
-		{#if me.data?.settings.smartDecisions && !dismissedNotes.keys.includes(JEV_NOTICE)}
-			<Alert.Root class="mb-3">
-				<Alert.Title>Hush sorts your work with Jev</Alert.Title>
+	<p class="mt-2 mb-2 px-1 text-xs text-muted-foreground">
+		{#if data && (refreshing || dashQ.isFetching || data.refreshing)}
+			<span class="inline-flex items-center gap-1"
+				><RefreshCw class="size-3 animate-spin" />Updating…</span
+			>
+		{:else if data}
+			Updated {ago(data.fetchedAt)}
+		{:else}Loading from GitHub…{/if}
+	</p>
+
+	{#if dashQ.isError}
+		<Alert.Root variant="destructive" class="mb-3"
+			><Alert.Description>{dashQ.error.message}</Alert.Description></Alert.Root
+		>
+	{/if}
+	{#each data?.errors ?? [] as err (err)}
+		{@const help = tokenHelp(err)}
+		<!-- A known token limit is advice, not a failure: the other results are all here. You can
+		     hide advice for good (per note); a failed search always shows. -->
+		{#if !help || !dismissedNotes.keys.includes(help.title)}
+			<Alert.Root variant={help ? 'default' : 'destructive'} class="mb-3">
+				<Alert.Title>{help?.title ?? 'A search failed'}</Alert.Title>
 				<Alert.Description>
-					Jev, a decision model from TypeSafe (through Cloudflare), reads the title, labels, start
-					of the description, and 2 newest comments of your pull requests and issues. It puts each
-					into a category and tags, and tells which comments need you. It keeps nothing.
-					<span class="mt-1 flex flex-wrap gap-x-3">
-						<a class="underline underline-offset-2" href="/settings/inbox">Turn it off</a>
-						<a class="underline underline-offset-2" href="/settings/categories"
-							>Change categories and tags</a
-						>
-						<button
-							type="button"
-							class="underline underline-offset-2 hover:text-foreground"
-							onclick={() => dismissNote(JEV_NOTICE)}>Got it</button
-						>
-					</span>
+					{help?.body ?? err}
+					{#if help}
+						<span class="mt-1 flex flex-wrap gap-x-3">
+							<a class="underline underline-offset-2" href="/settings/general#token"
+								>GitHub access settings</a
+							>
+							<button
+								type="button"
+								class="underline underline-offset-2 hover:text-foreground"
+								onclick={() => dismissNote(help.title)}>Don't show again</button
+							>
+						</span>
+					{/if}
 				</Alert.Description>
 			</Alert.Root>
 		{/if}
-		{#if loadError}
-			<Alert.Root variant="destructive" class="mb-3"
-				><Alert.Description>{loadError.message}</Alert.Description></Alert.Root
-			>
-		{/if}
-		{#each data?.errors ?? [] as err (err)}
-			{@const help = tokenHelp(err)}
-			<!-- A known token limit is advice, not a failure: the other results are all here. You can
-		     hide advice for good (per note); a failed search always shows. -->
-			{#if !help || !dismissedNotes.keys.includes(help.title)}
-				<Alert.Root variant={help ? 'default' : 'destructive'} class="mb-3">
-					<Alert.Title>{help?.title ?? 'A search failed'}</Alert.Title>
-					<Alert.Description>
-						{help?.body ?? err}
-						{#if help}
-							<span class="mt-1 flex flex-wrap gap-x-3">
-								<a class="underline underline-offset-2" href="/settings/general#token"
-									>GitHub access settings</a
-								>
-								<button
-									type="button"
-									class="underline underline-offset-2 hover:text-foreground"
-									onclick={() => dismissNote(help.title)}>Don't show again</button
-								>
-							</span>
-						{/if}
-					</Alert.Description>
-				</Alert.Root>
-			{/if}
-		{/each}
-		{#each data?.sections.filter((s) => s.skipped) ?? [] as s (s.id)}
-			<p class="mb-2 px-1 text-xs text-signal-warn">{s.name}: {s.skipped}</p>
-		{/each}
+	{/each}
+	{#each data?.sections.filter((s) => s.skipped) ?? [] as s (s.id)}
+		<p class="mb-2 px-1 text-xs text-signal-warn">{s.name}: {s.skipped}</p>
+	{/each}
 
-		{#if !data && loading}
-			<div class="grid gap-2">
-				{#each [0, 1, 2, 3, 4] as k (k)}
-					<div class="flex items-center gap-3 px-3 py-3">
-						<Skeleton class="size-8 rounded-full" />
-						<div class="grid flex-1 gap-2">
-							<Skeleton class="h-4 w-2/3" />
-							<Skeleton class="h-3 w-1/3" />
-						</div>
+	{#if dashQ.isPending}
+		<div class="grid gap-2">
+			{#each [0, 1, 2, 3, 4] as k (k)}
+				<div class="flex items-center gap-3 px-3 py-3">
+					<Skeleton class="size-8 rounded-full" />
+					<div class="grid flex-1 gap-2">
+						<Skeleton class="h-4 w-2/3" />
+						<Skeleton class="h-3 w-1/3" />
 					</div>
-				{/each}
-			</div>
-		{:else if !filtered.length}
-			<div
-				class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
-			>
-				<CircleCheck class="mb-3 size-8 text-signal-merge" />
-				{#if query}
-					<p class="font-medium">No {noun} match “{query}”.</p>
-				{:else if showHidden}
-					<p class="font-medium">Nothing is hidden.</p>
-				{:else}
-					<p class="font-medium">No open {noun} involve you.</p>
-					<p class="mt-1 text-sm text-muted-foreground">
-						<a class="underline" href="/settings/dashboards">Edit the sections</a> to track more.
-					</p>
-				{/if}
-			</div>
-		{:else}
-			<ContextMenu.Root bind:open={contextOpen}>
-				<ContextMenu.Trigger>
-					{#snippet child({ props })}
-						<div {...props} class="grid gap-6" data-drag-root oncontextmenucapture={onContextMenu}>
-							{#each columnRows as col (col.kind)}
-								<div role="group" aria-label={col.label} class="grid min-w-0 content-start gap-5">
-									{#each col.groups as g (g.zone)}
-										{@const count = g.items.length}
-										{@const target = drag.active && drag.zone === g.zone}
-										{@const headerDrop = target && (collapsed[g.zone] || !count)}
-										<!-- The whole group (header and rows) is one drop zone. Always in the layout, so
-									     picking up a card never shifts the page. -->
-										<section data-drag-zone={g.zone}>
-											<button
-												class={cn(
-													'group/h mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors duration-150',
-													headerDrop && 'bg-primary/[0.07] text-primary'
-												)}
-												onclick={() => {
-													groupMotion = true;
-													collapsed[g.zone] = !collapsed[g.zone];
-												}}
-												aria-expanded={!collapsed[g.zone]}
+				</div>
+			{/each}
+		</div>
+	{:else if !filtered.length}
+		<div
+			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
+		>
+			<CircleCheck class="mb-3 size-8 text-signal-merge" />
+			{#if query}
+				<p class="font-medium">No {noun} match “{query}”.</p>
+			{:else if showHidden}
+				<p class="font-medium">Nothing is hidden.</p>
+			{:else}
+				<p class="font-medium">No open {noun} involve you.</p>
+				<p class="mt-1 text-sm text-muted-foreground">
+					<a class="underline" href="/settings/dashboards">Edit the sections</a> to track more.
+				</p>
+			{/if}
+		</div>
+	{:else}
+		<ContextMenu.Root bind:open={contextOpen}>
+			<ContextMenu.Trigger>
+				{#snippet child({ props })}
+					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
+						{#each groups as g (g.turn)}
+							{@const count = baseGroups.find((b) => b.turn === g.turn)?.items.length ?? 0}
+							{@const target = drag.active && drag.zone === g.turn}
+							{@const headerDrop = target && (collapsed[g.turn] || !count)}
+							<!-- The whole group (header and rows) is one drop zone. Always in the layout, so
+							     picking up a card never shifts the page. -->
+							<section data-drag-zone={g.turn}>
+								<button
+									class={cn(
+										'group/h mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors duration-150',
+										headerDrop && 'bg-primary/[0.07] text-primary'
+									)}
+									onclick={() => {
+										groupMotion = true;
+										collapsed[g.turn] = !collapsed[g.turn];
+									}}
+									aria-expanded={!collapsed[g.turn]}
+								>
+									<ChevronDown
+										class={cn(
+											'size-3.5 text-muted-foreground',
+											groupMotion && 'transition-transform',
+											collapsed[g.turn] && '-rotate-90'
+										)}
+									/>
+									<h2
+										class={cn(
+											'text-xs font-semibold tracking-wide uppercase',
+											!count && !headerDrop && 'text-muted-foreground/70'
+										)}
+									>
+										{g.label}
+									</h2>
+									<span class="text-xs text-muted-foreground tabular-nums">{count}</span>
+									<span
+										class={cn(
+											'ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline',
+											headerDrop && 'text-primary opacity-100'
+										)}>{headerDrop ? 'Drop to move here' : g.hint}</span
+									>
+								</button>
+								{#if !collapsed[g.turn]}
+									<!-- An empty list is 0 px tall; the placeholder opens it when you drag over. -->
+									<!-- Opening or closing a group slides it; the rows' own transitions are local, so
+									     they do not also play. -->
+									<ul
+										transition:slide={groupMotion ? SECTION_SLIDE : { duration: 0 }}
+										class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
+										role="listbox"
+										aria-multiselectable="true"
+										aria-label={g.label}
+									>
+										{#each g.rows as r (r.key)}
+											<li
+												animate:flip={FLIP}
+												in:enter={r}
+												out:leave={r}
+												data-drag-id={r.item?.id}
+												data-drag-placeholder={!r.item || undefined}
+												style={r.item ? undefined : `height: ${drag.gap}px`}
+												class={r.item
+													? 'drag-row'
+													: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
+												onpointerdown={(e) =>
+													r.item && drag.pointerdown(e, r.item.id, e.currentTarget)}
 											>
-												<ChevronDown
-													class={cn(
-														'size-3.5 text-muted-foreground',
-														groupMotion && 'transition-transform',
-														collapsed[g.zone] && '-rotate-90'
-													)}
-												/>
-												<h3
-													class={cn(
-														'text-xs font-semibold tracking-wide uppercase',
-														!count && !headerDrop && 'text-muted-foreground/70'
-													)}
-												>
-													{g.label}
-												</h3>
-												<span class="text-xs text-muted-foreground tabular-nums">{count}</span>
-												<span
-													class={cn(
-														'ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline',
-														headerDrop && 'text-primary opacity-100'
-													)}>{headerDrop ? 'Drop to move here' : g.hint}</span
-												>
-											</button>
-											{#if !collapsed[g.zone]}
-												<!-- An empty list is 0 px tall; the placeholder opens it when you drag over. -->
-												<!-- Opening or closing a group slides it; the rows' own transitions are local, so
-											     they do not also play. -->
-												<ul
-													transition:slide={groupMotion ? SECTION_SLIDE : { duration: 0 }}
-													class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
-													role="listbox"
-													aria-multiselectable="true"
-													aria-label={g.label}
-												>
-													{#each g.rows as r (r.key)}
-														<li
-															animate:flip={FLIP}
-															in:enter={r}
-															out:leave={r}
-															data-drag-id={r.item?.id}
-															data-drag-placeholder={!r.item || undefined}
-															style={r.item ? undefined : `height: ${drag.gap}px`}
-															class={r.item
-																? 'drag-row'
-																: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
-															onpointerdown={(e) =>
-																r.item && drag.pointerdown(e, r.item.id, e.currentTarget)}
-														>
-															{#if r.item}
-																{@const i = r.item}
-																<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
-																	<DashRow
-																		item={i}
-																		selected={i.id === selectedId}
-																		checked={sel.has(i.id)}
-																		selecting={sel.size > 0}
-																		draggable={!showHidden}
-																		showSections={false}
-																		sectionNames={sectionNamesByKind[i.kind] ?? {}}
-																		onopen={open}
-																		onhide={(x) => toggleHide([x.id])}
-																		onmute={(x) => toggleMute([x.id])}
-																		oncopy={(x) => copyLinks([x.id])}
-																		onrowclick={(e) => onRowClick(e, i)}
-																		ontoggle={(e) => onToggle(e, i)}
-																		onundomove={(x) => arrange([x.id], null)}
-																		marks={marksFor(i)}
-																		menu={() => menuFor([i.id])}
-																	/>
-																</SwipeRow>
-															{/if}
-														</li>
-													{/each}
-												</ul>
-											{/if}
-										</section>
-									{/each}
-									{#if !col.count}
-										<p class="px-1 text-sm text-muted-foreground">
-											No {col.label.toLowerCase()} here.
-										</p>
-									{/if}
-								</div>
-							{/each}
-						</div>
-					{/snippet}
-				</ContextMenu.Trigger>
-				<ContextMenu.Content class="w-64">
-					<AppMenu entries={menuFor(menuIds)} kind="context" />
-				</ContextMenu.Content>
-			</ContextMenu.Root>
-		{/if}
-	</main>
-</div>
+												{#if r.item}
+													{@const i = r.item}
+													<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
+														<DashRow
+															item={i}
+															selected={i.id === selectedId}
+															checked={sel.has(i.id)}
+															selecting={sel.size > 0}
+															draggable={!showHidden}
+															showSections={!section}
+															{sectionNames}
+															onopen={open}
+															onhide={(x) => toggleHide([x.id])}
+															onmute={(x) => toggleMute([x.id])}
+															oncopy={(x) => copyLinks([x.id])}
+															onrowclick={(e) => onRowClick(e, i)}
+															ontoggle={(e) => onToggle(e, i)}
+															onundomove={(x) => arrange([x.id], null)}
+															menu={() => menuFor([i.id])}
+														/>
+													</SwipeRow>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							</section>
+						{/each}
+					</div>
+				{/snippet}
+			</ContextMenu.Trigger>
+			<ContextMenu.Content class="w-64">
+				<AppMenu entries={menuFor(menuIds)} kind="context" />
+			</ContextMenu.Content>
+		</ContextMenu.Root>
+	{/if}
+</main>
 
 {#if drag.active}
 	{@const first = byId(drag.ids[0])}
@@ -1198,7 +967,7 @@
 				<DashRow
 					item={first}
 					checked={sel.has(first.id)}
-					sectionNames={sectionNamesByKind[first.kind] ?? {}}
+					{sectionNames}
 					draggable={false}
 					onopen={() => {}}
 					onhide={() => {}}
@@ -1248,50 +1017,6 @@
 
 <NotNeededDialog bind:target={notNeededFor} />
 
-{#snippet markList(
-	title: string,
-	param: 'category' | 'tag',
-	list: { id: string; name: string; color: MarkColor }[],
-	current: string | null,
-	count: (id: string) => number
-)}
-	<div class="mt-4">
-		<div class="group/h mb-1 flex items-center justify-between px-2">
-			<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</p>
-			<span class="flex items-center gap-0.5">
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					href="/settings/categories#{param === 'category' ? 'categories' : 'tags'}"
-					aria-label="{title} settings"><Settings2 /></Button
-				>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					href="/settings/categories?new={param}"
-					aria-label="New {param}"><Plus /></Button
-				>
-			</span>
-		</div>
-		{#each list as m (m.id)}
-			<a
-				href="/items?{param}={m.id}"
-				aria-current={current === m.id ? 'page' : undefined}
-				class={cn(
-					'flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
-					current === m.id && 'bg-muted text-foreground'
-				)}
-			>
-				<span class="flex min-w-0 items-center gap-2">
-					<span class={cn('size-2 shrink-0 rounded-full', MARK_DOT[m.color])}></span>
-					<span class="truncate">{m.name}</span>
-				</span>
-				<span class="text-xs tabular-nums">{count(m.id)}</span>
-			</a>
-		{/each}
-	</div>
-{/snippet}
-
 {#snippet peekHeader()}
 	{#if peekItem}
 		{@const i = peekItem}
@@ -1302,7 +1027,8 @@
 			seenAt={i.seenAt ?? null}
 			notes={[
 				i.movedByYou && 'You moved it here, until it changes',
-				i.sections.length > 0 && `Found by: ${foundBy(i)}`
+				i.sections.length > 0 &&
+					`Found by: ${i.sections.map((id) => sectionNames[id] ?? id).join(', ')}`
 			]}
 		>
 			{#snippet actions()}

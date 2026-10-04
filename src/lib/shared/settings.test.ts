@@ -35,16 +35,24 @@ describe('settings file', () => {
 		expect(settingsFromFile('{"hush":3,"settings":{"pushFyi":true}}')).toMatch(/newer Hush/);
 	});
 
-	it('drops settings Hush no longer has, such as inbox rules and views', () => {
-		const old = {
-			hush: 2,
+	it('reads a version 1 file: JSON conditions become query text', () => {
+		const v1 = {
+			hush: 1,
 			settings: {
-				rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }],
-				views: [],
-				botsAreFyi: false
+				rules: [
+					{
+						name: 'Docs',
+						when: { repo: 'acme/website', kind: ['review'] },
+						then: { category: 'fyi' }
+					}
+				],
+				views: [{ id: 'web', name: 'Web', base: 'inbox', when: { repo: 'acme/web-*' } }]
 			}
 		};
-		expect(settingsFromFile(JSON.stringify(old))).toEqual({ botsAreFyi: false });
+		expect(settingsFromFile(JSON.stringify(v1))).toEqual({
+			rules: [{ name: 'Docs', when: 'repo:acme/website needs:review', then: { category: 'fyi' } }],
+			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
+		});
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
@@ -67,7 +75,7 @@ describe('settings schema', () => {
 
 	it('keeps the rest of a group', () => {
 		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } as never });
-		expect(s.dash.scope).toEqual(DEFAULT_SETTINGS.dash.scope);
+		expect(s.dash.pr).toEqual(DEFAULT_SETTINGS.dash.pr);
 		expect(settingsOverrides(s)).toEqual({ dash: { hideBots: false } });
 	});
 
@@ -80,11 +88,10 @@ describe('settings schema', () => {
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);
 		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
-		expect(check({ tags: [{ id: 'a', name: 'A', color: 'blue', rule: 'repo:' }] })).toMatch(/"A"/);
-		expect(
-			check({ tags: [{ id: 'a', name: 'A', color: 'blue', rule: 'repo:acme/*' }] })
-		).toBeNull();
-		expect(check({ rules: [] })).toMatch(/Unknown setting "rules"/);
+		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
+			/"A"/
+		);
+		expect(check({ rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }] })).toBeNull();
 	});
 });
 

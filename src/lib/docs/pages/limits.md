@@ -1,6 +1,6 @@
 ---
 title: Limits, timing, and data
-description: How often Hush checks GitHub, what it stores, how long it keeps it, and the limits on sources, categories, tags, and devices.
+description: How often Hush checks GitHub, what it stores, how long it keeps it, and the limits on views, sections, and devices.
 ---
 
 ## Timing and limits
@@ -11,12 +11,12 @@ Hush checks more often while you use it, because a check costs GitHub requests a
 
 ## What Hush sees
 
-Hush sees what GitHub puts in your notifications, and the facts of the pull requests and issues behind them. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); Hush finds those on its next search of the item.
+Hush sees what GitHub puts in your notifications, and the facts of the pull requests and issues behind them. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); the inbox watcher finds those within 15 minutes, and the dashboards on their next search.
 
 ## What Hush stores
 
 - **Your account**: your GitHub login, name, and avatar, and your token, encrypted.
-- **Your data**, in storage of its own for each user: your threads and their state, the facts of each PR and issue (CI, reviews, the start of the description, the 2 newest comments), Jev's answers (unless you turned off smart decisions), your settings, your alert history, when each item last pushed and why, the pushes that wait (quiet hours, a digest, a limit), your push devices, and your hidden and moved dashboard items.
+- **Your data**, in storage of its own for each user: your threads and their state, the facts of each PR and issue (CI, reviews, the start of the description, the 2 newest comments), Jev's answers if you turned on smart decisions, your settings, your alert history, when each item last pushed and why, the pushes that wait (quiet hours, a digest, a limit), your push devices, and your hidden and moved dashboard items.
 - **Sessions and feeds**: a hash of each sign-in session (with its browser and when it was last used), and a hash of each feed address.
 
 Hush keeps Done threads until they have had no activity for 30 days, and alerts for 30 days. **Delete account** (Settings → General → Account) deletes all of it at once. Nothing is shared with anyone (except TypeSafe's Jev model, if you turn on [smart decisions](/docs/settings#smartdecisions); see [Privacy](/privacy)), and Hush has no analytics.

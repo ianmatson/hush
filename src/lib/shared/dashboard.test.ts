@@ -10,7 +10,6 @@ import {
 	validateDash,
 	type DashFacts
 } from './dashboard';
-import { DEFAULT_SOURCES, sectionsFor } from './sources';
 
 const base = (over: Partial<DashFacts> = {}): DashFacts => ({
 	id: 'n1',
@@ -150,11 +149,7 @@ describe('expandSections', () => {
 		expect(skipped).toEqual({});
 	});
 	it('skips disabled sections and explains team sections without teams', () => {
-		const { queries, skipped } = expandSections(
-			sectionsFor('pr', DEFAULT_SOURCES),
-			DEFAULT_DASH,
-			[]
-		);
+		const { queries, skipped } = expandSections(DEFAULT_DASH.pr, DEFAULT_DASH, []);
 		expect(queries.some((q) => q.section === 'team-mentioned')).toBe(false);
 		expect(skipped['review-team']).toMatch(/team/);
 	});
@@ -182,6 +177,12 @@ describe('filters, sorting, validation', () => {
 	it('validates dashboard settings', () => {
 		expect(validateDash(DEFAULT_DASH)).toBeNull();
 		expect(validateDash({ ...DEFAULT_DASH, staleDays: 0 })).toMatch(/Stale/);
+		expect(
+			validateDash({ ...DEFAULT_DASH, pr: [{ id: 'x', name: 'X', query: '', enabled: true }] })
+		).toMatch(/query/);
+		expect(validateDash({ ...DEFAULT_DASH, pr: [DEFAULT_DASH.pr[0], DEFAULT_DASH.pr[0]] })).toMatch(
+			/Two sections/
+		);
 	});
 });
 

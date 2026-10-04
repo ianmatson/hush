@@ -2,7 +2,6 @@ import { ruleMatches } from '../../src/lib/shared/classify';
 import {
 	conditionId,
 	estimateTokens,
-	forgetIdentityAnswers,
 	mergeDecisions,
 	parseStoredDecisions,
 	planDecisions,
@@ -13,8 +12,7 @@ import {
 	type StoredDecisions,
 	type SubjectDecisions
 } from '../../src/lib/shared/decisions';
-import { aboutTexts, compileExpr, type QueryExpr } from '../../src/lib/shared/query';
-import { categoryChoiceOptions, markQueries } from '../../src/lib/shared/categories';
+import { compileQuery } from '../../src/lib/shared/query';
 import { enrichmentOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
 import type { Classification, RuleMatch, Settings } from '../../src/lib/shared/types';
 import { dailyTokenBudget, decide, decisionsAvailable } from '../decide';
@@ -34,8 +32,7 @@ interface DecisionUsage {
 	calls: number;
 }
 
-type ConditionScope = { condition: SmartCondition; exprs: QueryExpr[] };
-type Maybe = boolean | 'maybe';
+type ConditionScope = { condition: SmartCondition; exactParts: RuleMatch[] };
 
 const NO_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
 const utcDay = (now = Date.now()) => new Date(now).toISOString().slice(0, 10);
@@ -46,35 +43,16 @@ function exactPartsOf(when: RuleMatch): RuleMatch {
 }
 
 function conditionScopes(settings: Settings): ConditionScope[] {
-	const queries = markQueries(settings);
-	return smartConditions(queries).map((condition) => ({
+	const queries = [
+		...settings.rules.filter((r) => r.enabled !== false).map((r) => r.when ?? ''),
+		...settings.views.map((v) => v.query ?? '')
+	].map(compileQuery);
+	return smartConditions(settings.rules, settings.views).map((condition) => ({
 		condition,
-		exprs: queries
-			.filter((q) => aboutTexts(q).some((text) => conditionId(text) === condition.id))
-			.map(compileExpr)
+		exactParts: queries
+			.filter((q) => q.about?.some((text) => conditionId(text) === condition.id))
+			.map(exactPartsOf)
 	}));
-}
-
-function couldMatch(expr: QueryExpr, exactMatches: (when: RuleMatch) => boolean): Maybe {
-	switch (expr.kind) {
-		case 'match':
-			if (!exactMatches(exactPartsOf(expr.when))) return false;
-			return expr.when.about?.length ? 'maybe' : true;
-		case 'and': {
-			const values = expr.parts.map((p) => couldMatch(p, exactMatches));
-			if (values.includes(false)) return false;
-			return values.every((v) => v === true) ? true : 'maybe';
-		}
-		case 'or': {
-			const values = expr.parts.map((p) => couldMatch(p, exactMatches));
-			if (values.includes(true)) return true;
-			return values.every((v) => v === false) ? false : 'maybe';
-		}
-		case 'not': {
-			const value = couldMatch(expr.part, exactMatches);
-			return value === 'maybe' ? 'maybe' : !value;
-		}
-	}
 }
 
 export abstract class PollerDecisions extends PollerAlerts {
@@ -97,6 +75,19 @@ export abstract class PollerDecisions extends PollerAlerts {
 		return out;
 	}
 
+	private keysWithInboxThreads(keys: string[]): Set<string> {
+		const out = new Set<string>();
+		for (let i = 0; i < keys.length; i += SQL_BATCH) {
+			const batch = keys.slice(i, i + SQL_BATCH);
+			for (const r of this.all<{ subject_key: string }>(
+				`SELECT DISTINCT subject_key FROM threads WHERE category != 'muted' AND subject_key IN (${marks(batch.length)})`,
+				...batch
+			))
+				out.add(r.subject_key);
+		}
+		return out;
+	}
+
 	protected decisionsOf(who: Who, subjects: SubjectFacts[]): Map<string, SubjectDecisions> {
 		const out = new Map<string, SubjectDecisions>();
 		if (!who.settings.smartDecisions || !subjects.length) return out;
@@ -115,17 +106,25 @@ export abstract class PollerDecisions extends PollerAlerts {
 		return (await this.decisionUsage()).tokens >= dailyTokenBudget(this.env);
 	}
 
-	protected async decideSubjects(who: Who, subjects: SubjectFacts[]): Promise<void> {
+	protected async decideSubjects(
+		who: Who,
+		subjects: SubjectFacts[],
+		opts: { allAreInboxThreads?: boolean } = {}
+	): Promise<void> {
 		if (!this.decisionsOn(who.settings) || !subjects.length) return;
 		const keyed = new Map(subjects.map((s) => [subjectKey(s.repo, s.number), s]));
 		const keys = [...keyed.keys()];
 		const stored = this.storedDecisions(keys);
 		const scopes = conditionScopes(who.settings);
-		const categoryOptions = categoryChoiceOptions(who.settings.categories);
+		const inboxKeys: Set<string> = !scopes.length
+			? new Set()
+			: opts.allAreInboxThreads
+				? new Set(keys)
+				: this.keysWithInboxThreads(keys);
 		const plans: { key: string; plan: DecisionPlan }[] = [];
 		for (const [key, s] of keyed) {
-			const conditions = this.conditionsFor(s, who, scopes);
-			const plan = planDecisions(s, who.me, stored.get(key), conditions, categoryOptions);
+			const conditions = inboxKeys.has(key) ? this.conditionsFor(s, who, scopes) : [];
+			const plan = planDecisions(s, who.me, stored.get(key), conditions);
 			if (plan) plans.push({ key, plan });
 		}
 		if (plans.length) await this.runPlans(plans, stored);
@@ -142,11 +141,8 @@ export abstract class PollerDecisions extends PollerAlerts {
 			me: who.me
 		};
 		return scopes
-			.filter(({ exprs }) =>
-				exprs.some(
-					(expr) =>
-						couldMatch(expr, (when) => ruleMatches(when, facts, NO_CLASSIFICATION)) !== false
-				)
+			.filter(({ exactParts }) =>
+				exactParts.some((when) => ruleMatches(when, facts, NO_CLASSIFICATION))
 			)
 			.map(({ condition }) => condition);
 	}
@@ -189,17 +185,5 @@ export abstract class PollerDecisions extends PollerAlerts {
 
 	protected forgetDecisions(): void {
 		this.run('DELETE FROM decisions');
-	}
-
-	protected forgetIdentityAnswersOf(keys: string[]): void {
-		const stored = this.storedDecisions(keys);
-		this.transaction(() => {
-			for (const [key, answers] of stored)
-				this.run(
-					'UPDATE decisions SET answers = ? WHERE key = ?',
-					JSON.stringify(forgetIdentityAnswers(answers)),
-					key
-				);
-		});
 	}
 }

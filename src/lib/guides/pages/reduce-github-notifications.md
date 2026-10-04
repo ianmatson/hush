@@ -71,32 +71,26 @@ If you work in a few repositories and the steps above leave a short list, you do
 
 ## Where Hush helps
 
-GitHub sorts notifications by time, and gives each one a reason that does not change. A thread with `reason:review-requested` keeps that reason after you review. Hush looks at the pull requests and issues that involve you: their CI, reviews, review requests, conflicts, and newest comment.
+GitHub sorts notifications by time, and gives each one a reason that does not change. A thread with `reason:review-requested` keeps that reason after you review. Hush reads the same notifications, then looks at the pull request or issue behind each one: its CI, reviews, review requests, conflicts, and newest comment.
 
-- **Your turn** has only the items where you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you. The rest wait on others, or are only for your information. See [what is your turn](/docs/turns#what-is-your-turn).
-- When you approve, push a fix, or reply, the item leaves Your turn by itself. If it needs you again, it comes back.
-- Hush pushes only what is your turn, one alert for each pull request or issue.
-- When an item is in Your turn and should not be, press {{key:dash.notNeeded}} (**Not my turn**). Hush asks why, and changes a setting or moves only that item. See [Not my turn](/docs/turns#not-my-turn).
+- **Needs you** has only the threads where you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you. Everything else goes to **FYI**. See [what needs you](/docs/inbox#what-needs-you).
+- When you approve, push a fix, or reply, Hush moves the thread to **Done** by itself. If it needs you again, it comes back.
+- The first time you sign in, Hush lists the repositories with the most notifications that do not need you, and moves the ones that you choose to FYI.
+- When a thread is in Needs you and should not be, press {{key:inbox.notNeeded}} (**Doesn't need me**). Hush asks why, and changes a setting or adds a rule. See [Doesn't need me](/docs/inbox#doesnt-need-me).
 
-For a repository that you only read, or a bot, make a [category](/docs/pull-requests-and-issues#categories-and-tags) with push off. This one keeps the website repository and Renovate in one quiet category:
+For a repository that you only read, or a bot, write a [rule](/docs/rules). These rules send one repository to FYI, mute a bot, and move passing workflow runs to Done:
 
 ```json settings
 {
-	"categories": [
-		{
-			"id": "quiet",
-			"name": "Quiet",
-			"color": "gray",
-			"rule": "repo:acme/website OR author:renovate*",
-			"description": "",
-			"push": "off"
-		},
-		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
+	"rules": [
+		{ "name": "Website is FYI", "when": "repo:acme/website", "then": { "category": "fyi" } },
+		{ "name": "Mute renovate", "when": "author:renovate*", "then": { "category": "muted" } },
+		{ "name": "Quiet CI", "when": "type:ci in:fyi", "then": { "triage": "done" } }
 	]
 }
 ```
 
-Hush does not change what GitHub sends you, except **Mute** ({{key:dash.mute}}), which also unsubscribes you on GitHub. So the GitHub steps above still help: they leave Hush less to sort.
+Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. So the GitHub steps above still help: they leave Hush less to sort.
 
 ## Sources
 
