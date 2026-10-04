@@ -45,7 +45,7 @@ sw.addEventListener('install', () => sw.skipWaiting());
 sw.addEventListener('activate', (event) => event.waitUntil(sw.clients.claim()));
 
 sw.addEventListener('push', (event) => {
-	let data: PushPayload = { title: 'Hush', body: 'Something needs you.', url: '/inbox' };
+	let data: PushPayload = { title: 'Hush', body: 'Something needs you.', url: '/items' };
 	try {
 		if (event.data) data = event.data.json() as PushPayload;
 	} catch {
@@ -69,7 +69,7 @@ sw.addEventListener('push', (event) => {
 
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
-	const url: string = event.notification.data?.url ?? '/inbox';
+	const url: string = event.notification.data?.url ?? '/items';
 	const threadIds: string[] = event.notification.data?.threadIds ?? [];
 	const action = event.action;
 	if (isTriageAction(action) && threadIds.length) {

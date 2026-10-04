@@ -27,6 +27,7 @@ export interface PushCandidate {
 	message: PushMessage;
 	ignoresRepeatSetting?: boolean;
 	urgent?: boolean;
+	pushes: boolean;
 }
 
 type Held = { count: number; messages: PushMessage[]; duringQuiet: boolean };
@@ -35,11 +36,18 @@ type LegacyQuietHeld = { count: number; lines: string[] };
 /** Push alerts: send them, record them in the alert history, and update them when resolved. */
 export abstract class PollerAlerts extends PollerBase {
 	protected async deliver(candidates: PushCandidate[]): Promise<void> {
-		if (!candidates.length || !(await this.updateHasPush())) return;
+		if (!candidates.length) return;
+		const latestPerItem = [...new Map(candidates.map((c) => [c.itemKey, c])).values()];
+		const canPush = await this.updateHasPush();
+		const pushing = canPush ? latestPerItem.filter((c) => c.pushes) : [];
+		const historyOnly = latestPerItem.filter((c) => !pushing.includes(c));
+		if (historyOnly.length)
+			this.logAlerts(historyOnly.map((c) => ({ ...c.message, tag: c.itemKey })));
+		if (!pushing.length) return;
 		const settings = await this.settings();
 		const pushUrgentNow = settings.smartDecisions && settings.pushUrgentNow;
-		const urgent = pushUrgentNow ? candidates.filter((c) => c.urgent) : [];
-		const rest = candidates.filter((c) => !urgent.includes(c));
+		const urgent = pushUrgentNow ? pushing.filter((c) => c.urgent) : [];
+		const rest = pushing.filter((c) => !urgent.includes(c));
 		if (urgent.length) await this.deliverBatch(settings, urgent, true);
 		if (rest.length) await this.deliverBatch(settings, rest, false);
 	}
@@ -209,7 +217,7 @@ export abstract class PollerAlerts extends PollerBase {
 		if (held) return held;
 		const legacy = s.get('quietHeld') as LegacyQuietHeld | undefined;
 		if (!legacy) return { count: 0, messages: [], duringQuiet: false };
-		const inbox = `${await this.origin()}/inbox`;
+		const inbox = `${await this.origin()}/items`;
 		return {
 			count: legacy.count,
 			messages: legacy.lines.map((title) => ({ title, body: '', url: inbox })),
@@ -300,7 +308,7 @@ function digestOf(
 			.slice(-DIGEST_LINES)
 			.map((m) => m.title)
 			.join('\n'),
-		url: `${origin}/inbox`,
+		url: `${origin}/items`,
 		tag: 'digest'
 	};
 }

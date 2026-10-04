@@ -16,10 +16,6 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 
-	/**
-	 * The alert history: every push Hush sent in the last 30 days. A PR or issue opens in the same
-	 * panel (a peek, with a way back); other alerts open where the push went.
-	 */
 	const alerts = createQuery(alertsQuery);
 	const devices = createQuery(() => ({ ...pushDevicesQuery(), enabled: ui.alertsOpen }));
 
@@ -60,16 +56,16 @@
 <SidePanel
 	open={ui.alertsOpen}
 	onclose={close}
-	label="alerts"
-	title={selected?.thread?.title ?? 'Alerts'}
+	label="notifications"
+	title={selected?.thread?.title ?? 'Notifications'}
 >
 	{#snippet start(wide)}
 		{#if selected}
 			<Button variant="ghost" size={wide ? 'sm' : 'default'} onclick={() => (selected = null)}
-				><ArrowLeft />Alerts</Button
+				><ArrowLeft />Notifications</Button
 			>
 		{:else}
-			<span class="px-2 text-sm font-medium">Alerts</span>
+			<span class="px-2 text-sm font-medium">Notifications</span>
 		{/if}
 	{/snippet}
 	{#snippet actions(size)}
@@ -105,16 +101,15 @@
 	{:else if !alerts.data?.length}
 		<div class="flex flex-col items-center px-6 py-16 text-center text-sm">
 			<BellOff class="mb-3 size-7 text-muted-foreground" />
-			<p class="font-medium">No alerts yet.</p>
+			<p class="font-medium">No notifications yet.</p>
 			<p class="mt-1 text-muted-foreground">
+				When one of your pull requests or issues needs you, it shows here for 30 days.
 				{#if devices.data && !devices.data.length}
-					Hush keeps each push alert here for 30 days. Turn on push in <a
+					To also get push alerts, turn on push in <a
 						class="underline"
 						href="/settings/notifications"
 						onclick={close}>Settings → Notifications</a
 					>.
-				{:else}
-					Hush keeps each push alert here for 30 days.
 				{/if}
 			</p>
 		</div>

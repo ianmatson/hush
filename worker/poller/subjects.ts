@@ -261,11 +261,12 @@ export abstract class PollerSubjects extends PollerDecisions {
 			const wanted = snoozeOver
 				? settings.pushAction
 				: settings.pushTurnChanges && shouldPush(c, settings);
-			if (out.push && wanted && !moved)
+			if (out.push && !moved && r.subject_key)
 				candidates.push({
-					itemKey: r.subject_key ?? r.id,
+					itemKey: r.subject_key,
 					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,
 					ignoresRepeatSetting: snoozeOver,
+					pushes: wanted,
 					urgent: !snoozeOver && c.category === 'action' && !!e.urgent,
 					message: { title: out.push, body: `${r.title}\n${r.repo}`, url: c.actionUrl }
 				});

@@ -181,7 +181,7 @@ let leaving = false;
  * Clear the cache and do a full page load. Open components keep their last query results after
  * `clear()`, so a client-side navigation would still see the old account.
  */
-export function leaveTo(path: '/login' | '/inbox') {
+export function leaveTo(path: '/login' | '/items') {
 	if (!browser || leaving) return;
 	if (path === '/login' && location.pathname === '/login') return;
 	leaving = true;

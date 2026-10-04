@@ -135,26 +135,30 @@ export abstract class PollerSync extends PollerSubjects {
 			let pushed = ex?.pushed_updated_at ?? null;
 			const itemKey = key ?? n.id;
 			const body = `${n.subject.title}\n${n.repository.full_name}`;
-			if (wokeBy && settings.pushAction) {
+			const isItem = !!key;
+			if (isItem && wokeBy) {
 				candidates.push({
 					itemKey,
 					reason: SNOOZE_OVER_REASON,
 					ignoresRepeatSetting: true,
+					pushes: settings.pushAction,
 					message: { title: `Snooze over: ${wokeBy}`, body, url: c.actionUrl }
 				});
 				pushed = n.updated_at;
 			} else if (
+				isItem &&
 				!moved &&
 				initialized &&
 				n.unread &&
 				triage === 'inbox' &&
-				shouldPush(c, settings) &&
+				(c.category === 'action' || shouldPush(c, settings)) &&
 				pushed !== n.updated_at
 			) {
 				candidates.push({
 					itemKey,
 					reason: c.kind,
 					urgent: c.category === 'action' && !!enrichment?.urgent,
+					pushes: shouldPush(c, settings),
 					message: { title: c.summary, body, url: c.actionUrl }
 				});
 				pushed = n.updated_at;

@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { cn } from '$lib/utils';
 	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
@@ -24,14 +22,6 @@
 	// The theme grid is large: it opens in a dialog.
 	let themesOpen = $state(false);
 	const current = $derived(ALL_THEMES.find((t) => t.id === theme.current));
-
-	const starts = { '/inbox': 'Inbox', '/pulls': 'Pull requests', '/issues': 'Issues' } as const;
-	let start = $state<keyof typeof starts>('/inbox');
-	onMount(() => {
-		const saved = localStorage.getItem('hush:start');
-		start = saved && saved in starts ? (saved as keyof typeof starts) : '/inbox';
-	});
-	$effect(() => localStorage.setItem('hush:start', start));
 </script>
 
 {#snippet swatch(c: ThemeSwatch)}
@@ -83,16 +73,6 @@
 					{/if}
 					<span class="text-muted-foreground">Change…</span>
 				</Button>
-			</SettingRow>
-			<SettingRow label="Start page" description="The tab Hush opens first.">
-				<Select.Root type="single" bind:value={start}>
-					<Select.Trigger class="w-40">{starts[start]}</Select.Trigger>
-					<Select.Content>
-						{#each Object.entries(starts) as [value, label] (value)}
-							<Select.Item {value} {label} />
-						{/each}
-					</Select.Content>
-				</Select.Root>
 			</SettingRow>
 		</Card.Content>
 	</Card.Root>

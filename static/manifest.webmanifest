@@ -2,7 +2,7 @@
 	"name": "Hush",
 	"short_name": "Hush",
 	"description": "GitHub notifications that only show what needs you.",
-	"start_url": "/inbox",
+	"start_url": "/items",
 	"display": "standalone",
 	"background_color": "#0a0a0a",
 	"theme_color": "#0a0a0a",

@@ -666,7 +666,7 @@ export abstract class PollerData extends PollerDashboard {
 					{
 						title: 'Hush is connected',
 						body: 'Push notifications work on this device.',
-						url: `${origin}/inbox`,
+						url: `${origin}/items`,
 						tag: 'test'
 					},
 					vapid
