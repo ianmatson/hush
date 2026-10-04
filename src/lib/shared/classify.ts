@@ -12,6 +12,7 @@ import { textMatches } from './text-match';
 import { activityText, latestActivity } from './activity';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 import { compileQuery, queryError } from './query';
+import { conditionId } from './decisions';
 
 /** Notification reasons, as Hush shows them. */
 export const WHY: Record<string, string> = {
@@ -47,6 +48,7 @@ export function classifyDefault(
 	const lastBy = e?.lastComment?.author;
 	const lastByOther = !!lastBy && lastBy.toLowerCase() !== me;
 	const lastByHuman = lastByOther && !(settings.botsAreFyi && e?.lastComment?.authorIsBot);
+	const noReplyNeeded = e?.commentsNeedMe === false;
 
 	const act = (
 		kind: ActionKind,
@@ -82,6 +84,7 @@ export function classifyDefault(
 			);
 		if (!lastByOther) return fyi('You replied to a mention');
 		if (settings.botsAreFyi && c.authorIsBot) return fyi(`@${lastBy} mentioned you`);
+		if (noReplyNeeded) return fyi(`@${lastBy} mentioned you (no reply needed)`);
 		return act('reply', `@${lastBy} mentioned you`, 'Reply', c.url || url);
 	};
 
@@ -108,7 +111,7 @@ export function classifyDefault(
 
 		// Conversations you are in, which the dashboards do not track.
 		if (t.reason === 'mention') return mention(pr ? 'PR' : 'issue');
-		if (t.reason === 'comment' && !mine && lastByHuman)
+		if (t.reason === 'comment' && !mine && lastByHuman && !noReplyNeeded)
 			return act(
 				'reply',
 				`@${lastBy} replied in ${pr ? 'a PR' : 'an issue'} thread`,
@@ -192,6 +195,10 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 		const a = t.activity !== undefined ? t.activity : latestActivity(e);
 		if (!matchGlobs(a?.by ?? undefined, m.by)) return false;
 		if (m.byBot !== undefined && m.byBot !== !!a?.bot) return false;
+	}
+	if (m.about?.length) {
+		const smart = e?.smart ?? [];
+		if (!m.about.some((text) => smart.includes(conditionId(text)))) return false;
 	}
 	return true;
 }

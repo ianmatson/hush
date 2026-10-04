@@ -86,6 +86,10 @@ export interface Enrichment {
 	openThreads?: number;
 	/** PRs: the newest approval or change request by someone who is not you or the author. */
 	lastVerdict?: { by: string; at: string } | null;
+	previousComment?: LastComment | null;
+	commentsNeedMe?: boolean | null;
+	urgent?: boolean;
+	smart?: string[];
 }
 
 /** Everything the classifier needs to know about one notification thread. */
@@ -142,6 +146,7 @@ export interface RuleMatch {
 	by?: string | string[];
 	/** The latest activity is by a bot (true) or by a person (false). */
 	byBot?: boolean;
+	about?: string[];
 }
 
 export interface Rule {
@@ -180,6 +185,8 @@ export interface Settings {
 	pushDigestMinutes: number | null;
 	pushLimit: import('./push-policy').PushLimit | null;
 	pushWhileOpen: boolean;
+	pushUrgentNow: boolean;
+	smartDecisions: boolean;
 	clearNotifications: import('./push-policy').ClearNotifications;
 	/** A thread open in the peek for a moment is marked as read. */
 	peekMarksRead: boolean;
@@ -291,6 +298,8 @@ export interface DashItem {
 	lastVerdictAt: string | null;
 	myLastReviewState: string | null;
 	lastCommitAt: string | null;
+	commentsNeedMe?: boolean | null;
+	urgent?: boolean;
 	// Computed.
 	sections: string[];
 	turn: Turn;
@@ -366,6 +375,7 @@ export interface ThreadDTO {
 	seenAt?: number | null;
 	/** The newest comment, review, or push (who, and whether a bot): shared/activity.ts. */
 	activity: Activity | null;
+	smart?: string[];
 }
 
 export interface Counts {
@@ -409,6 +419,8 @@ export interface MeDTO {
 	tokenSource: 'app' | 'own';
 	/** The first sync after sign-in has not finished: the inbox is still filling. */
 	firstSync: boolean;
+	smartDecisionsPaused: boolean;
+	smartDecisionsChecking: boolean;
 	/** The first-run questions were answered (or skipped). */
 	onboarded: boolean;
 }

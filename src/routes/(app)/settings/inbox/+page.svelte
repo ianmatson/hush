@@ -28,6 +28,13 @@
 	const me = createQuery(meQuery);
 	const feeds = createQuery(feedsQuery);
 	const settings = $derived(me.data?.settings);
+	const smartStatus = $derived(
+		me.data?.smartDecisionsPaused
+			? 'Smart decisions are paused until 00:00 UTC: your account used its tokens for today. Your other rules work as before.'
+			: me.data?.smartDecisionsChecking
+				? 'Checking your open threads… Their lists update when this ends.'
+				: ''
+	);
 
 	const EXAMPLE: Rule[] = [
 		{ name: 'Docs repo is FYI', when: 'repo:acme/website', then: { category: 'fyi' } },
@@ -187,6 +194,20 @@
 						onCheckedChange={(v) => saveSettings({ teamReviewsAreAction: v })}
 					/>
 				</SettingRow>
+				<SettingRow
+					id="smart-decisions"
+					label="Smart decisions"
+					description="Jev, a decision model, reads the newest comments, and your about: conditions. Comments that need nothing from you (thanks, +1) stop being your turn. It sends titles, descriptions, and comments to TypeSafe."
+				>
+					<Switch
+						id="smart-decisions"
+						checked={settings.smartDecisions}
+						onCheckedChange={(v) => saveSettings({ smartDecisions: v })}
+					/>
+				</SettingRow>
+				{#if settings.smartDecisions && smartStatus}
+					<p class="py-2 text-xs text-muted-foreground" role="status">{smartStatus}</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 

@@ -341,6 +341,19 @@
 						>
 					</div>
 				{/if}
+				{#if settings.smartDecisions}
+					<SettingRow
+						id="push-urgent-now"
+						label="Push blocking items at once"
+						description="A “Needs you” item whose text says it blocks something or is an incident skips the digest and the limit. Quiet hours still hold it."
+					>
+						<Switch
+							id="push-urgent-now"
+							checked={settings.pushUrgentNow}
+							onCheckedChange={(v) => saveSettings({ pushUrgentNow: v })}
+						/>
+					</SettingRow>
+				{/if}
 				<SettingRow
 					id="push-while-open"
 					label="Push while Hush is open"

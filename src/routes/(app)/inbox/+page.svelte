@@ -18,6 +18,7 @@
 	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
 	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
 	import { formatQuery, parseQuery, type ParsedQuery } from '$lib/shared/query';
+	import { conditionId, smartConditions } from '$lib/shared/decisions';
 	import { saveSettings } from '$lib/save-settings';
 	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
@@ -123,6 +124,19 @@
 	let syncing = $state(false);
 	// The Filter box speaks the query language (shared/query.ts); parts with errors are left out.
 	const filter = $derived(parseQuery(query));
+	const checkedConditionIds = $derived(
+		new Set(
+			smartConditions(me.data?.settings.rules ?? [], me.data?.settings.views ?? []).map((c) => c.id)
+		)
+	);
+	const aboutHint = $derived.by(() => {
+		const about = filter.when.about ?? [];
+		if (!about.length) return '';
+		if (!me.data?.settings.smartDecisions)
+			return 'about: needs smart decisions (Settings → Inbox).';
+		if (about.every((text) => checkedConditionIds.has(conditionId(text)))) return '';
+		return 'Jev checks about: in rules and saved views. Save this filter as a view to check it.';
+	});
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
 	let bulkSnoozeOpen = $state(false);
@@ -691,6 +705,14 @@
 					role="status"
 				>
 					{filter.errors[0]}
+				</p>
+			{:else if aboutHint}
+				<p
+					transition:fly={{ y: -4, duration: 120 }}
+					class="absolute top-full right-0 z-10 mt-1 w-max max-w-72 rounded-md border bg-popover px-2.5 py-1 text-xs text-muted-foreground shadow-md"
+					role="status"
+				>
+					{aboutHint}
 				</p>
 			{/if}
 			<!-- Inside the box, at its right end, over the text: typing does not move anything. -->

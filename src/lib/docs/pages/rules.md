@@ -51,6 +51,7 @@ A rule's conditions are one [query](/docs/query-language). All of its conditions
 | `is:draft` / `-is:draft`       | A draft PR, or not.                                       |
 | `is:open`                      | Open, closed, or merged.                                  |
 | words                          | Each word is in the title, the repository, or the author. |
+| `about:"database migrations"`  | What it is about, in your words (smart decisions).        |
 
 Every word and value is in the [query language](/docs/query-language) reference.
 

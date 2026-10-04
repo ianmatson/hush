@@ -37,6 +37,7 @@ Busy PRs change many times a day. These settings, in **Settings → Notification
 - **Push the same item again** ([`pushRepeat`](/docs/settings#pushrepeat)): by default, an item pushes once, and then not again until you open Hush, read it on GitHub, or act on it. **Again when the reason changes** also pushes when, for example, “Review requested” becomes “Changes requested”. **Each update** pushes every time. A snooze that ends always pushes.
 - **Digest** ([`pushDigestMinutes`](/docs/settings#pushdigestminutes)): pushes wait, and one push lists them every 5 to 240 minutes.
 - **Limit** ([`pushLimit`](/docs/settings#pushlimit)): after this many pushes in this many minutes, the rest wait and go as one push.
+- **Push blocking items at once** ([`pushUrgentNow`](/docs/settings#pushurgentnow)): off by default, and it needs [smart decisions](/docs/settings#smartdecisions). A “Needs you” item whose text says it blocks something or is about an incident skips the digest and the limit. Quiet hours still hold it.
 - **Push while Hush is open** ([`pushWhileOpen`](/docs/settings#pushwhileopen)): off by default. While you use Hush on any device, new items show in Hush and do not push. They still go in the [alert history](#alert-history). Hush is in use when its tab or app has focus and you used it in the last 5 minutes.
 - **Clear notifications** ([`clearNotifications`](/docs/settings#clearnotifications)): by default, Hush removes its alerts from a device when you open Hush there. **Each one, when you open its item** removes only the alert of the item that you peek at.
 

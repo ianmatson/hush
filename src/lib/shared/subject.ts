@@ -1,4 +1,5 @@
 import type { DashFacts } from './dashboard';
+import { NO_DECISIONS, type SubjectDecisions } from './decisions';
 import type { CiState, Enrichment, LastComment } from './types';
 
 /**
@@ -31,6 +32,8 @@ export interface SubjectFacts {
 	/** PRs: the number of commits (0 for issues; missing in facts stored before it existed). */
 	commits?: number;
 	lastComment: LastComment | null;
+	previousComment?: LastComment | null;
+	body?: string;
 	// PRs only (empty or null for issues).
 	ci: CiState | null;
 	reviewDecision: Enrichment['reviewDecision'];
@@ -81,7 +84,11 @@ export function lastVerdictOf(s: SubjectFacts, me: string): { by: string; at: st
 }
 
 /** The inbox's view of a subject (stored on each thread, read by the classifier). */
-export function enrichmentOf(s: SubjectFacts, me: string): Enrichment {
+export function enrichmentOf(
+	s: SubjectFacts,
+	me: string,
+	decisions: SubjectDecisions = NO_DECISIONS
+): Enrichment {
 	const meL = me.toLowerCase();
 	const base: Enrichment = {
 		kind: s.kind,
@@ -91,7 +98,11 @@ export function enrichmentOf(s: SubjectFacts, me: string): Enrichment {
 		authorIsBot: s.authorIsBot,
 		labels: s.labels.map((l) => l.name),
 		assignedToMe: s.assignees.some((a) => a.toLowerCase() === meL),
-		lastComment: s.lastComment
+		lastComment: s.lastComment,
+		previousComment: s.previousComment ?? null,
+		commentsNeedMe: decisions.commentsNeedMe,
+		urgent: decisions.urgent,
+		smart: decisions.smart
 	};
 	if (s.kind === 'issue') return { ...base, state: s.state === 'closed' ? 'closed' : 'open' };
 	return {
@@ -115,7 +126,12 @@ export function enrichmentOf(s: SubjectFacts, me: string): Enrichment {
 }
 
 /** The dashboards' view of a subject. `myTeams` are the "org/team" slugs whose requests count. */
-export function dashFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): DashFacts {
+export function dashFactsOf(
+	s: SubjectFacts,
+	me: string,
+	myTeams: Set<string>,
+	decisions: SubjectDecisions = NO_DECISIONS
+): DashFacts {
 	const meL = me.toLowerCase();
 	const pr = s.kind === 'pr';
 	const isMe = (r: { team: boolean; name: string }) => !r.team && r.name.toLowerCase() === meL;
@@ -161,6 +177,8 @@ export function dashFactsOf(s: SubjectFacts, me: string, myTeams: Set<string>): 
 		openThreads: pr ? s.openThreads : 0,
 		lastVerdictBy: verdict?.by ?? null,
 		lastVerdictAt: verdict?.at ?? null,
-		lastCommitAt: s.lastCommitAt
+		lastCommitAt: s.lastCommitAt,
+		commentsNeedMe: decisions.commentsNeedMe,
+		urgent: decisions.urgent
 	};
 }

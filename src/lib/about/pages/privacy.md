@@ -11,7 +11,7 @@ _Last updated: 3 October 2026._
 
 - Hush stores only what it needs to sort your notifications and show your lists.
 - Your GitHub token is encrypted. It never goes to your browser.
-- Nobody else gets your data, except the services that Hush runs on (below).
+- Nobody else gets your data, except the services that Hush runs on, and TypeSafe if you turn on smart decisions (below).
 - **Delete account** deletes all of it at once.
 
 ## What Hush stores
@@ -25,11 +25,12 @@ _Last updated: 3 October 2026._
 **What it needs to sort your notifications:**
 
 - Your notification threads: the repository, the title, the link, why GitHub notified you, read or unread, and what you did with it (Done, Snoozed, Muted).
-- For each pull request and issue behind them: its state, author, labels, CI result, reviews and review requests, size, and the newest comment (its author, time, and text).
+- For each pull request and issue behind them: its state, author, labels, CI result, reviews and review requests, size, the first 500 characters of its description, and the 2 newest comments (their author, time, and text).
+- If you turn on [smart decisions](/docs/settings#smartdecisions): Jev's answers for each pull request and issue (whether the newest comments need a reply from you, how urgent it is, and which of your `about:` conditions it matches), and how many tokens your account used today.
 - The results of your Pull requests and Issues searches, and the items that you hid or moved there.
 - Your teams (their names), for team review requests.
 
-Hush does not read code. The [peek](/docs/peek) shows a PR's description and comments when you open it; Hush gets them from GitHub at that moment and does not keep them.
+Hush does not read code. The [peek](/docs/peek) shows a PR's whole description and all its comments when you open it; Hush gets them from GitHub at that moment and does not keep them.
 
 **For push and feeds:**
 
@@ -50,6 +51,7 @@ Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your notification
 - **GitHub**, where your data comes from. Hush sends GitHub only the requests that it needs, with your token. The app shows avatars and the images in comments from GitHub's own servers, so GitHub also sees those requests from your browser.
 - **Cloudflare**, which runs Hush and stores its data. Cloudflare also keeps request logs (addresses, status codes, and errors) for a few days, which Hush uses to find bugs.
 - **Your browser's push service** (Apple, Google, Mozilla, or Microsoft) carries each push to your device. The message is encrypted for your device, so the push service cannot read it; it sees only that a message went to it.
+- **TypeSafe**, only if you turn on [smart decisions](/docs/settings#smartdecisions) (off by default). Hush sends TypeSafe's Jev model, through Cloudflare Workers AI, the title, repository, author, labels, first 500 characters of the description, and 2 newest comments of your pull requests and issues, your GitHub login, and the text of your `about:` conditions. Cloudflare lists Jev with zero data retention: TypeSafe does not keep what it reads. Turn smart decisions off to stop this; Hush then deletes Jev's answers.
 
 That is all. There are no analytics, tracking, or advertising services, and no third-party scripts on the site or in the app.
 

@@ -44,13 +44,18 @@ import { PollerDashboard } from './dashboard';
 import {
 	enrichmentFor,
 	factsFromRow,
+	factsOf,
 	subjectRefOf,
 	toDTO,
 	viewWhere,
 	type ThreadRow,
 	type ThreadWithFacts
 } from './schema';
-import { MIN, MUTED_BY_USER, type PollStatus } from './shared';
+import { FILL_DONE_WITHIN_MS, FILL_MAX, MIN, MUTED_BY_USER, type PollStatus } from './shared';
+import { DECISION_FILL_KEY } from './decisions';
+import { smartConditions } from '../../src/lib/shared/decisions';
+
+const DECISION_FILL_DELAY_MS = 2_000;
 
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
@@ -490,11 +495,57 @@ export abstract class PollerData extends PollerDashboard {
 		const err = validateSettings(next, Object.keys(body));
 		if (err) return { error: err, status: 400 };
 		await this.saveSettings(next);
+		if (old.smartDecisions && !next.smartDecisions) this.forgetDecisions();
+		if (this.needsDecisionFill(old, next)) await this.startDecisionFill();
 		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
 		// must not rewrite every thread.
 		const affects = RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
 		const reclassified = affects ? await this.reclassify(next) : 0;
 		return { settings: next, reclassified };
+	}
+
+	private needsDecisionFill(old: Settings, next: Settings): boolean {
+		if (!this.decisionsOn(next)) return false;
+		if (!old.smartDecisions) return true;
+		const ids = (s: Settings) => smartConditions(s.rules, s.views).map((c) => c.id);
+		const known = new Set(ids(old));
+		return ids(next).some((id) => !known.has(id));
+	}
+
+	private async startDecisionFill(): Promise<void> {
+		await this.ctx.storage.put(DECISION_FILL_KEY, Date.now());
+		const alarm = await this.ctx.storage.getAlarm();
+		const soon = Date.now() + DECISION_FILL_DELAY_MS;
+		if (alarm === null || alarm > soon) await this.ctx.storage.setAlarm(soon);
+	}
+
+	protected async decisionFillPending(): Promise<boolean> {
+		return !!(await this.ctx.storage.get(DECISION_FILL_KEY));
+	}
+
+	protected async fillDecisions(): Promise<void> {
+		if (!(await this.decisionFillPending())) return;
+		await this.ctx.storage.delete(DECISION_FILL_KEY);
+		const who = await this.who();
+		if (!who || !this.decisionsOn(who.settings)) return;
+		const doneSince = new Date(Date.now() - FILL_DONE_WITHIN_MS).toISOString();
+		const rows = this.threads(
+			`subject_key IS NOT NULL AND category != 'muted'
+       AND (triage IN ('inbox', 'snoozed') OR gh_updated_at > ?)
+       ORDER BY gh_updated_at DESC LIMIT ${FILL_MAX}`,
+			doneSince
+		);
+		const subjects = [
+			...new Map(
+				rows.flatMap((r) => {
+					const f = factsOf(r);
+					return f && r.subject_key ? [[r.subject_key, f] as const] : [];
+				})
+			).values()
+		];
+		await this.decideSubjects(who, subjects, { allAreInboxThreads: true });
+		await this.reclassify(who.settings);
+		await this.patchDashCaches(who, subjects, this.decisionsOf(who, subjects));
 	}
 
 	/**

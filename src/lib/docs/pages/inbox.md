@@ -39,6 +39,8 @@ Hush reads each notification and the pull request or issue behind it (CI, review
 
 **Conversations:** a person mentioned you, or replied in a thread that you commented in (and you did not reply since).
 
+With [smart decisions](/docs/settings#smartdecisions) on, Hush also reads the newest comments. When they need nothing from you (thanks, approval, a status update, +1), a reply or a mention is FYI, and a comment on your PR or issue is not your turn.
+
 **Other:** security and Dependabot alerts, repository invitations, deployments that wait for your approval, and workflow runs that failed.
 
 Everything else is **FYI**: team mentions, repositories that you watch, merged and closed work, passing CI, releases. With [`botsAreFyi`](/docs/settings#botsarefyi) on (the default), PRs, comments, and mentions by bots are FYI too. A review request to you by name still needs you, also on a bot's PR.

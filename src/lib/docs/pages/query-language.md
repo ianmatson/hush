@@ -33,6 +33,20 @@ When a part has an error (an unknown word, a value that does not exist), Hush sa
 
 For example, `from:github-actions` finds the threads where the newest thing is a comment by GitHub Actions.
 
+## `about:`
+
+`about:` says in your own words what a PR or issue is about:
+
+```query
+about:"database migrations or schema changes"
+```
+
+It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision model, reads the title, labels, start of the description, and last 2 comments, and decides whether the item is about what you wrote. It matches only when Jev is sure.
+
+- Use it in [rules](/docs/rules) and [saved views](/docs/views). Hush checks the condition when you save, and again when an item's text changes. In the filter box, `about:` finds only what a saved rule or view with the same words already checked.
+- Put exact words first where you can: in `repo:acme/api about:"migrations"`, Jev reads only the items of acme/api.
+- Up to 10 different `about:` conditions in all your rules and views, each up to 200 characters.
+
 ## Examples
 
 | Query                              | Finds                                                                |
@@ -46,6 +60,7 @@ For example, `from:github-actions` finds the threads where the newest thing is a
 | `label:"good first issue" is:open` | Open threads with this label.                                        |
 | `type:release,discussion`          | Releases and discussions.                                            |
 | `login timeout`                    | Threads with both words in the title, the repository, or the author. |
+| `about:"dependency bump"`          | Dependency updates, whoever opened them (smart decisions).           |
 
 ## In settings.json
 

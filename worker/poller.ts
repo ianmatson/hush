@@ -75,6 +75,7 @@ export class Poller extends PollerData {
 	async pollNow(): Promise<PollStatus> {
 		await this.ctx.storage.put('lastActive', Date.now());
 		await this.runOnce();
+		await this.runDecisionFill();
 		await this.flushHeld();
 		await this.schedule();
 		await this.broadcastStatus();
@@ -94,8 +95,16 @@ export class Poller extends PollerData {
 			ssoHiddenOrgs: ((s.get('ssoHiddenOrgs') as string[] | undefined) ?? []).length,
 			nextPollAt: await this.ctx.storage.getAlarm(),
 			// A first sync that failed is not "still filling": the error says what is wrong.
-			firstSync: !s.get('initialized') && !s.get('stopped') && !lastError
+			firstSync: !s.get('initialized') && !s.get('stopped') && !lastError,
+			smartDecisionsPaused: await this.decisionsPaused(),
+			smartDecisionsChecking: await this.decisionFillPending()
 		};
+	}
+
+	private async runDecisionFill(): Promise<void> {
+		await this.fillDecisions().catch((err) =>
+			console.error('decision fill failed', (err as Error).message)
+		);
 	}
 
 	/**
@@ -117,6 +126,7 @@ export class Poller extends PollerData {
 
 	async alarm(): Promise<void> {
 		await this.runOnce();
+		await this.runDecisionFill();
 		await this.flushHeld();
 		await this.schedule();
 		await this.broadcastStatus();

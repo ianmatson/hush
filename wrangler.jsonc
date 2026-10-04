@@ -41,9 +41,11 @@
 		// Sign in with GitHub (OAuth app; its secret is GITHUB_CLIENT_SECRET). .dev.vars sets the
 		// development app and APP_URL=http://localhost:5173.
 		"GITHUB_CLIENT_ID": "Ov23li2B14AtWbZe1Uz1",
-		"APP_URL": "https://app.hush-gh.com"
+		"APP_URL": "https://app.hush-gh.com",
+		"DECISION_MODEL": "typesafe/jev"
 	},
 	// Approximate, per-location limits against floods (period must be 10 or 60 seconds).
+	"ai": { "binding": "AI" },
 	"ratelimits": [
 		{ "name": "AUTH_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
 		{ "name": "FEED_LIMIT", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } },

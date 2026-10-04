@@ -111,13 +111,15 @@ export abstract class PollerDashboard extends PollerSync {
 		await this.ctx.storage.put(readKey, nextRead);
 		const errors = [...new Set([...searchErrors, ...detailErrors])].slice(0, 3);
 
+		await this.decideSubjects(who, [...facts.values()]);
+		const decided = this.decisionsOf(who, [...facts.values()]);
 		const teamSet = new Set(teams.map((t) => t.slug));
 		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
 		for (const h of hits) {
 			const subject = facts.get(h.key);
 			if (!subject || !forTeams(h.query, subject)) continue;
 			const e = byId.get(h.key) ?? {
-				facts: dashFactsOf(subject, who.me, teamSet),
+				facts: dashFactsOf(subject, who.me, teamSet, decided.get(h.key)),
 				sections: new Set<string>()
 			};
 			e.sections.add(h.query.section);

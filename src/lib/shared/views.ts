@@ -43,7 +43,8 @@ export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: strin
 				authorIsBot: t.authorIsBot,
 				labels: t.labels,
 				draft: t.draft,
-				state: t.state ?? undefined
+				state: t.state ?? undefined,
+				smart: t.smart
 			}
 		},
 		c

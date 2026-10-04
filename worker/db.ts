@@ -1,4 +1,5 @@
 import type { Poller } from './poller';
+import type { DecisionModel } from './decide';
 export { parseSettings } from '../src/lib/shared/settings';
 import { decryptSecret } from './crypto';
 
@@ -24,6 +25,10 @@ export interface Env {
 	AUTH_LIMIT?: RateLimit;
 	FEED_LIMIT?: RateLimit;
 	API_LIMIT?: RateLimit;
+	AI?: DecisionModel;
+	DECISIONS?: string;
+	DECISION_MODEL?: string;
+	DECISION_DAILY_TOKENS?: string;
 }
 
 export interface UserRow {

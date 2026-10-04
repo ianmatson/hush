@@ -2,7 +2,9 @@ import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
 import { DEFAULT_ISSUE_SECTIONS, DEFAULT_PR_SECTIONS, MAX_QUERIES } from '$lib/shared/dashboard';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
-import { IS_VALUES, WORDS } from '$lib/shared/query';
+import { IS_VALUES, MAX_CONDITION_CHARS, WORDS } from '$lib/shared/query';
+import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
+import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
@@ -14,6 +16,7 @@ import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
 import {
 	ALERT_LOG_KEEP,
 	DASH_TTL,
+	FILL_MAX,
 	FIRST_SYNC_DAYS,
 	MAX_INDIVIDUAL_PUSHES,
 	PAUSE_AFTER_NO_PUSH,
@@ -156,6 +159,20 @@ This also applies to team review requests.`
 	botsAreFyi: {
 		type: 'boolean',
 		body: `PRs that bots open (dependabot, renovate…) are FYI, and they show in Other on the Pull requests tab, unless they ask for your review by name. Comments and mentions by bots do not count as replies. A bot is a login that ends in \`[bot]\`, or starts with dependabot, renovate, github-actions, or codecov.`
+	},
+	smartDecisions: {
+		type: 'boolean',
+		body: `Off by default. On, Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
+
+- **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
+- **\`about:\` conditions** in your rules and saved views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
+- **Order:** on the Pull requests and Issues tabs, items whose text says they block something or are about an incident come first inside their group.
+
+When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and your other rules work as before. Turning it off deletes Jev's answers.`
+	},
+	pushUrgentNow: {
+		type: 'boolean',
+		body: `Needs **smartDecisions**. On, a “Needs you” item whose text says it blocks something or is about an incident pushes at once, also during a digest (**pushDigestMinutes**) or over the push limit (**pushLimit**). Quiet hours still hold it. Off by default.`
 	},
 	teamReviewsAreAction: {
 		type: 'boolean',
@@ -490,6 +507,16 @@ function limitsReference(): string {
 			['Keys per command', '4'],
 			['Push devices', '10'],
 			['Rule snooze (snoozeHours)', '1 to 720 hours'],
+			['Different about: conditions in rules and views', String(MAX_SMART_CONDITIONS)],
+			['Length of one about: condition', `${MAX_CONDITION_CHARS} characters`],
+			[
+				'Smart decisions per account',
+				`${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day`
+			],
+			[
+				'Threads checked again when you turn on smart decisions or add an about: condition',
+				String(FILL_MAX)
+			],
 			[
 				'Session',
 				`${SESSION_IDLE_DAYS} days with no use, or ${SESSION_DAYS} days after sign-in; then sign in again`

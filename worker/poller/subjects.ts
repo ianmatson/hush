@@ -8,8 +8,10 @@ import {
 	subjectKey,
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
+import type { SubjectDecisions } from '../../src/lib/shared/decisions';
 import { fetchSubjects } from '../github';
-import { PollerAlerts, SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
+import { SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
+import { PollerDecisions } from './decisions';
 import { subjectRefOf, type ThreadRow } from './schema';
 import { MAX_INDIVIDUAL_PUSHES, type Resolved, type Who } from './shared';
 
@@ -25,7 +27,7 @@ type Apply = { row: ThreadRow; fresh: SubjectFacts; before: SubjectFacts | null 
  * The subject store. Every GitHub read of a PR or issue goes through `record`, which keeps the
  * one copy of its facts and updates every view of it: the inbox threads and the cached dashboards.
  */
-export abstract class PollerSubjects extends PollerAlerts {
+export abstract class PollerSubjects extends PollerDecisions {
 	/**
 	 * Store fresh facts from GitHub, then update the views. The threads about these subjects get
 	 * the facts whether or not they changed, so a thread that is out of date catches up. The
@@ -35,7 +37,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 	protected async record(
 		who: Who,
 		subjects: SubjectFacts[],
-		opts: { dash?: boolean; threads?: boolean; quiet?: boolean } = {}
+		opts: { dash?: boolean; threads?: boolean; quiet?: boolean; allAreInboxThreads?: boolean } = {}
 	): Promise<{ changed: number; resolved: Resolved[]; wrote: number }> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
@@ -60,10 +62,13 @@ export abstract class PollerSubjects extends PollerAlerts {
 					now
 				);
 		});
+		await this.decideSubjects(who, subjects, { allAreInboxThreads: opts.allAreInboxThreads });
+		const decided = this.decisionsOf(who, subjects);
 		if (opts.dash !== false)
 			await this.patchDashCaches(
 				who,
-				changed.map(([, x]) => x)
+				changed.map(([, x]) => x),
+				decided
 			);
 		if (opts.threads === false || !keys.length)
 			return { changed: changed.length, resolved: [], wrote: 0 };
@@ -81,7 +86,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 					before: parse(stored.get(row.subject_key!))
 				});
 		}
-		const out = await this.applyFacts(who, items, opts);
+		const out = await this.applyFacts(who, items, decided, opts);
 		return { changed: changed.length, ...out };
 	}
 
@@ -98,7 +103,11 @@ export abstract class PollerSubjects extends PollerAlerts {
 	}
 
 	/** Replace changed subjects in the cached dashboards (and drop the ones that closed). */
-	protected async patchDashCaches(who: Who, subs: SubjectFacts[]) {
+	protected async patchDashCaches(
+		who: Who,
+		subs: SubjectFacts[],
+		decided: Map<string, SubjectDecisions> = new Map()
+	) {
 		if (!subs.length) return;
 		const { dash, botsAreFyi, reviewResolution } = who.settings;
 		let teamSet: Set<string> | null = null;
@@ -116,7 +125,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 				cached.data.items.flatMap((i) => {
 					const sub = byId.get(i.id);
 					if (!sub) return [i];
-					const f = dashFactsOf(sub, who.me, teamSet!);
+					const f = dashFactsOf(sub, who.me, teamSet!, decided.get(i.id));
 					if (f.state !== 'open' || !keepItem(f, who.me, dash)) return [];
 					return [
 						finishItem(
@@ -151,6 +160,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 	private async applyFacts(
 		who: Who,
 		items: Apply[],
+		decided: Map<string, SubjectDecisions>,
 		opts: { quiet?: boolean } = {}
 	): Promise<{ resolved: Resolved[]; wrote: number }> {
 		const { me, settings, inboxTeams: myTeams } = who;
@@ -159,7 +169,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 		const resolved: Resolved[] = [];
 		const now = Date.now();
 		for (const { row: r, fresh, before } of items) {
-			const e = enrichmentOf(fresh, me);
+			const e = enrichmentOf(fresh, me, decided.get(r.subject_key!));
 			const c = withOverride(
 				classify(
 					{
@@ -256,6 +266,7 @@ export abstract class PollerSubjects extends PollerAlerts {
 					itemKey: r.subject_key ?? r.id,
 					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,
 					ignoresRepeatSetting: snoozeOver,
+					urgent: !snoozeOver && c.category === 'action' && !!e.urgent,
 					message: { title: out.push, body: `${r.title}\n${r.repo}`, url: c.actionUrl }
 				});
 		}

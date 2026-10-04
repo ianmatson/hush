@@ -292,6 +292,8 @@ const app = routes()
 			lastPollError: status.lastError,
 			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
 			firstSync: status.firstSync,
+			smartDecisionsPaused: !!status.smartDecisionsPaused,
+			smartDecisionsChecking: !!status.smartDecisionsChecking,
 			scopes: u.scopes ? u.scopes.split(',') : [],
 			tokenSource: u.token_source,
 			onboarded

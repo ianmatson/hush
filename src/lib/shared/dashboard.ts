@@ -194,6 +194,7 @@ export type TurnFacts = Pick<
 	| 'lastVerdictAt'
 	| 'createdAt'
 	| 'updatedAt'
+	| 'commentsNeedMe'
 >;
 
 export interface TurnOptions {
@@ -221,6 +222,8 @@ export function computeTurn(
 	const lastByMe = i.lastCommentBy?.toLowerCase() === meL;
 	const lastByOtherHuman =
 		!!i.lastCommentBy && !lastByMe && !(i.lastCommentIsBot && opts.botsAreFyi !== false);
+	const commentNeedsNothing = lastByOtherHuman && i.commentsNeedMe === false;
+	const commentWaitsOnMe = lastByOtherHuman && !commentNeedsNothing;
 	const botPr = !mine && !!opts.botsAreFyi && (i.authorIsBot || isBot(i.author));
 	const r = (
 		turn: Turn,
@@ -255,7 +258,7 @@ export function computeTurn(
 	if (i.state === 'closed') return r('none', 'Closed', 0, i.updatedAt);
 
 	if (i.kind === 'issue') {
-		if (assigned && lastByOtherHuman)
+		if (assigned && commentWaitsOnMe)
 			return you(
 				`@${i.lastCommentBy} replied`,
 				1,
@@ -273,7 +276,7 @@ export function computeTurn(
 				'triage',
 				'An issue was assigned to you'
 			);
-		if (mine && lastByOtherHuman)
+		if (mine && commentWaitsOnMe)
 			return you(
 				`@${i.lastCommentBy} replied`,
 				2,
@@ -282,6 +285,8 @@ export function computeTurn(
 				'reply',
 				`@${i.lastCommentBy} replied on your issue`
 			);
+		if (mine && commentNeedsNothing)
+			return r('them', `@${i.lastCommentBy} replied, no reply needed`, 0, i.lastCommentAt);
 		if (mine)
 			return r(
 				'them',
@@ -343,7 +348,7 @@ export function computeTurn(
 				'merge',
 				'Your PR is approved and ready to merge'
 			);
-		if (lastByOtherHuman && after(i.lastCommentAt, i.lastCommitAt))
+		if (commentWaitsOnMe && after(i.lastCommentAt, i.lastCommitAt))
 			return you(
 				`@${i.lastCommentBy} commented`,
 				2,
@@ -352,6 +357,8 @@ export function computeTurn(
 				'reply',
 				`@${i.lastCommentBy} commented on your PR`
 			);
+		if (commentNeedsNothing && after(i.lastCommentAt, i.lastCommitAt))
+			return r('them', `@${i.lastCommentBy} commented, no reply needed`, 0, i.lastCommentAt);
 		if (i.ci === 'PENDING' || i.ci === 'EXPECTED')
 			return r('them', 'CI running', 0, i.lastCommitAt);
 		return r('them', 'Waiting for review', 0, i.requestedAt || i.createdAt);
@@ -461,7 +468,8 @@ export function turnFactsFromEnrichment(
 		lastVerdictBy: e.lastVerdict?.by ?? null,
 		lastVerdictAt: e.lastVerdict?.at ?? null,
 		createdAt: '',
-		updatedAt: ''
+		updatedAt: '',
+		commentsNeedMe: e.commentsNeedMe ?? null
 	};
 }
 
@@ -504,13 +512,15 @@ export function keepItem(
 const TURN_ORDER: Record<Turn, number> = { you: 0, team: 1, them: 2, none: 3 };
 
 /** Your turn first; inside a group, most urgent first, then the longest wait. */
-export function sortItems<T extends Pick<DashItem, 'turn' | 'waitingSince'> & { priority: number }>(
-	items: T[]
-): T[] {
+export function sortItems<
+	T extends Pick<DashItem, 'turn' | 'waitingSince' | 'urgent'> & { priority: number }
+>(items: T[]): T[] {
+	const urgentFirst = (x: T) => (x.urgent ? 0 : 1);
 	return [...items].sort(
 		(a, b) =>
 			TURN_ORDER[a.turn] - TURN_ORDER[b.turn] ||
 			a.priority - b.priority ||
+			urgentFirst(a) - urgentFirst(b) ||
 			Date.parse(a.waitingSince) - Date.parse(b.waitingSince)
 	);
 }

@@ -108,6 +108,12 @@ export const RULE_FIELDS: RuleFieldInfo[] = [
 		input: 'globs',
 		help: 'Any of these labels (exact names).'
 	},
+	{
+		key: 'about',
+		label: 'About',
+		input: 'globs',
+		help: 'In your own words, for example “database migrations”. Needs smart decisions (Settings → Inbox).'
+	},
 	{ key: 'bot', label: 'Author is a bot', input: 'yesno', yes: 'Bot', no: 'Person' },
 	{
 		key: 'by',

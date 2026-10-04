@@ -26,6 +26,7 @@ export interface PushCandidate {
 	reason: string;
 	message: PushMessage;
 	ignoresRepeatSetting?: boolean;
+	urgent?: boolean;
 }
 
 type Held = { count: number; messages: PushMessage[]; duringQuiet: boolean };
@@ -36,6 +37,18 @@ export abstract class PollerAlerts extends PollerBase {
 	protected async deliver(candidates: PushCandidate[]): Promise<void> {
 		if (!candidates.length || !(await this.updateHasPush())) return;
 		const settings = await this.settings();
+		const pushUrgentNow = settings.smartDecisions && settings.pushUrgentNow;
+		const urgent = pushUrgentNow ? candidates.filter((c) => c.urgent) : [];
+		const rest = candidates.filter((c) => !urgent.includes(c));
+		if (urgent.length) await this.deliverBatch(settings, urgent, true);
+		if (rest.length) await this.deliverBatch(settings, rest, false);
+	}
+
+	private async deliverBatch(
+		settings: Settings,
+		candidates: PushCandidate[],
+		urgent: boolean
+	): Promise<void> {
 		const now = Date.now();
 		const latestPerItem = new Map(candidates.map((c) => [c.itemKey, c]));
 		const appSeenAt = await this.appSeenAt();
@@ -54,7 +67,7 @@ export abstract class PollerAlerts extends PollerBase {
 		if (!settings.pushWhileOpen && this.appInFocus(now)) return this.logAlerts(messages);
 		this.logAlerts(messages);
 		const state = await this.deliveryState();
-		const hold = holdReason(settings, now, state);
+		const hold = holdReason(settings, now, state, urgent);
 		if (hold) {
 			this.savePushMarks(due, now);
 			return this.hold(
@@ -68,7 +81,7 @@ export abstract class PollerAlerts extends PollerBase {
 			messages.length <= MAX_INDIVIDUAL_PUSHES
 				? messages
 				: [digestOf(messages, messages.length, false, await this.origin())];
-		const room = limitRoom(settings, now, state);
+		const room = urgent ? outgoing.length : limitRoom(settings, now, state);
 		const sendable = outgoing.slice(0, room);
 		const overLimit = outgoing.slice(room);
 		await this.recordSend(settings, now, state, sendable.length, false);

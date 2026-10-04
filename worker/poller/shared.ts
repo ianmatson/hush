@@ -34,6 +34,8 @@ export const POLL_ACTIVE = 5 * MIN;
 export const POLL_IDLE = 15 * MIN;
 export const DASH_TTL = 15 * MIN;
 export const MUTED_BY_USER = 'Muted by you';
+export const FILL_MAX = 500;
+export const FILL_DONE_WITHIN_MS = 14 * DAY;
 
 export interface PollStatus {
 	lastPollAt: number | null;
@@ -45,6 +47,8 @@ export interface PollStatus {
 	firstSync: boolean;
 	/** Threads a manual refresh moved to Done (see checkInbox). */
 	resolved?: { title: string; note: string }[];
+	smartDecisionsPaused?: boolean;
+	smartDecisionsChecking?: boolean;
 }
 
 /** The signed-in user, as every layer needs them for one piece of work. */

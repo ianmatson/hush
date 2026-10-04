@@ -266,6 +266,9 @@
 					Catches no stored thread now{index > 0 ? ' (or a rule above catches them first)' : ''}.
 				</p>
 			{/if}
+			{#if parseQuery(rule.when ?? '').when.about?.length}
+				<p>Jev checks about: after you save, so new conditions catch threads a moment later.</p>
+			{/if}
 		</footer>
 	{/if}
 </article>

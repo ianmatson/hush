@@ -1,5 +1,6 @@
 import { validateRules } from './classify';
 import { validateDash } from './dashboard';
+import { MAX_SMART_CONDITIONS, smartConditions } from './decisions';
 import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
 import { validateKeys } from './keymap';
@@ -74,6 +75,12 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'Push also while Hush is open and in use on a device. Off: what happens then shows only in Hush.'
 	},
 	{
+		key: 'pushUrgentNow',
+		page: 'notifications',
+		description:
+			'With smart decisions on: push a “Needs you” item at once, also during a digest or over the push limit, when its text says it blocks something or is an incident. Quiet hours still hold it.'
+	},
+	{
 		key: 'clearNotifications',
 		page: 'notifications',
 		description:
@@ -99,6 +106,11 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'teamReviewsAreAction',
 		page: 'inbox',
 		description: 'A review request to one of your teams is “Needs you”, not FYI.'
+	},
+	{
+		key: 'smartDecisions',
+		page: 'inbox',
+		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, and checks the about: conditions of your rules and views (up to ${MAX_SMART_CONDITIONS}).`
 	},
 	{
 		key: 'rules',
@@ -177,7 +189,8 @@ export const RECLASSIFY_KEYS: (keyof Settings)[] = [
 	'rules',
 	'botsAreFyi',
 	'reviewResolution',
-	'teamReviewsAreAction'
+	'teamReviewsAreAction',
+	'smartDecisions'
 ];
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -228,6 +241,8 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	pushDigestMinutes: validateDigestMinutes,
 	pushLimit: validatePushLimit,
 	pushWhileOpen: bool('pushWhileOpen'),
+	pushUrgentNow: bool('pushUrgentNow'),
+	smartDecisions: bool('smartDecisions'),
 	clearNotifications: validateClearNotifications,
 	reviewResolution: (v) =>
 		v === 'strict' || v === 'any_review'
@@ -256,6 +271,11 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 				if (sub !== 'v' && !SETTINGS_DOCS.some((d) => d.key === `${k}.${sub}`))
 					return `Unknown setting "${k}.${sub}".`;
 	}
+	if (
+		(keys.includes('rules') || keys.includes('views')) &&
+		smartConditions(next.rules, next.views).length > MAX_SMART_CONDITIONS
+	)
+		return `Rules and views can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
 	return null;
 }
 

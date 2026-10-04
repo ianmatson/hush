@@ -80,9 +80,11 @@ export function digestWindowIsOver(
 export function holdReason(
 	settings: DeliverySettings,
 	now: number,
-	state: DeliveryState
+	state: DeliveryState,
+	urgent = false
 ): HoldReason | null {
 	if (inQuietHours(settings.quietHours, now)) return 'quiet';
+	if (urgent) return null;
 	if (settings.pushDigestMinutes !== null) return 'digest';
 	if (limitRoom(settings, now, state) === 0) return 'limit';
 	return null;

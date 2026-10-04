@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	pushDigestMinutes: null,
 	pushLimit: null,
 	pushWhileOpen: false,
+	pushUrgentNow: false,
+	smartDecisions: false,
 	clearNotifications: 'open',
 	peekMarksRead: true,
 	reviewResolution: 'strict',

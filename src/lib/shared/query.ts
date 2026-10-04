@@ -19,6 +19,8 @@ import type { RuleMatch } from './types';
 
 type Field = keyof RuleMatch;
 
+export const MAX_CONDITION_CHARS = 200;
+
 export interface QueryWord {
 	key: string;
 	field: Field;
@@ -50,6 +52,12 @@ export const WORDS: QueryWord[] = [
 		bots: 'byBot'
 	},
 	{ key: 'label', field: 'label', help: 'Has this label', example: 'label:"good first issue"' },
+	{
+		key: 'about',
+		field: 'about',
+		help: 'What it is about, in your own words (smart decisions)',
+		example: 'about:"database migrations"'
+	},
 	{
 		key: 'type',
 		field: 'type',
@@ -208,6 +216,10 @@ export function parseQuery(query: string): ParsedQuery {
 						? `“-${key}:${x}” is not supported. Only -${key}:bots.`
 						: `“-${key}:” is not supported.`
 				);
+				continue;
+			}
+			if (w.field === 'about' && x.length > MAX_CONDITION_CHARS) {
+				errors.push(`An about: condition must be ${MAX_CONDITION_CHARS} characters or fewer.`);
 				continue;
 			}
 			if (!w.values) {

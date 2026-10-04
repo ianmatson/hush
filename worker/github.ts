@@ -1,12 +1,14 @@
 import type {
 	CheckState,
 	CiState,
+	LastComment,
 	PeekDTO,
 	PeekEntry,
 	PeekPerson,
 	TeamDTO
 } from '../src/lib/shared/types';
 import { isBot } from '../src/lib/shared/classify';
+import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts } from '../src/lib/shared/subject';
@@ -232,12 +234,12 @@ const CHUNK = 40;
 /** Fragments P (pull request) and I (issue). Queries that use them declare `$me: String!`. */
 export const SUBJECT_FIELDS = `
 fragment P on PullRequest {
-  id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable
+  id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable bodyText
   repository { nameWithOwner }
   author { login avatarUrl(size: 48) __typename }
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
-  comments(last: 1) { totalCount nodes { author { login __typename } bodyText url createdAt } }
+  comments(last: 2) { totalCount nodes { author { login __typename } bodyText url createdAt } }
   commits(last: 1) { totalCount nodes { commit { committedDate statusCheckRollup { state } } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   requestEvents: timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
@@ -249,12 +251,12 @@ fragment P on PullRequest {
   reviewThreads(first: 50) { nodes { isResolved } }
 }
 fragment I on Issue {
-  id number title url state createdAt updatedAt
+  id number title url state createdAt updatedAt bodyText
   repository { nameWithOwner }
   author { login avatarUrl(size: 48) __typename }
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
-  comments(last: 1) { totalCount nodes { author { login __typename } bodyText url createdAt } }
+  comments(last: 2) { totalCount nodes { author { login __typename } bodyText url createdAt } }
 }`;
 
 export interface SubjectRef {
@@ -271,10 +273,22 @@ const reviewer = (r: Node | null | undefined) =>
 		? { team: true, name: String(r.combinedSlug ?? '') }
 		: { team: false, name: String(r?.login ?? '') };
 
+const COMMENT_CHARS = 280;
+
+const toComment = (c: Node): LastComment => ({
+	author: c.author?.login ?? 'ghost',
+	authorIsBot: c.author?.__typename === 'Bot' || isBot(c.author?.login),
+	body: String(c.bodyText ?? '').slice(0, COMMENT_CHARS),
+	url: c.url,
+	createdAt: c.createdAt
+});
+
 /** A PR or issue node (fragments P and I) as SubjectFacts. */
 export function toSubject(n: Node): SubjectFacts {
 	const pr = n.__typename === 'PullRequest';
-	const c = n.comments?.nodes?.[0];
+	const recentComments: Node[] = (n.comments?.nodes ?? []).filter(Boolean);
+	const c = recentComments.at(-1);
+	const previous = recentComments.length > 1 ? recentComments.at(-2) : undefined;
 	const commit = n.commits?.nodes?.[0]?.commit;
 	const latest = n.latestReview?.nodes?.[0];
 	const mine = n.myReviews?.nodes?.[0];
@@ -296,15 +310,9 @@ export function toSubject(n: Node): SubjectFacts {
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
 		comments: n.comments?.totalCount ?? 0,
 		commits: pr ? (n.commits?.totalCount ?? 0) : 0,
-		lastComment: c
-			? {
-					author: c.author?.login ?? 'ghost',
-					authorIsBot: c.author?.__typename === 'Bot' || isBot(c.author?.login),
-					body: String(c.bodyText ?? '').slice(0, 280),
-					url: c.url,
-					createdAt: c.createdAt
-				}
-			: null,
+		lastComment: c ? toComment(c) : null,
+		previousComment: previous ? toComment(previous) : null,
+		body: bodyExcerpt(n.bodyText),
 		ci: pr ? ((commit?.statusCheckRollup?.state as CiState | undefined) ?? null) : null,
 		reviewDecision: pr ? (n.reviewDecision ?? null) : null,
 		mergeable: pr ? (n.mergeable ?? null) : null,

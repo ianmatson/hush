@@ -77,7 +77,8 @@ export abstract class PollerSync extends PollerSubjects {
 		}
 		const fetched = await fetchSubjects(who.token, refs, me);
 		// Store the facts; this ingest writes these threads itself.
-		await this.record(who, [...fetched.values()], { threads: false });
+		await this.record(who, [...fetched.values()], { threads: false, allAreInboxThreads: true });
+		const decided = this.decisionsOf(who, [...fetched.values()]);
 
 		const now = Date.now();
 		const candidates: PushCandidate[] = [];
@@ -92,7 +93,11 @@ export abstract class PollerSync extends PollerSubjects {
 					? subjectKey(n.repository.full_name, num)
 					: null;
 			// No fresh read (no access, a GitHub error): the facts stored before, if any.
-			const enrichment = sub ? enrichmentOf(sub, me) : ex ? enrichmentFor(ex, me) : null;
+			const enrichment = sub
+				? enrichmentOf(sub, me, key ? decided.get(key) : undefined)
+				: ex
+					? enrichmentFor(ex, me)
+					: null;
 			const facts: ThreadFacts = {
 				repo: n.repository.full_name,
 				subjectType: n.subject.type,
@@ -149,6 +154,7 @@ export abstract class PollerSync extends PollerSubjects {
 				candidates.push({
 					itemKey,
 					reason: c.kind,
+					urgent: c.category === 'action' && !!enrichment?.urgent,
 					message: { title: c.summary, body, url: c.actionUrl }
 				});
 				pushed = n.updated_at;
@@ -400,6 +406,7 @@ export abstract class PollerSync extends PollerSubjects {
        AND key NOT IN (SELECT subject_key FROM threads WHERE subject_key IS NOT NULL)`,
 			cutoff
 		);
+		this.run(`DELETE FROM decisions WHERE key NOT IN (SELECT key FROM subjects)`);
 		this.forgetOldPushMarks(Date.now());
 		if (threads) await this.bumpVersion();
 		await this.ctx.storage.put('lastCleanup', Date.now());

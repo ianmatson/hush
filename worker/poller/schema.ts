@@ -1,6 +1,12 @@
 import { latestActivity } from '../../src/lib/shared/activity';
 import type { Enrichment, ThreadDTO, ThreadFacts } from '../../src/lib/shared/types';
 import { enrichmentOf, type SubjectFacts } from '../../src/lib/shared/subject';
+import {
+	NO_DECISIONS,
+	parseStoredDecisions,
+	readDecisions,
+	type SubjectDecisions
+} from '../../src/lib/shared/decisions';
 import type { SubjectRef } from '../github';
 
 /**
@@ -9,7 +15,8 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
+const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -80,6 +87,8 @@ CREATE TABLE dash_order (item_id TEXT PRIMARY KEY, rank INTEGER NOT NULL);
 CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT NULL);
 
 CREATE TABLE push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);
+
+${DECISIONS_TABLE}
 `;
 
 /** How to get from an older version of this layout to SCHEMA_VERSION. */
@@ -119,7 +128,8 @@ ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 		sql: `
 CREATE TABLE IF NOT EXISTS push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS threads_triage ON threads (triage, resolved_at);`
-	}
+	},
+	8: { to: 9, sql: DECISIONS_TABLE }
 };
 
 export interface ThreadRow {
@@ -156,19 +166,26 @@ export interface ThreadRow {
 /** A thread with its subject's facts (JSON), from THREADS. */
 export interface ThreadWithFacts extends ThreadRow {
 	facts: string | null;
+	decisions?: string | null;
 }
 
 /** Threads with their subject's facts; add a WHERE on thread columns. */
-export const THREADS =
-	'SELECT threads.*, subjects.facts FROM threads LEFT JOIN subjects ON subjects.key = threads.subject_key';
+export const THREADS = `SELECT threads.*, subjects.facts, decisions.answers AS decisions FROM threads
+  LEFT JOIN subjects ON subjects.key = threads.subject_key
+  LEFT JOIN decisions ON decisions.key = threads.subject_key`;
 
 export const factsOf = (r: ThreadWithFacts): SubjectFacts | null =>
 	r.facts ? (JSON.parse(r.facts) as SubjectFacts) : null;
 
 /** The inbox's view of the thread's subject, or null (releases, CI runs, a subject not read yet). */
+export function decisionsFor(r: ThreadWithFacts): SubjectDecisions {
+	const f = factsOf(r);
+	return f ? readDecisions(parseStoredDecisions(r.decisions), f) : NO_DECISIONS;
+}
+
 export function enrichmentFor(r: ThreadWithFacts, me: string): Enrichment | null {
 	const f = factsOf(r);
-	return f ? enrichmentOf(f, me) : null;
+	return f ? enrichmentOf(f, me, decisionsFor(r)) : null;
 }
 
 /** The classifier's input for a stored thread. */
@@ -222,7 +239,8 @@ export function toDTO(r: ThreadWithFacts): ThreadDTO {
 		labels: f?.labels.map((l) => l.name) ?? [],
 		rule: r.rule,
 		activity: latestActivity(f),
-		override: r.override === 'fyi' && r.override_updated_at === r.gh_updated_at
+		override: r.override === 'fyi' && r.override_updated_at === r.gh_updated_at,
+		smart: decisionsFor(r).smart
 	};
 }
 
