@@ -20,6 +20,8 @@ import type { RuleMatch } from './types';
 type Field = keyof RuleMatch;
 
 export const MAX_CONDITION_CHARS = 200;
+export const ME = '@me';
+const SIZE_PATTERN = /^(?:(?:<|>|<=|>=)?\d+|\d+\.\.\d+)$/;
 
 export interface QueryWord {
 	key: string;
@@ -52,6 +54,30 @@ export const WORDS: QueryWord[] = [
 		bots: 'byBot'
 	},
 	{ key: 'label', field: 'label', help: 'Has this label', example: 'label:"good first issue"' },
+	{
+		key: 'assignee',
+		field: 'assignee',
+		help: 'Who it is assigned to; @me for you',
+		example: 'assignee:@me'
+	},
+	{
+		key: 'review-requested',
+		field: 'reviewRequested',
+		help: 'Whose review is requested: @me, a login, or org/team',
+		example: 'review-requested:@me'
+	},
+	{
+		key: 'size',
+		field: 'size',
+		help: 'Lines changed in a pull request: <50, >500, 10..200',
+		example: 'size:<50'
+	},
+	{
+		key: 'source',
+		field: 'source',
+		help: 'Which source found it (its name)',
+		example: 'source:"Assigned to you"'
+	},
 	{
 		key: 'about',
 		field: 'about',
@@ -173,7 +199,7 @@ export function parseQuery(query: string): ParsedQuery {
 	};
 	// Split before removing quotes, so `label:"a b"` stays one part.
 	for (const part of query.match(/(?:[^\s"]+|"[^"]*"?)+/g) ?? []) {
-		const m = /^(-?)([a-z]+):(.*)$/i.exec(part);
+		const m = /^(-?)([a-z][a-z-]*):(.*)$/i.exec(part);
 		if (!m) {
 			words.push(...tokens(part));
 			continue;
@@ -218,6 +244,10 @@ export function parseQuery(query: string): ParsedQuery {
 				);
 				continue;
 			}
+			if (w.field === 'size' && !SIZE_PATTERN.test(x)) {
+				errors.push(`“size:${x}” must look like <50, >500, <=10, >=10, or 10..200.`);
+				continue;
+			}
 			if (w.field === 'about' && x.length > MAX_CONDITION_CHARS) {
 				errors.push(`An about: condition must be ${MAX_CONDITION_CHARS} characters or fewer.`);
 				continue;
@@ -235,7 +265,8 @@ export function parseQuery(query: string): ParsedQuery {
 		const list = lists.get(w.field);
 		if (!list?.length) continue;
 		// Repo, author, and from: one glob is stored as a string (the form people write by hand).
-		const one = w.field === 'repo' || w.field === 'author' || w.field === 'by';
+		const one =
+			w.field === 'repo' || w.field === 'author' || w.field === 'by' || w.field === 'assignee';
 		(when as Record<string, unknown>)[w.field] = one && list.length === 1 ? list[0] : list;
 	}
 	if (states.length) when.state = states;
@@ -270,8 +301,176 @@ export function compileQuery(query: string): RuleMatch {
 export function queryError(query: unknown): string | null {
 	if (typeof query !== 'string') return 'must be a query (text), such as "repo:acme/*".';
 	if (query.length > MAX_QUERY) return `the query must be ${MAX_QUERY} characters or fewer.`;
-	return parseQuery(query).errors[0] ?? null;
+	return parseExpr(query).errors[0] ?? null;
 }
+
+export type QueryExpr =
+	| { kind: 'match'; when: RuleMatch }
+	| { kind: 'and'; parts: QueryExpr[] }
+	| { kind: 'or'; parts: QueryExpr[] }
+	| { kind: 'not'; part: QueryExpr };
+
+type Token =
+	| { type: 'open' }
+	| { type: 'close' }
+	| { type: 'or' }
+	| { type: 'not' }
+	| { type: 'term'; text: string };
+
+const OR_WORD = 'OR';
+const EVERYTHING: QueryExpr = { kind: 'match', when: {} };
+
+function tokenize(query: string): Token[] {
+	const out: Token[] = [];
+	let i = 0;
+	while (i < query.length) {
+		const ch = query[i];
+		if (/\s/.test(ch)) i++;
+		else if (ch === '(') (out.push({ type: 'open' }), i++);
+		else if (ch === ')') (out.push({ type: 'close' }), i++);
+		else if (ch === '-' && query[i + 1] === '(') (out.push({ type: 'not' }), i++);
+		else {
+			let j = i;
+			let quoted = false;
+			while (j < query.length && (quoted || !/[\s()]/.test(query[j]))) {
+				if (query[j] === '"') quoted = !quoted;
+				j++;
+			}
+			const text = query.slice(i, j);
+			out.push(text === OR_WORD ? { type: 'or' } : { type: 'term', text });
+			i = j;
+		}
+	}
+	return out;
+}
+
+const keepsItsOwnMinus = (term: string) => term.includes(':') && !parseQuery(term).errors.length;
+
+export interface ParsedExpr {
+	expr: QueryExpr;
+	errors: string[];
+}
+
+export function parseExpr(query: string): ParsedExpr {
+	const tokens = tokenize(query);
+	const errors: string[] = [];
+	let pos = 0;
+	const leaf = (text: string): QueryExpr => {
+		const parsed = parseQuery(text);
+		errors.push(...parsed.errors);
+		return { kind: 'match', when: parsed.when };
+	};
+	const group = (): QueryExpr => {
+		const inner = parseOr();
+		if (tokens[pos]?.type === 'close') pos++;
+		else errors.push('A “(” has no matching “)”.');
+		return inner;
+	};
+	const parseAnd = (): QueryExpr => {
+		const parts: QueryExpr[] = [];
+		let plain: string[] = [];
+		const flush = () => {
+			if (plain.length) parts.push(leaf(plain.join(' ')));
+			plain = [];
+		};
+		while (pos < tokens.length) {
+			const t = tokens[pos];
+			if (t.type === 'or' || t.type === 'close') break;
+			pos++;
+			if (t.type === 'open') {
+				flush();
+				parts.push(group());
+			} else if (t.type === 'not') {
+				flush();
+				pos++;
+				parts.push({ kind: 'not', part: group() });
+			} else if (t.text.startsWith('-') && t.text.length > 1 && !keepsItsOwnMinus(t.text)) {
+				flush();
+				parts.push({ kind: 'not', part: leaf(t.text.slice(1)) });
+			} else plain.push(t.text);
+		}
+		flush();
+		if (!parts.length) return EVERYTHING;
+		return parts.length === 1 ? parts[0] : { kind: 'and', parts };
+	};
+	const parseOr = (): QueryExpr => {
+		const parts = [parseAnd()];
+		while (tokens[pos]?.type === 'or') {
+			pos++;
+			parts.push(parseAnd());
+		}
+		if (parts.length > 1 && parts.some((p) => p === EVERYTHING))
+			errors.push('“OR” needs a condition on both sides.');
+		return parts.length === 1 ? parts[0] : { kind: 'or', parts };
+	};
+	const expr = parseOr();
+	if (pos < tokens.length) errors.push('A “)” has no matching “(”.');
+	return { expr, errors: [...new Set(errors)] };
+}
+
+const compiledExprs = new Map<string, QueryExpr>();
+
+export function compileExpr(query: string): QueryExpr {
+	let expr = compiledExprs.get(query);
+	if (!expr) {
+		expr = parseExpr(query).expr;
+		if (compiledExprs.size > 500) compiledExprs.clear();
+		compiledExprs.set(query, expr);
+	}
+	return expr;
+}
+
+export function isSimpleQuery(query: string): boolean {
+	return compileExpr(query).kind === 'match';
+}
+
+export function exprMatches(expr: QueryExpr, matchLeaf: (when: RuleMatch) => boolean): boolean {
+	switch (expr.kind) {
+		case 'match':
+			return matchLeaf(expr.when);
+		case 'and':
+			return expr.parts.every((p) => exprMatches(p, matchLeaf));
+		case 'or':
+			return expr.parts.some((p) => exprMatches(p, matchLeaf));
+		case 'not':
+			return !exprMatches(expr.part, matchLeaf);
+	}
+}
+
+export function leavesOf(expr: QueryExpr): RuleMatch[] {
+	switch (expr.kind) {
+		case 'match':
+			return [expr.when];
+		case 'and':
+		case 'or':
+			return expr.parts.flatMap(leavesOf);
+		case 'not':
+			return leavesOf(expr.part);
+	}
+}
+
+export function sizeMatches(spec: string, lines: number): boolean {
+	const range = /^(\d+)\.\.(\d+)$/.exec(spec);
+	if (range) return lines >= Number(range[1]) && lines <= Number(range[2]);
+	const bound = /^(<=|>=|<|>)?(\d+)$/.exec(spec);
+	if (!bound) return false;
+	const n = Number(bound[2]);
+	switch (bound[1]) {
+		case '<':
+			return lines < n;
+		case '>':
+			return lines > n;
+		case '<=':
+			return lines <= n;
+		case '>=':
+			return lines >= n;
+		default:
+			return lines === n;
+	}
+}
+
+export const aboutTexts = (query: string) =>
+	leavesOf(compileExpr(query)).flatMap((when) => when.about ?? []);
 
 export function formatQuery(when: RuleMatch): string {
 	const parts: string[] = [];

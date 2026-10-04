@@ -6,7 +6,15 @@
 	import { api } from '$lib/api';
 	import { keys, meQuery, queryClient, teamsQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import { DEFAULT_ISSUE_SECTIONS, DEFAULT_PR_SECTIONS, validateDash } from '$lib/shared/dashboard';
+	import { validateDash } from '$lib/shared/dashboard';
+	import {
+		DEFAULT_SOURCES,
+		MAX_TRACKED,
+		trackedKeyOf,
+		validateSources,
+		validateTracked,
+		type Source
+	} from '$lib/shared/sources';
 	import type { DashSettings } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -16,36 +24,60 @@
 	import SectionEditor from '$lib/components/app/section-editor.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import Trash from '@lucide/svelte/icons/trash';
+	import Plus from '@lucide/svelte/icons/plus';
 
 	const me = createQuery(meQuery);
 	const teams = createQuery(teamsQuery);
 
+	interface Draft {
+		dash: DashSettings;
+		sources: Source[];
+		tracked: string[];
+	}
 	// A local draft; nothing is saved until you press Save.
-	let draft = $state<DashSettings | null>(null);
+	let draft = $state<Draft | null>(null);
 	let saved = $state('');
 	$effect(() => {
-		const dash = me.data?.settings.dash;
+		const settings = me.data?.settings;
 		untrack(() => {
-			if (dash && !draft) {
-				draft = structuredClone($state.snapshot(dash));
-				saved = JSON.stringify(dash);
+			if (settings && !draft) {
+				const initial: Draft = {
+					dash: settings.dash,
+					sources: settings.sources,
+					tracked: settings.tracked
+				};
+				draft = structuredClone($state.snapshot(initial));
+				saved = JSON.stringify(initial);
 			}
 		});
 	});
 	const dirty = $derived(!!draft && JSON.stringify(draft) !== saved);
-	const error = $derived(draft ? validateDash(draft) : null);
+	const error = $derived(
+		draft
+			? (validateDash(draft.dash) ??
+					validateSources(draft.sources) ??
+					validateTracked(draft.tracked))
+			: null
+	);
+	let trackInput = $state('');
+	const trackKey = $derived(trackedKeyOf(trackInput));
+	function track() {
+		if (!draft || !trackKey) return;
+		if (!draft.tracked.includes(trackKey)) draft.tracked = [...draft.tracked, trackKey];
+		trackInput = '';
+	}
 	let saving = $state(false);
 	let refreshingTeams = $state(false);
 
 	beforeNavigate((nav) => {
-		if (dirty && !confirm('Leave without saving your section changes?')) nav.cancel();
+		if (dirty && !confirm('Leave without saving your source changes?')) nav.cancel();
 	});
 
 	async function save() {
 		if (!draft || error) return;
 		saving = true;
-		if (await saveSettings({ dash: $state.snapshot(draft) }, 'Sections saved'))
-			saved = JSON.stringify(draft);
+		if (await saveSettings($state.snapshot(draft), 'Sources saved')) saved = JSON.stringify(draft);
 		saving = false;
 	}
 
@@ -64,25 +96,25 @@
 
 	function toggleTeam(slug: string, tracked: boolean) {
 		if (!draft) return;
-		draft.excludedTeams = tracked
-			? draft.excludedTeams.filter((t) => t !== slug)
-			: [...draft.excludedTeams, slug];
+		draft.dash.excludedTeams = tracked
+			? draft.dash.excludedTeams.filter((t) => t !== slug)
+			: [...draft.dash.excludedTeams, slug];
 	}
 
 	const previewTeam = $derived(
-		teams.data?.teams.find((t) => !draft?.excludedTeams.includes(t.slug))?.slug ?? null
+		teams.data?.teams.find((t) => !draft?.dash.excludedTeams.includes(t.slug))?.slug ?? null
 	);
 </script>
 
-<svelte:head><title>PRs & issues · Settings · Hush</title></svelte:head>
+<svelte:head><title>Sources · Settings · Hush</title></svelte:head>
 
 <div class="grid gap-6">
 	<div class="flex items-end justify-between gap-4">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">PRs & issues</h1>
+			<h1 class="text-lg font-semibold tracking-tight">Sources</h1>
 			<p class="text-sm text-muted-foreground">
-				The Pull requests and Issues tabs are saved GitHub searches. Hush groups the results by
-				whose turn it is.
+				Hush tracks every open pull request and issue that your sources find, also ones that do not
+				involve you. It groups them by whose turn it is.
 			</p>
 		</div>
 	</div>
@@ -92,7 +124,7 @@
 			<Card.Header>
 				<Card.Title>Teams</Card.Title>
 				<Card.Description>
-					Sections with <code>@team</code> run once for each tracked team. Turn off big teams (e.g. “everyone”)
+					Sources with <code>@team</code> run once for each tracked team. Turn off big teams (e.g. “everyone”)
 					to cut noise.
 				</Card.Description>
 			</Card.Header>
@@ -120,7 +152,7 @@
 									<span class="font-mono text-xs text-muted-foreground">{t.slug}</span></span
 								>
 								<Switch
-									checked={!draft.excludedTeams.includes(t.slug)}
+									checked={!draft.dash.excludedTeams.includes(t.slug)}
 									onCheckedChange={(v) => toggleTeam(t.slug, v)}
 									aria-label="Track {t.slug}"
 								/>
@@ -145,7 +177,7 @@
 					<label for="scope" class="sr-only">Scope</label>
 					<Input
 						id="scope"
-						bind:value={draft.scope}
+						bind:value={draft.dash.scope}
 						class="h-8 font-mono text-xs"
 						placeholder="org:acme archived:false"
 					/>
@@ -158,41 +190,90 @@
 			</Card.Content>
 		</Card.Root>
 
-		{#each [{ kind: 'pr', title: 'Pull request sections', defaults: DEFAULT_PR_SECTIONS }, { kind: 'issue', title: 'Issue sections', defaults: DEFAULT_ISSUE_SECTIONS }] as const as g (g.kind)}
-			<Card.Root>
-				<Card.Header>
-					<div class="flex items-start justify-between gap-2">
-						<div class="grid gap-1.5">
-							<Card.Title>{g.title}</Card.Title>
-							<Card.Description>
-								Any <a
-									class="underline"
-									href="https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests"
-									target="_blank"
-									rel="noreferrer">GitHub search</a
-								>.
-								<code>@me</code> is you. <code>@team</code> is each tracked team.
-							</Card.Description>
-						</div>
-						<Button
-							variant="ghost"
-							size="xs"
-							onclick={() => draft && (draft[g.kind] = structuredClone(g.defaults))}
-						>
-							<RotateCcw /> Defaults
-						</Button>
+		<Card.Root>
+			<Card.Header>
+				<div class="flex items-start justify-between gap-2">
+					<div class="grid gap-1.5">
+						<Card.Title>Sources</Card.Title>
+						<Card.Description>
+							Any <a
+								class="underline"
+								href="https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests"
+								target="_blank"
+								rel="noreferrer">GitHub search</a
+							>. <code>@me</code> is you. <code>@team</code> is each tracked team. Without
+							<code>is:pr</code> or <code>is:issue</code>, a search finds both.
+						</Card.Description>
 					</div>
-				</Card.Header>
-				<Card.Content class="grid gap-3">
-					<SectionEditor
-						kind={g.kind}
-						bind:sections={draft[g.kind]}
-						scope={draft.scope}
-						{previewTeam}
+					<Button
+						variant="ghost"
+						size="xs"
+						onclick={() => draft && (draft.sources = structuredClone(DEFAULT_SOURCES))}
+					>
+						<RotateCcw /> Defaults
+					</Button>
+				</div>
+			</Card.Header>
+			<Card.Content class="grid gap-3">
+				<SectionEditor bind:sections={draft.sources} scope={draft.dash.scope} {previewTeam} />
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Tracked items</Card.Title>
+				<Card.Description>
+					Single pull requests and issues to track while they are open, whatever the sources find.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="grid gap-3">
+				{#if draft.tracked.length}
+					<ul class="grid gap-1">
+						{#each draft.tracked as key (key)}
+							<li
+								class="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 font-mono text-xs"
+							>
+								{key}
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									aria-label="Stop tracking {key}"
+									onclick={() => draft && (draft.tracked = draft.tracked.filter((k) => k !== key))}
+									><Trash /></Button
+								>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				<form
+					class="flex gap-2"
+					onsubmit={(e) => {
+						e.preventDefault();
+						track();
+					}}
+				>
+					<label for="track" class="sr-only">PR or issue to track</label>
+					<Input
+						id="track"
+						bind:value={trackInput}
+						class="h-8 font-mono text-xs"
+						placeholder="https://github.com/acme/web/pull/482 or acme/web#482"
+						spellcheck={false}
 					/>
-				</Card.Content>
-			</Card.Root>
-		{/each}
+					<Button
+						type="submit"
+						variant="outline"
+						size="sm"
+						disabled={!trackKey || draft.tracked.length >= MAX_TRACKED}><Plus /> Track</Button
+					>
+				</form>
+				{#if trackInput.trim() && !trackKey}
+					<p class="text-xs text-muted-foreground">
+						Paste the address of a pull request or issue, or write <code>owner/repo#123</code>.
+					</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 
 		<div
 			class="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border bg-background/90 p-3 shadow-sm backdrop-blur"

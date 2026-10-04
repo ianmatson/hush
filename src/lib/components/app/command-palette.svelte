@@ -6,7 +6,9 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, leaveTo, queryClient } from '$lib/queries';
+	import { dashQuery, keys, leaveTo, meQuery, queryClient } from '$lib/queries';
+	import FolderInput from '@lucide/svelte/icons/folder-input';
+	import TagIcon from '@lucide/svelte/icons/tag';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
@@ -67,6 +69,7 @@
 		);
 	});
 
+	const me = createQuery(meQuery);
 	const goEntries = $derived<Entry[]>([
 		{
 			id: 'go:items',
@@ -75,13 +78,30 @@
 			keywords: ['prs', 'pull requests', 'issues', 'all', 'dashboard'],
 			run: () => goto('/items')
 		},
+		...(me.data?.settings.categories ?? []).map((c) => ({
+			id: `go:category:${c.id}`,
+			label: c.name,
+			where: 'Category',
+			icon: FolderInput as Component,
+			keywords: ['category', c.description],
+			run: () => goto(`/items?category=${c.id}`)
+		})),
+		...(me.data?.settings.tags ?? []).map((t) => ({
+			id: `go:tag:${t.id}`,
+			label: t.name,
+			where: 'Tag',
+			icon: TagIcon as Component,
+			keywords: ['tag'],
+			run: () => goto(`/items?tag=${t.id}`)
+		})),
 		...(
 			[
 				['general', 'General', 'appearance menus account export import'],
 				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
 				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
-				['dashboards', 'PR and issue dashboards', 'sections teams'],
+				['dashboards', 'Sources', 'sources searches tracked teams'],
+				['categories', 'Categories & tags', 'categories tags rules jev re-evaluate'],
 				['notifications', 'Notifications', 'push quiet']
 			] as const
 		).map(([slug, name, more]) => ({

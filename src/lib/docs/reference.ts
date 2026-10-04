@@ -1,9 +1,25 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
-import { DEFAULT_ISSUE_SECTIONS, DEFAULT_PR_SECTIONS, MAX_QUERIES } from '$lib/shared/dashboard';
+import { MAX_QUERIES } from '$lib/shared/dashboard';
+import { DEFAULT_SOURCES, MAX_SOURCES, MAX_TRACKED } from '$lib/shared/sources';
+import {
+	DEFAULT_CATEGORIES,
+	DEFAULT_TAGS,
+	FALLBACK_CATEGORY_ID,
+	MARK_COLORS,
+	MAX_CATEGORIES,
+	MAX_DESCRIPTION_CHARS,
+	MAX_MARK_NAME_CHARS,
+	MAX_TAGS
+} from '$lib/shared/categories';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import { IS_VALUES, MAX_CONDITION_CHARS, WORDS } from '$lib/shared/query';
-import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
+import {
+	BODY_EXCERPT_CHARS,
+	CHOICE_CONFIDENCE,
+	MAX_SMART_CONDITIONS,
+	YES_AT
+} from '$lib/shared/decisions';
 import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
@@ -58,7 +74,8 @@ const table = (head: string[], rows: string[][]) =>
 const PAGE: Record<SettingsPage, string> = {
 	general: 'Settings → General',
 	inbox: 'Settings → Inbox',
-	dashboards: 'Settings → PRs & issues',
+	dashboards: 'Settings → Sources',
+	categories: 'Settings → Categories & tags',
 	notifications: 'Settings → Notifications',
 	keys: 'Settings → Keybinds'
 };
@@ -224,32 +241,64 @@ A rule:
 }
 \`\`\``
 	},
-	'dash.pr': {
-		type: 'array of sections',
-		body: `The sections of the Pull requests tab. Each is a saved GitHub search. Up to 20.
+	sources: {
+		type: 'array of sources',
+		body: `The GitHub searches that decide which PRs and issues Hush tracks. Up to ${MAX_SOURCES}.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
-- \`name\`: up to 60 characters.
-- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track.
-- \`enabled\`: \`false\` hides the section and skips its search.
+- \`name\`: up to 60 characters. Rules can test it with \`source:\`.
+- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both.
+- \`enabled\`: \`false\` skips the search.
 
-A change to \`dash.pr\` replaces the whole list. To add a section, write the defaults below and your new one.
+A change to \`sources\` replaces the whole list. To add a source, write the defaults below and your new one.
 
 The defaults:
 
 ${table(
 	['id', 'name', 'query', 'enabled'],
-	DEFAULT_PR_SECTIONS.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
+	DEFAULT_SOURCES.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
 )}`
 	},
-	'dash.issue': {
-		type: 'array of sections',
-		body: `The sections of the Issues tab, the same as \`dash.pr\`. The defaults:
+	categories: {
+		type: 'array of categories',
+		body: `Where each PR and issue lives. Every item has exactly one category. Up to ${MAX_CATEGORIES}.
+
+- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. \`"${FALLBACK_CATEGORY_ID}"\` is the fallback and cannot be deleted.
+- \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
+- \`color\`: ${MARK_COLORS.map((c) => `\`"${c}"\``).join(', ')}.
+- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev.
+- \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
+
+Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description, when it is at least ${CHOICE_CONFIDENCE * 100}% sure; else \`"${FALLBACK_CATEGORY_ID}"\`. Jev chooses once for each item, and again only when its title, description, or labels change. After you change categories, **Re-evaluate items** asks again for your open items.
+
+The defaults:
 
 ${table(
-	['id', 'name', 'query', 'enabled'],
-	DEFAULT_ISSUE_SECTIONS.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
+	['id', 'name', 'rule', 'description'],
+	DEFAULT_CATEGORIES.map((c) => [code(c.id), c.name, c.rule ? code(c.rule) : '', c.description])
 )}`
+	},
+	tags: {
+		type: 'array of tags',
+		body: `Marks that cut across categories: an item can have none, one, or several. Up to ${MAX_TAGS}.
+
+- \`id\`, \`name\`, \`color\`: as for categories.
+- \`rule\`: a [query](/docs/query-language). \`about:"…"\` asks Jev, once for each item (and again when its title, description, or labels change).
+
+The defaults:
+
+${table(
+	['id', 'name', 'rule'],
+	DEFAULT_TAGS.map((t) => [code(t.id), t.name, code(t.rule)])
+)}`
+	},
+	tracked: {
+		type: 'array of strings',
+		body: `Single PRs and issues that Hush tracks whatever the sources find, as \`"owner/repo#123"\`. Up to ${MAX_TRACKED}. They show while they are open.
+
+\`\`\`json settings
+{ "tracked": ["acme/web#482", "acme/api#77"] }
+\`\`\``
 	},
 	'dash.scope': {
 		type: 'string',
@@ -501,7 +550,8 @@ function limitsReference(): string {
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
 			['Done threads with no activity are forgotten after', '30 days'],
 			['Saved views', String(MAX_VIEWS)],
-			['Sections per tab (dash.pr, dash.issue)', '20'],
+			['Sources', String(MAX_SOURCES)],
+			['Tracked items', String(MAX_TRACKED)],
 			['GitHub searches per tab', String(MAX_QUERIES)],
 			['Items per menu', '60'],
 			['Keys per command', '4'],
@@ -525,7 +575,14 @@ function limitsReference(): string {
 	);
 }
 
+const sourcesReference = () =>
+	table(
+		['Default source', 'Search', 'On'],
+		DEFAULT_SOURCES.map((s) => [s.name, code(s.query), s.enabled ? 'yes' : 'no'])
+	);
+
 export const REFERENCES: Record<string, (args: string[]) => string> = {
+	sources: sourcesReference,
 	keys: someKeys,
 	themes: () => ['Default', ...THEMES.map((t) => t.label)].map((l) => `- ${l}`).join('\n'),
 	settings: settingsReference,

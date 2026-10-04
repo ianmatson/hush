@@ -11,7 +11,7 @@ import { isBot } from './bots';
 import { textMatches } from './text-match';
 import { activityText, latestActivity } from './activity';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
-import { compileQuery, queryError } from './query';
+import { compileExpr, exprMatches, ME, queryError, sizeMatches } from './query';
 import { conditionId } from './decisions';
 
 /** Notification reasons, as Hush shows them. */
@@ -177,12 +177,33 @@ function matchGlobs(value: string | undefined, globs: string | string[] | undefi
 	return list.some((g) => globToRegExp(g).test(value));
 }
 
+function withMe(globs: string | string[] | undefined, me: string): string[] | undefined {
+	if (globs === undefined) return undefined;
+	return (Array.isArray(globs) ? globs : [globs]).map((g) => (g.toLowerCase() === ME ? me : g));
+}
+
 export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): boolean {
 	const e = t.enrichment;
 	if (!matchGlobs(t.repo, m.repo)) return false;
 	if (m.reason && !m.reason.includes(t.reason)) return false;
 	if (m.type && !m.type.includes(t.subjectType)) return false;
-	if (!matchGlobs(e?.author, m.author)) return false;
+	if (!matchGlobs(e?.author, withMe(m.author, t.me))) return false;
+	if (m.assignee !== undefined) {
+		const assignees = e?.assignees ?? (e?.assignedToMe ? [t.me] : []);
+		const wanted = withMe(m.assignee, t.me);
+		if (!assignees.some((a) => matchGlobs(a, wanted))) return false;
+	}
+	if (m.reviewRequested?.length) {
+		const requested = e?.reviewRequests ?? (e?.reviewRequestedFromMe ? [t.me] : []);
+		const wanted = withMe(m.reviewRequested, t.me);
+		if (!requested.some((r) => matchGlobs(r, wanted))) return false;
+	}
+	if (m.source?.length && !t.sources?.some((name) => matchGlobs(name, m.source))) return false;
+	if (m.size?.length) {
+		if (e?.additions === undefined) return false;
+		const lines = e.additions + (e.deletions ?? 0);
+		if (!m.size.some((spec) => sizeMatches(spec, lines))) return false;
+	}
 	if (!textMatches(m.text, [t.title, t.repo, e?.author])) return false;
 	if (m.kind && !m.kind.includes(c.kind)) return false;
 	if (m.category && !m.category.includes(c.category)) return false;
@@ -193,7 +214,7 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	if (m.state && !(e?.state && m.state.includes(e.state))) return false;
 	if (m.by !== undefined || m.byBot !== undefined) {
 		const a = t.activity !== undefined ? t.activity : latestActivity(e);
-		if (!matchGlobs(a?.by ?? undefined, m.by)) return false;
+		if (!matchGlobs(a?.by ?? undefined, withMe(m.by, t.me))) return false;
 		if (m.byBot !== undefined && m.byBot !== !!a?.bot) return false;
 	}
 	if (m.about?.length) {
@@ -201,6 +222,10 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 		if (!m.about.some((text) => smart.includes(conditionId(text)))) return false;
 	}
 	return true;
+}
+
+export function queryMatches(query: string, t: ThreadFacts, c: Classification): boolean {
+	return exprMatches(compileExpr(query), (when) => ruleMatches(when, t, c));
 }
 
 /**
@@ -219,9 +244,7 @@ export function withOverride(
 
 /** Index of the first enabled rule that matches (the one that wins), or -1. */
 export function firstMatchingRule(t: ThreadFacts, rules: Rule[], base: Classification): number {
-	return rules.findIndex(
-		(r) => r.enabled !== false && ruleMatches(compileQuery(r.when ?? ''), t, base)
-	);
+	return rules.findIndex((r) => r.enabled !== false && queryMatches(r.when ?? '', t, base));
 }
 
 export function classify(t: ThreadFacts, settings: Settings): Classification {

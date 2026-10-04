@@ -13,7 +13,7 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
 - **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `Rule 2: "then" needs category, push, or triage.`, and saves nothing. Unknown keys are errors too.
-- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the default sections. A list, such as `dash.pr` or `rules`, is always replaced as a whole.
+- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the rest of `dash`. A list, such as `sources` or `rules`, is always replaced as a whole.
 - **Changes apply at once**, on every device. A change to `rules`, `botsAreFyi`, `teamReviewsAreAction`, or `reviewResolution` sorts your stored threads again.
 
 A complete example:

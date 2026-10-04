@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-	import { formatQuery, parseQuery } from '$lib/shared/query';
+	import { aboutTexts, formatQuery, isSimpleQuery, parseQuery } from '$lib/shared/query';
 	import type { Category, Rule } from '$lib/shared/types';
 	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
 	import ConditionsEditor from './conditions-editor.svelte';
@@ -187,16 +187,22 @@
 		</DropdownMenu.Root>
 	</header>
 
-	<ConditionsEditor
-		bind:when={
-			() => parseQuery(rule.when ?? '').when,
-			(when) => (rule = { ...rule, when: formatQuery(when) })
-		}
-		fields={RULE_FIELDS}
-		{suggest}
-		idPrefix="rule-{index}"
-		emptyNote="No conditions: this rule matches every thread."
-	/>
+	{#if isSimpleQuery(rule.when ?? '')}
+		<ConditionsEditor
+			bind:when={
+				() => parseQuery(rule.when ?? '').when,
+				(when) => (rule = { ...rule, when: formatQuery(when) })
+			}
+			fields={RULE_FIELDS}
+			{suggest}
+			idPrefix="rule-{index}"
+			emptyNote="No conditions: this rule matches every thread."
+		/>
+	{:else}
+		<p class="text-xs text-muted-foreground">
+			This rule uses OR, groups, or “-”. Edit it as text below.
+		</p>
+	{/if}
 	<QueryInput
 		bind:value={() => rule.when ?? '', (when) => (rule = { ...rule, when })}
 		id="rule-{index}-query"
@@ -266,7 +272,7 @@
 					Catches no stored thread now{index > 0 ? ' (or a rule above catches them first)' : ''}.
 				</p>
 			{/if}
-			{#if parseQuery(rule.when ?? '').when.about?.length}
+			{#if aboutTexts(rule.when ?? '').length}
 				<p>Jev checks about: after you save, so new conditions catch threads a moment later.</p>
 			{/if}
 		</footer>

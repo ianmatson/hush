@@ -1,4 +1,4 @@
-import { compileQuery } from './query';
+import { aboutTexts } from './query';
 import type { SubjectFacts } from './subject';
 import type { LastComment, Rule, SavedView } from './types';
 
@@ -6,7 +6,8 @@ export const YES_AT = 0.8;
 export const NO_AT = 0.2;
 export const URGENT_SCORE = 1.5;
 export const BODY_EXCERPT_CHARS = 500;
-export const MAX_SMART_CONDITIONS = 10;
+export const MAX_SMART_CONDITIONS = 30;
+export const CHOICE_CONFIDENCE = 0.6;
 export const CHARS_PER_TOKEN = 4;
 
 export const URGENCY_LEVELS = [
@@ -18,25 +19,40 @@ export const URGENCY_LEVELS = [
 const REPLY = 'reply';
 const URGENCY = 'urgency';
 const ABOUT_PREFIX = 'about_';
+const CATEGORY = 'category';
 
 export interface StoredDecisions {
 	contentHash: string;
 	reply?: number;
 	urgency?: number;
+	identityHash?: string;
 	about?: Record<string, number>;
+	category?: { id: string; confidence: number };
 }
 
 export interface SubjectDecisions {
 	commentsNeedMe: boolean | null;
 	urgent: boolean;
 	smart: string[];
+	category: string | null;
 }
 
-export const NO_DECISIONS: SubjectDecisions = { commentsNeedMe: null, urgent: false, smart: [] };
+export const NO_DECISIONS: SubjectDecisions = {
+	commentsNeedMe: null,
+	urgent: false,
+	smart: [],
+	category: null
+};
+
+export interface CategoryOption {
+	id: string;
+	label: string;
+}
 
 export type DecisionQuestion =
 	| { type: 'noul'; instructions: string; criteria?: { true: string; false: string } }
-	| { type: 'score'; instructions: string; criteria: string[] };
+	| { type: 'score'; instructions: string; criteria: string[] }
+	| { type: 'choice'; instructions: string; criteria: Record<string, string> };
 
 export interface DecisionState {
 	title: string;
@@ -62,7 +78,10 @@ export interface SmartCondition {
 
 export type DecisionAnswers = Record<
 	string,
-	{ type: 'noul'; noul: number } | { type: 'score'; score: number } | { type: string }
+	| { type: 'noul'; noul: number }
+	| { type: 'score'; score: number }
+	| { type: 'choice'; choice: string; confidence: number }
+	| { type: string }
 >;
 
 export function cyrb53(text: string): string {
@@ -82,14 +101,19 @@ const normalizeCondition = (text: string) => text.trim().replace(/\s+/g, ' ').to
 
 export const conditionId = (text: string) => cyrb53(normalizeCondition(text));
 
-export function smartConditions(rules: Rule[], views: SavedView[]): SmartCondition[] {
+export function smartConditions(
+	rules: Rule[],
+	views: SavedView[],
+	markQueries: string[] = []
+): SmartCondition[] {
 	const byId = new Map<string, SmartCondition>();
 	const queries = [
 		...rules.filter((r) => r.enabled !== false).map((r) => r.when ?? ''),
-		...views.map((v) => v.query ?? '')
+		...views.map((v) => v.query ?? ''),
+		...markQueries
 	];
 	for (const query of queries)
-		for (const text of compileQuery(query).about ?? [])
+		for (const text of aboutTexts(query))
 			byId.set(conditionId(text), { id: conditionId(text), text });
 	return [...byId.values()];
 }
@@ -123,6 +147,10 @@ export function contentHash(s: SubjectFacts): string {
 			recentComments(s).map((c) => [c.author, c.authorIsBot, c.body])
 		])
 	);
+}
+
+export function identityHash(s: SubjectFacts): string {
+	return cyrb53(JSON.stringify([s.title, s.labels.map((l) => l.name), s.body ?? '']));
 }
 
 function rolesOf(s: SubjectFacts, me: string): string[] {
@@ -176,9 +204,18 @@ function aboutQuestion(text: string): DecisionQuestion {
 	};
 }
 
+function categoryQuestion(options: CategoryOption[]): DecisionQuestion {
+	return {
+		type: 'choice',
+		instructions: 'Which category fits this pull request or issue best?',
+		criteria: Object.fromEntries(options.map((o) => [o.id, o.label]))
+	};
+}
+
 export interface DecisionPlan {
 	request: DecisionRequest;
 	contentHash: string;
+	identityHash: string | null;
 	aboutIds: Record<string, string>;
 }
 
@@ -186,23 +223,33 @@ export function planDecisions(
 	s: SubjectFacts,
 	me: string,
 	stored: StoredDecisions | null | undefined,
-	conditions: SmartCondition[]
+	conditions: SmartCondition[],
+	categoryOptions: CategoryOption[] = []
 ): DecisionPlan | null {
 	const hash = contentHash(s);
-	const known = stored?.contentHash === hash ? stored : null;
+	const idHash = identityHash(s);
+	const content = stored?.contentHash === hash ? stored : null;
+	const identityKnown = stored?.identityHash === idHash;
 	const questions: Record<string, DecisionQuestion> = {};
-	if (known?.reply === undefined && newestCommentIsFromAnotherPerson(s, me))
+	if (content?.reply === undefined && newestCommentIsFromAnotherPerson(s, me))
 		questions[REPLY] = replyQuestion(me);
-	if (known?.urgency === undefined) questions[URGENCY] = URGENCY_QUESTION;
+	if (content?.urgency === undefined) questions[URGENCY] = URGENCY_QUESTION;
 	const aboutIds: Record<string, string> = {};
-	for (const c of conditions) {
-		if (known?.about?.[c.id] !== undefined) continue;
-		const key = `${ABOUT_PREFIX}${c.id}`;
-		questions[key] = aboutQuestion(c.text);
-		aboutIds[key] = c.id;
+	if (!identityKnown) {
+		for (const c of conditions) {
+			const key = `${ABOUT_PREFIX}${c.id}`;
+			questions[key] = aboutQuestion(c.text);
+			aboutIds[key] = c.id;
+		}
+		if (categoryOptions.length > 1) questions[CATEGORY] = categoryQuestion(categoryOptions);
 	}
 	if (!Object.keys(questions).length) return null;
-	return { request: { state: decisionState(s, me), questions }, contentHash: hash, aboutIds };
+	return {
+		request: { state: decisionState(s, me), questions },
+		contentHash: hash,
+		identityHash: identityKnown ? null : idHash,
+		aboutIds
+	};
 }
 
 export function estimateTokens(request: DecisionRequest): number {
@@ -214,13 +261,24 @@ const noulOf = (a: DecisionAnswers[string] | undefined) =>
 const scoreOf = (a: DecisionAnswers[string] | undefined) =>
 	a && 'score' in a && typeof a.score === 'number' ? a.score : undefined;
 
+const choiceOf = (a: DecisionAnswers[string] | undefined) =>
+	a && 'choice' in a && typeof a.choice === 'string' && typeof a.confidence === 'number'
+		? { id: a.choice, confidence: a.confidence }
+		: undefined;
+
 export function mergeDecisions(
 	stored: StoredDecisions | null | undefined,
 	plan: DecisionPlan,
 	answers: DecisionAnswers
 ): StoredDecisions {
-	const base: StoredDecisions =
-		stored?.contentHash === plan.contentHash ? { ...stored } : { contentHash: plan.contentHash };
+	const sameContent = stored?.contentHash === plan.contentHash;
+	const base: StoredDecisions = {
+		contentHash: plan.contentHash,
+		...(sameContent ? { reply: stored?.reply, urgency: stored?.urgency } : {}),
+		...(plan.identityHash
+			? { identityHash: plan.identityHash }
+			: { identityHash: stored?.identityHash, about: stored?.about, category: stored?.category })
+	};
 	const reply = noulOf(answers[REPLY]);
 	if (reply !== undefined) base.reply = reply;
 	const urgency = scoreOf(answers[URGENCY]);
@@ -229,7 +287,16 @@ export function mergeDecisions(
 		const p = noulOf(answers[key]);
 		if (p !== undefined) base.about = { ...base.about, [id]: p };
 	}
-	return base;
+	const category = choiceOf(answers[CATEGORY]);
+	if (category) base.category = category;
+	return Object.fromEntries(
+		Object.entries(base).filter(([, v]) => v !== undefined)
+	) as unknown as StoredDecisions;
+}
+
+export function forgetIdentityAnswers(stored: StoredDecisions): StoredDecisions {
+	const { identityHash: _id, about: _about, category: _category, ...kept } = stored;
+	return kept;
 }
 
 export function yesOrNo(probability: number | undefined): boolean | null {
@@ -243,13 +310,21 @@ export function readDecisions(
 	stored: StoredDecisions | null | undefined,
 	s: SubjectFacts
 ): SubjectDecisions {
-	if (!stored || stored.contentHash !== contentHash(s)) return NO_DECISIONS;
+	if (!stored) return NO_DECISIONS;
+	const content = stored.contentHash === contentHash(s);
+	const identity = stored.identityHash === identityHash(s);
 	return {
-		commentsNeedMe: yesOrNo(stored.reply),
-		urgent: (stored.urgency ?? 0) >= URGENT_SCORE,
-		smart: Object.entries(stored.about ?? {})
-			.filter(([, p]) => yesOrNo(p) === true)
-			.map(([id]) => id)
+		commentsNeedMe: content ? yesOrNo(stored.reply) : null,
+		urgent: content && (stored.urgency ?? 0) >= URGENT_SCORE,
+		smart: identity
+			? Object.entries(stored.about ?? {})
+					.filter(([, p]) => yesOrNo(p) === true)
+					.map(([id]) => id)
+			: [],
+		category:
+			identity && stored.category && stored.category.confidence >= CHOICE_CONFIDENCE
+				? stored.category.id
+				: null
 	};
 }
 

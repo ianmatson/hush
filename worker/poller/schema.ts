@@ -15,8 +15,9 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
+const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, category TEXT, tags_on TEXT NOT NULL DEFAULT '[]', tags_off TEXT NOT NULL DEFAULT '[]');`;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -89,6 +90,8 @@ CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT 
 CREATE TABLE push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);
 
 ${DECISIONS_TABLE}
+
+${ITEM_PINS_TABLE}
 `;
 
 /** How to get from an older version of this layout to SCHEMA_VERSION. */
@@ -129,7 +132,8 @@ ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 CREATE TABLE IF NOT EXISTS push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reason TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS threads_triage ON threads (triage, resolved_at);`
 	},
-	8: { to: 9, sql: DECISIONS_TABLE }
+	8: { to: 9, sql: DECISIONS_TABLE },
+	9: { to: 10, sql: ITEM_PINS_TABLE }
 };
 
 export interface ThreadRow {

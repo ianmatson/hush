@@ -53,9 +53,15 @@ import {
 } from './schema';
 import { FILL_DONE_WITHIN_MS, FILL_MAX, MIN, MUTED_BY_USER, type PollStatus } from './shared';
 import { DECISION_FILL_KEY } from './decisions';
-import { smartConditions } from '../../src/lib/shared/decisions';
 
 const DECISION_FILL_DELAY_MS = 2_000;
+const PLACEMENT_KEYS = ['categories', 'tags', 'sources'] as const;
+
+export interface PinChange {
+	category?: string | null;
+	tag?: string;
+	tagState?: 'on' | 'off' | 'auto';
+}
 
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
@@ -496,20 +502,57 @@ export abstract class PollerData extends PollerDashboard {
 		if (err) return { error: err, status: 400 };
 		await this.saveSettings(next);
 		if (old.smartDecisions && !next.smartDecisions) this.forgetDecisions();
-		if (this.needsDecisionFill(old, next)) await this.startDecisionFill();
+		if (!old.smartDecisions && this.decisionsOn(next)) await this.startDecisionFill();
 		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
 		// must not rewrite every thread.
 		const affects = RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
 		const reclassified = affects ? await this.reclassify(next) : 0;
+		if (PLACEMENT_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]))) {
+			const who = await this.who();
+			if (who) await this.rePlaceCachedItems(who);
+		}
 		return { settings: next, reclassified };
 	}
 
-	private needsDecisionFill(old: Settings, next: Settings): boolean {
-		if (!this.decisionsOn(next)) return false;
-		if (!old.smartDecisions) return true;
-		const ids = (s: Settings) => smartConditions(s.rules, s.views).map((c) => c.id);
-		const known = new Set(ids(old));
-		return ids(next).some((id) => !known.has(id));
+	async pinItems(ids: string[], change: PinChange): Promise<{ ok: true }> {
+		const pins = this.itemPins(ids);
+		this.transaction(() => {
+			for (const id of ids) {
+				const pin = pins.get(id) ?? {};
+				const tagsOn = new Set(pin.tagsOn ?? []);
+				const tagsOff = new Set(pin.tagsOff ?? []);
+				if (change.tag) {
+					tagsOn.delete(change.tag);
+					tagsOff.delete(change.tag);
+					if (change.tagState === 'on') tagsOn.add(change.tag);
+					if (change.tagState === 'off') tagsOff.add(change.tag);
+				}
+				const category = change.category === undefined ? (pin.category ?? null) : change.category;
+				if (!category && !tagsOn.size && !tagsOff.size) {
+					this.run('DELETE FROM item_pins WHERE key = ?', id);
+					continue;
+				}
+				this.run(
+					`INSERT INTO item_pins (key, category, tags_on, tags_off) VALUES (?, ?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET category = excluded.category, tags_on = excluded.tags_on,
+             tags_off = excluded.tags_off`,
+					id,
+					category,
+					JSON.stringify([...tagsOn]),
+					JSON.stringify([...tagsOff])
+				);
+			}
+		});
+		const who = await this.who();
+		if (who) await this.rePlaceCachedItems(who);
+		return { ok: true };
+	}
+
+	async reevaluateItems(): Promise<{ items: number }> {
+		const keys = (await this.cachedItemKeys()).slice(0, FILL_MAX);
+		this.forgetIdentityAnswersOf(keys);
+		await this.startDecisionFill();
+		return { items: keys.length };
 	}
 
 	private async startDecisionFill(): Promise<void> {
@@ -535,7 +578,7 @@ export abstract class PollerData extends PollerDashboard {
        ORDER BY gh_updated_at DESC LIMIT ${FILL_MAX}`,
 			doneSince
 		);
-		const subjects = [
+		const threadSubjects = [
 			...new Map(
 				rows.flatMap((r) => {
 					const f = factsOf(r);
@@ -543,9 +586,11 @@ export abstract class PollerData extends PollerDashboard {
 				})
 			).values()
 		];
-		await this.decideSubjects(who, subjects, { allAreInboxThreads: true });
+		await this.decideSubjects(who, threadSubjects, { allAreInboxThreads: true });
+		const itemKeys = (await this.cachedItemKeys()).slice(0, FILL_MAX);
+		await this.decideSubjects(who, [...this.storedSubjectFacts(itemKeys).values()]);
 		await this.reclassify(who.settings);
-		await this.patchDashCaches(who, subjects, this.decisionsOf(who, subjects));
+		await this.rePlaceCachedItems(who);
 	}
 
 	/**

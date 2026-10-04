@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The dashboards of open work that involves you, grouped by whose turn it is.
 ---
 
-The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Each tab is a set of saved GitHub searches, called **sections**. Hush groups the results by whose turn it is.
+The **Items** page shows the open pull requests and issues that Hush tracks, in two tabs: **Pull requests** and **Issues**. {{key:dash.section.0}} and {{key:dash.section.1}} switch between them. Your [sources](#sources) decide what Hush tracks; by default, open work that involves you. Hush groups the items by whose turn it is.
 
 ## Groups
 
@@ -23,7 +23,7 @@ Inside a group, the most urgent items come first (failing CI before a comment), 
 | Your turn         | CI failing · Changes requested · Merge conflict · 2 open threads · Ready to merge · @alice commented (on your PR) · Review requested · Re-review requested · Assigned to you · New commits since your review | Assigned to you · @alice replied                           |
 | Your team's turn  | Review for acme/web                                                                                                                                                                                          |                                                            |
 | Waiting on others | CI running · Waiting for review · Waiting on author · You approved · Waiting for a reply · @alice reviewed (with [`any_review`](/docs/settings#reviewresolution))                                            | Waiting for replies · No replies yet · Waiting for a reply |
-| Other             | Draft · Bot PR · the section's name                                                                                                                                                                          | the section's name                                         |
+| Other             | Draft · Bot PR · the source's name                                                                                                                                                                           | the source's name                                          |
 
 The rules are the same as for the inbox's [Needs you](/docs/inbox#what-needs-you).
 
@@ -33,22 +33,38 @@ A row also lists what changed since you last looked at the item (“+2 commits�
 
 An item whose turn started more than 3 days ago is **stale**: it says how long it waited (“waiting 5d”) in amber. Change the number of days with [`dash.staleDays`](/docs/settings#dash-staledays).
 
-## Sections
+## Sources
 
-The sections are tabs above the list: **All**, then each section with its count. {{key:dash.section.0}} shows all; {{key:dash.section.1}} to {{key:dash.section.9}} show one section. An item can be in more than one section.
+A source is a saved [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). Hush tracks every open PR and issue that any of your sources finds, also ones that do not involve you.
 
-The default sections:
+{{ref:sources}}
 
-- **Pull requests:** Review requested from you, Team review requests, Your PRs, You reviewed, Assigned to you, Mentions you. “Mentions your teams” is off.
-- **Issues:** Assigned to you, You opened, Mentions you, You commented. “Mentions your teams” is off.
+Change them in **Settings → Sources**:
 
-Change them in **Settings → PRs & issues**:
-
-- Each section has a name and a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams (it leaves out your own PRs, which are in **Your PRs**).
-- Turn a section off with its switch, move it up or down, delete it, or choose **Add section**. The link button opens the same search on GitHub, to check it.
+- Each source has a name and a search. `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams.
+- A search with `is:pr`, or a word that only pull requests have (such as `review-requested:` or `reviewed-by:`), finds pull requests. With `is:issue`, issues. With neither, both.
+- Turn a source off with its switch, move it up or down, delete it, or choose **Add source**. The link button opens the same search on GitHub, to check it.
+- **Track one item:** paste the address of a PR or issue (or `owner/repo#123`). Hush shows it while it is open, whatever the sources find.
 - **Scope** is added to every search: for example `org:acme`, or `-repo:acme/website`.
 - **Teams** lists your teams. Turn off big teams (such as “everyone”) to cut noise. **Look up teams again** finds new teams at once; otherwise Hush looks every 6 hours.
-- **Defaults** puts back the default sections. Nothing changes until you choose **Save**.
+- **Defaults** puts back the default sources. Nothing changes until you choose **Save**.
+
+## Categories and tags
+
+Every item has exactly one **category** (where it lives) and any number of **tags** (what else is true about it). The sidebar lists them with their counts; choose one to see only its items. The turn groups and the Pull requests and Issues tabs stay the same in every view. On a phone, the menu at the top of the list does the same.
+
+Hush places an item in this order:
+
+1. A category that you chose for it (right-click → **Category**).
+2. The first category whose rule matches, top to bottom.
+3. Jev's choice among the categories that have a description, when it is sure enough (see [smart decisions](/docs/settings#smartdecisions)).
+4. Otherwise **Other**, which cannot be deleted.
+
+An item gets every tag whose rule matches, plus the tags that you add by hand (right-click → **Tags**); a tag that you remove by hand stays off.
+
+Rules are [queries](/docs/query-language): `repo:`, `label:`, `author:@me`, `source:"Assigned to you"`, `size:<50`, OR, groups, and `about:"…"`, which asks Jev. Jev reads each item once, when Hush first sees it, and again when its title, description, or labels change; a new comment does not change its category or tags. After you change categories or tags, choose **Re-evaluate items** in **Settings → Categories & tags** to ask again for the items you have now. Rules without `about:` apply at once.
+
+Hush starts with presets that you can change or delete: [categories](/docs/settings#categories) (Incidents, Features, Bugs, Maintenance, Other) and [tags](/docs/settings#tags) (Blocked, Needs decision, Security, Breaking change, Quick).
 
 More options are only in [settings.json](/docs/settings): hide others' drafts ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)), hide bots' PRs ([`dash.hideBots`](/docs/settings#dash-hidebots)), and the stale days.
 

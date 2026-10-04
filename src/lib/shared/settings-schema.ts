@@ -1,5 +1,7 @@
 import { validateRules } from './classify';
 import { validateDash } from './dashboard';
+import { validateSources, validateTracked } from './sources';
+import { markQueries, validateCategories, validateTags } from './categories';
 import { MAX_SMART_CONDITIONS, smartConditions } from './decisions';
 import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
@@ -21,7 +23,8 @@ import { validateViews } from './views';
  * Every setting, for the settings.json editor and the docs: one entry per key (and per key of
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
-export type SettingsPage = 'inbox' | 'dashboards' | 'notifications' | 'general' | 'keys';
+export type SettingsPage =
+	'inbox' | 'dashboards' | 'categories' | 'notifications' | 'general' | 'keys';
 export interface SettingInfo {
 	key: string;
 	page: SettingsPage | null;
@@ -125,12 +128,28 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'Saved views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
 	},
 	{
-		key: 'dash.pr',
+		key: 'sources',
 		page: 'dashboards',
 		description:
-			'Pull request sections: saved GitHub searches { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team.'
+			'The GitHub searches that decide which PRs and issues Hush tracks: { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue covers both.'
 	},
-	{ key: 'dash.issue', page: 'dashboards', description: 'Issue sections, the same as dash.pr.' },
+	{
+		key: 'categories',
+		page: 'categories',
+		description:
+			'Where each PR and issue lives: exactly one category each. { "id", "name", "color", "rule": a query, "description": for Jev }. The first category whose rule matches wins; else Jev picks among categories with a description; else "other".'
+	},
+	{
+		key: 'tags',
+		page: 'categories',
+		description:
+			'Marks that cut across categories: zero or more each. { "id", "name", "color", "rule": a query }. A rule with about:"…" asks Jev.'
+	},
+	{
+		key: 'tracked',
+		page: 'dashboards',
+		description: 'Single PRs and issues to track, as "owner/repo#123", whatever the sources find.'
+	},
 	{
 		key: 'dash.scope',
 		page: 'dashboards',
@@ -251,6 +270,10 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	rules: validateRules,
 	views: validateViews,
 	dash: validateDash,
+	sources: validateSources,
+	categories: validateCategories,
+	tags: validateTags,
+	tracked: validateTracked,
 	menus: validateMenus,
 	keys: validateKeys,
 	swipe: validateSwipe
@@ -272,10 +295,10 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 					return `Unknown setting "${k}.${sub}".`;
 	}
 	if (
-		(keys.includes('rules') || keys.includes('views')) &&
-		smartConditions(next.rules, next.views).length > MAX_SMART_CONDITIONS
+		['rules', 'views', 'categories', 'tags'].some((k) => keys.includes(k)) &&
+		smartConditions(next.rules, next.views, markQueries(next)).length > MAX_SMART_CONDITIONS
 	)
-		return `Rules and views can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
+		return `Rules, views, categories, and tags can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
 	return null;
 }
 

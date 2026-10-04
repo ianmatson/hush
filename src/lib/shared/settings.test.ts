@@ -75,7 +75,7 @@ describe('settings schema', () => {
 
 	it('keeps the rest of a group', () => {
 		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } as never });
-		expect(s.dash.pr).toEqual(DEFAULT_SETTINGS.dash.pr);
+		expect(s.dash.scope).toEqual(DEFAULT_SETTINGS.dash.scope);
 		expect(settingsOverrides(s)).toEqual({ dash: { hideBots: false } });
 	});
 

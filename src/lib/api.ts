@@ -139,6 +139,11 @@ export const api = {
 	hide: (items: { id: string; updatedAt: string }[]) =>
 		ok(client.api.dashboard.hide.$post({ json: { items } })),
 	unhide: (ids: string[]) => ok(client.api.dashboard.unhide.$post({ json: { ids } })),
+	pinItems: (
+		ids: string[],
+		change: { category?: string | null; tag?: string; tagState?: 'on' | 'off' | 'auto' }
+	) => ok(client.api.items.pin.$post({ json: { ids, ...change } })),
+	reevaluateItems: () => ok(client.api.items.reevaluate.$post()),
 	/** Hidden until you unmute it; its threads are muted too (also on GitHub). */
 	muteItems: (ids: string[]) => ok(client.api.dashboard.mute.$post({ json: { ids } })),
 	arrange: (items: { id: string; updatedAt: string; turn?: Turn | null }[], order: string[]) =>

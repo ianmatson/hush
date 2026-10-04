@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseQuery } from '$lib/shared/query';
+import { parseExpr } from '$lib/shared/query';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, mergeSettings, validateSettings } from '$lib/shared/settings-schema';
 import type { Settings } from '$lib/shared/types';
@@ -56,7 +56,7 @@ describe('docs', () => {
 		expect(queries.length).toBeGreaterThan(10);
 		for (const { page, text } of queries) {
 			expect(text, page).not.toBe('');
-			expect(parseQuery(text).errors, `${page}: ${text}`).toEqual([]);
+			expect(parseExpr(text).errors, `${page}: ${text}`).toEqual([]);
 		}
 	});
 

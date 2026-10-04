@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { DashKind, DashSection } from '$lib/shared/types';
+	import type { DashSection } from '$lib/shared/types';
+	import { MAX_SOURCES, sourceKinds } from '$lib/shared/sources';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
@@ -11,12 +12,10 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 
 	let {
-		kind,
 		sections = $bindable(),
 		scope,
 		previewTeam
 	}: {
-		kind: DashKind;
 		sections: DashSection[];
 		scope: string;
 		previewTeam: string | null;
@@ -30,15 +29,15 @@
 
 	function add() {
 		const id = `custom-${Math.random().toString(36).slice(2, 8)}`;
-		const query = kind === 'pr' ? 'is:pr is:open ' : 'is:issue is:open ';
-		sections = [...sections, { id, name: 'New section', query, enabled: true }];
+		sections = [...sections, { id, name: 'New source', query: 'is:open ', enabled: true }];
 	}
 
 	/** Open the same search on GitHub, to check a query. */
 	function preview(s: DashSection) {
 		let q = [s.query, scope].filter(Boolean).join(' ');
 		if (q.includes('@team')) q = q.replaceAll('@team', previewTeam ?? '');
-		return `https://github.com/search?type=${kind === 'pr' ? 'pullrequests' : 'issues'}&q=${encodeURIComponent(q)}`;
+		const type = sourceKinds(s.query).includes('issue') ? 'issues' : 'pullrequests';
+		return `https://github.com/search?type=${type}&q=${encodeURIComponent(q)}`;
 	}
 </script>
 
@@ -49,11 +48,7 @@
 			class="flex flex-wrap items-center gap-2 rounded-lg border p-2.5 sm:grid sm:grid-cols-[auto_12rem_1fr_auto]"
 		>
 			<Switch bind:checked={s.enabled} aria-label="Show {s.name}" />
-			<Input
-				bind:value={s.name}
-				aria-label="Section name"
-				class="h-8 min-w-0 flex-1 sm:flex-none"
-			/>
+			<Input bind:value={s.name} aria-label="Source name" class="h-8 min-w-0 flex-1 sm:flex-none" />
 			<Input
 				bind:value={s.query}
 				aria-label="GitHub search query"
@@ -94,7 +89,7 @@
 				<Button
 					variant="ghost"
 					size="icon-xs"
-					aria-label="Delete section"
+					aria-label="Delete source"
 					onclick={() => (sections = sections.filter((x) => x.id !== s.id))}><Trash /></Button
 				>
 			</div>
@@ -102,7 +97,7 @@
 	{/each}
 </ul>
 <div>
-	<Button variant="outline" size="sm" onclick={add} disabled={sections.length >= 20}
-		><Plus /> Add section</Button
+	<Button variant="outline" size="sm" onclick={add} disabled={sections.length >= MAX_SOURCES}
+		><Plus /> Add source</Button
 	>
 </div>

@@ -13,12 +13,15 @@ repo:acme/* needs:review -author:bots label:"good first issue" login bug
 
 - `word:value` is a condition. All conditions must match.
 - `word:a,b` (or the same word twice) matches **any** of the values: `repo:acme/web,acme/api`.
+- `OR` (in capitals) matches when either side matches: `label:bug OR label:crash`.
+- Parentheses group conditions: `repo:acme/web (label:bug OR author:alice)`.
+- `-` in front of any condition, word, or group means "not": `-label:wontfix`, `-(label:a OR label:b)`.
+- `@me` means you, wherever a login goes: `author:@me`, `assignee:@me`, `review-requested:@me`.
 - `*` matches anything, and `?` one character, in `repo:`, `author:`, and `from:`: `repo:acme/*`, `author:dependabot*`.
 - Quote a value that has spaces or commas: `label:"good first issue"`.
 - `author:bots` and `from:bots` mean any bot. `-author:bots` and `-from:bots` mean a person.
 - `is:draft` and `-is:draft`; `is:open`, `is:closed`, `is:merged`.
 - Other words must all be in the title, the repository, or the author. They are not case-sensitive.
-- Only `-author:bots`, `-from:bots`, and `-is:draft` can have a `-`.
 
 When a part has an error (an unknown word, a value that does not exist), Hush says so and leaves that part out. While you type, suggestions show the words and their values; ↑ and ↓ move, Enter or Tab picks one, and Esc closes the list.
 
@@ -60,6 +63,9 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 | `label:"good first issue" is:open` | Open threads with this label.                                        |
 | `type:release,discussion`          | Releases and discussions.                                            |
 | `login timeout`                    | Threads with both words in the title, the repository, or the author. |
+| `review-requested:@me size:<50`    | Small pull requests that wait for your review.                       |
+| `label:bug OR label:crash`         | Threads with either label.                                           |
+| `repo:acme/* -author:@me`          | Everything in the acme org that you did not open.                    |
 | `about:"dependency bump"`          | Dependency updates, whoever opened them (smart decisions).           |
 
 ## In settings.json

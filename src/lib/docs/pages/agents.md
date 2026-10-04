@@ -20,13 +20,13 @@ Hush has no public API. Its API accepts only a signed-in browser session, and it
 1. Write the user's settings as JSON (see below).
 2. Give it to the user, who pastes it into **Settings → General → Edit settings.json** and chooses **Save**, or imports it as a file in **Settings → General → Settings file**.
 
-Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about sorting, pushes, views, sections, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
+Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about sorting, pushes, views, sources, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
 
 ## Write settings.json
 
 - Write only what differs from the defaults. Leave out every setting that you do not change.
 - **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their rules deletes their rules.
-- `rules`, `views`, `dash.pr`, `dash.issue`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
+- `rules`, `views`, `sources`, `tracked`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
 - Every key, type, default, and limit is in [settings.json](/docs/settings). The conditions of rules and views are queries (text): every word is in the [query language](/docs/query-language#words).
 
@@ -44,7 +44,7 @@ Check these, or Hush refuses the file:
 - `category` is `"action"`, `"fyi"`, or `"muted"`. `triage: "snooze"` has `snoozeHours`, a whole number from 1 to 720.
 - Queries (a rule's `when`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
 - View ids are 1 to 16 lower-case letters or digits, and unique; names are 1 to 40 characters; at most 12 views.
-- Section ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters; at most 20 sections for each tab.
+- Source ids are 1 to 40 lower-case letters, digits, or dashes; searches are 1 to 256 characters; at most 20 sources and 50 tracked items.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
 - `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.

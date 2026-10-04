@@ -10,67 +10,7 @@ import type {
 	Turn
 } from './types';
 
-export const DEFAULT_PR_SECTIONS: DashSection[] = [
-	{
-		id: 'review-me',
-		name: 'Review requested from you',
-		query: 'is:pr is:open user-review-requested:@me',
-		enabled: true
-	},
-	{
-		id: 'review-team',
-		name: 'Team review requests',
-		query: 'is:pr is:open team-review-requested:@team',
-		enabled: true
-	},
-	{ id: 'mine', name: 'Your PRs', query: 'is:pr is:open author:@me', enabled: true },
-	{
-		id: 'reviewed',
-		name: 'You reviewed',
-		query: 'is:pr is:open reviewed-by:@me -author:@me',
-		enabled: true
-	},
-	{ id: 'assigned', name: 'Assigned to you', query: 'is:pr is:open assignee:@me', enabled: true },
-	{ id: 'mentioned', name: 'Mentions you', query: 'is:pr is:open mentions:@me', enabled: true },
-	{
-		id: 'team-mentioned',
-		name: 'Mentions your teams',
-		query: 'is:pr is:open team:@team',
-		enabled: false
-	}
-];
-
-export const DEFAULT_ISSUE_SECTIONS: DashSection[] = [
-	{
-		id: 'assigned',
-		name: 'Assigned to you',
-		query: 'is:issue is:open assignee:@me',
-		enabled: true
-	},
-	{ id: 'mine', name: 'You opened', query: 'is:issue is:open author:@me', enabled: true },
-	{ id: 'mentioned', name: 'Mentions you', query: 'is:issue is:open mentions:@me', enabled: true },
-	{
-		id: 'commented',
-		name: 'You commented',
-		query: 'is:issue is:open commenter:@me -author:@me',
-		enabled: true
-	},
-	{
-		id: 'team-mentioned',
-		name: 'Mentions your teams',
-		query: 'is:issue is:open team:@team',
-		enabled: false
-	}
-];
-
-/** The sections Hush ships. Their names only repeat a row's turn reason, so rows do not tag them. */
-export const BUILT_IN_SECTIONS = new Set(
-	[...DEFAULT_PR_SECTIONS, ...DEFAULT_ISSUE_SECTIONS].map((s) => s.id)
-);
-
 export const DEFAULT_DASH: DashSettings = {
-	pr: DEFAULT_PR_SECTIONS,
-	issue: DEFAULT_ISSUE_SECTIONS,
 	scope: 'archived:false',
 	excludedTeams: [],
 	staleDays: 3,
@@ -560,23 +500,6 @@ export function orderAfterDrop(full: string[], visible: string[], moved: string[
 export function validateDash(d: unknown): string | null {
 	if (typeof d !== 'object' || d === null) return 'Dashboard settings must be an object.';
 	const x = d as Partial<DashSettings>;
-	for (const kind of ['pr', 'issue'] as DashKind[]) {
-		const list = x[kind];
-		if (list === undefined) continue;
-		if (!Array.isArray(list) || list.length > 20) return `Up to 20 ${kind} sections are allowed.`;
-		const ids = new Set<string>();
-		for (const s of list) {
-			if (typeof s?.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(s.id))
-				return 'Each section needs a short id.';
-			if (ids.has(s.id)) return `Two sections use the id "${s.id}".`;
-			ids.add(s.id);
-			if (typeof s.name !== 'string' || !s.name.trim() || s.name.length > 60)
-				return 'Each section needs a name (60 characters or fewer).';
-			if (typeof s.query !== 'string' || !s.query.trim() || s.query.length > 256)
-				return `"${s.name}": the query must have 1–256 characters.`;
-			if (typeof s.enabled !== 'boolean') return `"${s.name}": "enabled" must be true or false.`;
-		}
-	}
 	if (x.scope !== undefined && (typeof x.scope !== 'string' || x.scope.length > 200))
 		return 'Scope must be 200 characters or fewer.';
 	if (

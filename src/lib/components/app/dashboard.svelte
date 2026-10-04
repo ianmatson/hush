@@ -15,7 +15,6 @@
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { MediaQuery } from 'svelte/reactivity';
 	import { ListDrag } from '$lib/drag.svelte';
 	import { api } from '$lib/api';
 	import { dashQuery, keys, queryClient } from '$lib/queries';
@@ -57,12 +56,17 @@
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
 	import Folder from '@lucide/svelte/icons/folder';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Settings2 from '@lucide/svelte/icons/settings-2';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { MARK_DOT } from '$lib/marks';
+	import type { MarkColor } from '$lib/shared/types';
 
 	const KINDS: DashKind[] = ['pr', 'issue'];
 	const PAGE = 'items';
 	const COLLAPSED_KEY = 'hush:collapsed:items';
 	const KIND_LABEL: Record<DashKind, string> = { pr: 'Pull requests', issue: 'Issues' };
-	const SIDE_BY_SIDE = '(min-width: 80rem)';
 	type Zone = `${DashKind}:${Turn}`;
 	const zoneOf = (kind: DashKind, turn: Turn): Zone => `${kind}:${turn}`;
 	const parseZone = (zone: string) => {
@@ -75,6 +79,17 @@
 	const prQ = createQuery(() => dashQuery('pr'));
 	const issueQ = createQuery(() => dashQuery('issue'));
 	const me = createQuery(meQuery);
+	const categories = $derived(me.data?.settings.categories ?? []);
+	const tags = $derived(me.data?.settings.tags ?? []);
+	const viewCategory = $derived(page.url.searchParams.get('category'));
+	const viewTag = $derived(page.url.searchParams.get('tag'));
+	const viewName = $derived(
+		viewCategory
+			? categories.find((c) => c.id === viewCategory)?.name
+			: viewTag
+				? tags.find((t) => t.id === viewTag)?.name
+				: null
+	);
 	const dashQs = [prQ, issueQ];
 	const loading = $derived(dashQs.some((q) => q.isPending));
 	const fetching = $derived(dashQs.some((q) => q.isFetching || q.data?.refreshing));
@@ -92,12 +107,9 @@
 		};
 	});
 	let refreshing = $state(false);
-	const sideBySide = new MediaQuery(SIDE_BY_SIDE);
 	let activeKind = $state<DashKind>('pr');
-	const shownKinds = $derived(sideBySide.current ? KINDS : [activeKind]);
-	const noun = $derived(
-		sideBySide.current ? 'items' : activeKind === 'pr' ? 'pull requests' : 'issues'
-	);
+	const shownKinds = $derived([activeKind]);
+	const noun = $derived(activeKind === 'pr' ? 'pull requests' : 'issues');
 	let query = $state('');
 	let showHidden = $state(false);
 	let selectedId = $state<string | null>(null);
@@ -161,6 +173,8 @@
 		return (data?.items ?? []).filter(
 			(i) =>
 				i.dismissed === showHidden &&
+				(!viewCategory || i.category === viewCategory) &&
+				(!viewTag || !!i.tags?.includes(viewTag)) &&
 				(!q ||
 					`${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
 						.toLowerCase()
@@ -181,6 +195,71 @@
 		}))
 	);
 	const baseGroups = $derived(columns.flatMap((c) => c.groups));
+
+	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
+	const allCount = () => visibleItems.length;
+	const categoryCount = (id: string) => visibleItems.filter((i) => i.category === id).length;
+	const tagCount = (id: string) => visibleItems.filter((i) => i.tags?.includes(id)).length;
+
+	function marksFor(i: DashItem): { key: string; name: string; color: MarkColor }[] {
+		const category = viewCategory ? null : categories.find((c) => c.id === i.category);
+		return [
+			...(category
+				? [{ key: `c:${category.id}`, name: category.name, color: category.color }]
+				: []),
+			...tags
+				.filter((t) => t.id !== viewTag && i.tags?.includes(t.id))
+				.map((t) => ({ key: `t:${t.id}`, name: t.name, color: t.color }))
+		];
+	}
+
+	async function pin(
+		ids: string[],
+		change: { category?: string | null; tag?: string; tagState?: 'on' | 'off' },
+		patch: (x: DashItem) => DashItem,
+		message: string
+	) {
+		const set = new Set(ids);
+		await cancelDash();
+		updateDash((x) => (set.has(x.id) ? patch(x) : x));
+		sel.clear();
+		try {
+			await api.pinItems(ids, change);
+			toast(message, {
+				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} items`
+			});
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			reloadDash();
+		}
+	}
+
+	function setCategory(ids: string[], category: string | null) {
+		const name = categories.find((c) => c.id === category)?.name;
+		return pin(
+			ids,
+			{ category },
+			(x) => (category ? { ...x, category } : x),
+			name ? `Moved to “${name}”` : 'Hush decides the category again'
+		);
+	}
+
+	function setTag(ids: string[], tag: string, state: 'on' | 'off') {
+		const name = tags.find((t) => t.id === tag)?.name ?? tag;
+		return pin(
+			ids,
+			{ tag, tagState: state },
+			(x) => ({
+				...x,
+				tags:
+					state === 'on'
+						? [...new Set([...(x.tags ?? []), tag])]
+						: (x.tags ?? []).filter((t) => t !== tag)
+			}),
+			state === 'on' ? `Tagged “${name}”` : `Removed “${name}”`
+		);
+	}
 
 	const cancelDash = () => queryClient.cancelQueries({ queryKey: keys.dashAll });
 	const reloadDash = () => queryClient.invalidateQueries({ queryKey: keys.dashAll });
@@ -716,7 +795,15 @@
 		copyLinks,
 		refresh,
 		toggleShowHidden: () => (showHidden = !showHidden),
-		notNeeded: sayNotNeeded
+		notNeeded: sayNotNeeded,
+		get categories() {
+			return categories;
+		},
+		get tags() {
+			return tags;
+		},
+		setCategory,
+		setTag
 	};
 	const menuFor = (ids: string[]) => dashMenu(actions, ids);
 	$effect(() => palette.register(() => dashCommands(actions, targets())));
@@ -725,22 +812,65 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="mx-auto flex max-w-7xl gap-6 px-4 pt-4 pb-24">
-	<nav aria-label="Folders" class="sticky top-16 hidden w-48 shrink-0 self-start md:block">
-		<p class="mb-1 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-			Folders
-		</p>
+	<nav aria-label="Views" class="sticky top-16 hidden w-52 shrink-0 self-start md:block">
 		<a
 			href="/items"
-			aria-current="page"
-			class="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1.5 text-sm text-foreground"
+			aria-current={!viewCategory && !viewTag ? 'page' : undefined}
+			class={cn(
+				'flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
+				!viewCategory && !viewTag && 'bg-muted text-foreground'
+			)}
 		>
-			<span class="flex items-center gap-2"><Folder class="size-4 text-muted-foreground" />All</span
-			>
-			<span class="text-xs text-muted-foreground tabular-nums">{kindCount(null)}</span>
+			<span class="flex items-center gap-2"><Folder class="size-4" />All</span>
+			<span class="text-xs tabular-nums">{allCount()}</span>
 		</a>
+		{@render markList('Categories', 'category', categories, viewCategory, categoryCount)}
+		{@render markList('Tags', 'tag', tags, viewTag, tagCount)}
 	</nav>
 	<main data-page class="min-w-0 flex-1">
+		{#if viewName}
+			<h1 class="mb-3 hidden text-lg font-semibold tracking-tight md:block">{viewName}</h1>
+		{/if}
 		<div class="flex flex-wrap items-center gap-2">
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger
+					class="flex h-8 max-w-44 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm md:hidden"
+				>
+					<span class="truncate">{viewName ?? 'All'}</span>
+					<ChevronDown class="size-3.5 shrink-0 text-muted-foreground" />
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="start" class="min-w-52">
+					<DropdownMenu.Item onclick={() => goto('/items')}>All</DropdownMenu.Item>
+					{#if categories.length}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>Categories</DropdownMenu.Label>
+						{#each categories as c (c.id)}
+							<DropdownMenu.Item onclick={() => goto(`/items?category=${c.id}`)}>
+								<span class={cn('size-2 rounded-full', MARK_DOT[c.color])}></span>{c.name}
+								<span class="ml-auto text-xs text-muted-foreground tabular-nums"
+									>{categoryCount(c.id)}</span
+								>
+							</DropdownMenu.Item>
+						{/each}
+					{/if}
+					{#if tags.length}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Label>Tags</DropdownMenu.Label>
+						{#each tags as t (t.id)}
+							<DropdownMenu.Item onclick={() => goto(`/items?tag=${t.id}`)}>
+								<span class={cn('size-2 rounded-full', MARK_DOT[t.color])}></span>{t.name}
+								<span class="ml-auto text-xs text-muted-foreground tabular-nums"
+									>{tagCount(t.id)}</span
+								>
+							</DropdownMenu.Item>
+						{/each}
+					{/if}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={() => goto('/settings/categories')}
+						><Settings2 />Categories and tags</DropdownMenu.Item
+					>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 			<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
 				<Search
 					class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -788,7 +918,7 @@
 			</div>
 		</div>
 
-		{#if data && !sideBySide.current}
+		{#if data}
 			<div class="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Type">
 				{#each KINDS as k (k)}
 					{@const count = kindCount(k)}
@@ -887,22 +1017,9 @@
 			<ContextMenu.Root bind:open={contextOpen}>
 				<ContextMenu.Trigger>
 					{#snippet child({ props })}
-						<div
-							{...props}
-							class="grid items-start gap-x-8 gap-y-6 xl:grid-cols-2"
-							data-drag-root
-							oncontextmenucapture={onContextMenu}
-						>
+						<div {...props} class="grid gap-6" data-drag-root oncontextmenucapture={onContextMenu}>
 							{#each columnRows as col (col.kind)}
 								<div role="group" aria-label={col.label} class="grid min-w-0 content-start gap-5">
-									{#if sideBySide.current}
-										<h2 class="flex items-center gap-2 px-1 text-sm font-semibold">
-											{col.label}
-											<span class="text-xs font-normal text-muted-foreground tabular-nums"
-												>{col.count}</span
-											>
-										</h2>
-									{/if}
 									{#each col.groups as g (g.zone)}
 										{@const count = g.items.length}
 										{@const target = drag.active && drag.zone === g.zone}
@@ -987,6 +1104,7 @@
 																		onrowclick={(e) => onRowClick(e, i)}
 																		ontoggle={(e) => onToggle(e, i)}
 																		onundomove={(x) => arrange([x.id], null)}
+																		marks={marksFor(i)}
 																		menu={() => menuFor([i.id])}
 																	/>
 																</SwipeRow>
@@ -1091,6 +1209,50 @@
 </BulkBar>
 
 <NotNeededDialog bind:target={notNeededFor} />
+
+{#snippet markList(
+	title: string,
+	param: 'category' | 'tag',
+	list: { id: string; name: string; color: MarkColor }[],
+	current: string | null,
+	count: (id: string) => number
+)}
+	<div class="mt-4">
+		<div class="group/h mb-1 flex items-center justify-between px-2">
+			<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</p>
+			<span class="flex items-center gap-0.5">
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					href="/settings/categories#{param === 'category' ? 'categories' : 'tags'}"
+					aria-label="{title} settings"><Settings2 /></Button
+				>
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					href="/settings/categories?new={param}"
+					aria-label="New {param}"><Plus /></Button
+				>
+			</span>
+		</div>
+		{#each list as m (m.id)}
+			<a
+				href="/items?{param}={m.id}"
+				aria-current={current === m.id ? 'page' : undefined}
+				class={cn(
+					'flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
+					current === m.id && 'bg-muted text-foreground'
+				)}
+			>
+				<span class="flex min-w-0 items-center gap-2">
+					<span class={cn('size-2 shrink-0 rounded-full', MARK_DOT[m.color])}></span>
+					<span class="truncate">{m.name}</span>
+				</span>
+				<span class="text-xs tabular-nums">{count(m.id)}</span>
+			</a>
+		{/each}
+	</div>
+{/snippet}
 
 {#snippet peekHeader()}
 	{#if peekItem}

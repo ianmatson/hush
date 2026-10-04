@@ -109,6 +109,24 @@ export const RULE_FIELDS: RuleFieldInfo[] = [
 		help: 'Any of these labels (exact names).'
 	},
 	{
+		key: 'assignee',
+		label: 'Assigned to',
+		input: 'globs',
+		help: 'A login, or @me for you. * matches anything.'
+	},
+	{
+		key: 'reviewRequested',
+		label: 'Review requested from',
+		input: 'globs',
+		help: 'A login, a team (org/team), or @me for you.'
+	},
+	{
+		key: 'size',
+		label: 'Lines changed',
+		input: 'globs',
+		help: 'Pull requests only: <50, >500, <=10, >=10, or 10..200.'
+	},
+	{
 		key: 'about',
 		label: 'About',
 		input: 'globs',

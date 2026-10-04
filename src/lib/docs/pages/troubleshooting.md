@@ -40,7 +40,7 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 
 ## The Pull requests or Issues tab is empty or incomplete
 
-- The sections are GitHub searches. Choose the link button next to a section in **Settings → PRs & issues** to try its search on GitHub.
+- The sources are GitHub searches. Choose the link button next to a source in **Settings → Sources** to try its search on GitHub.
 - Check the **Scope**: it is added to every search.
 - `@team` sections need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
 - Hidden items: press {{key:dash.showHidden}} to show them.
