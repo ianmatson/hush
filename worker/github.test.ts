@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DETAILS_TTL, fetchDetails, forTeams, gh, needsDetails, searchShort } from './github';
+import {
+	DETAILS_TTL,
+	fetchDetails,
+	forTeams,
+	gh,
+	needsDetails,
+	searchShort,
+	toSubject
+} from './github';
 import type { SubjectFacts } from '../src/lib/shared/subject';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -172,5 +180,36 @@ describe('forTeams', () => {
 		expect(forTeams(q, facts({ reviewRequests: [{ team: true, name: 'O/Web' }] }))).toBe(true);
 		expect(forTeams(q, facts({ reviewRequests: [{ team: false, name: 'ian' }] }))).toBe(false);
 		expect(forTeams({ section: 'mine', q: 'x' }, facts())).toBe(true);
+	});
+});
+
+describe('toSubject stack links', () => {
+	const pr = (number: number, baseRefName: string, under?: Record<string, unknown>) => ({
+		number,
+		title: `PR ${number}`,
+		url: `https://github.com/o/r/pull/${number}`,
+		isDraft: false,
+		baseRefName,
+		author: { login: 'alice' },
+		baseRef: { associatedPullRequests: { nodes: under ? [under] : [] } }
+	});
+	const top = (under: Record<string, unknown> | undefined, baseRefName = 'b2') => ({
+		__typename: 'PullRequest',
+		...pr(3, baseRefName, under),
+		repository: { nameWithOwner: 'o/r', defaultBranchRef: { name: 'main' } }
+	});
+
+	it('lists the open PRs under it, nearest first, down to the default branch', () => {
+		const s = toSubject(top(pr(2, 'b1', pr(1, 'main', pr(9, 'x')))));
+		expect(s.stackBelowNearestFirst?.map((l) => l.number)).toEqual([2, 1]);
+	});
+
+	it('has no links for a PR on the default branch', () => {
+		expect(toSubject(top(pr(2, 'b1'), 'main')).stackBelowNearestFirst).toEqual([]);
+	});
+
+	it('stops at a loop', () => {
+		const s = toSubject(top(pr(2, 'b1', pr(3, 'b2'))));
+		expect(s.stackBelowNearestFirst?.map((l) => l.number)).toEqual([2]);
 	});
 });

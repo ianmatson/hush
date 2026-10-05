@@ -33,6 +33,17 @@ A row also lists what changed since you last looked at the item (“+2 commits�
 
 An item whose turn started more than 3 days ago is **stale**: it says how long it waited (“waiting 5d”) in amber. Change the number of days with [`dash.staleDays`](/docs/settings#dash-staledays).
 
+## Stacked pull requests
+
+A pull request is on top of another one when its base branch is the head branch of the other one. Hush shows a stack as one row, in the place of its most urgent pull request. Stacks from `gh stack`, Graphite, and branches that you made yourself are all the same to Hush.
+
+- The row shows the stack's most urgent pull request first. “2 of 4” is its place in the stack, from the base branch up. Click the row to peek it.
+- The [peek](/docs/peek) lists the whole stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack, and the row in the list turns to show the same pull request as the peek.
+- A pull request that is in the stack but not in your sections shows as “Not in this list”. You can peek it, but it has no actions in the list.
+- Drag the row to move the whole stack to another group.
+
+Hush finds up to 3 open pull requests under each pull request in your list, in the same repository.
+
 ## Sections
 
 The sections are tabs above the list: **All**, then each section with its count. {{key:dash.section.0}} shows all; {{key:dash.section.1}} to {{key:dash.section.9}} show one section. An item can be in more than one section.

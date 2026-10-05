@@ -25,6 +25,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import X from '@lucide/svelte/icons/x';
+	import Layers from '@lucide/svelte/icons/layers';
 	import SelectMark from './select-mark.svelte';
 	import AppMenu from './app-menu.svelte';
 	import type { MenuEntry } from '$lib/menu';
@@ -44,7 +45,8 @@
 		onrowclick,
 		ontoggle,
 		onundomove,
-		menu
+		menu,
+		stack
 	}: {
 		item: DashItem;
 		/** The keyboard cursor is on this row. */
@@ -66,6 +68,7 @@
 		onundomove: (i: DashItem) => void;
 		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
 		menu?: () => MenuEntry[];
+		stack?: { position: number; size: number };
 	} = $props();
 
 	// A click on any row closes this row's menus (see row-menus.svelte.ts).
@@ -225,6 +228,25 @@
 				title={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
 				>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
 			>
+			{#if stack}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<span
+								{...props}
+								class="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground tabular-nums"
+							>
+								<Layers class="size-3" />{stack.position} of {stack.size}
+							</span>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content
+						>Stack: move down or up with
+						<kbd class="opacity-60">{keysOf('dash.stackDown')[0] ?? ''}</kbd>
+						<kbd class="opacity-60">{keysOf('dash.stackUp')[0] ?? ''}</kbd></Tooltip.Content
+					>
+				</Tooltip.Root>
+			{/if}
 			{#if i.movedByYou}
 				<span
 					class="flex items-center gap-0.5 rounded-md border border-dashed py-0.5 pr-0.5 pl-1.5 text-muted-foreground"

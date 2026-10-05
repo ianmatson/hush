@@ -5,6 +5,7 @@ import type {
 	PeekDTO,
 	PeekEntry,
 	PeekPerson,
+	StackLink,
 	TeamDTO
 } from '../src/lib/shared/types';
 import { isBot } from '../src/lib/shared/classify';
@@ -231,11 +232,18 @@ export const muteThread = (token: string, id: string) =>
 
 const CHUNK = 40;
 
+const MAX_STACK_LEVELS_BELOW = 3;
+const stackBelowFields = (depth: number): string =>
+	depth === 0
+		? ''
+		: `baseRef { associatedPullRequests(first: 1, states: OPEN) { nodes { number title url isDraft baseRefName author { login } ${stackBelowFields(depth - 1)} } } }`;
+
 /** Fragments P (pull request) and I (issue). Queries that use them declare `$me: String!`. */
 export const SUBJECT_FIELDS = `
 fragment P on PullRequest {
   id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable bodyText
-  repository { nameWithOwner }
+  repository { nameWithOwner defaultBranchRef { name } }
+  baseRefName ${stackBelowFields(MAX_STACK_LEVELS_BELOW)}
   author { login avatarUrl(size: 48) __typename }
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
@@ -282,6 +290,27 @@ const toComment = (c: Node): LastComment => ({
 	url: c.url,
 	createdAt: c.createdAt
 });
+
+function openPrsBelowInStack(n: Node): StackLink[] {
+	const defaultBranch = n.repository?.defaultBranchRef?.name;
+	const seen = new Set<number>([n.number]);
+	const links: StackLink[] = [];
+	let at: Node = n;
+	while (at.baseRefName && at.baseRefName !== defaultBranch) {
+		const under: Node | undefined = at.baseRef?.associatedPullRequests?.nodes?.[0];
+		if (!under || seen.has(under.number)) break;
+		seen.add(under.number);
+		links.push({
+			number: under.number,
+			title: under.title ?? '',
+			url: under.url,
+			author: under.author?.login ?? 'ghost',
+			draft: !!under.isDraft
+		});
+		at = under;
+	}
+	return links;
+}
 
 /** A PR or issue node (fragments P and I) as SubjectFacts. */
 export function toSubject(n: Node): SubjectFacts {
@@ -334,7 +363,8 @@ export function toSubject(n: Node): SubjectFacts {
 			.map((v: Node) => ({ by: v.author.login, at: v.submittedAt, state: v.state })),
 		openThreads: pr
 			? (n.reviewThreads?.nodes ?? []).filter((t: Node) => t && t.isResolved === false).length
-			: 0
+			: 0,
+		...(pr && { stackBelowNearestFirst: openPrsBelowInStack(n) })
 	};
 }
 

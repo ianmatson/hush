@@ -260,6 +260,14 @@ export interface Change {
 	labels?: string[];
 }
 
+export interface StackLink {
+	number: number;
+	title: string;
+	url: string;
+	author: string;
+	draft: boolean;
+}
+
 export interface DashItem {
 	id: string;
 	kind: DashKind;
@@ -293,6 +301,7 @@ export interface DashItem {
 	myLastReviewAt: string | null;
 	/** Review threads nobody resolved yet (up to 50). */
 	openThreads: number;
+	stackBelowNearestFirst?: StackLink[];
 	/** Newest approval or change request by someone else (not you, not the author). */
 	lastVerdictBy: string | null;
 	lastVerdictAt: string | null;

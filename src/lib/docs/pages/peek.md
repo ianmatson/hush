@@ -10,6 +10,7 @@ The peek shows one pull request or issue next to your list. Click a row, or pres
 - {{key:list.peek}} or {{key:list.escape}} closes it.
 - The peek stays open when you go to another tab, and shows the same item until you move the cursor there.
 - The alert history (the bell) opens in the same place; the one that you opened last stays.
+- For a pull request in a [stack](/docs/pull-requests-and-issues#stacked-pull-requests), the peek lists the stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack.
 
 Every thread has a peek. Besides pull requests and issues:
 

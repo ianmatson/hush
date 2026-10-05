@@ -108,9 +108,8 @@ export class ListDrag {
 		const ids = this.#cfg.pick(id);
 		const set = new Set(ids);
 		const rows = [...zoneEl.querySelectorAll<HTMLElement>('[data-drag-id]')];
-		const heights = ids
-			.map((x) => this.#row(x)?.offsetHeight ?? row.offsetHeight)
-			.reduce((sum, h) => sum + h, 0);
+		const liftedRows = [...new Set(ids.map((x) => this.#row(x) ?? row))];
+		const heights = liftedRows.reduce((sum, r) => sum + r.offsetHeight, 0);
 		const gapPx = parseFloat(getComputedStyle(row.parentElement!).rowGap) || 0;
 		const rect = row.getBoundingClientRect();
 
@@ -122,7 +121,7 @@ export class ListDrag {
 			index: rows.slice(0, rows.indexOf(row)).filter((r) => !set.has(r.dataset.dragId!)).length
 		};
 		this.width = rect.width;
-		this.gap = heights + gapPx * (ids.length - 1);
+		this.gap = heights + gapPx * (liftedRows.length - 1);
 		this.fresh = true;
 		this.pos.set({ x: rect.left, y: rect.top }, { instant: true });
 		this.lift.set(0, { instant: true });

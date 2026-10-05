@@ -1,6 +1,6 @@
 import type { DashFacts } from './dashboard';
 import { NO_DECISIONS, type SubjectDecisions } from './decisions';
-import type { CiState, Enrichment, LastComment } from './types';
+import type { CiState, Enrichment, LastComment, StackLink } from './types';
 
 /**
  * Everything Hush knows about one PR or issue, as GitHub last returned it. The one record that
@@ -51,6 +51,7 @@ export interface SubjectFacts {
 	verdicts: { by: string; at: string; state: string }[];
 	/** Review threads nobody resolved (up to 50). */
 	openThreads: number;
+	stackBelowNearestFirst?: StackLink[];
 }
 
 /** "owner/repo#123": the store's key. */
@@ -175,6 +176,7 @@ export function dashFactsOf(
 		myLastReviewAt: s.myReview?.at ?? null,
 		myLastReviewState: s.myReview?.state ?? null,
 		openThreads: pr ? s.openThreads : 0,
+		stackBelowNearestFirst: pr ? (s.stackBelowNearestFirst ?? []) : [],
 		lastVerdictBy: verdict?.by ?? null,
 		lastVerdictAt: verdict?.at ?? null,
 		lastCommitAt: s.lastCommitAt,

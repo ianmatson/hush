@@ -22,6 +22,17 @@
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
 	import { arrangeGroup, orderAfterDrop } from '$lib/shared/dashboard';
+	import {
+		findStacks,
+		rotateToFront,
+		stackByMember,
+		unitsOf,
+		type ListUnit,
+		type Stack,
+		type StackMember
+	} from '$lib/shared/stacks';
+	import StackStrip from './stack-strip.svelte';
+	import StackOutsideRow from './stack-outside-row.svelte';
 	import type { DashItem, DashKind, DashResponse, Turn } from '$lib/shared/types';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -123,18 +134,41 @@
 	});
 
 	/** Groups in display order: new items on top, then your manual order. */
-	const baseGroups = $derived(
+	const arrangedGroups = $derived(
 		GROUPS.map((g) => ({
 			...g,
 			items: arrangeGroup(filtered.filter((i) => i.turn === g.turn))
 		}))
 	);
 
+	let stackFront = $state<Record<string, string>>({});
+	let rotationDirection = $state(0);
+	let peekedOutsideKey = $state<string | null>(null);
+
+	const stacks = $derived(kind === 'pr' ? findStacks(arrangedGroups.flatMap((g) => g.items)) : []);
+	const stackOf = $derived(stackByMember(stacks));
+	const rotated = (s: Stack) => rotateToFront(s, stackFront[s.bottomKey]);
+	const inListMembers = (members: StackMember[]) =>
+		members.flatMap((m) => (m.itemInList ? [m.itemInList] : []));
+	const itemsOfUnit = (u: ListUnit) => (u.stack ? inListMembers(rotated(u.stack)) : [u.item]);
+	const visibleItemOfUnit = (u: ListUnit) => itemsOfUnit(u).slice(0, 1);
+
+	const baseGroups = $derived(
+		arrangedGroups.map((g) => {
+			const units = unitsOf(g.items, stackOf);
+			return { ...g, units, items: units.flatMap(itemsOfUnit) };
+		})
+	);
+
 	// --- Drag and drop ----------------------------------------------------------------
 	const drag = new ListDrag({
 		enabled: () => !showHidden,
 		// Dragging a selected row moves the whole selection, in list order.
-		pick: (id) => (sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id]),
+		pick: (id) => {
+			const stack = stackOf.get(id);
+			if (stack) return inListMembers(rotated(stack)).map((i) => i.id);
+			return sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id];
+		},
 		isCollapsed: (zone) => collapsed[zone as Turn],
 		drop: (ids, zone, index) => dropAt(ids, zone as Turn, index)
 	});
@@ -143,17 +177,19 @@
 	/** Rows to render: dragged rows leave their lists; the placeholder opens where they land. */
 	const groups = $derived(
 		baseGroups.map((g) => {
-			const rows: { key: string; item: DashItem | null }[] = g.items
-				.filter((i) => !dragging.has(i.id))
-				.map((i) => ({ key: i.id, item: i }));
+			const rows: Row[] = g.units
+				.filter((u) => !itemsOfUnit(u).some((i) => dragging.has(i.id)))
+				.map((u) => ({ key: u.key, unit: u }));
 			if (drag.active && drag.zone === g.turn && !collapsed[g.turn])
-				rows.splice(Math.min(drag.index, rows.length), 0, { key: '__placeholder', item: null });
+				rows.splice(Math.min(drag.index, rows.length), 0, { key: '__placeholder', unit: null });
 			return { ...g, rows };
 		})
 	);
 
 	/** Keyboard order: only rows in open groups. */
-	const navigable = $derived(baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.items)));
+	const navigable = $derived(
+		baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.units.flatMap(visibleItemOfUnit)))
+	);
 	const order = $derived(navigable.map((i) => i.id));
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
 	const byId = (id: string) => data?.items.find((i) => i.id === id);
@@ -165,10 +201,18 @@
 	const peekOpen = $derived(peek.owner !== null);
 	// Read the cursor row even while not owned: a derived whose dependencies change between runs
 	// (only `owns` while not owned) missed later cursor moves.
+	const peekedOutsideMember = $derived.by(() => {
+		const key = peekedOutsideKey;
+		if (!owns || !key) return null;
+		const m = stackOf.get(key)?.membersBottomFirst.find((x) => x.key === key);
+		return m && !m.itemInList ? m : null;
+	});
 	const peekItem = $derived.by(() => {
 		const row = navigable[selectedIndex] ?? null;
-		return owns ? row : null;
+		return owns && !peekedOutsideMember ? row : null;
 	});
+	const peekCurrentKey = $derived(peekedOutsideMember?.key ?? peekItem?.id ?? null);
+	const peekStack = $derived(peekCurrentKey ? (stackOf.get(peekCurrentKey) ?? null) : null);
 	// Looking at it in the peek for a moment: "since you looked" starts again (when there is
 	// something to reset).
 	$effect(() => {
@@ -185,7 +229,11 @@
 		if (!owns) return void (restoredFor = null);
 		if (restoredFor === peekOwner || !data) return;
 		restoredFor = peekOwner;
-		if (id && navigable.some((i) => i.id === id)) untrack(() => (selectedId = id));
+		if (!id) return;
+		untrack(() => {
+			if (byId(id) && stackOf.has(id)) revealInStack(id);
+			if (navigable.some((i) => i.id === id) || stackOf.has(id)) selectedId = id;
+		});
 	});
 	/** This page takes the peek over, on the cursor row. */
 	function take() {
@@ -196,8 +244,20 @@
 	// when no row is left.
 	$effect(() => {
 		const i = peekItem;
+		const outside = peekedOutsideMember;
 		if (!owns || !data) return;
 		untrack(() => {
+			if (outside) {
+				peek.target = {
+					id: outside.key,
+					repo: outside.repo,
+					number: outside.number,
+					title: outside.title,
+					url: outside.url,
+					need: null
+				};
+				return;
+			}
 			if (!i) return closePeek();
 			peek.target = {
 				id: i.id,
@@ -220,27 +280,84 @@
 	});
 	/** Show an item in the peek (this page takes it over). */
 	function peekThis(i: DashItem) {
+		peekedOutsideKey = null;
+		revealInStack(i.id);
 		selectedId = i.id;
 		take();
 	}
 
+	function revealInStack(id: string) {
+		const stack = stackOf.get(id);
+		if (stack) stackFront[stack.bottomKey] = id;
+	}
+
+	const cursorIsIn = (stack: Stack) => !!selectedId && stackOf.get(selectedId) === stack;
+	const positionIn = (stack: Stack, key: string) =>
+		stack.membersBottomFirst.findIndex((m) => m.key === key);
+
+	function showStackMember(stack: Stack, m: StackMember, direction: number) {
+		rotationDirection = direction;
+		stackFront[stack.bottomKey] = m.key;
+		if (m.itemInList) {
+			peekedOutsideKey = null;
+			selectedId = m.itemInList.id;
+			if (peekOpen && !owns) take();
+			return;
+		}
+		if (!cursorIsIn(stack)) selectedId = inListMembers(rotated(stack))[0]?.id ?? selectedId;
+		peekedOutsideKey = m.key;
+		take();
+	}
+
+	function stepStack(direction: 1 | -1) {
+		const key = (owns && peekedOutsideMember?.key) || selectedId;
+		const stack = key ? stackOf.get(key) : undefined;
+		if (!stack || !key) return;
+		const next = stack.membersBottomFirst[positionIn(stack, key) + direction];
+		if (next) showStackMember(stack, next, direction);
+	}
+
+	function pickInStrip(stack: Stack, m: StackMember) {
+		const from = peekCurrentKey ? positionIn(stack, peekCurrentKey) : 0;
+		showStackMember(stack, m, Math.sign(positionIn(stack, m.key) - from));
+	}
+
+	function peekOutside(stack: Stack, m: StackMember) {
+		contextOpen = false;
+		closeRowMenus();
+		sel.clear();
+		if (!cursorIsIn(stack)) selectedId = inListMembers(rotated(stack))[0]?.id ?? selectedId;
+		peekedOutsideKey = m.key;
+		take();
+	}
+
+	const ROTATION = { duration: 260, easing: cubicOut };
+	const rotationSlide = (offsetSign: number) => ({
+		...ROTATION,
+		duration: offsetSign ? ROTATION.duration : 0,
+		css: (t: number, u: number) => `transform: translateY(${offsetSign * u * 100}%); opacity: ${t}`
+	});
+	const rotateIn = (_node: Element, direction: number) => rotationSlide(-direction);
+	const rotateOut = (_node: Element, direction: number) => rotationSlide(direction);
+
 	/** `index` counts the visible rows left in the group once the dragged rows are out. */
 	function dropAt(ids: string[], turn: Turn, index: number) {
-		const left = (baseGroups.find((g) => g.turn === turn)?.items ?? [])
-			.map((i) => i.id)
-			.filter((id) => !ids.includes(id));
-		const visible = [...left.slice(0, index), ...ids, ...left.slice(index)];
+		const left = (baseGroups.find((g) => g.turn === turn)?.units ?? []).filter(
+			(u) => !itemsOfUnit(u).some((i) => ids.includes(i.id))
+		);
+		const idsOf = (units: ListUnit[]) => units.flatMap((u) => itemsOfUnit(u).map((i) => i.id));
+		const visible = [...idsOf(left.slice(0, index)), ...ids, ...idsOf(left.slice(index))];
 		return arrange(ids, turn, orderAfterDrop(fullGroup(turn), visible, ids));
 	}
 
 	// Enter and leave animations that know about dragging.
-	type Row = { key: string; item: DashItem | null };
+	type Row = { key: string; unit: ListUnit | null };
 	function enter(node: Element, r: Row) {
-		if (!r.item)
+		if (!r.unit)
 			return drag.fresh ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
 		if (drag.settling) {
 			// The dropped stack unfolds: the first card is already in place, the rest slide out of it.
-			const k = drag.unfold.indexOf(r.item.id);
+			const k = drag.unfold.indexOf(r.unit.item.id);
 			return k < 0
 				? { duration: 0 }
 				: fly(node, { y: -28, opacity: 0, duration: 320, delay: 35 * k, easing: cubicOut });
@@ -249,7 +366,7 @@
 		return fly(node, { y: -8, duration: 200 });
 	}
 	function leave(node: Element, r: Row) {
-		if (!r.item)
+		if (!r.unit)
 			return drag.settling ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
 		// Rows lifted by a drag vanish at once: the floating card stands in for them.
 		if (drag.active || drag.settling) return { duration: 0 };
@@ -353,7 +470,11 @@
 
 	// --- Everything else --------------------------------------------------------------
 	$effect(() => {
-		if (!navigable.some((i) => i.id === selectedId)) selectedId = navigable[0]?.id ?? null;
+		if (!navigable.some((i) => i.id === selectedId)) {
+			const stack = selectedId ? stackOf.get(selectedId) : undefined;
+			const standIn = stack && navigable.find((i) => stackOf.get(i.id) === stack);
+			selectedId = standIn?.id ?? navigable[0]?.id ?? null;
+		}
 		untrack(() => sel.prune(order));
 	});
 
@@ -396,8 +517,11 @@
 			query = '';
 			section = null;
 			showHidden = !!item.dismissed;
-			collapsed[item.turn] = false;
 			sel.clear();
+			peekedOutsideKey = null;
+			const stackLead = stackOf.get(item.id)?.mostUrgentInList;
+			collapsed[(stackLead ?? item).turn] = false;
+			revealInStack(item.id);
 			selectedId = item.id;
 			take();
 		});
@@ -527,6 +651,7 @@
 		if (sel.click(e, i.id, order, selectedId)) return;
 		// A click on the card peeks it.
 		sel.clear();
+		peekedOutsideKey = null;
 		selectedId = i.id;
 		take();
 	}
@@ -539,6 +664,7 @@
 
 	function move(delta: number, extend = false) {
 		if (!navigable.length) return;
+		peekedOutsideKey = null;
 		if (extend && selectedId) sel.ids.add(selectedId);
 		const n =
 			selectedIndex < 0 ? 0 : Math.min(Math.max(selectedIndex + delta, 0), navigable.length - 1);
@@ -580,7 +706,9 @@
 			'dash.hide': () => toggleHide(targets()),
 			'dash.showHidden': () => (showHidden = !showHidden),
 			'dash.mute': () => toggleMute(targets()),
-			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i)
+			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i),
+			'dash.stackUp': () => stepStack(1),
+			'dash.stackDown': () => stepStack(-1)
 		};
 		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
 		const fn = run[cmd];
@@ -893,36 +1021,19 @@
 												animate:flip={FLIP}
 												in:enter={r}
 												out:leave={r}
-												data-drag-id={r.item?.id}
-												data-drag-placeholder={!r.item || undefined}
-												style={r.item ? undefined : `height: ${drag.gap}px`}
-												class={r.item
+												data-drag-id={r.unit?.item.id}
+												data-drag-placeholder={!r.unit || undefined}
+												style={r.unit ? undefined : `height: ${drag.gap}px`}
+												class={r.unit
 													? 'drag-row'
 													: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
 												onpointerdown={(e) =>
-													r.item && drag.pointerdown(e, r.item.id, e.currentTarget)}
+													r.unit && drag.pointerdown(e, r.unit.item.id, e.currentTarget)}
 											>
-												{#if r.item}
-													{@const i = r.item}
-													<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
-														<DashRow
-															item={i}
-															selected={i.id === selectedId}
-															checked={sel.has(i.id)}
-															selecting={sel.size > 0}
-															draggable={!showHidden}
-															showSections={!section}
-															{sectionNames}
-															onopen={open}
-															onhide={(x) => toggleHide([x.id])}
-															onmute={(x) => toggleMute([x.id])}
-															oncopy={(x) => copyLinks([x.id])}
-															onrowclick={(e) => onRowClick(e, i)}
-															ontoggle={(e) => onToggle(e, i)}
-															onundomove={(x) => arrange([x.id], null)}
-															menu={() => menuFor([i.id])}
-														/>
-													</SwipeRow>
+												{#if r.unit?.stack}
+													{@render stackRow(r.unit.stack)}
+												{:else if r.unit}
+													{@render itemRow(r.unit.item)}
 												{/if}
 											</li>
 										{/each}
@@ -1017,7 +1128,67 @@
 
 <NotNeededDialog bind:target={notNeededFor} />
 
+{#snippet itemRow(i: DashItem, stack?: Stack)}
+	<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
+		<DashRow
+			item={i}
+			selected={i.id === selectedId && !peekedOutsideMember}
+			checked={sel.has(i.id)}
+			selecting={sel.size > 0}
+			draggable={!showHidden}
+			showSections={!section}
+			{sectionNames}
+			onopen={open}
+			onhide={(x) => toggleHide([x.id])}
+			onmute={(x) => toggleMute([x.id])}
+			oncopy={(x) => copyLinks([x.id])}
+			onrowclick={(e) => onRowClick(e, i)}
+			ontoggle={(e) => onToggle(e, i)}
+			onundomove={(x) => arrange([x.id], null)}
+			menu={() => menuFor([i.id])}
+			stack={stack && {
+				position: positionIn(stack, i.id) + 1,
+				size: stack.membersBottomFirst.length
+			}}
+		/>
+	</SwipeRow>
+{/snippet}
+
+{#snippet stackMember(stack: Stack, m: StackMember)}
+	{#if m.itemInList}
+		{@render itemRow(m.itemInList, stack)}
+	{:else}
+		<StackOutsideRow
+			member={m}
+			position={positionIn(stack, m.key) + 1}
+			size={stack.membersBottomFirst.length}
+			selected={peekedOutsideMember?.key === m.key || (cursorIsIn(stack) && !peekedOutsideMember)}
+			onclick={() => peekOutside(stack, m)}
+		/>
+	{/if}
+{/snippet}
+
+{#snippet stackRow(stack: Stack)}
+	{@const front = rotated(stack)[0]}
+	<div class="grid overflow-y-clip *:[grid-area:1/1]">
+		{#key front.key}
+			<div in:rotateIn={rotationDirection} out:rotateOut={rotationDirection}>
+				{@render stackMember(stack, front)}
+			</div>
+		{/key}
+	</div>
+{/snippet}
+
 {#snippet peekHeader()}
+	{#if peekStack && peekCurrentKey}
+		{@const stack = peekStack}
+		<StackStrip {stack} currentKey={peekCurrentKey} onpick={(m) => pickInStrip(stack, m)} />
+	{/if}
+	{#if peekedOutsideMember}
+		<p class="border-b px-4 py-3 text-sm text-muted-foreground">
+			Not in this list. It is in the same stack as the PRs around it.
+		</p>
+	{/if}
 	{#if peekItem}
 		{@const i = peekItem}
 		<WhyLine
