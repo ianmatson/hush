@@ -68,16 +68,16 @@ Busy pull requests change many times a day. By default, Hush keeps **one alert f
 - [`quietHours`](/docs/settings#quiethours) holds pushes from 22:00 to 07:00 and on weekends. When quiet hours end, one push lists what waited.
 - [`pushLimit`](/docs/settings#pushlimit) sends at most 6 pushes in 30 minutes. The rest wait and go as one push.
 
-A [category](/docs/categories#inbox-settings) decides for its threads: **Always push** or **Never push**. This one pushes releases of one project, which are FYI by default:
+A [category](/docs/categories#inbox-settings) decides for its threads: **Always push** or **Never push**. This one pushes every notification about the issues of one project, also FYI ones:
 
 ```json settings
 {
 	"categories": [
 		{
 			"id": "svelte",
-			"name": "Svelte releases",
+			"name": "Svelte issues",
 			"color": "orange",
-			"rule": "type:release repo:sveltejs/*",
+			"rule": "type:issue repo:sveltejs/*",
 			"description": "",
 			"inbox": "fyi",
 			"push": "on"

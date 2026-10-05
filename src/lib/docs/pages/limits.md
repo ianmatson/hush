@@ -11,7 +11,7 @@ Hush checks more often while you use it, because a check costs GitHub requests a
 
 ## What Hush sees
 
-Hush sees what GitHub puts in your notifications, and the facts of the pull requests and issues behind them. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); the inbox watcher finds those within 15 minutes, and the dashboards on their next search.
+Hush sees the pull requests and issues that your sources find or that you track, their facts, and what GitHub puts in your notifications about them. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); the inbox watcher finds those within 15 minutes, and the dashboards on their next search.
 
 ## What Hush stores
 

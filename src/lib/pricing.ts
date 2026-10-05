@@ -27,7 +27,7 @@ export const INCLUDED = [
 	'Your inbox, sorted into Needs you and FYI',
 	'Pull requests and issues by whose turn it is',
 	'Push on every device, with quiet hours',
-	'Rules, saved views, and feeds',
+	'Rules, notification views, and feeds',
 	'Approve, comment, and merge from Hush',
 	'Every setting in one settings.json'
 ];

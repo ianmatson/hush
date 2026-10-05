@@ -21,7 +21,7 @@ import { fetchSubjects } from '../github';
 import { SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
 import { PollerDecisions } from './decisions';
 import { subjectRefOf, type ThreadRow } from './schema';
-import { MAX_INDIVIDUAL_PUSHES, type Resolved, type Who } from './shared';
+import { MAX_INDIVIDUAL_PUSHES, TRACKED_SEEN_REFRESH, type Resolved, type Who } from './shared';
 
 /** SQLite binds at most this many values per statement here; longer IN lists go in chunks. */
 const CHUNK = 90;
@@ -149,6 +149,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 				})
 			);
 			const items = this.placeItems(who, patched, byId);
+			if (this.storePlacements(items)) await this.bumpVersion();
 			const data: DashResponse = {
 				...cached.data,
 				items,
@@ -238,12 +239,67 @@ export abstract class PollerSubjects extends PollerDecisions {
 		});
 	}
 
+	protected trackedPlacements(
+		keys: string[]
+	): Map<string, { category: string | null; tags: string[]; seenAt: number }> {
+		const out = new Map<string, { category: string | null; tags: string[]; seenAt: number }>();
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const r of this.all<{
+				key: string;
+				category: string | null;
+				tags: string;
+				seen_at: number;
+			}>(
+				`SELECT key, category, tags, seen_at FROM tracked_items WHERE key IN (${marks(chunk.length)})`,
+				...chunk
+			))
+				out.set(r.key, {
+					category: r.category,
+					tags: JSON.parse(r.tags) as string[],
+					seenAt: r.seen_at
+				});
+		}
+		return out;
+	}
+
+	protected storePlacements(items: DashItem[], seen = false): boolean {
+		const now = Date.now();
+		const stored = this.trackedPlacements(items.map((i) => i.id));
+		let marksChanged = false;
+		const writes: (() => void)[] = [];
+		for (const i of items) {
+			const old = stored.get(i.id);
+			const category = i.category ?? null;
+			const tags = JSON.stringify(i.tags ?? []);
+			const sameMarks = !!old && old.category === category && JSON.stringify(old.tags) === tags;
+			const seenAt = old && !(seen && now - old.seenAt > TRACKED_SEEN_REFRESH) ? old.seenAt : now;
+			if (sameMarks && seenAt === old.seenAt) continue;
+			if (!sameMarks) marksChanged = true;
+			writes.push(() =>
+				this.run(
+					`INSERT INTO tracked_items (key, kind, seen_at, category, tags) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET seen_at = excluded.seen_at, category = excluded.category,
+             tags = excluded.tags`,
+					i.id,
+					i.kind,
+					seenAt,
+					category,
+					tags
+				)
+			);
+		}
+		if (writes.length) this.transaction(() => writes.forEach((w) => w()));
+		return marksChanged;
+	}
+
 	protected async rePlaceCachedItems(who: Who): Promise<void> {
 		for (const kind of ['pr', 'issue'] as const) {
 			const key = `dash:${kind}`;
 			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
 			if (!cached) continue;
 			const items = this.placeItems(who, cached.data.items);
+			if (this.storePlacements(items)) await this.bumpVersion();
 			await this.ctx.storage.put(key, { sig: cached.sig, data: { ...cached.data, items } });
 			this.broadcast({ type: 'dash', kind });
 		}
@@ -273,7 +329,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const candidates: PushCandidate[] = [];
 		const resolved: Resolved[] = [];
 		const now = Date.now();
-		const pins = this.itemPins([...new Set(items.map((i) => i.row.subject_key!))]);
+		const placed = this.trackedPlacements([...new Set(items.map((i) => i.row.subject_key!))]);
 		for (const { row: r, fresh, before } of items) {
 			const e = enrichmentOf(fresh, me, decided.get(r.subject_key!));
 			const c = withOverride(
@@ -287,7 +343,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 						enrichment: e,
 						me,
 						myTeams,
-						pinnedCategory: pins.get(r.subject_key!)?.category ?? null
+						itemCategoryId: placed.get(r.subject_key!)?.category ?? null
 					},
 					settings
 				),

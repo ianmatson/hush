@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { SavedView, ThreadDTO, ViewBase } from '$lib/shared/types';
+	import type { SavedView, Settings, ThreadDTO, ViewBase } from '$lib/shared/types';
 	import { VIEW_BASES } from '$lib/shared/views';
 	import { previewThreads, ruleSuggestions } from '$lib/rule-preview';
 	import { cn } from '$lib/utils';
@@ -11,7 +11,7 @@
 	import RuleBuilder from './rules/rule-builder.svelte';
 
 	/**
-	 * Create or edit a saved view: a name, a base list, and conditions (the same as rules, also as
+	 * Create or edit a notification view: a name, a base list, and conditions (the same as rules, also as
 	 * text). Shows how many threads match while you edit.
 	 */
 	let {
@@ -19,6 +19,7 @@
 		initial,
 		threads,
 		me,
+		settings,
 		onsave,
 		ondelete
 	}: {
@@ -28,6 +29,7 @@
 		/** Threads of each base list the page has, for the live count. */
 		threads: Partial<Record<ViewBase, ThreadDTO[]>>;
 		me: string;
+		settings?: Settings;
 		onsave: (v: Omit<SavedView, 'id'> & { id?: string }) => void;
 		ondelete?: () => void;
 	} = $props();
@@ -42,16 +44,16 @@
 		if (open) untrack(() => (draft = structuredClone($state.snapshot(initial))));
 	});
 
-	const EXCLUDED_WORDS = ['in', 'category', 'tag'];
+	const EXCLUDED_WORDS = ['in'];
 	const list = $derived(threads[draft.base]);
-	const suggestions = $derived(open ? ruleSuggestions(undefined) : {});
+	const suggestions = $derived(open ? ruleSuggestions(settings) : {});
 	const nameOk = $derived(!!draft.name.trim());
 </script>
 
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-h-[90dvh] gap-4 overflow-y-auto sm:max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>{initial.id ? 'Edit view' : 'New view'}</Dialog.Title>
+			<Dialog.Title>{initial.id ? 'Edit notification view' : 'New notification view'}</Dialog.Title>
 			<Dialog.Description
 				>A tab with only the threads you choose. Actions and keys work as in its base.</Dialog.Description
 			>
@@ -90,7 +92,7 @@
 			label="Only threads where"
 			exclude={EXCLUDED_WORDS}
 			{suggestions}
-			preview={(q) => (list ? previewThreads(q, me, list) : null)}
+			preview={(q) => (list ? previewThreads(q, me, list, settings) : null)}
 		/>
 		{#if !list}
 			<p class="text-xs text-muted-foreground">Hush counts the matches when it has this list.</p>

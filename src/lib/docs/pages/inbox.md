@@ -1,7 +1,20 @@
 ---
 title: Inbox
-description: How Hush sorts notifications, what each tab and row shows, and how Done, Snooze, Mute, and Read work.
+description: Which notifications come in, how Hush sorts them, what each tab and row shows, and how Done, Snooze, Mute, and Read work.
 ---
+
+## What comes in
+
+Hush tracks the pull requests and issues that your [sources](/docs/pull-requests-and-issues#sources) find, and the ones that you [track by hand](/docs/pull-requests-and-issues#sources). Your GitHub notifications are a second stream of information about these items. Hush keeps only the notifications about them:
+
+- A notification about a PR or issue that no source finds, and that you do not track, does not come in.
+- A notification that is not about a PR or issue does not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Hush removed the threads of this type that you had.
+- When a notification is about a PR or issue that Hush does not track yet, Hush runs your sources again (at most every 5 minutes). If a source finds the item now, the notification comes in.
+- Hush gets unread notifications again at the next sync (about every 15 minutes). Thus a notification that came before a source found its item is not lost.
+
+Hush runs your sources about every 15 minutes while it checks GitHub, also when the Pull requests and Issues tabs are not open.
+
+When your sources stop finding a PR or issue (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more. Thus its last notifications still come in. When you change your sources, or tab settings such as hidden bots or stale days, Hush stops at once to track the items that the new sources do not find, and removes their notifications.
 
 ## Tabs
 
@@ -13,7 +26,7 @@ description: How Hush sorts notifications, what each tab and row shows, and how 
 | **Done**      | Threads that you (or Hush, or a category) finished.                              |
 | **Muted**     | Threads that you muted, or that a category mutes.                                |
 
-After these come your [saved views](/docs/views). Keys {{key:inbox.view.1}} to {{key:inbox.view.5}} open the built-in tabs, and {{key:inbox.view.6}} to {{key:inbox.view.9}} your first four saved views.
+After these come your [notification views](/docs/views). Keys {{key:inbox.view.1}} to {{key:inbox.view.5}} open the built-in tabs, and {{key:inbox.view.6}} to {{key:inbox.view.9}} your first four notification views.
 
 ## What needs you
 
@@ -41,9 +54,7 @@ Hush reads each notification and the pull request or issue behind it (CI, review
 
 With [smart decisions](/docs/settings#smartdecisions) on (the default), Hush also reads the newest comments. When they need nothing from you (thanks, approval, a status update, +1), a reply or a mention is FYI, and a comment on your PR or issue is not your turn.
 
-**Other:** security and Dependabot alerts, repository invitations, deployments that wait for your approval, and workflow runs that failed.
-
-Everything else is **FYI**: team mentions, repositories that you watch, merged and closed work, passing CI, releases. With [`botsAreFyi`](/docs/settings#botsarefyi) on (the default), PRs, comments, and mentions by bots are FYI too. A review request to you by name still needs you, also on a bot's PR.
+Everything else is **FYI**: team mentions, repositories that you watch, merged and closed work. With [`botsAreFyi`](/docs/settings#botsarefyi) on (the default), PRs, comments, and mentions by bots are FYI too. A review request to you by name still needs you, also on a bot's PR.
 
 Turn the bot, team, and smart decisions settings on or off in **Settings → Inbox → Defaults**.
 
@@ -56,12 +67,14 @@ Each row shows:
 - **What happened**, in one line: “CI failed on your PR”, “@alice requests your review”, “@github-actions commented on your PR”.
 - The title, the repository, and the number.
 - **Why GitHub notified you**: “Review requested”, “You opened this”, “Watching repo”… A row does not show a fact twice: when the first line already says why, or that it is a draft, that tag is left out.
-- **category: …** when the inbox settings of its [category](/docs/categories#inbox-settings) sorted it.
+- The icon of its PR or issue's [category](/docs/categories), and the icons of its tags. Hold the pointer on an icon to see its name.
 - **What changed since you looked**, for a PR or issue: “+2 commits”, “CI fails”, “@alice approved”, “3 new comments”. See [Since you looked](#since-you-looked).
 - A note such as “✓ You approved” when Hush moved it to Done by itself.
 - The time and the condition of a snooze.
 - A dot when it is unread.
 - The **main action** button: Review, Fix CI, Address, Resolve, Merge, Reply, Triage, or Open. It opens the right page on GitHub (the files of a PR to review, its checks to fix CI) and marks the thread as read.
+
+To choose the parts that rows show, go to **Settings → General → Row contents**. The Notifications row has **Category** and **Tags** parts, and more. See [`rows.thread`](/docs/settings#rows-thread).
 
 Click a row to [peek](/docs/peek) at it.
 
@@ -101,12 +114,12 @@ After each action, a message with **Undo** shows for a few seconds.
 
 When Hush puts a thread in Needs you and it does not need you, press {{key:inbox.notNeeded}}, or choose **Doesn't need me** at the top of the [peek](/docs/peek) or in the right-click menu. Hush asks **Why doesn't this need you?**, and each answer fixes what would have been right:
 
-| Answer                                 | What changes                                                                                                                                 |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Someone else already reviewed it**   | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.             |
-| **Team review requests don't need me** | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                     |
-| **A bot opened it**                    | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                          |
-| **Only this one**                      | Moves only this thread to FYI, until it changes (a new notification). For a PR or issue, also to Other on the Pull requests and Issues tabs. |
+| Answer                                 | What changes                                                                                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Someone else already reviewed it**   | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.               |
+| **Team review requests don't need me** | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                       |
+| **A bot opened it**                    | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                            |
+| **Only this one**                      | Moves only this thread to FYI, until it changes (a new notification). Its PR or issue also goes to Other on the Pull requests and Issues tabs. |
 
 Hush shows only the answers that would change something for this thread. After each one, **Undo** in the message puts everything back. A thread that you moved says “You said: doesn't need me”.
 
@@ -140,7 +153,9 @@ repo:acme/* needs:review -author:bots
 
 Plain words must all be in the title, the repository, or the author. Suggestions show while you type; {{key:list.search}} goes to the box. When a filter has an error, the message shows under the box, and the part with the error is left out.
 
-To keep a filter, choose the bookmark button at the end of the box: **Save this filter as a view (a new tab)**. See [Saved views](/docs/views).
+`category:` and `tag:` work here too. They match the category and tags of the thread's PR or issue: `category:bugs tag:quick`.
+
+To keep a filter, choose the bookmark button at the end of the box: **Save this filter as a notification view (a new tab)**. See [Notification views](/docs/views).
 
 ### Search everywhere
 

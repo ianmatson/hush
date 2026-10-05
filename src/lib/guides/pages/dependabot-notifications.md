@@ -67,11 +67,11 @@ Hush treats bots differently by default, with [`botsAreFyi`](/docs/settings#bots
 
 - Pull requests that bots open are **FYI**, unless they ask for your review by name.
 - Comments and mentions by bots do not count as replies to you.
-- On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name.
+- On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name. Hush then does not track them, so their notifications do not come in to the inbox either. Turn off `dash.hideBots` to get them.
 
 A bot is a login that ends in `[bot]`, or that starts with dependabot, renovate, github-actions, or codecov.
 
-Dependabot **alerts** are different: they go to **Needs you**, because a vulnerability usually needs someone to act. The [peek](/docs/peek) lists the open alerts of the repository, with the severity and the version that fixes each one.
+Dependabot **alerts** do not come in to Hush: Hush keeps only notifications about pull requests and issues. Read alerts on GitHub, or by email (Step 2).
 
 To change this, make [categories](/docs/categories) with inbox settings. The first category whose rule matches wins:
 
@@ -82,7 +82,7 @@ To change this, make [categories](/docs/categories) with inbox settings. The fir
 			"id": "dependabot",
 			"name": "Dependabot PRs",
 			"color": "gray",
-			"rule": "author:dependabot* in:fyi",
+			"rule": "author:dependabot*",
 			"description": "",
 			"inbox": "muted"
 		},
@@ -90,18 +90,9 @@ To change this, make [categories](/docs/categories) with inbox settings. The fir
 			"id": "renovate",
 			"name": "Renovate",
 			"color": "gray",
-			"rule": "author:renovate* in:fyi",
+			"rule": "author:renovate*",
 			"description": "",
 			"triage": "done"
-		},
-		{
-			"id": "sandbox-alerts",
-			"name": "Sandbox alerts",
-			"color": "amber",
-			"rule": "type:dependabot repo:acme/sandbox",
-			"description": "",
-			"inbox": "fyi",
-			"push": "off"
 		},
 		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
 	]
@@ -110,9 +101,9 @@ To change this, make [categories](/docs/categories) with inbox settings. The fir
 
 A change to `categories` replaces the whole list, so keep `other`, the fallback. This example also removes the default categories; to keep them, add them to the list, below these.
 
-- `author:dependabot*` matches the login `dependabot[bot]`. With `in:fyi`, a Dependabot pull request that asks for your review by name still needs you.
-- `author:` matches who opened a pull request or issue. To match alerts, use `type:dependabot` (Dependabot alerts) or `type:vulnerability` (vulnerability alerts).
-- To see bot activity in one place, make a [saved view](/docs/views) with `from:bots`, or leave bots out of a view with `-author:bots`.
+- `author:dependabot*` matches the login `dependabot[bot]`. `author:` matches who opened a pull request or issue.
+- A category rule looks only at the pull request or issue, so it cannot use `in:`. A muted category mutes every notification about its pull requests, also a review request to you by name.
+- To see bot activity in one place, make a [notification view](/docs/views) with `from:bots`, or leave bots out of a view with `-author:bots`.
 
 A category that mutes a thread acts in Hush only. To stop GitHub from sending a thread, choose **Mute** on the thread: Hush also unsubscribes you on GitHub.
 

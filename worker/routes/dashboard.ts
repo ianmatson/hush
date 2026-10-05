@@ -28,6 +28,17 @@ const app = routes()
 		const u = c.get('user');
 		return c.json(await poller(c.env, u.id).teams(c.req.query('refresh') === '1'));
 	})
+	.get('/api/sources/count', query<{ q: string; scope: string }>(), async (c) => {
+		const q = c.req.query('q') ?? '';
+		const scope = c.req.query('scope') ?? '';
+		if (!q.trim() || q.length > 256 || scope.length > 200)
+			return c.json({ error: 'The search must have 1–256 characters.' }, 400);
+		try {
+			return c.json(await poller(c.env, c.get('user').id).countSource(q, scope));
+		} catch (err) {
+			return c.json({ error: (err as Error).message }, 502);
+		}
+	})
 	.get('/api/dashboard/:kind', query<{ refresh: '1' }>(), async (c) => {
 		const kind = c.req.param('kind') as DashKind;
 		if (kind !== 'pr' && kind !== 'issue') return c.json({ error: 'Unknown dashboard' }, 400);

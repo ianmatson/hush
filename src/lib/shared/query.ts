@@ -2,7 +2,7 @@ import { tokens } from './text-match';
 import type { RuleMatch } from './types';
 
 /**
- * One small query language for rules, saved views, and the Filter box. Rules and views store the
+ * One small query language for rules, notification views, and the Filter box. Rules and views store the
  * text; it compiles to RuleMatch, the form the matcher reads (and back, for the visual editor):
  *
  *   repo:acme/* needs:review -author:bots label:"good first issue" login bug
@@ -75,13 +75,13 @@ export const WORDS: QueryWord[] = [
 	{
 		key: 'category',
 		field: 'itemCategory',
-		help: 'Its category (name or id); only in the Filter box of the PR and issue tabs',
+		help: 'Its category (name or id); not in category and tag rules',
 		example: 'category:bugs'
 	},
 	{
 		key: 'tag',
 		field: 'itemTag',
-		help: 'Has this tag (name or id); only in the Filter box of the PR and issue tabs',
+		help: 'Has this tag (name or id); not in category and tag rules',
 		example: 'tag:blocked'
 	},
 	{
@@ -103,13 +103,7 @@ export const WORDS: QueryWord[] = [
 		example: 'type:pr',
 		values: {
 			pr: v('PullRequest', 'Pull request'),
-			issue: v('Issue', 'Issue'),
-			ci: v('CheckSuite', 'Workflow run'),
-			release: v('Release', 'Release'),
-			discussion: v('Discussion', 'Discussion'),
-			commit: v('Commit', 'Commit'),
-			vulnerability: v('RepositoryVulnerabilityAlert', 'Vulnerability alert'),
-			dependabot: v('RepositoryDependabotAlertsThread', 'Dependabot alerts')
+			issue: v('Issue', 'Issue')
 		}
 	},
 	{
@@ -126,13 +120,7 @@ export const WORDS: QueryWord[] = [
 			assigned: v('assign', 'You were assigned'),
 			watching: v('subscribed', 'You watch the repository'),
 			subscribed: v('manual', 'You subscribed to it'),
-			'state-changed': v('state_change', 'You changed its state'),
-			'your-ci': v('ci_activity', 'Your workflow run'),
-			security: v('security_alert', 'Security alert'),
-			invited: v('invitation', 'Repository invitation'),
-			'deploy-approval': v('approval_requested', 'A deployment waits for your approval'),
-			'feature-request': v('member_feature_requested', 'Feature request'),
-			'advisory-credit': v('security_advisory_credit', 'Security advisory credit')
+			'state-changed': v('state_change', 'You changed its state')
 		}
 	},
 	{
@@ -148,7 +136,6 @@ export const WORDS: QueryWord[] = [
 			merge: v('merge', 'Merge it'),
 			reply: v('reply', 'Reply'),
 			triage: v('triage', 'Triage it'),
-			security: v('security', 'Handle a security alert'),
 			nothing: v('none', 'Nothing: FYI')
 		}
 	},
@@ -180,6 +167,14 @@ const RENAMED: Record<string, string> = {
 	why: 'event',
 	by: 'from'
 };
+
+export const NOTIFICATION_WORDS = ['event', 'needs', 'in'];
+const NOTIFICATION_FIELDS = WORDS.filter((w) => NOTIFICATION_WORDS.includes(w.key)).map(
+	(w) => w.field
+);
+
+export const usesNotificationWords = (query: string) =>
+	leavesOf(compileExpr(query)).some((w) => NOTIFICATION_FIELDS.some((f) => w[f] !== undefined));
 
 export const usesItemMarks = (query: string) =>
 	leavesOf(compileExpr(query)).some((w) => !!w.itemCategory?.length || !!w.itemTag?.length);

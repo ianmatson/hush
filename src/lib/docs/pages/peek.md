@@ -12,28 +12,18 @@ The peek shows one pull request or issue next to your list. Click a row, or pres
 - The alert history (the bell) opens in the same place; the one that you opened last stays.
 - For a pull request in a [stack](/docs/pull-requests-and-issues#stacked-pull-requests), the peek lists the stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack.
 
-Every thread has a peek. Besides pull requests and issues:
-
-| Thread               | The peek shows                                                                                                                                                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Workflow run**     | The workflow, the branch, the commit, and the PR it ran for; each job with its result and time; the steps that failed; and the end of each failed job's log, up to its error. **Re-run failed jobs** runs them again. |
-| **Release**          | The name, the tag, who published it and when, and the release notes.                                                                                                                                                  |
-| **Commit**           | The message, the author, and the changed files.                                                                                                                                                                       |
-| **Discussion**       | The question or post, its category, whether it is answered, and the last 10 comments.                                                                                                                                 |
-| **Dependabot alert** | The open alerts of the repository, newest first: severity, package, and the version that fixes it. GitHub shows alerts only to tokens that may read them; if it refuses, the peek says so.                            |
-
-Other kinds (an invitation, for example) show what GitHub sent, and a link to it.
+Every inbox thread is about a pull request or an issue, so every thread has a peek.
 
 ## What it shows
 
-- **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: your workflow run. Category: CI.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requested from you.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
+- **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this. Category: Bugs.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened.
 - For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted, not shown.
-- The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another. Discussions have them too.
+- The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
 - A comment box at the end.
 
 A thread that stays open in the peek for a moment is marked as read, also on GitHub. Turn this off with [`peekMarksRead`](/docs/settings#peekmarksread).

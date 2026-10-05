@@ -37,7 +37,8 @@ export const ROW_PARTS: Record<RowKind, RowPart[]> = {
 		{ id: 'why', label: 'Why you got it' },
 		{ id: 'changes', label: 'Changes since you looked' },
 		{ id: 'override', label: '“Doesn’t need me” note' },
-		{ id: 'category', label: 'Category note' },
+		{ id: 'category', label: 'Category' },
+		{ id: 'tags', label: 'Tags' },
 		{ id: 'resolved', label: 'Why Hush moved it' },
 		{ id: 'draft', label: 'Draft' },
 		{ id: 'snooze', label: 'Snoozed until' }

@@ -38,14 +38,13 @@
 	import { cn } from '$lib/utils';
 	import type { Classification } from '$lib/shared/types';
 	import { itemQueryFacts } from '$lib/shared/categories';
-	import { exprMatches, parseExpr } from '$lib/shared/query';
+	import { exprMatches, NOTIFICATION_WORDS, parseExpr } from '$lib/shared/query';
 	import { ruleMatches } from '$lib/shared/classify';
-	import type { RowMark } from '$lib/marks';
+	import { rowMarks, type RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
 	import FilterBuilder from './rules/filter-builder.svelte';
 	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import PillRow, { type Pill } from './pill-row.svelte';
-	import { FALLBACK_CATEGORY_ID } from '$lib/shared/categories';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -78,7 +77,6 @@
 	import Undo from '@lucide/svelte/icons/undo-2';
 
 	let { kind }: { kind: DashKind } = $props();
-	const THREAD_ONLY_WORDS = ['event', 'needs', 'in'];
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
@@ -133,25 +131,7 @@
 	const categories = $derived(me.data?.settings.categories ?? []);
 	const tags = $derived(me.data?.settings.tags ?? []);
 
-	function marksFor(i: DashItem): RowMark[] {
-		const category = categories.find((c) => c.id === i.category && c.id !== FALLBACK_CATEGORY_ID);
-		return [
-			...(category
-				? [
-						{
-							key: `c:${category.id}`,
-							name: category.name,
-							color: category.color,
-							kind: 'category' as const,
-							icon: category.icon
-						}
-					]
-				: []),
-			...tags
-				.filter((t) => i.tags?.includes(t.id))
-				.map((t) => ({ key: `t:${t.id}`, name: t.name, color: t.color, kind: 'tag' as const }))
-		];
-	}
+	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.category, i.tags, me.data?.settings);
 
 	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
 	const categoryCount = (id: string) => visibleItems.filter((i) => i.category === id).length;
@@ -958,7 +938,7 @@
 			<FilterBuilder
 				bind:value={query}
 				id="dash-filter-{kind}"
-				exclude={THREAD_ONLY_WORDS}
+				exclude={NOTIFICATION_WORDS}
 				suggestions={ruleSuggestions(me.data?.settings)}
 				preview={(q) =>
 					me.data && data ? previewItems(q, me.data.login, me.data.settings, data.items) : null}

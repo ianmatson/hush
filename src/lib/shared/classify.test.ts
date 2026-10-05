@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { classify, globToRegExp, categoryTriage, shouldPush, withOverride } from './classify';
+import {
+	classify,
+	globToRegExp,
+	categoryTriage,
+	queryMatches,
+	shouldPush,
+	withOverride
+} from './classify';
 import { DEFAULT_CATEGORIES } from './categories';
 import { DEFAULT_SETTINGS } from './settings';
 import type { Classification, Enrichment, ItemCategory, Settings, ThreadFacts } from './types';
@@ -159,72 +166,61 @@ describe('default classification', () => {
 });
 
 describe('categories in the inbox', () => {
-	it('the first matching category wins and can change push', () => {
+	const placed = (f: Partial<ThreadFacts>, id: string) => facts({ ...f, itemCategoryId: id });
+
+	it('a thread takes its PR or issue’s category, which can change push', () => {
 		const c = run(
-			facts({ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) }),
+			placed(
+				{ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) },
+				'quiet-acme'
+			),
 			withCategories(
-				category('Docs', 'repo:acme/website', { inbox: 'muted' }),
-				category('Quiet acme', 'repo:acme/* needs:review', { push: 'off' }),
-				category('Never reached', 'repo:acme/*', { inbox: 'muted' })
+				category('Docs', '', { inbox: 'muted' }),
+				category('Quiet acme', '', { push: 'off' })
 			)
 		);
 		expect(c).toMatchObject({ category: 'action', rule: 'Quiet acme', push: false });
 		expect(shouldPush(c, DEFAULT_SETTINGS)).toBe(false);
 	});
 
+	it('does not run category rules on the thread itself', () => {
+		const s = withCategories(category('Muted web', 'repo:acme/web', { inbox: 'muted' }));
+		expect(run(facts(), s).category).toBe('fyi');
+		expect(run(placed({}, 'muted-web'), s).category).toBe('muted');
+	});
+
 	it('leaves Hush’s decision alone for a category with no inbox settings', () => {
-		const c = run(facts(), withCategories(category('Web', 'repo:acme/web')));
+		const c = run(placed({}, 'web'), withCategories(category('Web', 'repo:acme/web')));
 		expect(c.category).toBe('fyi');
 		expect(c.rule).toBeUndefined();
 	});
 
-	it('places threads that are not PRs or issues by their thread facts, else in Other', () => {
-		const release = facts({ subjectType: 'Release', enrichment: null });
-		const releases = category('Releases', 'type:release', { inbox: 'action', push: 'on' });
-		expect(run(release, withCategories(releases))).toMatchObject({
-			category: 'action',
-			push: true,
-			rule: 'Releases'
-		});
+	it('puts a thread with no item category in Other', () => {
 		const other = DEFAULT_CATEGORIES.map((c) =>
 			c.id === 'other' ? { ...c, inbox: 'muted' as const } : c
 		);
-		expect(run(release, { categories: other }).category).toBe('muted');
-	});
-
-	it('follows a pinned category, then Jev, before the fallback', () => {
-		const loud = category('Loud', '', { inbox: 'action', description: 'Loud things' });
-		const s = withCategories(loud);
-		expect(run(facts({ pinnedCategory: 'loud' }), s).category).toBe('action');
-		expect(run(facts({ enrichment: pr({ jevCategory: 'loud' }) }), s).category).toBe('action');
-		expect(run(facts(), s).category).toBe('fyi');
-	});
-
-	it('matches on state', () => {
-		const s = withCategories(category('Merged', 'is:merged', { triage: 'done' }));
-		expect(run(facts({ enrichment: pr({ state: 'merged' }) }), s).rule).toBe('Merged');
-		expect(run(facts(), s).rule).toBeUndefined();
-		expect(run(facts({ enrichment: null }), s).rule).toBeUndefined();
+		expect(run(facts(), { categories: other }).category).toBe('muted');
+		expect(run(placed({}, 'deleted'), { categories: other }).category).toBe('muted');
 	});
 
 	it('categoryTriage moves only for categories that ask', () => {
 		const now = 1_000_000;
-		const done = run(facts(), withCategories(category('X', 'repo:acme/*', { triage: 'done' })));
+		const done = run(placed({}, 'x'), withCategories(category('X', '', { triage: 'done' })));
 		expect(categoryTriage(done, now)).toEqual({ triage: 'done', note: 'Category: X' });
 		const snooze = run(
-			facts(),
-			withCategories(category('Later', 'repo:acme/*', { triage: 'snooze', snoozeHours: 4 }))
+			placed({}, 'later'),
+			withCategories(category('Later', '', { triage: 'snooze', snoozeHours: 4 }))
 		);
 		expect(categoryTriage(snooze, now)).toEqual({
 			triage: 'snoozed',
 			until: now + 4 * 3_600_000,
 			note: 'Category: Later'
 		});
-		const day = run(facts(), withCategories(category('Day', 'repo:acme/*', { triage: 'snooze' })));
+		const day = run(placed({}, 'day'), withCategories(category('Day', '', { triage: 'snooze' })));
 		expect(categoryTriage(day, now)).toMatchObject({ until: now + 24 * 3_600_000 });
 		expect(
 			categoryTriage(
-				run(facts(), withCategories(category('Push', 'repo:acme/*', { push: 'on' }))),
+				run(placed({}, 'push'), withCategories(category('Push', '', { push: 'on' }))),
 				now
 			)
 		).toBeNull();
@@ -273,13 +269,12 @@ describe('latest activity', () => {
 	});
 
 	it('matches who did it', () => {
-		const ci = withCategories(category('ci bots', 'from:github-*', { triage: 'done' }));
-		expect(run(mine({ lastComment: bot }), ci).rule).toBe('ci bots');
-		const people = withCategories(category('people', '-from:bots', { inbox: 'action' }));
-		expect(run(mine({ lastComment: bot }), people).rule).toBeUndefined();
+		const matches = (query: string, f: ThreadFacts) => queryMatches(query, f, run(f));
+		expect(matches('from:github-*', mine({ lastComment: bot }))).toBe(true);
+		expect(matches('-from:bots', mine({ lastComment: bot }))).toBe(false);
 		expect(
-			run(mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }), people).rule
-		).toBe('people');
+			matches('-from:bots', mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }))
+		).toBe(true);
 	});
 });
 

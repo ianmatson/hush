@@ -7,6 +7,9 @@ import {
 	sectionsFor,
 	sourceKinds,
 	trackedKeyOf,
+	upgradeSources,
+	searchIsUnscoped,
+	newestFirst,
 	validateSources,
 	validateTracked
 } from './sources';
@@ -29,14 +32,54 @@ describe('sectionsFor', () => {
 	it('adds the kind to searches that cover both, and skips the other kind', () => {
 		const pr = sectionsFor('pr', DEFAULT_SOURCES);
 		const issue = sectionsFor('issue', DEFAULT_SOURCES);
-		expect(pr.find((s) => s.id === 'mine')?.query).toBe('is:pr is:open author:@me');
-		expect(issue.find((s) => s.id === 'mine')?.query).toBe('is:issue is:open author:@me');
-		expect(issue.some((s) => s.id === 'review-me')).toBe(false);
-		expect(pr.some((s) => s.id === 'commented')).toBe(false);
+		expect(pr.find((s) => s.id === 'involves')?.query).toBe('is:pr is:open involves:@me');
+		expect(issue.find((s) => s.id === 'involves')?.query).toBe('is:issue is:open involves:@me');
+		expect(issue.some((s) => s.id === 'review-requests')).toBe(false);
+		expect(issue.some((s) => s.id === 'reviewed')).toBe(false);
 	});
-	it('keeps the searches of the old dashboards', () => {
-		expect(sectionsFor('pr', DEFAULT_SOURCES).filter((s) => s.enabled)).toHaveLength(6);
-		expect(sectionsFor('issue', DEFAULT_SOURCES).filter((s) => s.enabled)).toHaveLength(4);
+	it('runs few searches by default', () => {
+		expect(sectionsFor('pr', DEFAULT_SOURCES).filter((s) => s.enabled)).toHaveLength(3);
+		expect(sectionsFor('issue', DEFAULT_SOURCES).filter((s) => s.enabled)).toHaveLength(1);
+	});
+});
+
+describe('searchIsUnscoped', () => {
+	it('is true for a search that looks at all of GitHub', () => {
+		expect(searchIsUnscoped('is:open is:issue')).toBe(true);
+		expect(searchIsUnscoped('is:open label:bug', 'archived:false')).toBe(true);
+	});
+	it('is false when a person, team, repository, or organization narrows it', () => {
+		for (const s of DEFAULT_SOURCES) expect(searchIsUnscoped(s.query)).toBe(false);
+		expect(searchIsUnscoped('is:open is:issue', 'org:acme')).toBe(false);
+		expect(searchIsUnscoped('is:open repo:acme/web')).toBe(false);
+	});
+});
+
+describe('newestFirst', () => {
+	it('sorts by update time unless the search sorts', () => {
+		expect(newestFirst('is:open')).toBe('is:open sort:updated-desc');
+		expect(newestFirst('is:open sort:created-asc')).toBe('is:open sort:created-asc');
+	});
+});
+
+describe('upgradeSources', () => {
+	const old = [
+		['review-me', 'is:pr is:open user-review-requested:@me'],
+		['review-team', 'is:pr is:open team-review-requested:@team'],
+		['mine', 'is:open author:@me'],
+		['reviewed', 'is:pr is:open reviewed-by:@me -author:@me'],
+		['assigned', 'is:open assignee:@me'],
+		['mentioned', 'is:open mentions:@me'],
+		['commented', 'is:issue is:open commenter:@me -author:@me'],
+		['team-mentioned', 'is:open team:@team']
+	].map(([id, query]) => ({ id, name: id, query, enabled: id !== 'team-mentioned' }));
+	it('moves the old eight defaults to the new ones', () => {
+		expect(upgradeSources(old)).toEqual(DEFAULT_SOURCES);
+	});
+	it('keeps a list you changed', () => {
+		const changed = old.map((s) => (s.id === 'mine' ? { ...s, enabled: false } : s));
+		expect(upgradeSources(changed)).toBe(changed);
+		expect(upgradeSources(old.slice(1))).toHaveLength(7);
 	});
 });
 

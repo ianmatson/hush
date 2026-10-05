@@ -127,6 +127,8 @@ export const api = {
 		),
 	unsubscribe: (endpoint: string) => ok(client.api.push.unsubscribe.$post({ json: { endpoint } })),
 	testPush: () => ok(client.api.push.test.$post()),
+	countSource: (q: string, scope: string) =>
+		ok(client.api.sources.count.$get({ query: { q, scope } })),
 	dashboard: (kind: DashKind, refresh = false) =>
 		ok(
 			client.api.dashboard[':kind'].$get({
@@ -150,7 +152,6 @@ export const api = {
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),
 	/** The peek of a thread that is not a PR or issue (a workflow run, a release…). */
-	peekThread: (id: string) => ok(client.api['peek-thread'][':id'].$get({ param: { id } })),
 	/** Re-run the failed jobs of a workflow run (from its peek). */
 	rerunRun: (repo: string, run: number) =>
 		ok(client.api.actions.$post({ json: { repo, action: 'rerun', runs: [run] } })),
@@ -164,7 +165,7 @@ export const api = {
 	},
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),
-	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
+	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<notification view id>'. */
 	feedOn: (view: string) => ok(client.api.feeds[':view'].$put({ param: { view } })),
 	feedOff: (view: string) => ok(client.api.feeds[':view'].$delete({ param: { view } })),
 	sessions: () => ok(client.api.account.sessions.$get()),

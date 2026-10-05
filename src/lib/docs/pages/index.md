@@ -3,7 +3,7 @@ title: Hush docs
 description: How Hush sorts your GitHub notifications, and how to make it work your way.
 ---
 
-Hush reads your GitHub notifications and sorts them into what **needs you** and what is only **FYI**. It follows whose turn it is on every pull request and issue that involves you, sends a push only when something waits on you, and lets you act on GitHub (approve, comment, merge, mark Done) without leaving your inbox.
+Hush tracks the pull requests and issues that your saved GitHub searches find, reads your GitHub notifications about them, and sorts them into what **needs you** and what is only **FYI**. It follows whose turn it is on every pull request and issue that involves you, sends a push only when something waits on you, and lets you act on GitHub (approve, comment, merge, mark Done) without leaving your inbox.
 
 ## What Hush is
 
@@ -21,7 +21,7 @@ Hush is a web app for your GitHub notifications. It replaces the notifications p
 - **FYI** is everything else: team mentions, watched repositories, bots, merged and closed work.
 - **Whose turn** is one set of rules for the inbox and the [Pull requests and Issues tabs](/docs/pull-requests-and-issues). An item is in Needs you exactly when it is “Your turn”.
 - **Hush follows up by itself.** When you approve, push a fix, or reply, the thread leaves Needs you with a note such as “✓ You approved”. When it needs you again, it comes back.
-- **Categories sort everything.** Every PR, issue, and notification has one [category](/docs/categories), and a category can send its threads to FYI, mute them, or push them.
+- **Categories sort everything.** Every PR and issue has one [category](/docs/categories), and its notifications have the same category. A category can send its notifications to FYI, mute them, or push them.
 - **Everything is a setting.** Categories, tags, views, sources, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.
 
 ## Where to start

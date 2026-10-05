@@ -4,6 +4,21 @@ import type { DashKind, DashSection } from './types';
 export type Source = DashSection;
 
 export const MAX_SOURCES = 20;
+export const MAX_SOURCE_COUNT_SEARCHES = 10;
+export const SOURCE_RESULTS_MAX = 50;
+const SORTS = /(?:^|\s)sort:/i;
+export const newestFirst = (query: string) =>
+	SORTS.test(query) ? query : `${query} sort:updated-desc`;
+
+export interface SourceCount {
+	pr: number | null;
+	issue: number | null;
+}
+
+const SCOPING =
+	/(?:^|\s)(?:author|assignee|mentions|commenter|involves|reviewed-by|review-requested|user-review-requested|team-review-requested|team|repo|org|user):\S/i;
+
+export const searchIsUnscoped = (query: string, scope = '') => !SCOPING.test(`${query} ${scope}`);
 export const MAX_TRACKED = 50;
 export const TRACKED_SOURCE: Source = {
 	id: 'tracked',
@@ -14,34 +29,42 @@ export const TRACKED_SOURCE: Source = {
 
 export const DEFAULT_SOURCES: Source[] = [
 	{
-		id: 'review-me',
-		name: 'Review requested from you',
-		query: 'is:pr is:open user-review-requested:@me',
+		id: 'review-requests',
+		name: 'Review requests',
+		query: 'is:pr is:open review-requested:@me',
 		enabled: true
 	},
-	{
-		id: 'review-team',
-		name: 'Team review requests',
-		query: 'is:pr is:open team-review-requested:@team',
-		enabled: true
-	},
-	{ id: 'mine', name: 'You opened', query: 'is:open author:@me', enabled: true },
+	{ id: 'involves', name: 'Involves you', query: 'is:open involves:@me', enabled: true },
 	{
 		id: 'reviewed',
 		name: 'You reviewed',
 		query: 'is:pr is:open reviewed-by:@me -author:@me',
 		enabled: true
 	},
-	{ id: 'assigned', name: 'Assigned to you', query: 'is:open assignee:@me', enabled: true },
-	{ id: 'mentioned', name: 'Mentions you', query: 'is:open mentions:@me', enabled: true },
-	{
-		id: 'commented',
-		name: 'You commented',
-		query: 'is:issue is:open commenter:@me -author:@me',
-		enabled: true
-	},
 	{ id: 'team-mentioned', name: 'Mentions your teams', query: 'is:open team:@team', enabled: false }
 ];
+
+const OLD_DEFAULT_SOURCE_QUERIES = [
+	'is:pr is:open user-review-requested:@me',
+	'is:pr is:open team-review-requested:@team',
+	'is:open author:@me',
+	'is:pr is:open reviewed-by:@me -author:@me',
+	'is:open assignee:@me',
+	'is:open mentions:@me',
+	'is:issue is:open commenter:@me -author:@me',
+	'is:open team:@team'
+];
+
+export function upgradeSources(sources: Source[]): Source[] {
+	const unchanged =
+		sources.length === OLD_DEFAULT_SOURCE_QUERIES.length &&
+		sources.every(
+			(s, k) =>
+				s.query === OLD_DEFAULT_SOURCE_QUERIES[k] &&
+				s.enabled === (s.query !== 'is:open team:@team')
+		);
+	return unchanged ? DEFAULT_SOURCES : sources;
+}
 
 export const DEFAULT_SOURCE_IDS = new Set(DEFAULT_SOURCES.map((s) => s.id));
 

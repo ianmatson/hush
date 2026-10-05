@@ -9,13 +9,23 @@ The org has probably not approved Hush. GitHub then hides the org completely. Ch
 
 If the org uses SAML single sign-on and the inbox says “GitHub hides notifications from N orgs”, sign in again and authorize Hush for those orgs.
 
+## A notification is missing
+
+Hush keeps only the notifications about the PRs and issues that it tracks. See [What comes in](/docs/inbox#what-comes-in).
+
+- Check that one of your [sources](/docs/pull-requests-and-issues#sources) finds the PR or issue: look for it on the Pull requests or Issues tab. If no source finds it, change a source, or add the item to **Tracked items** in **Settings → Sources**.
+- Items that the tabs hide by default are not tracked: drafts that others opened, and PRs that bots opened. See [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
+- Notifications that are not about a PR or issue do not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Read them on GitHub.
+- A notification can come before a source finds its item. Hush runs the sources again and gets unread notifications again at the next sync, so it comes in within about 15 minutes.
+- A notification about a PR or issue that your sources stopped finding comes in for 14 days more. After you change your sources, it stops at once.
+
 ## “Hush cannot read your notifications”
 
 The token no longer works: you revoked Hush on GitHub, the token expired, or a custom token was deleted. Choose **Sign in again**. With a custom token, replace it in **Settings → General → GitHub access**.
 
 ## A thread is in the wrong list
 
-- Look at the row: its summary says why Hush put it there, and “category: …” names the category whose inbox settings sorted it.
+- Look at the row: its summary says why Hush put it there, and its category icon shows the category of its PR or issue. That category's inbox settings can change the list.
 - Check your [categories](/docs/categories): the first rule that matches wins, so a wide rule at the top catches more than you expect. Your inbox rules from before are categories now, at the top of the list.
 - Bots' activity is FYI by default ([`botsAreFyi`](/docs/settings#botsarefyi)), and so are team review requests ([`teamReviewsAreAction`](/docs/settings#teamreviewsareaction)).
 - Press {{key:list.refresh}} to check GitHub again now.
@@ -51,7 +61,8 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 - A category that you chose by hand wins. Right-click the item and choose **Category → Hush decides** to remove it.
 - Then the first category whose rule matches wins. Check the order in **Settings → Categories & tags**.
 - Jev chooses only among categories with a description, and only when it is sure. It reads an item again only when its title, description, or labels change. Choose **Re-evaluate items** to ask again after you change categories.
-- `category:` and `tag:` work only in the Filter box of the Pull requests and Issues tabs, not in rules or saved views.
+- Rules look only at the PR or issue. They cannot use `category:`, `tag:`, `event:`, `needs:`, or `in:`.
+- A notification has the category of its PR or issue. To change it, change the category of the PR or issue.
 
 ## settings.json does not save
 

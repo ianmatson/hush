@@ -11,7 +11,7 @@ Hush works from the keyboard. Press {{key:list.help}} on any list to see the sho
 
 - **Threads, pull requests, and issues** by title or repository. Enter peeks at it; `Mod`+Enter opens it on GitHub.
 - **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Peek, Move to…
-- **Pages**: every inbox tab and saved view, Pull requests, Issues, and each settings page.
+- **Pages**: every inbox tab and notification view, Pull requests, Issues, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
 
 Before you type, the palette shows your **Recent** choices. It searches only what Hush already has, not all of GitHub.

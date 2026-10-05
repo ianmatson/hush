@@ -404,25 +404,6 @@ export const DEMO_THREADS: DemoThread[] = [
 		)
 	},
 	{
-		id: 't-preview',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: false,
-		subject: 'CheckSuite',
-		kind: 'none',
-		summary: 'CI passed',
-		repo: DEMO_REPO,
-		number: null,
-		title: 'Build & deploy preview on master',
-		why: 'CI activity',
-		unread: false,
-		ago: '3h',
-		actionLabel: 'Open',
-		opensTo: 'the workflow runs',
-		url: `${REPO_URL}/actions`,
-		peek: simplePeek('run', 'passed', DEMO_ME, 'All 12 checks passed.')
-	},
-	{
 		id: 't-merged',
 		list: 'fyi',
 		triage: 'inbox',
@@ -580,7 +561,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.joethreepwood,
 			reason: 'Review requested',
 			group: 'yours',
-			sections: ['Review requested'],
+			sections: ['Review requests'],
 			ago: '3m',
 			actionLabel: 'Review',
 			url: pull(20387, '/files'),
@@ -599,7 +580,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			reason: 'CI failing',
 			tone: 'bad',
 			group: 'yours',
-			sections: ['Your PRs'],
+			sections: ['Involves you'],
 			ago: '12m',
 			actionLabel: 'Fix CI',
 			url: pull(20508, '/checks'),
@@ -617,7 +598,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_ME,
 			reason: 'Ready to merge',
 			group: 'yours',
-			sections: ['Your PRs'],
+			sections: ['Involves you'],
 			ago: '25m',
 			actionLabel: 'Merge',
 			url: pull(20510),
@@ -636,7 +617,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_ME,
 			reason: 'Changes requested',
 			group: 'yours',
-			sections: ['Your PRs'],
+			sections: ['Involves you'],
 			ago: '1h',
 			actionLabel: 'Address',
 			url: pull(20524, '/files'),
@@ -655,7 +636,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.cleoPleurodon,
 			reason: 'Review for your team',
 			group: 'team',
-			sections: ['Team reviews'],
+			sections: ['Review requests'],
 			ago: '2h',
 			actionLabel: 'Review',
 			url: pull(20454, '/files'),
@@ -679,7 +660,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			reason: 'Waiting for review',
 			tone: 'stale',
 			group: 'waiting',
-			sections: ['Your PRs'],
+			sections: ['Involves you'],
 			ago: '5d',
 			actionLabel: 'Open',
 			url: pull(20571),
@@ -729,7 +710,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.ivanagas,
 			reason: '@ivanagas replied',
 			group: 'yours',
-			sections: ['Assigned to you'],
+			sections: ['Involves you'],
 			ago: '40m',
 			actionLabel: 'Reply',
 			url: issue(20700),
@@ -745,7 +726,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_ME,
 			reason: 'Waiting for a reply',
 			group: 'waiting',
-			sections: ['You opened'],
+			sections: ['Involves you'],
 			ago: '2d',
 			actionLabel: 'Open',
 			url: issue(19783),
@@ -765,7 +746,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.ivanagas,
 			reason: 'Mentions you',
 			group: 'other',
-			sections: ['Mentions you'],
+			sections: ['Involves you'],
 			ago: '3d',
 			actionLabel: 'Open',
 			url: issue(20423),
@@ -782,8 +763,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 };
 
 export const DASH_SECTIONS: Record<'pulls' | 'issues', string[]> = {
-	pulls: ['Review requested', 'Team reviews', 'Your PRs', 'You reviewed'],
-	issues: ['Assigned to you', 'You opened', 'Mentions you']
+	pulls: ['Review requests', 'Involves you', 'You reviewed'],
+	issues: ['Involves you']
 };
 
 export const DASH_GROUPS = [

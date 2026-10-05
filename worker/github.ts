@@ -8,6 +8,7 @@ import type {
 	StackLink,
 	TeamDTO
 } from '../src/lib/shared/types';
+import { newestFirst, SOURCE_RESULTS_MAX } from '../src/lib/shared/sources';
 import { isBot } from '../src/lib/shared/classify';
 import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
@@ -172,46 +173,6 @@ export async function listNotifications(
 		ssoHiddenOrgs: parseSsoHeader(res.headers.get('X-GitHub-SSO')),
 		complete: res.status === 200 && url === null
 	};
-}
-
-/** "HogFM workflow run failed for master branch" → workflow name and branch. */
-export function parseWorkflowTitle(title: string): { workflow: string; branch: string } | null {
-	const m = title.match(/^(.+?) workflow run .+? for (.+) branch$/i);
-	return m ? { workflow: m[1], branch: m[2] } : null;
-}
-
-/**
- * Did a run of this workflow on this branch pass after `since`? The newest completed run decides.
- * null when GitHub cannot tell (unknown workflow, no access). One or two REST requests; pass a
- * shared `workflows` map to reuse the workflow list of a repo.
- */
-export async function laterRunPassed(
-	token: string,
-	repo: string,
-	workflow: string,
-	branch: string,
-	since: string,
-	workflows: Map<string, Promise<{ id: number; name: string }[]>>
-): Promise<boolean | null> {
-	let list = workflows.get(repo);
-	if (!list) {
-		list = gh(token, `/repos/${repo}/actions/workflows?per_page=100`).then(async (r) =>
-			r.ok ? ((await r.json()) as { workflows: { id: number; name: string }[] }).workflows : []
-		);
-		workflows.set(repo, list);
-	}
-	const wf = (await list).find((w) => w.name === workflow);
-	if (!wf) return null;
-	const res = await gh(
-		token,
-		`/repos/${repo}/actions/workflows/${wf.id}/runs?branch=${encodeURIComponent(branch)}&status=completed&per_page=1`
-	);
-	if (!res.ok) return null;
-	const run = (
-		(await res.json()) as { workflow_runs: { conclusion: string; created_at: string }[] }
-	).workflow_runs[0];
-	if (!run) return null;
-	return run.conclusion === 'success' && Date.parse(run.created_at) > Date.parse(since);
 }
 
 export const markThreadRead = (token: string, id: string) =>
@@ -481,7 +442,7 @@ async function inRequests<T>(
 }
 
 /** Results for each dashboard search (it asks for no more). */
-export const SEARCH_MAX = 50;
+export const SEARCH_MAX = SOURCE_RESULTS_MAX;
 /** Short searches in one request: their answers are small. */
 const SEARCH_CHUNK = 10;
 /** Items with all their details in one request: these answers are big. */
@@ -522,7 +483,7 @@ export async function searchShort(
 						`s${j}: search(type: ISSUE, query: $q${j}, first: ${SEARCH_MAX}) { nodes { ${SHORT} } }`
 				)
 				.join('\n')}\n}`,
-			variables: Object.fromEntries(chunk.map((q, j) => [`q${j}`, q.q]))
+			variables: Object.fromEntries(chunk.map((q, j) => [`q${j}`, newestFirst(q.q)]))
 		}),
 		(chunk, data) =>
 			chunk.forEach((q, j) => {
@@ -538,6 +499,24 @@ export async function searchShort(
 		errors
 	);
 	return { hits, errors: [...new Set(errors)].slice(0, 3) };
+}
+
+export async function searchCounts(token: string, queries: string[]): Promise<(number | null)[]> {
+	if (!queries.length) return [];
+	const res = await gh(token, '/graphql', {
+		method: 'POST',
+		body: JSON.stringify({
+			query: `query(${queries.map((_, j) => `$q${j}: String!`).join(', ')}) {\n${queries
+				.map((_, j) => `c${j}: search(type: ISSUE, query: $q${j}, first: 0) { issueCount }`)
+				.join('\n')}\n}`,
+			variables: Object.fromEntries(queries.map((q, j) => [`q${j}`, q]))
+		})
+	});
+	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
+	const json = (await res.json()) as {
+		data?: Record<string, { issueCount: number } | null>;
+	};
+	return queries.map((_, j) => json.data?.[`c${j}`]?.issueCount ?? null);
 }
 
 /** Step 2: the full facts of these PRs and issues (by node ID). Missing ones are left out. */
@@ -591,10 +570,12 @@ export function needsDetails(
 }
 
 /** A team search keeps only the PRs that request one of its teams (see expandSections). */
-export const forTeams = (q: ExpandedQuery, s: SubjectFacts) =>
+export const forTeams = (q: ExpandedQuery, s: SubjectFacts, me: string) =>
 	!q.teams ||
-	s.reviewRequests.some(
-		(r) => r.team && q.teams!.some((t) => t.toLowerCase() === r.name.toLowerCase())
+	s.reviewRequests.some((r) =>
+		r.team
+			? q.teams!.some((t) => t.toLowerCase() === r.name.toLowerCase())
+			: !!q.orDirect && r.name.toLowerCase() === me.toLowerCase()
 	);
 
 // ---------------------------------------------------------------------------

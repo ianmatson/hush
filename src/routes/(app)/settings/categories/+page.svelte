@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { NOTIFICATION_WORDS } from '$lib/shared/query';
 	import { tick, untrack } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
@@ -36,7 +37,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Select from '$lib/components/ui/select';
 	import RuleBuilder from '$lib/components/app/rules/rule-builder.svelte';
-	import { previewBoth, previewItems, ruleSuggestions } from '$lib/rule-preview';
+	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -50,7 +51,6 @@
 	const me = createQuery(meQuery);
 	const feeds = createQuery(feedsQuery);
 	const MARK_WORDS = ['category', 'tag'];
-	const THREAD_ONLY_WORDS = ['event', 'needs', 'in'];
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
 
 	interface Draft {
@@ -295,9 +295,9 @@
 	<div>
 		<h1 class="text-lg font-semibold tracking-tight">Categories & tags</h1>
 		<p class="text-sm text-muted-foreground">
-			Every pull request, issue, and notification has exactly one category, and PRs and issues can
-			have any number of tags. A category also decides what its notifications do in the inbox. Rules
-			use the
+			Every pull request and issue has exactly one category and any number of tags. Its
+			notifications get the same ones, and the category also decides what they do in the inbox.
+			Rules look at the PR or issue and use the
 			<a class="underline" href="/docs/query-language" target="_blank" rel="noreferrer"
 				>query language</a
 			>; <code>about:"…"</code> asks Jev.
@@ -420,10 +420,10 @@
 											bind:value={c.rule}
 											id="category-{c.id}-rule"
 											label="Rule (optional)"
-											exclude={MARK_WORDS}
+											exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
 											{suggestions}
 											preview={(q) =>
-												me.data ? previewBoth(q, me.data.login, me.data.settings) : null}
+												me.data ? previewItems(q, me.data.login, me.data.settings) : null}
 										/>
 										<div class="grid gap-1">
 											<label
@@ -533,7 +533,7 @@
 										bind:value={t.rule}
 										id="tag-{t.id}-rule"
 										label="Rule"
-										exclude={[...MARK_WORDS, ...THREAD_ONLY_WORDS]}
+										exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
 										{suggestions}
 										preview={(q) =>
 											me.data ? previewItems(q, me.data.login, me.data.settings) : null}

@@ -41,6 +41,7 @@
 	import JevNotice from '$lib/components/app/jev-notice.svelte';
 	import FilterBuilder from '$lib/components/app/rules/filter-builder.svelte';
 	import { previewThreads, ruleSuggestions } from '$lib/rule-preview';
+	import { rowMarks } from '$lib/marks';
 	import NotNeededDialog, {
 		type NotNeededTarget
 	} from '$lib/components/app/not-needed-dialog.svelte';
@@ -92,11 +93,11 @@
 	const me = createQuery(meQuery);
 	const viewParam = $derived(page.url.searchParams.get('view') || 'action');
 	const savedViews = $derived(me.data?.settings.views ?? []);
-	/** The saved view on screen, when the tab is one (?view=v:<id>). */
+	/** The notification view on screen, when the tab is one (?view=v:<id>). */
 	const saved = $derived(
 		viewParam.startsWith('v:') ? (savedViews.find((v) => `v:${v.id}` === viewParam) ?? null) : null
 	);
-	/** The list the page shows and acts on: a built-in view, or the saved view's base. */
+	/** The list the page shows and acts on: a built-in view, or the notification view's base. */
 	const view = $derived<View>(
 		saved ? saved.base : viewParam.startsWith('v:') ? 'action' : (viewParam as View)
 	);
@@ -105,7 +106,7 @@
 	let everywhere = $state(false);
 	const searching = $derived(everywhere && !!query.trim());
 	const threadsQ = createQuery(() => threadsQuery(searching ? 'all' : view));
-	// The base lists of the saved views, for their tab counts (D1 only, usually a 304).
+	// The base lists of the notification views, for their tab counts (D1 only, usually a 304).
 	const bases = $derived([...new Set(savedViews.map((v) => v.base))]);
 	const baseLists = createQueries(() => ({ queries: bases.map((b) => threadsQuery(b)) }));
 	const baseThreads = $derived(
@@ -117,7 +118,7 @@
 	const lastViewCounts: Record<string, number> = {};
 	const viewCount = (v: SavedView) => {
 		const n = baseThreads[v.base]?.filter((t) =>
-			threadMatches(v.query, t, me.data?.login ?? '')
+			threadMatches(v.query, t, me.data?.login ?? '', me.data?.settings)
 		).length;
 		if (n !== undefined) lastViewCounts[v.id] = n;
 		return lastViewCounts[v.id] ?? null;
@@ -128,7 +129,6 @@
 	let syncing = $state(false);
 	// The Filter box speaks the query language (shared/query.ts); parts with errors are left out.
 	const filter = $derived(parseExpr(query));
-	const ITEM_MARK_WORDS = ['category', 'tag'];
 	const checkedConditionIds = $derived(
 		new Set(
 			smartConditions(
@@ -143,7 +143,7 @@
 		if (!me.data?.settings.smartDecisions)
 			return 'about: needs smart decisions (Settings → Inbox).';
 		if (about.every((text) => checkedConditionIds.has(conditionId(text)))) return '';
-		return 'Jev checks about: in rules and saved views. Save this filter as a view to check it.';
+		return 'Jev checks about: in rules and notification views. Save this filter as a notification view to check it.';
 	});
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
@@ -158,8 +158,8 @@
 		return (threadsQ.data?.threads ?? []).filter(
 			(t) =>
 				!pending.has(t.id) &&
-				(searching || !saved || threadMatches(saved.query, t, login)) &&
-				threadMatches(query, t, login)
+				(searching || !saved || threadMatches(saved.query, t, login, me.data?.settings)) &&
+				threadMatches(query, t, login, me.data?.settings)
 		);
 	});
 	const order = $derived(visible.map((t) => t.id));
@@ -210,7 +210,6 @@
 				id: t.id,
 				repo: t.repo,
 				number: t.number,
-				thread: t.number ? null : t.id,
 				title: t.title,
 				url: t.htmlUrl,
 				need: t.kind
@@ -571,7 +570,7 @@
 	const menuFor = (ids: string[]) => inboxMenu(actions, ids);
 	$effect(() => palette.register(() => inboxCommands(actions, targets())));
 
-	// --- Saved views ------------------------------------------------------------------------
+	// --- Notification views ------------------------------------------------------------------------
 	// Settings → Inbox links here with &edit=1 to edit a view.
 	$effect(() => {
 		if (!saved || page.url.searchParams.get('edit') !== '1') return;
@@ -693,10 +692,11 @@
 			<FilterBuilder
 				bind:value={query}
 				id="inbox-filter"
-				exclude={ITEM_MARK_WORDS}
 				suggestions={ruleSuggestions(me.data?.settings)}
 				preview={(q) =>
-					me.data && threadsQ.data ? previewThreads(q, me.data.login, threadsQ.data.threads) : null}
+					me.data && threadsQ.data
+						? previewThreads(q, me.data.login, threadsQ.data.threads, me.data.settings)
+						: null}
 			/>
 			<QuerySuggest input={searchEl} value={query} onpick={(next) => (query = next)} />
 			<!-- A filter error: under the box, over the list. -->
@@ -722,12 +722,12 @@
 				<Tooltip.Root>
 					<Tooltip.Trigger
 						class="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-						aria-label="Save this filter as a view"
+						aria-label="Save this filter as a notification view"
 						onclick={() => editView(null, true)}
 					>
 						<BookmarkPlus class="size-3.5" />
 					</Tooltip.Trigger>
-					<Tooltip.Content>Save this filter as a view (a new tab)</Tooltip.Content>
+					<Tooltip.Content>Save this filter as a notification view (a new tab)</Tooltip.Content>
 				</Tooltip.Root>
 			{/if}
 		</div>
@@ -735,8 +735,8 @@
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				aria-label="Edit view {saved.name}"
-				title="Edit view"
+				aria-label="Edit notification view {saved.name}"
+				title="Edit notification view"
 				onclick={() => editView(saved)}><Pencil /></Button
 			>
 		{/if}
@@ -849,6 +849,7 @@
 												thread={t}
 												showList={searching}
 												hidden={me.data?.settings.rows.thread ?? []}
+												marks={rowMarks(t.itemCategory, t.tags, me.data?.settings)}
 												selected={t.id === selectedId}
 												checked={sel.has(t.id)}
 												selecting={sel.size > 0}
@@ -1045,6 +1046,7 @@
 	initial={viewEditing}
 	threads={{ ...baseThreads, [view]: threadsQ.data?.threads }}
 	me={me.data?.login ?? ''}
+	settings={me.data?.settings}
 	onsave={saveView}
 	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
 />

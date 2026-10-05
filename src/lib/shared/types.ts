@@ -5,7 +5,7 @@ export type Category = 'action' | 'fyi' | 'muted';
 export type Triage = 'inbox' | 'done' | 'snoozed';
 export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all' | 'inbox';
 
-/** What a saved view starts from. "inbox" is Needs you and FYI together. */
+/** What a notification view starts from. "inbox" is Needs you and FYI together. */
 export type ViewBase = 'inbox' | 'action' | 'fyi' | 'snoozed' | 'done';
 
 /** A named filter on the inbox, shown as a tab (see shared/views.ts). */
@@ -109,7 +109,7 @@ export interface ThreadFacts {
 	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
 	sources?: string[];
-	pinnedCategory?: string | null;
+	itemCategoryId?: string | null;
 	itemCategory?: { id: string; name: string };
 	itemTags?: { id: string; name: string }[];
 }
@@ -244,7 +244,7 @@ export interface Settings {
 	tracked: string[];
 	categories: ItemCategory[];
 	tags: ItemTag[];
-	/** Saved views: extra inbox tabs, in order. */
+	/** Notification views: extra inbox tabs, in order. */
 	views: SavedView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
 	keys: Record<string, string[]>;
@@ -419,6 +419,8 @@ export interface ThreadDTO {
 	authorIsBot: boolean;
 	labels: string[];
 	rule: string | null;
+	itemCategory: string | null;
+	tags: string[];
 	/** You said it does not need you ("only this one"): FYI until it changes. */
 	override?: boolean;
 	/** What changed since you last looked at its PR or issue (none before your first look). */
@@ -436,7 +438,7 @@ export interface Counts {
 	snoozed: number;
 }
 
-/** A feed: one inbox tab as Atom. `view` is 'action', 'fyi', 'inbox', or 'v:<saved view id>'. */
+/** A feed: one inbox tab as Atom. `view` is 'action', 'fyi', 'inbox', or 'v:<notification view id>'. */
 export interface FeedDTO {
 	view: string;
 	/** Only when the feed was just made: Hush keeps only a hash of the address. */
@@ -485,111 +487,6 @@ export type OrgAccess =
 	{ available: false } | { available: true; orgs: string[]; approveUrl: string };
 
 // --- Peek: one PR or issue in the side panel, with actions on it ---------------------
-
-// --- Peek of other threads: workflow runs, releases, commits, discussions, alerts ---------
-
-export interface RunJobDTO {
-	id: number;
-	name: string;
-	status: string;
-	conclusion: string | null;
-	url: string;
-	startedAt: string | null;
-	completedAt: string | null;
-	/** Names of the steps that failed. */
-	failedSteps: string[];
-	/** The end of the log of a failed job, up to its last error (null: not read). */
-	log: string[] | null;
-}
-
-interface ThreadPeekBase {
-	repo: string;
-	/** The page on GitHub. */
-	url: string;
-}
-
-export type ThreadPeekDTO = ThreadPeekBase &
-	(
-		| {
-				kind: 'run';
-				run: {
-					id: number;
-					name: string;
-					/** The commit or PR title the run was for. */
-					title: string;
-					number: number;
-					attempt: number;
-					event: string;
-					status: string;
-					conclusion: string | null;
-					branch: string;
-					sha: string;
-					actor: string | null;
-					startedAt: string;
-					updatedAt: string;
-					/** PRs of the branch, in this repository. */
-					prs: number[];
-				};
-				jobs: RunJobDTO[];
-		  }
-		| {
-				kind: 'release';
-				name: string;
-				tag: string;
-				author: string | null;
-				publishedAt: string | null;
-				prerelease: boolean;
-				html: string;
-				assets: number;
-		  }
-		| {
-				kind: 'commit';
-				sha: string;
-				message: string;
-				author: string | null;
-				date: string | null;
-				additions: number;
-				deletions: number;
-				files: { name: string; status: string; additions: number; deletions: number }[];
-				totalFiles: number;
-		  }
-		| {
-				kind: 'discussion';
-				number: number;
-				title: string;
-				author: string | null;
-				createdAt: string;
-				category: string | null;
-				answered: boolean;
-				html: string;
-				reactions?: Reactions;
-				comments: {
-					author: string | null;
-					html: string;
-					createdAt: string;
-					url: string;
-					reactions?: Reactions;
-				}[];
-				totalComments: number;
-		  }
-		| {
-				kind: 'alerts';
-				alerts: {
-					number: number;
-					severity: string;
-					summary: string;
-					package: string;
-					ecosystem: string;
-					patched: string | null;
-					manifest: string | null;
-					url: string;
-					createdAt: string;
-				}[];
-				/** Why GitHub shows no alerts to Hush (for example, the token lacks a scope). */
-				error: string | null;
-		  }
-		| { kind: 'none'; note: string }
-	);
 
 export type CheckState = 'failure' | 'pending' | 'success' | 'neutral';
 

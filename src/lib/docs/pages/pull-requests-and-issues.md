@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The dashboards of open work that involves you, grouped by whose turn it is.
 ---
 
-The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Your [sources](#sources), saved GitHub searches, decide what Hush tracks. Hush groups the results by whose turn it is, and gives each item a [category and tags](#categories-and-tags).
+The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Your [sources](#sources), saved GitHub searches, decide what Hush tracks. The inbox gets only the notifications about these items. Hush groups the results by whose turn it is, and gives each item a [category and tags](#categories-and-tags).
 
 ## Groups
 
@@ -46,7 +46,9 @@ Hush finds up to 3 open pull requests under each pull request in your list, in t
 
 ## Sources
 
-A source is a saved [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). Hush tracks every open PR and issue that any of your sources finds.
+A source is a saved [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). Hush tracks every open PR and issue that any of your sources finds. The [inbox](/docs/inbox#what-comes-in) gets only the notifications about these items and your tracked items.
+
+When the sources stop finding an item (it was merged or closed, or a review request ended), Hush tracks it for 14 days more, so its last notifications still come in. When you change your sources, the scope, or a setting such as hidden bots or stale days, Hush stops at once to track the items that the sources do not find now, and removes their notifications.
 
 {{ref:sources}}
 
@@ -76,7 +78,7 @@ Set up categories and tags, and how Hush places items, in **Settings → Categor
 
 The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box.
 
-Text with a `word:` in it is a [query](/docs/query-language): `repo:acme/web label:bug`, `review-requested:@me size:<50`. Here, and only here, `category:` and `tag:` work too: `category:bugs tag:quick`.
+Text with a `word:` in it is a [query](/docs/query-language): `repo:acme/web label:bug`, `review-requested:@me size:<50`. `category:` and `tag:` work too: `category:bugs tag:quick`.
 
 ## Actions
 
@@ -103,6 +105,6 @@ Select many items to move, hide, or copy them together, the same as in the [inbo
 
 ## Refresh
 
-Hush keeps the results for 15 minutes. When you open the tab after that, it shows the saved list at once ("Updating…") and searches GitHub again in the background; the list changes when the new results arrive.
+Hush runs your sources about every 15 minutes while it checks GitHub, also when the tabs are not open. It keeps the results for 15 minutes. When you open the tab after that, it shows the saved list at once ("Updating…") and searches GitHub again in the background; the list changes when the new results arrive.
 
 A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 50 results for each source). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}} to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).

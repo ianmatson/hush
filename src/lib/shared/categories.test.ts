@@ -103,6 +103,18 @@ describe('placeItem: category', () => {
 			categoryBy: 'pin'
 		});
 	});
+	it('lets a stored rule that is not valid now match nothing', () => {
+		const old: ItemCategory = {
+			id: 'old',
+			name: 'Old',
+			color: 'gray',
+			rule: 'repo:acme/* type:ci',
+			description: ''
+		};
+		expect(place(thread(), settings([old, OTHER])).category).toBe(FALLBACK_CATEGORY_ID);
+		const notification = { ...old, rule: 'repo:acme/* in:fyi' };
+		expect(place(thread(), settings([notification, OTHER])).category).toBe(FALLBACK_CATEGORY_ID);
+	});
 	it('ignores a pin to a deleted category', () => {
 		expect(place(thread(), s, null, { category: 'gone' }).category).toBe(FALLBACK_CATEGORY_ID);
 	});
@@ -201,4 +213,13 @@ describe('category: and tag: in the Filter box', () => {
 			/cannot use category: or tag:/
 		);
 	});
+	it.each(['needs:review', 'event:mentioned', 'in:fyi', 'repo:acme/* (author:bots OR -in:muted)'])(
+		'rules cannot use notification words: %s',
+		(rule) => {
+			const tag = { id: 'a', name: 'A', color: 'gray', rule } as const;
+			expect(validateTags([tag])).toMatch(/cannot use event:, needs:, or in:/);
+			const category = { ...tag, description: '' };
+			expect(validateCategories([category, ...DEFAULT_CATEGORIES])).toMatch(/needs:, or in:/);
+		}
+	);
 });

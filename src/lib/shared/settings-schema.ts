@@ -125,7 +125,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'views',
 		page: 'inbox',
 		description:
-			'Saved views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
+			'Notification views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
 	},
 	{
 		key: 'sources',

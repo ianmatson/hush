@@ -19,7 +19,7 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 | Price                    | Included with GitHub                                                                      | Free in beta; planned $3 a month or $30 a year                        |
 | Open source              | No                                                                                        | Yes                                                                   |
 | Sort order               | Time (newest or oldest first)                                                             | Needs you, FYI, Muted, by whose turn it is                            |
-| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Categories, tags, a query language, up to 12 saved views              |
+| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Categories, tags, a query language, up to 12 notification views       |
 | Push                     | GitHub Mobile: mentions, assignments, review requests, deployment approvals, Actions runs | Web Push for "Needs you" items, with quiet hours, digests, and limits |
 | Review a PR              | Yes, with the full diff (web and Mobile)                                                  | Approve, comment, merge, close, re-run CI; no diff view               |
 | GitHub Enterprise Server | Yes                                                                                       | No (github.com only)                                                  |
@@ -33,7 +33,7 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 
 The reason that GitHub gives is fixed when the notification arrives. A thread with `reason:review-requested` keeps that reason after you review, and a thread with `reason:subscribed` does not say that CI failed on your pull request.
 
-**Hush** reads the same notifications, then reads the pull request or issue behind each one: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what needs you](/docs/inbox#what-needs-you).
+**Hush** reads the same notifications, but keeps only the ones about the pull requests and issues that your saved searches find. Releases, CI runs, discussions, and security alerts stay on GitHub. Hush reads the pull request or issue behind each notification: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what needs you](/docs/inbox#what-needs-you).
 
 You can change the defaults with [categories](/docs/categories): for example, a repository that is only FYI, or a bot to mute.
 
@@ -62,6 +62,7 @@ You can change the defaults with [categories](/docs/categories): for example, a 
 - Native iOS and Android apps, with push that needs no install step.
 - The full diff and line comments, on the web and on a phone.
 - It is complete at once; Hush waits up to 5 minutes for its next check.
+- It shows every type of notification, also releases, CI runs, discussions, and security alerts.
 - It is mature and maintained by GitHub. Hush is in beta.
 
 ## Where Hush is better

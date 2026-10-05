@@ -4,6 +4,7 @@
 @import '@fontsource-variable/geist';
 /* Color themes: html[data-theme] and html.dark[data-theme] override the defaults below. */
 @import '../lib/themes/themes.css';
+@import '../lib/themes/marks.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -93,6 +94,15 @@
 	--color-signal-merge: var(--signal-merge);
 	--color-signal-reply: var(--signal-reply);
 	--color-signal-warn: var(--signal-warn);
+	--color-mark-gray: var(--mark-gray);
+	--color-mark-red: var(--mark-red);
+	--color-mark-orange: var(--mark-orange);
+	--color-mark-amber: var(--mark-amber);
+	--color-mark-green: var(--mark-green);
+	--color-mark-teal: var(--mark-teal);
+	--color-mark-blue: var(--mark-blue);
+	--color-mark-violet: var(--mark-violet);
+	--color-mark-pink: var(--mark-pink);
 	--font-sans: 'Geist Variable', sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);

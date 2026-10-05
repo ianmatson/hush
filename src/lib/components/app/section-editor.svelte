@@ -16,6 +16,7 @@
 	import { tick } from 'svelte';
 	import { cn } from '$lib/utils';
 	import SearchBuilder from './rules/search-builder.svelte';
+	import SourceSize from './source-size.svelte';
 
 	let {
 		sections = $bindable(),
@@ -135,6 +136,7 @@
 						>
 					</div>
 					<SearchBuilder bind:value={s.query} id="source-{s.id}-query" />
+					<SourceSize query={s.query} {scope} />
 				</div>
 			{/if}
 		</li>

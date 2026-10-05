@@ -25,7 +25,7 @@
 				: ''
 	);
 
-	// Saved views, for reordering here (they are made and edited on the inbox).
+	// Notification views, for reordering here (they are made and edited on the inbox).
 	const viewRows = $derived((settings?.views ?? []).map((view) => ({ key: view.id, view })));
 	function describeView(v: SavedView) {
 		return [VIEW_BASES.find((b) => b.id === v.base)?.label, v.query || null]
@@ -92,9 +92,9 @@
 			<Card.Header>
 				<Card.Title>Views and feeds</Card.Title>
 				<Card.Description
-					>Saved views are extra inbox tabs, in this order. Make one with “+” after the tabs, or
-					“Save as view” next to the filter. <Rss class="inline size-3.5" /> makes an Atom feed of a tab,
-					for any feed reader.</Card.Description
+					>Notification views are extra inbox tabs, in this order. Make one with “+” after the tabs,
+					or “Save as view” next to the filter. <Rss class="inline size-3.5" /> makes an Atom feed of
+					a tab, for any feed reader.</Card.Description
 				>
 			</Card.Header>
 			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
@@ -109,8 +109,8 @@
 				<SortableList
 					items={viewRows}
 					onchange={(rows) => saveSettings({ views: rows.map((r) => r.view) }, 'Views saved')}
-					label="Saved views in order"
-					empty="No saved views yet."
+					label="Notification views in order"
+					empty="No notification views yet."
 				>
 					{#snippet row(r)}
 						<span class="min-w-0 flex-1">

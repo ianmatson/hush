@@ -15,9 +15,10 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
 const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, category TEXT, tags_on TEXT NOT NULL DEFAULT '[]', tags_off TEXT NOT NULL DEFAULT '[]');`;
+const TRACKED_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, category TEXT, tags TEXT NOT NULL DEFAULT '[]');`;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -92,6 +93,8 @@ CREATE TABLE push_marks (key TEXT PRIMARY KEY, pushed_at INTEGER NOT NULL, reaso
 ${DECISIONS_TABLE}
 
 ${ITEM_PINS_TABLE}
+
+${TRACKED_ITEMS_TABLE}
 `;
 
 /** How to get from an older version of this layout to SCHEMA_VERSION. */
@@ -135,7 +138,12 @@ CREATE INDEX IF NOT EXISTS threads_triage ON threads (triage, resolved_at);`
 	8: { to: 9, sql: DECISIONS_TABLE },
 	9: { to: 11, sql: '' },
 	10: { to: 11, sql: 'DROP TABLE IF EXISTS item_pins;' },
-	11: { to: 12, sql: ITEM_PINS_TABLE }
+	11: { to: 12, sql: ITEM_PINS_TABLE },
+	12: {
+		to: 13,
+		sql: TRACKED_ITEMS_TABLE,
+		resetKeys: ['dash:pr', 'dash:issue', 'lastWatch', 'lastCleanup']
+	}
 };
 
 export interface ThreadRow {
@@ -173,16 +181,20 @@ export interface ThreadRow {
 export interface ThreadWithFacts extends ThreadRow {
 	facts: string | null;
 	decisions?: string | null;
-	pin_category?: string | null;
+	item_category?: string | null;
+	item_tags?: string | null;
 }
 
 /** Threads with their subject's facts; add a WHERE on thread columns. */
 export const THREADS = `SELECT threads.*, subjects.facts, decisions.answers AS decisions,
-    pins.pin_category FROM threads
+    items.item_category, items.item_tags FROM threads
   LEFT JOIN subjects ON subjects.key = threads.subject_key
   LEFT JOIN decisions ON decisions.key = threads.subject_key
-  LEFT JOIN (SELECT key AS pin_key, category AS pin_category FROM item_pins) AS pins
-    ON pins.pin_key = threads.subject_key`;
+  LEFT JOIN (SELECT key AS item_key, category AS item_category, tags AS item_tags FROM tracked_items)
+    AS items ON items.item_key = threads.subject_key`;
+
+const tagsOf = (json: string | null | undefined): string[] =>
+	json ? (JSON.parse(json) as string[]) : [];
 
 export const factsOf = (r: ThreadWithFacts): SubjectFacts | null =>
 	r.facts ? (JSON.parse(r.facts) as SubjectFacts) : null;
@@ -209,7 +221,7 @@ export function factsFromRow(r: ThreadWithFacts, me: string, myTeams: string[] =
 		htmlUrl: r.html_url,
 		enrichment: enrichmentFor(r, me),
 		me,
-		pinnedCategory: r.pin_category ?? null
+		itemCategoryId: r.item_category ?? null
 	};
 }
 
@@ -249,6 +261,8 @@ export function toDTO(r: ThreadWithFacts): ThreadDTO {
 		authorIsBot: !!f?.authorIsBot,
 		labels: f?.labels.map((l) => l.name) ?? [],
 		rule: r.rule,
+		itemCategory: r.item_category ?? null,
+		tags: tagsOf(r.item_tags),
 		activity: latestActivity(f),
 		override: r.override === 'fyi' && r.override_updated_at === r.gh_updated_at,
 		smart: decisionsFor(r).smart

@@ -262,7 +262,8 @@ export class Poller extends PollerData {
 		});
 		if (page.status === 304) {
 			await this.wakeSnoozed();
-			return this.watch(who);
+			await this.watch(who);
+			return this.cleanup();
 		}
 		await this.putChanged({ ssoHiddenOrgs: page.ssoHiddenOrgs });
 		const ingested = await this.ingest(who, page.items, initialized);

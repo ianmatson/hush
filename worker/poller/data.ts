@@ -42,7 +42,6 @@ import type {
 import { userToken } from '../db';
 import { markThreadDone, markThreadRead, muteThread } from '../github';
 import { sendPush, vapidFromEnv } from '../webpush';
-import type { ThreadRef } from '../peek-other';
 import { PollerDashboard } from './dashboard';
 import {
 	enrichmentFor,
@@ -231,21 +230,6 @@ export abstract class PollerData extends PollerDashboard {
 		return out;
 	}
 
-	/** What the peek of a thread that is not a PR or issue needs to find its subject on GitHub. */
-	async threadRef(id: string): Promise<ThreadRef | null> {
-		const r = this.one<ThreadRow>('SELECT * FROM threads WHERE id = ?', id);
-		return r
-			? {
-					repo: r.repo,
-					subjectType: r.subject_type,
-					title: r.title,
-					htmlUrl: r.html_url,
-					apiUrl: r.api_url,
-					updatedAt: r.gh_updated_at
-				}
-			: null;
-	}
-
 	/** You looked at these PRs or issues ("owner/repo#123"): "since you looked" starts again. */
 	async markSeen(keys: string[]): Promise<{ ok: true }> {
 		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
@@ -397,7 +381,7 @@ export abstract class PollerData extends PollerDashboard {
 
 	/**
 	 * An Atom feed of one inbox tab (see worker/feeds.ts): its name and its threads, newest first.
-	 * Null when the tab is gone (a deleted saved view).
+	 * Null when the tab is gone (a deleted notification view).
 	 */
 	async feedEntries(view: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
 		const mark = parseMarkFeed(view);
@@ -408,7 +392,10 @@ export abstract class PollerData extends PollerDashboard {
 		const { where, args } = viewWhere(saved?.base ?? view);
 		const rows = this.threads(`${where} ORDER BY gh_updated_at DESC LIMIT 300`, ...args);
 		const me = saved ? await this.login() : '';
-		const matching = saved ? rows.filter((r) => threadMatches(saved.query, toDTO(r), me)) : rows;
+		const settings = saved ? await this.settings() : null;
+		const matching = saved
+			? rows.filter((r) => threadMatches(saved.query, toDTO(r), me, settings!))
+			: rows;
 		return {
 			name: saved?.name ?? tab!.label,
 			entries: matching.slice(0, FEED_ENTRIES).map(threadFeedEntry)
@@ -468,12 +455,17 @@ export abstract class PollerData extends PollerDashboard {
 		if (!old.smartDecisions && this.decisionsOn(next)) await this.startDecisionFill();
 		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
 		// must not rewrite every thread.
-		const affects = RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
-		const reclassified = affects ? await this.reclassify(next) : 0;
-		if (PLACEMENT_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]))) {
+		const placementChanged = PLACEMENT_KEYS.some(
+			(k) => JSON.stringify(old[k]) !== JSON.stringify(next[k])
+		);
+		if (placementChanged) {
 			const who = await this.who();
 			if (who) await this.rePlaceCachedItems(who);
 		}
+		const affects =
+			placementChanged ||
+			RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
+		const reclassified = affects ? await this.reclassify(next) : 0;
 		return { settings: next, reclassified };
 	}
 
@@ -508,8 +500,8 @@ export abstract class PollerData extends PollerDashboard {
 		});
 		const who = await this.who();
 		if (!who) return { ok: true };
-		if (change.category !== undefined) await this.reclassify(who.settings);
 		await this.rePlaceCachedItems(who);
+		if (change.category !== undefined) await this.reclassify(who.settings);
 		return { ok: true };
 	}
 
@@ -554,8 +546,8 @@ export abstract class PollerData extends PollerDashboard {
 		await this.decideSubjects(who, threadSubjects, { allAreInboxThreads: true });
 		const itemKeys = (await this.cachedItemKeys()).slice(0, FILL_MAX);
 		await this.decideSubjects(who, [...this.storedSubjectFacts(itemKeys).values()]);
-		await this.reclassify(who.settings);
 		await this.rePlaceCachedItems(who);
+		await this.reclassify(who.settings);
 	}
 
 	/**

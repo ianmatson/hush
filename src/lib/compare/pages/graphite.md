@@ -5,10 +5,10 @@ description: Graphite's pull request inbox next to Hush for GitHub notifications
 
 ## Summary
 
-**Graphite is a code review platform for teams: stacked pull requests, a pull request inbox, a full review page, a merge queue, AI review, and Slack alerts. Hush is a GitHub notification inbox for one person: it covers pull requests, issues, CI, mentions, and releases, sorts them by whose turn it is, and pushes what waits on you.**
+**Graphite is a code review platform for teams: stacked pull requests, a pull request inbox, a full review page, a merge queue, AI review, and Slack alerts. Hush is a GitHub notification inbox for one person: it tracks the pull requests and issues that your saved searches find, sorts their notifications by whose turn it is, and pushes what waits on you.**
 
 - Choose Graphite if your team wants to change how it writes, reviews, and merges pull requests.
-- Choose Hush if you want all your GitHub notifications sorted, with push alerts, and you review on GitHub itself.
+- Choose Hush if you want your GitHub notifications about pull requests and issues sorted, with push alerts, and you review on GitHub itself.
 - The two can work together: Graphite for the review, Hush for the rest of the inbox.
 
 ## At a glance
@@ -19,7 +19,7 @@ description: Graphite's pull request inbox next to Hush for GitHub notifications
 | Where it runs            | Web app, CLI, VS Code extension, MCP, macOS menu bar app                                                             | Web app (installable), on Cloudflare                                  |
 | Price                    | Hobby free; Starter $20 and Team $40 per user per month, billed yearly; Enterprise custom                            | Free in beta; planned $3 a month or $30 a year                        |
 | Open source              | No                                                                                                                   | Yes                                                                   |
-| Covers                   | Pull requests in your chosen repositories                                                                            | Notifications of every type, plus pull request and issue dashboards   |
+| Covers                   | Pull requests in your chosen repositories                                                                            | Notifications about tracked pull requests and issues, plus dashboards |
 | Inbox sections           | Needs your review, Approved, Returned to you, Merging and recently merged, Drafts, Waiting for review, plus your own | Needs you, FYI, Muted; Your turn, Your team's turn, Waiting on others |
 | Code review              | Full diff, comments, approve, merge, stacks, merge queue (Team plan and up), AI review                               | Approve, comment, merge, close, re-run CI; no diff                    |
 | Alerts                   | In-app; Slack (Starter plan and up)                                                                                  | Web Push with quiet hours and digests; Atom feeds                     |
@@ -30,7 +30,7 @@ description: Graphite's pull request inbox next to Hush for GitHub notifications
 
 **Graphite** replaces much of the GitHub pull request page. Its inbox lists the pull requests in your default repositories (up to 3 on the free plan, up to 30 on Team and Enterprise) in sections you can change and share with teammates. Its review page shows the diff, and you can comment, approve, and merge. It adds stacked pull requests through its CLI, a merge queue, automations, and AI review. Graphite does not document issues, discussions, releases, or other GitHub notifications in its inbox.
 
-**Hush** is about the notification inbox. It reads every notification GitHub sends you, then the pull request or issue behind it, and decides if you are the next person who must act. It has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by whose turn it is, across all repositories it can see. The [peek](/docs/peek) lets you approve, request changes, comment, merge, close, and re-run failed jobs, but you read the code on GitHub.
+**Hush** is about the notification inbox. It tracks the pull requests and issues that your saved GitHub searches find, reads your notifications about them and the facts of each item, and decides if you are the next person who must act. It has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by whose turn it is, across all repositories it can see. The [peek](/docs/peek) lets you approve, request changes, comment, merge, close, and re-run failed jobs, but you read the code on GitHub.
 
 ## Alerts
 
@@ -54,7 +54,7 @@ description: Graphite's pull request inbox next to Hush for GitHub notifications
 
 ## Where Hush is better
 
-- It covers all your GitHub notifications, not only pull requests: issues, mentions, CI, releases, security alerts, and discussions.
+- It covers issues too, not only pull requests, with the notifications about them: mentions, review requests, CI on your pull requests, and replies.
 - It works across all repositories you can see, with no limit on default repositories.
 - Push alerts on desktop and phone, with quiet hours and digests.
 - One low price for one person; no team purchase is needed.

@@ -28,6 +28,7 @@ export interface ExpandedQuery {
 	q: string;
 	/** Keep only results that request a review from one of these teams ("org/team"). */
 	teams?: string[];
+	orDirect?: boolean;
 }
 
 /**
@@ -35,6 +36,7 @@ export interface ExpandedQuery {
  * so one search, filtered by your tracked teams, does the work of one search per team.
  */
 const TEAM_REVIEW = /\bteam-review-requested:@team\b/g;
+const REVIEW_REQUESTED_ME = /(?<![\w-])review-requested:@me\b/;
 
 /** Turn saved sections into concrete GitHub search strings. */
 export function expandSections(
@@ -48,6 +50,10 @@ export function expandSections(
 	for (const s of sections) {
 		if (!s.enabled) continue;
 		const q = [s.query.trim(), dash.scope.trim()].filter(Boolean).join(' ');
+		if (REVIEW_REQUESTED_ME.test(q) && dash.excludedTeams.length && !q.includes('@team')) {
+			queries.push({ section: s.id, q, teams: tracked.map((t) => t.slug), orDirect: true });
+			continue;
+		}
 		if (!q.includes('@team')) {
 			queries.push({ section: s.id, q });
 			continue;

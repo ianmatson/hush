@@ -177,9 +177,25 @@ describe('needsDetails', () => {
 describe('forTeams', () => {
 	const q = { section: 'review-team', q: 'x', teams: ['o/web'] };
 	it('keeps PRs that ask a tracked team', () => {
-		expect(forTeams(q, facts({ reviewRequests: [{ team: true, name: 'O/Web' }] }))).toBe(true);
-		expect(forTeams(q, facts({ reviewRequests: [{ team: false, name: 'ian' }] }))).toBe(false);
-		expect(forTeams({ section: 'mine', q: 'x' }, facts())).toBe(true);
+		expect(forTeams(q, facts({ reviewRequests: [{ team: true, name: 'O/Web' }] }), 'ian')).toBe(
+			true
+		);
+		expect(forTeams(q, facts({ reviewRequests: [{ team: false, name: 'ian' }] }), 'ian')).toBe(
+			false
+		);
+		expect(forTeams({ section: 'mine', q: 'x' }, facts(), 'ian')).toBe(true);
+	});
+	it('also keeps PRs that ask you yourself, when the search says so', () => {
+		const both = { ...q, orDirect: true };
+		expect(forTeams(both, facts({ reviewRequests: [{ team: false, name: 'Ian' }] }), 'ian')).toBe(
+			true
+		);
+		expect(forTeams(both, facts({ reviewRequests: [{ team: false, name: 'bob' }] }), 'ian')).toBe(
+			false
+		);
+		expect(
+			forTeams(both, facts({ reviewRequests: [{ team: true, name: 'o/infra' }] }), 'ian')
+		).toBe(false);
 	});
 });
 

@@ -1,6 +1,6 @@
 import { ruleMatches } from './classify';
-import { compileExpr, exprMatches, queryError, usesItemMarks, type QueryExpr } from './query';
-import type { Classification, RuleMatch, SavedView, ThreadDTO, ViewBase } from './types';
+import { compileExpr, exprMatches, queryError, type QueryExpr } from './query';
+import type { Classification, RuleMatch, SavedView, Settings, ThreadDTO, ViewBase } from './types';
 
 export const VIEW_BASES: { id: ViewBase; label: string }[] = [
 	{ id: 'inbox', label: 'Needs you + FYI' },
@@ -11,7 +11,7 @@ export const VIEW_BASES: { id: ViewBase; label: string }[] = [
 ];
 export const MAX_VIEWS = 12;
 
-/** The built-in tabs that can be a feed, and their names. Saved views are 'v:<id>'. */
+/** The built-in tabs that can be a feed, and their names. Notification views are 'v:<id>'. */
 export const FEED_TABS: { id: string; label: string }[] = [
 	{ id: 'action', label: 'Needs you' },
 	{ id: 'fyi', label: 'FYI' },
@@ -35,14 +35,30 @@ export const feedViewOk = (view: string) =>
 	/^v:[a-z0-9]{1,16}$/.test(view) ||
 	parseMarkFeed(view) !== null;
 
+export type MarkNames = Pick<Settings, 'categories' | 'tags'>;
+
 /**
- * Does a thread match a query (a saved view, or the Filter box)? The words mean the same as in
- * rules; "in:" is the thread's list now (the view's base already picks it).
+ * Does a thread match a query (a notification view, or the Filter box)? The words mean the same
+ * as in rules; "in:" is the thread's list now (the view's base already picks it). "category:" and
+ * "tag:" are its PR or issue's.
  */
-export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: string): boolean {
+export function threadMatches(
+	query: string | RuleMatch,
+	t: ThreadDTO,
+	me: string,
+	marks?: MarkNames
+): boolean {
 	const expr: QueryExpr =
 		typeof query === 'string' ? compileExpr(query) : { kind: 'match', when: query };
 	const c = { category: t.category, kind: t.kind } as Classification;
+	const category = marks?.categories.find((x) => x.id === t.itemCategory);
+	const itemCategory = t.itemCategory
+		? { id: t.itemCategory, name: category?.name ?? t.itemCategory }
+		: undefined;
+	const itemTags = (t.tags ?? []).map((id) => ({
+		id,
+		name: marks?.tags.find((x) => x.id === id)?.name ?? id
+	}));
 	return exprMatches(expr, (when) =>
 		ruleMatches(
 			when,
@@ -54,6 +70,8 @@ export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: strin
 				htmlUrl: t.htmlUrl,
 				me,
 				activity: t.activity,
+				itemCategory,
+				itemTags,
 				enrichment: {
 					kind: 'other',
 					author: t.author ?? undefined,
@@ -69,7 +87,7 @@ export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: strin
 	);
 }
 
-/** Validate saved views from the client. Returns an error message, or null. */
+/** Validate notification views from the client. Returns an error message, or null. */
 export function validateViews(views: unknown) {
 	if (!Array.isArray(views)) return 'Views must be a list.';
 	if (views.length > MAX_VIEWS) return `Up to ${MAX_VIEWS} views are allowed.`;
@@ -84,7 +102,6 @@ export function validateViews(views: unknown) {
 		if (!VIEW_BASES.some((b) => b.id === v.base)) return `"${v.name}": unknown base.`;
 		const err = queryError(v.query);
 		if (err) return `"${v.name}": ${typeof v.query === 'string' ? err : `"query" ${err}`}`;
-		if (usesItemMarks(v.query)) return `"${v.name}": views cannot use category: or tag:.`;
 	}
 	return null;
 }

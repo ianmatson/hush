@@ -29,8 +29,7 @@
 		try {
 			await api.react(r.id, content, add);
 			// The peeks' saved copies are old now: they load again the next time they open.
-			for (const queryKey of [['peek'], ['peek-thread']])
-				queryClient.invalidateQueries({ queryKey, refetchType: 'none' });
+			queryClient.invalidateQueries({ queryKey: ['peek'], refetchType: 'none' });
 		} catch (err) {
 			groups = before;
 			toast.error(`Reaction: ${(err as Error).message}`);

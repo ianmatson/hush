@@ -114,6 +114,8 @@ export const PREVIEW_THREAD: ThreadDTO = {
 	authorIsBot: false,
 	labels: ['api'],
 	rule: 'Web team',
+	itemCategory: 'preview-category',
+	tags: ['preview-tag'],
 	override: true,
 	changes: [{ kind: 'commits', text: '2 new commits', tone: null }],
 	activity: null

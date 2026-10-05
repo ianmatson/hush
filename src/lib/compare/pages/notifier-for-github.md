@@ -47,7 +47,7 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 ## Where Hush is better
 
 - It tells you which threads need you, not only how many are unread.
-- Triage in one place: done, snooze, mute, categories, saved views.
+- Triage in one place: done, snooze, mute, categories, notification views.
 - Approve, comment, and merge pull requests from the list.
 - Push to your phone, with quiet hours and digests, also when Hush is not open.
 - Active development; Notifier for GitHub has had no release since June 2025.

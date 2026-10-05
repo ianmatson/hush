@@ -1,5 +1,5 @@
 import { DEFAULT_DASH } from './dashboard';
-import { DEFAULT_SOURCES } from './sources';
+import { DEFAULT_SOURCES, upgradeSources } from './sources';
 import { categoriesWithLegacyRules, DEFAULT_CATEGORIES, DEFAULT_TAGS } from './categories';
 import { DEFAULT_MENUS, upgradeMenus } from './menus';
 import { DEFAULT_SWIPE } from './swipe';
@@ -53,6 +53,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 			...DEFAULT_SETTINGS,
 			...raw,
 			categories: categoriesWithLegacyRules(raw.categories ?? DEFAULT_CATEGORIES, legacyRules),
+			sources: upgradeSources(raw.sources ?? DEFAULT_SOURCES),
 			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
 			swipe: {

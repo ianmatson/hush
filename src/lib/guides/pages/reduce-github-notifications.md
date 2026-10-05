@@ -78,7 +78,7 @@ GitHub sorts notifications by time, and gives each one a reason that does not ch
 - The first time you sign in, Hush lists the repositories with the most notifications that do not need you, and moves the ones that you choose to FYI.
 - When a thread is in Needs you and should not be, press {{key:inbox.notNeeded}} (**Doesn't need me**). Hush asks why, and changes a setting, or moves only this thread. See [Doesn't need me](/docs/inbox#doesnt-need-me).
 
-For a repository that you only read, or a bot, make a [category](/docs/categories) with inbox settings: right-click a thread and choose **Make a category…**. These categories send one repository to FYI, mute a bot, and move passing workflow runs to Done:
+For a repository that you only read, or a bot, make a [category](/docs/categories) with inbox settings: right-click a thread and choose **Make a category…**. These categories send one repository to FYI, mute a bot, and move the notifications about one bot's PRs to Done:
 
 ```json settings
 {
@@ -100,10 +100,10 @@ For a repository that you only read, or a bot, make a [category](/docs/categorie
 			"inbox": "muted"
 		},
 		{
-			"id": "quiet-ci",
-			"name": "Quiet CI",
+			"id": "quiet-bot",
+			"name": "Quiet bot",
 			"color": "gray",
-			"rule": "type:ci in:fyi",
+			"rule": "author:github-actions*",
 			"description": "",
 			"triage": "done"
 		},
@@ -114,7 +114,7 @@ For a repository that you only read, or a bot, make a [category](/docs/categorie
 
 A change to `categories` replaces the whole list, so keep `other`, the fallback.
 
-Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. So the GitHub steps above still help: they leave Hush less to sort.
+Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. Hush keeps only the notifications about the pull requests and issues that your [sources](/docs/pull-requests-and-issues#sources) find; it does not show releases, CI runs, or discussions. So the GitHub steps above still help: they leave Hush less to sort.
 
 ## Sources
 

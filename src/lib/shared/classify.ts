@@ -249,7 +249,7 @@ export function withOverride(
 
 export function classify(t: ThreadFacts, settings: Settings): Classification {
 	const base = classifyDefault(t, settings);
-	return withCategory(base, threadCategory(t, base, settings.categories));
+	return withCategory(base, threadCategory(t, settings.categories));
 }
 
 /**

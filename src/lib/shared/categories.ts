@@ -1,6 +1,6 @@
 import { queryMatches } from './classify';
 import type { CategoryOption } from './decisions';
-import { aboutTexts, queryError, usesItemMarks } from './query';
+import { aboutTexts, queryError, usesItemMarks, usesNotificationWords } from './query';
 import { parseMarkIcon } from './mark-icons';
 import type {
 	CategoryInbox,
@@ -134,6 +134,17 @@ export interface Placement {
 	tags: string[];
 }
 
+const usableRules = new Map<string, boolean>();
+
+export function ruleUsable(rule: string): boolean {
+	let ok = usableRules.get(rule);
+	if (ok === undefined) {
+		ok = !!rule.trim() && !queryError(rule) && !usesNotificationWords(rule) && !usesItemMarks(rule);
+		usableRules.set(rule, ok);
+	}
+	return ok;
+}
+
 export const choosableCategories = (categories: ItemCategory[]) =>
 	categories.filter((c) => c.id !== FALLBACK_CATEGORY_ID && c.description.trim());
 
@@ -146,7 +157,7 @@ function placeCategory(
 ): [string, PlacedBy] {
 	if (pinned && categories.some((x) => x.id === pinned)) return [pinned, 'pin'];
 	const byRule = categories.find(
-		(x) => x.id !== FALLBACK_CATEGORY_ID && x.rule.trim() && queryMatches(x.rule, t, c)
+		(x) => x.id !== FALLBACK_CATEGORY_ID && ruleUsable(x.rule) && queryMatches(x.rule, t, c)
 	);
 	if (byRule) return [byRule.id, 'rule'];
 	const byJev = choosableCategories(categories).find((x) => x.id === jevCategory);
@@ -172,24 +183,21 @@ export function placeItem(
 	const on = new Set((pins?.tagsOn ?? []).filter((id) => tagIds.has(id)));
 	const off = new Set(pins?.tagsOff ?? []);
 	const tags = settings.tags
-		.filter((x) => on.has(x.id) || (!off.has(x.id) && x.rule.trim() && queryMatches(x.rule, t, c)))
+		.filter(
+			(x) => on.has(x.id) || (!off.has(x.id) && ruleUsable(x.rule) && queryMatches(x.rule, t, c))
+		)
 		.map((x) => x.id);
 	return { category, categoryBy, tags };
 }
 
 export function threadCategory(
 	t: ThreadFacts,
-	base: Classification,
 	categories: ItemCategory[]
 ): ItemCategory | undefined {
-	const [id] = placeCategory(
-		t,
-		base,
-		t.enrichment?.jevCategory ?? null,
-		t.pinnedCategory,
-		categories
+	return (
+		categories.find((x) => x.id === t.itemCategoryId) ??
+		categories.find((x) => x.id === FALLBACK_CATEGORY_ID)
 	);
-	return categories.find((x) => x.id === id);
 }
 
 const changesInbox = (c: ItemCategory) =>
@@ -237,7 +245,8 @@ export function categoriesWithLegacyRules(
 	const used = new Set(categories.map((c) => c.id));
 	const enabled = rules
 		.map((r, n) => ({ r, n }))
-		.filter(({ r }) => r?.enabled !== false && r?.then && typeof r.when === 'string');
+		.filter(({ r }) => r?.enabled !== false && r?.then && typeof r.when === 'string')
+		.filter(({ r }) => !r.when.trim() || (!queryError(r.when) && !usesNotificationWords(r.when)));
 	const everyThread = enabled.find(({ r }) => !r.when.trim());
 	const withQueries = enabled
 		.filter(({ r }) => r.when.trim())
@@ -332,6 +341,8 @@ function validateMark(
 	const err = m.rule.trim() ? queryError(m.rule) : null;
 	if (err) return `"${m.name}": ${err}`;
 	if (usesItemMarks(m.rule)) return `"${m.name}": rules cannot use category: or tag:.`;
+	if (usesNotificationWords(m.rule))
+		return `"${m.name}": rules look at the PR or issue, so they cannot use event:, needs:, or in:.`;
 	return null;
 }
 

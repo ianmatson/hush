@@ -62,6 +62,7 @@
 			{#if kind === 'thread'}
 				<ThreadRow
 					thread={PREVIEW_THREAD}
+					marks={PREVIEW_MARKS}
 					hidden={rows.thread}
 					onaction={noop}
 					onopen={noop}

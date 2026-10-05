@@ -69,7 +69,7 @@ Team requests are **FYI** by default. On the [Pull requests tab](/docs/pull-requ
 - [`reviewResolution`](/docs/settings#reviewresolution) `"any_review"`: a review by someone else settles a request. Use it on teams where one review is enough.
 - [`dash.excludedTeams`](/docs/settings#dash-excludedteams): leave out big teams, such as "everyone".
 
-A [saved view](/docs/views) with only review requests from people, and the settings above:
+A [notification view](/docs/views) with only review requests from people, and the settings above:
 
 ```json settings
 {
@@ -82,7 +82,7 @@ A [saved view](/docs/views) with only review requests from people, and the setti
 }
 ```
 
-`needs:review` also matches deployments that wait for your approval. To read the pull request and approve it without leaving Hush, use the [peek](/docs/peek). For the diff and line comments, Hush sends you to GitHub.
+To read the pull request and approve it without leaving Hush, use the [peek](/docs/peek). For the diff and line comments, Hush sends you to GitHub.
 
 ## Sources
 

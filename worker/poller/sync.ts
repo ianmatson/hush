@@ -1,13 +1,11 @@
 import { classify, categoryTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
-import type { ThreadFacts } from '../../src/lib/shared/types';
+import type { DashKind, ThreadFacts } from '../../src/lib/shared/types';
 import { enrichmentOf, subjectKey } from '../../src/lib/shared/subject';
 import {
 	fetchSubjects,
-	laterRunPassed,
 	listNotifications,
-	parseWorkflowTitle,
 	subjectHtmlUrl,
 	subjectNumber,
 	type GhNotification,
@@ -24,14 +22,114 @@ import {
 	INBOX_CHECK_MAX,
 	INBOX_CHECK_GAP,
 	MUTED_BY_USER,
+	DASH_TTL,
+	TRACKED_KEEP,
+	TRACKED_REBUILD_GAP,
 	type Who
 } from './shared';
 import { PollerSubjects } from './subjects';
 
 const marks = (n: number) => Array(n).fill('?').join(',');
 
+const TRACKED_BUILD_KEY = (kind: DashKind) => `trackedBuild:${kind}`;
+const TRACKED_REBUILD_KEY = 'trackedRebuildAt';
+
+export interface TrackedBuild {
+	at: number;
+	complete: boolean;
+}
+
+function itemKeyOf(n: GhNotification): string | null {
+	const num = subjectNumber(n);
+	return num ? subjectKey(n.repository.full_name, num) : null;
+}
+
+const kindOf = (n: GhNotification): DashKind => (n.subject.type === 'PullRequest' ? 'pr' : 'issue');
+
 /** Notifications in: ingest, the watcher, the GitHub read/done sync, and upkeep. */
 export abstract class PollerSync extends PollerSubjects {
+	protected abstract rebuildTracked(kind: DashKind): Promise<void>;
+
+	protected async trackedBuild(kind: DashKind): Promise<TrackedBuild | null> {
+		return (await this.ctx.storage.get<TrackedBuild>(TRACKED_BUILD_KEY(kind))) ?? null;
+	}
+
+	protected async storeTrackedBuild(kind: DashKind, complete: boolean) {
+		await this.ctx.storage.put(TRACKED_BUILD_KEY(kind), { at: Date.now(), complete });
+	}
+
+	private trackedKeys(keys: string[]): Set<string> {
+		return new Set(this.trackedPlacements(keys).keys());
+	}
+
+	private async onlyTracked(items: GhNotification[]): Promise<GhNotification[]> {
+		const work = items.filter((n) => itemKeyOf(n));
+		if (!work.length) return [];
+		let known = this.trackedKeys(work.map((n) => itemKeyOf(n)!));
+		const unknown = work.filter((n) => !known.has(itemKeyOf(n)!));
+		if (unknown.length && (await this.rebuildFor(unknown)))
+			known = this.trackedKeys(work.map((n) => itemKeyOf(n)!));
+		return work.filter((n) => known.has(itemKeyOf(n)!));
+	}
+
+	private async rebuildFor(unknown: GhNotification[]): Promise<boolean> {
+		const last = (await this.ctx.storage.get<number>(TRACKED_REBUILD_KEY)) ?? 0;
+		if (Date.now() - last < TRACKED_REBUILD_GAP) return false;
+		const kinds: DashKind[] = [];
+		for (const kind of ['pr', 'issue'] as const) {
+			const builtAt = (await this.trackedBuild(kind))?.at ?? 0;
+			const newer = unknown.some((n) => kindOf(n) === kind && Date.parse(n.updated_at) > builtAt);
+			if (newer) kinds.push(kind);
+		}
+		if (!kinds.length) return false;
+		await this.ctx.storage.put(TRACKED_REBUILD_KEY, Date.now());
+		for (const kind of kinds)
+			await this.rebuildTracked(kind).catch((err) =>
+				console.error('sources rebuild', (err as Error).message)
+			);
+		return true;
+	}
+
+	protected async keepTrackedFresh() {
+		for (const kind of ['pr', 'issue'] as const) {
+			const built = await this.trackedBuild(kind);
+			if (built && Date.now() - built.at < DASH_TTL) continue;
+			await this.rebuildTracked(kind).catch((err) =>
+				console.error('sources rebuild', (err as Error).message)
+			);
+		}
+	}
+
+	protected async untrackMissing(kind: DashKind, found: string[]) {
+		const keep = new Set(found);
+		const gone = this.all<{ key: string }>(`SELECT key FROM tracked_items WHERE kind = ?`, kind)
+			.map((r) => r.key)
+			.filter((k) => !keep.has(k));
+		if (!gone.length) return;
+		this.transaction(() => {
+			for (const k of gone) this.run(`DELETE FROM tracked_items WHERE key = ?`, k);
+		});
+		await this.pruneUntrackedThreads(gone);
+	}
+
+	protected async pruneUntrackedThreads(keys?: string[]) {
+		let n = 0;
+		if (keys) {
+			for (let i = 0; i < keys.length; i += 90) {
+				const chunk = keys.slice(i, i + 90);
+				n += this.run(
+					`DELETE FROM threads WHERE subject_key IN (${marks(chunk.length)})`,
+					...chunk
+				);
+			}
+		} else
+			n = this.run(
+				`DELETE FROM threads WHERE subject_key IS NULL
+         OR subject_key NOT IN (SELECT key FROM tracked_items)`
+			);
+		if (n) await this.bumpVersion();
+	}
+
 	/**
 	 * Store new or changed notifications: read their PRs and issues (the subject store), classify,
 	 * and push what needs you. Returns the ids it wrote.
@@ -49,18 +147,13 @@ export abstract class PollerSync extends PollerSubjects {
 			const ids = items.slice(i, i + 90).map((n) => n.id);
 			for (const r of this.threads(`id IN (${marks(ids.length)})`, ...ids)) existing.set(r.id, r);
 		}
-		// Threads stored before their API address was kept get it now (one write each, once).
-		const fill = items.filter((n) => n.subject.url && existing.get(n.id)?.api_url === null);
-		if (fill.length)
-			this.transaction(() => {
-				for (const n of fill)
-					this.run('UPDATE threads SET api_url = ? WHERE id = ?', n.subject.url, n.id);
-			});
-		const changed = items.filter(
-			(n) =>
-				existing.get(n.id)?.gh_updated_at !== n.updated_at &&
-				// The GitHub sync lists read threads too; old ones Hush never had stay out.
-				(!opts.knownOrUnread || existing.has(n.id) || n.unread)
+		const changed = await this.onlyTracked(
+			items.filter(
+				(n) =>
+					existing.get(n.id)?.gh_updated_at !== n.updated_at &&
+					// The GitHub sync lists read threads too; old ones Hush never had stay out.
+					(!opts.knownOrUnread || existing.has(n.id) || n.unread)
+			)
 		);
 		if (!changed.length) return [];
 
@@ -79,6 +172,7 @@ export abstract class PollerSync extends PollerSubjects {
 		// Store the facts; this ingest writes these threads itself.
 		await this.record(who, [...fetched.values()], { threads: false, allAreInboxThreads: true });
 		const decided = this.decisionsOf(who, [...fetched.values()]);
+		const placed = this.trackedPlacements(changed.map((n) => itemKeyOf(n)!));
 
 		const now = Date.now();
 		const candidates: PushCandidate[] = [];
@@ -107,7 +201,7 @@ export abstract class PollerSync extends PollerSubjects {
 				enrichment,
 				me,
 				myTeams,
-				pinnedCategory: key ? (this.itemPins([key]).get(key)?.category ?? null) : null
+				itemCategoryId: key ? (placed.get(key)?.category ?? null) : null
 			};
 			let c = withOverride(classify(facts, settings), ex, n.updated_at);
 			if (ex?.category === 'muted' && ex.rule === MUTED_BY_USER)
@@ -225,6 +319,7 @@ export abstract class PollerSync extends PollerSubjects {
 		const last = (await this.ctx.storage.get<number>('lastWatch')) ?? 0;
 		if (Date.now() - last < WATCH_EVERY) return;
 		await this.ctx.storage.put('lastWatch', Date.now());
+		await this.keepTrackedFresh();
 		const synced = await this.syncFromGitHub(who);
 		const skip = new Set([...fresh, ...synced]);
 
@@ -252,49 +347,6 @@ export abstract class PollerSync extends PollerSubjects {
 		const batch = [...unread, ...rows].filter((r) => !skip.has(r.id));
 		// The first run after an update of the rules may move many threads at once: no pushes.
 		await this.refresh(who, batch, { quiet: last === 0 });
-		await this.resolveWorkflowRuns(who);
-	}
-
-	/**
-	 * "A workflow run failed" threads: GitHub notifies about the failure but not about the next
-	 * run that passes. Move a thread to Done when the newest completed run of that workflow on that
-	 * branch passed after it. Up to 10 threads per watch, one or two REST requests each.
-	 */
-	protected async resolveWorkflowRuns(who: Who) {
-		const rows = this.all<Pick<ThreadRow, 'id' | 'repo' | 'title' | 'gh_updated_at'>>(
-			`SELECT id, repo, title, gh_updated_at FROM threads
-       WHERE subject_type = 'CheckSuite' AND triage = 'inbox' AND category = 'action'
-       ORDER BY gh_updated_at DESC LIMIT 10`
-		);
-		const workflows = new Map<string, Promise<{ id: number; name: string }[]>>();
-		const passed = await Promise.all(
-			rows.map(async (r) => {
-				const w = parseWorkflowTitle(r.title);
-				if (!w) return false;
-				return (
-					(await laterRunPassed(
-						who.token,
-						r.repo,
-						w.workflow,
-						w.branch,
-						r.gh_updated_at,
-						workflows
-					).catch(() => null)) === true
-				);
-			})
-		);
-		const done = rows.filter((_, k) => passed[k]);
-		if (!done.length) return;
-		const now = Date.now();
-		this.transaction(() => {
-			for (const r of done)
-				this.run(
-					`UPDATE threads SET triage = 'done', resolved_at = ?, resolved_note = 'A later run passed' WHERE id = ?`,
-					now,
-					r.id
-				);
-		});
-		await this.bumpVersion();
 	}
 
 	/**
@@ -397,6 +449,11 @@ export abstract class PollerSync extends PollerSubjects {
 	protected async cleanup() {
 		const last = (await this.ctx.storage.get<number>('lastCleanup')) ?? 0;
 		if (Date.now() - last < DAY) return;
+		const builds = await Promise.all((['pr', 'issue'] as const).map((k) => this.trackedBuild(k)));
+		if (builds.every((b) => b?.complete && Date.now() - b.at < DAY)) {
+			this.run(`DELETE FROM tracked_items WHERE seen_at < ?`, Date.now() - TRACKED_KEEP);
+			await this.pruneUntrackedThreads();
+		}
 		const cutoff = Date.now() - 30 * DAY;
 		const threads = this.run(
 			`DELETE FROM threads WHERE triage = 'done' AND gh_updated_at < ?`,
@@ -404,7 +461,8 @@ export abstract class PollerSync extends PollerSubjects {
 		);
 		this.run(
 			`DELETE FROM subjects WHERE changed_at < ?
-       AND key NOT IN (SELECT subject_key FROM threads WHERE subject_key IS NOT NULL)`,
+       AND key NOT IN (SELECT subject_key FROM threads WHERE subject_key IS NOT NULL)
+       AND key NOT IN (SELECT key FROM tracked_items)`,
 			cutoff
 		);
 		this.run(`DELETE FROM decisions WHERE key NOT IN (SELECT key FROM subjects)`);

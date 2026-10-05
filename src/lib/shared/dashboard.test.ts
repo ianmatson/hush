@@ -156,7 +156,28 @@ describe('expandSections', () => {
 			[]
 		);
 		expect(queries.some((q) => q.section === 'team-mentioned')).toBe(false);
-		expect(skipped['review-team']).toMatch(/team/);
+		const { skipped: teamSkipped } = expandSections(
+			[{ id: 'tm', name: 'TM', query: 'is:open team:@team', enabled: true }],
+			DEFAULT_DASH,
+			[]
+		);
+		expect(skipped).toEqual({});
+		expect(teamSkipped.tm).toMatch(/team/);
+	});
+	it('filters your review requests by the tracked teams only when you leave a team out', () => {
+		const source = [{ id: 'r', name: 'R', query: 'is:pr review-requested:@me', enabled: true }];
+		expect(expandSections(source, { scope: '', excludedTeams: [] }, teams).queries).toEqual([
+			{ section: 'r', q: 'is:pr review-requested:@me' }
+		]);
+		expect(
+			expandSections(source, { scope: '', excludedTeams: ['o/infra'] }, teams).queries
+		).toEqual([
+			{ section: 'r', q: 'is:pr review-requested:@me', teams: ['o/web'], orDirect: true }
+		]);
+		const direct = [{ id: 'u', name: 'U', query: 'user-review-requested:@me', enabled: true }];
+		expect(
+			expandSections(direct, { scope: '', excludedTeams: ['o/infra'] }, teams).queries[0].teams
+		).toBeUndefined();
 	});
 });
 

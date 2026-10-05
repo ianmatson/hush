@@ -37,6 +37,12 @@ export const SEARCH_FIELDS: SearchField[] = [
 	{ key: 'involves', label: 'Involves', placeholder: PERSON, canNegate: true },
 	{ key: 'reviewed-by', label: 'Reviewed by', placeholder: PERSON, canNegate: true },
 	{
+		key: 'review-requested',
+		label: 'Review requested (person or their teams)',
+		placeholder: PERSON,
+		canNegate: true
+	},
+	{
 		key: 'user-review-requested',
 		label: 'Review requested from person',
 		placeholder: PERSON,
@@ -109,6 +115,7 @@ const VERB_FIELDS = new Set([
 	'commenter',
 	'involves',
 	'reviewed-by',
+	'review-requested',
 	'user-review-requested',
 	'team-review-requested',
 	'team'

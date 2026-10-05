@@ -12,6 +12,8 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import KindIcon from './kind-icon.svelte';
+	import MarkIcon from './marks/mark-icon.svelte';
+	import type { RowMark } from '$lib/marks';
 	import SelectMark from './select-mark.svelte';
 	import SnoozeItems from './snooze-items.svelte';
 	import AppMenu from './app-menu.svelte';
@@ -35,10 +37,12 @@
 		ontoggle,
 		menu,
 		showList = false,
-		hidden = []
+		hidden = [],
+		marks = []
 	}: {
 		thread: ThreadDTO;
 		hidden?: string[];
+		marks?: RowMark[];
 		/** Say which list it is in (a search of every tab). */
 		showList?: boolean;
 		/** The keyboard cursor is on this row. */
@@ -76,6 +80,9 @@
 	const said = $derived(saidBy(t.summary));
 	const show = (part: string) => !hidden.includes(part);
 	const showWhy = $derived(whyAddsInfo(t.why, t.summary) && show('why'));
+	const shownMarks = $derived(
+		marks.filter((m) => show(m.kind === 'category' ? 'category' : 'tags'))
+	);
 	const changes = $derived(newChanges(t.changes ?? [], said, [t.summary, t.why]));
 	const stop = (fn: () => void) => (e: MouseEvent) => {
 		e.stopPropagation();
@@ -159,10 +166,8 @@
 			{#if t.override && show('override')}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">You said: doesn’t need me</span>
 			{/if}
-			{#if t.rule && show('category')}
-				<span class="rounded-md border border-dashed px-1.5 py-0.5"
-					>{t.rule === 'Muted by you' ? 'You muted it' : `category: ${t.rule}`}</span
-				>
+			{#if t.rule === 'Muted by you'}
+				<span class="rounded-md border border-dashed px-1.5 py-0.5">You muted it</span>
 			{/if}
 			{#if t.resolvedNote && show('resolved')}
 				<span
@@ -183,6 +188,26 @@
 				<span class="rounded-md bg-muted px-1.5 py-0.5"
 					>{ev ? `until ${ev.label.toLowerCase()} (or ${at})` : `until ${at}`}</span
 				>
+			{/if}
+			{#if shownMarks.length}
+				<span class="flex shrink-0 items-center gap-1" aria-label="Category and tags">
+					{#each shownMarks as m (m.key)}
+						<Tooltip.Root>
+							<Tooltip.Trigger
+								class="flex size-4 items-center justify-center"
+								aria-label={m.kind === 'category' ? `Category: ${m.name}` : `Tag: ${m.name}`}
+							>
+								<MarkIcon kind={m.kind} color={m.color} icon={m.icon} class="size-3.5" />
+							</Tooltip.Trigger>
+							<Tooltip.Content
+								>{m.kind === 'category' ? 'Category' : 'Tag'}: {m.name}{m.kind === 'category' &&
+								t.rule === m.name
+									? ' (it sets where this goes)'
+									: ''}</Tooltip.Content
+							>
+						</Tooltip.Root>
+					{/each}
+				</span>
 			{/if}
 		</div>
 	</div>

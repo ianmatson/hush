@@ -1,12 +1,14 @@
 ---
 title: Categories and tags
-description: Give every pull request, issue, and notification one category, and mark items with tags. A category also decides what its threads do in the inbox.
+description: Give every pull request and issue one category, and mark items with tags. A category also decides what the notifications about its items do in the inbox.
 ---
 
-Every pull request, issue, and notification thread has exactly one **category**: where it lives. A pull request or issue can also have any number of **tags**: what else is true about it. Set them up in **Settings → Categories & tags**.
+Every pull request and issue has exactly one **category**: where it lives. It can also have any number of **tags**: what else is true about it. Set them up in **Settings → Categories & tags**.
+
+A notification has the category and the tags of its PR or issue. Hush does not place notifications by themselves.
 
 - Categories show on rows, as filter chips on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories-and-tags), and in [feeds](/docs/feeds).
-- A category can also change the inbox: send its threads to Needs you, FYI, or Muted, turn pushes on or off, and move new threads to Done or Snoozed. See [Inbox settings](#inbox-settings).
+- A category can also change the inbox: send the notification threads of its items to Needs you, FYI, or Muted, turn pushes on or off, and move new threads to Done or Snoozed. See [Inbox settings](#inbox-settings).
 - Tags only mark items. They do not change the inbox.
 
 ## How Hush places an item
@@ -18,9 +20,9 @@ Hush checks the categories **from top to bottom**:
 3. Jev's choice among the categories that have a description, when it is sure enough. See [smart decisions](/docs/settings#smartdecisions).
 4. Otherwise **Other** (id `other`). It is always last, and you cannot delete it.
 
-Notification threads that are not a PR or issue (releases, CI runs, discussions) are placed by their own facts, with the same rules. Without a match, they go to Other.
-
 An item gets every tag whose rule matches, plus the tags that you turn on by hand (right-click → **Tags**). A tag that you turn off by hand stays off. Each tag's rule is checked on its own.
+
+Hush checks the rules on the PR or issue only, never on a notification. A category or tags that you choose for a PR or issue apply to its notifications too.
 
 Hush starts with presets that you can change or delete: [categories](/docs/settings#categories) (Incidents, Features, Bugs, Maintenance, Other) and [tags](/docs/settings#tags) (Blocked, Needs decision, Security, Breaking change, Quick).
 
@@ -46,21 +48,18 @@ A category's or a tag's rule is a [query](/docs/query-language), such as `repo:a
 | `author:bots` / `-author:bots` | The author is a bot, or a person.                                |
 | `from:alice`                   | Who did the newest activity: a comment or a review.              |
 | `label:bug`                    | Has this label (the exact name, any case).                       |
-| `type:pr`                      | What it is: pr, issue, ci, release, discussion…                  |
-| `event:mentioned`              | Why GitHub notified you (notification threads only).             |
-| `needs:review`                 | What Hush thinks you must do, before your categories.            |
-| `in:fyi`                       | Where Hush's defaults put it, before your categories.            |
-| `source:"Assigned to you"`     | Which [source](/docs/pull-requests-and-issues#sources) found it. |
+| `type:pr`                      | What it is: pr or issue.                                         |
+| `source:"Involves you"`        | Which [source](/docs/pull-requests-and-issues#sources) found it. |
 | `size:<50`                     | Lines changed in a pull request.                                 |
 | `about:"database migrations"`  | What it is about, in your words. Jev decides.                    |
 
-`category:` and `tag:` do not work in rules. Every word and value is in the [query language](/docs/query-language) reference.
+Rules cannot use `category:` and `tag:`. They also cannot use `event:`, `needs:`, and `in:`, because these words are about notifications, and rules look only at the PR or issue. Every word and value is in the [query language](/docs/query-language) reference.
 
 Jev reads each item once, when Hush first sees it, and again when its title, description, or labels change. A new comment does not change its category or tags. After you change categories or tags, choose **Re-evaluate items** to ask Jev again about the items you have now. Rules without `about:` apply at once.
 
 ## Inbox settings
 
-Each category has three settings for its notification threads in the inbox:
+Each category has three settings for the notification threads of its PRs and issues in the inbox:
 
 | Setting          | JSON                                                     | Does                                                                                                     |
 | ---------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -87,13 +86,13 @@ A settings file with `rules` imports the same way.
 
 As queries, with what the category does in the inbox:
 
-| When                           | Then                     |
-| ------------------------------ | ------------------------ |
-| `repo:acme/website`            | FYI                      |
-| `author:dependabot*`           | Muted                    |
-| `type:release repo:sveltejs/*` | Needs you, always push   |
-| `from:github-actions in:fyi`   | Move to Done             |
-| `type:ci repo:acme/nightly`    | Snooze 12 hours, no push |
+| When                         | Then                     |
+| ---------------------------- | ------------------------ |
+| `repo:acme/website`          | FYI                      |
+| `author:dependabot*`         | Muted                    |
+| `type:issue repo:sveltejs/*` | Needs you, always push   |
+| `from:github-actions`        | Move to Done             |
+| `repo:acme/nightly`          | Snooze 12 hours, no push |
 
 The same categories in [settings.json](/docs/settings#categories):
 
@@ -118,9 +117,9 @@ The same categories in [settings.json](/docs/settings#categories):
 		},
 		{
 			"id": "svelte",
-			"name": "Svelte releases",
+			"name": "Svelte issues",
 			"color": "orange",
-			"rule": "type:release repo:sveltejs/*",
+			"rule": "type:issue repo:sveltejs/*",
 			"description": "",
 			"inbox": "action",
 			"push": "on"
@@ -129,15 +128,15 @@ The same categories in [settings.json](/docs/settings#categories):
 			"id": "bot-comments",
 			"name": "Bot comments",
 			"color": "gray",
-			"rule": "from:github-actions in:fyi",
+			"rule": "from:github-actions",
 			"description": "",
 			"triage": "done"
 		},
 		{
 			"id": "nightly",
-			"name": "Nightly CI",
+			"name": "Nightly",
 			"color": "teal",
-			"rule": "type:ci repo:acme/nightly",
+			"rule": "repo:acme/nightly",
 			"description": "",
 			"push": "off",
 			"triage": "snooze",
@@ -171,6 +170,6 @@ Each category and each tag can have an [Atom feed](/docs/feeds) of its open pull
 ## Tips
 
 - Put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
-- Use `in:` and `needs:` to change only part of Hush's sorting: `repo:acme/big-monorepo in:fyi` changes nothing about what needs you there.
+- To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter) or a [notification view](/docs/views). They can also use `category:` and `tag:`.
 - To hear about something without seeing it in Needs you, use **Always FYI** with **Always push**.
 - Give a category a description, and leave its rule empty, to let Jev fill it.

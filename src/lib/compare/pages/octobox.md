@@ -18,7 +18,7 @@ description: Octobox and Hush are both web apps for GitHub notifications. Octobo
 | Price                | Free for open source; enhanced data for private repos from $10 per user per month         | Free in beta; planned $3 a month or $30 a year              |
 | Open source          | Yes (AGPL-3.0)                                                                            | Yes                                                         |
 | Sort order           | Time, with search and filters                                                             | Needs you, FYI, Muted, by whose turn it is                  |
-| Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | Categories, tags, a query language, saved views             |
+| Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | Categories, tags, a query language, notification views      |
 | Push alerts          | Not documented                                                                            | Web Push, quiet hours, digests, limits                      |
 | Pull request actions | Comment from the thread view (beta)                                                       | Approve, request changes, comment, merge, close, re-run CI  |
 | GitHub Enterprise    | Yes, when self-hosted                                                                     | No (github.com only)                                        |

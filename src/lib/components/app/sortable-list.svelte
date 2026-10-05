@@ -11,7 +11,7 @@
 
 	/**
 	 * A list you reorder by drag (mouse and pen, with the dashboards' lift and spring) or with the
-	 * ↑ ↓ buttons (every device). Used by Settings → Menus and the saved views.
+	 * ↑ ↓ buttons (every device). Used by Settings → Menus and the notification views.
 	 */
 	let {
 		items,

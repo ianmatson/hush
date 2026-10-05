@@ -41,6 +41,8 @@ import {
 	POLL_ACTIVE,
 	POLL_IDLE,
 	TEAMS_TTL,
+	TRACKED_KEEP,
+	TRACKED_REBUILD_GAP,
 	WATCH_EVERY
 } from '../../../worker/poller/shared';
 import {
@@ -184,7 +186,7 @@ This also applies to team review requests.`
 
 - **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
 - **Categories:** Jev chooses a category for each PR and issue that no rule places, among the categories that have a description. See [Categories and tags](/docs/categories).
-- **\`about:\` conditions** in category and tag rules and in saved views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
+- **\`about:\` conditions** in category and tag rules and in notification views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
 - **Order:** on the Pull requests and Issues tabs, items whose text says they block something or are about an incident come first inside their group.
 
 A one-time notice on the inbox and on the Pull requests and Issues tabs says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Inbox → Defaults**: Hush then deletes Jev's answers, and sends Jev nothing more.`
@@ -199,30 +201,33 @@ A one-time notice on the inbox and on the Pull requests and Issues tabs says tha
 	},
 	views: {
 		type: 'array of views',
-		body: `Saved views: extra tabs after the built-in inbox tabs, in this order. Up to ${MAX_VIEWS}.
+		body: `Notification views: extra tabs after the built-in inbox tabs, in this order. They filter notifications only. Up to ${MAX_VIEWS}.
 
 - \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
 - \`name\`: up to 40 characters. The tab label.
 - \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
-- \`query\`: a [query](/docs/query-language), the same words as category rules. \`in:\` here is the thread's list now, after its category's inbox setting. \`category:\` and \`tag:\` do not work here. \`""\` shows every thread of the base.
+- \`query\`: a [query](/docs/query-language), the same words as category rules. \`in:\` here is the thread's list now, after its category's inbox setting. \`category:\` and \`tag:\` match the category and tags of the thread's PR or issue. \`""\` shows every thread of the base.
 
 \`\`\`json settings
 {
   "views": [
     { "id": "web", "name": "Web team", "base": "inbox", "query": "repo:acme/web-*" },
-    { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" }
+    { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" },
+    { "id": "bugs", "name": "Bugs", "base": "inbox", "query": "category:bugs" }
   ]
 }
 \`\`\``
 	},
 	sources: {
 		type: 'array of sources',
-		body: `The GitHub searches that decide which PRs and issues Hush tracks. Up to ${MAX_SOURCES}.
+		body: `The GitHub searches that decide which PRs and issues Hush tracks. The inbox gets only the notifications about these items and the \`tracked\` ones. Up to ${MAX_SOURCES}.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
 - \`name\`: up to 60 characters. Category and tag rules can test it with \`source:\`.
 - \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both.
 - \`enabled\`: \`false\` skips the search.
+
+Hush runs the sources about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the sources stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`sources\`, the items that the new sources do not find stop at once, and Hush removes their notifications.
 
 A change to \`sources\` replaces the whole list. To add a source, write the defaults below and your new one.
 
@@ -235,18 +240,18 @@ ${table(
 	},
 	categories: {
 		type: 'array of categories',
-		body: `Where each PR, issue, and notification thread lives. Every one has exactly one category. Up to ${MAX_CATEGORIES}.
+		body: `Where each PR and issue lives. Every one has exactly one category, and its notification threads have the same category. Up to ${MAX_CATEGORIES}.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. \`"${FALLBACK_CATEGORY_ID}"\` is the fallback and cannot be deleted.
 - \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
 - \`color\`: ${MARK_COLORS.map((c) => `\`"${c}"\``).join(', ')}.
-- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. \`category:\` and \`tag:\` do not work here.
+- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. The rule looks only at the PR or issue: \`category:\`, \`tag:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
 - \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
-- \`inbox\` (optional): what the category's notification threads do in the inbox. \`"auto"\` (default): Hush decides. \`"action"\`: always Needs you. \`"fyi"\`: always FYI. \`"muted"\`: Muted.
+- \`inbox\` (optional): what the notification threads of the category's items do in the inbox. \`"auto"\` (default): Hush decides. \`"action"\`: always Needs you. \`"fyi"\`: always FYI. \`"muted"\`: Muted.
 - \`push\` (optional): \`"inherit"\` (default) uses the [push settings](/docs/notifications#what-gets-pushed). \`"on"\` always pushes, also FYI threads. \`"off"\` never pushes.
 - \`triage\` (optional): \`"done"\` moves new threads to Done. \`"snooze"\` snoozes them for \`snoozeHours\` (a whole number from 1 to 720; default 24). Hush moves a thread only when it has new activity or when the category starts to match, so a thread that you move back stays where you put it.
 
-Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description, when it is at least ${CHOICE_CONFIDENCE * 100}% sure; else \`"${FALLBACK_CATEGORY_ID}"\`. Jev chooses once for each item, and again only when its title, description, or labels change. After you change categories, **Re-evaluate items** asks again for your open items. Notification threads that are not a PR or issue (releases, CI runs, discussions) are placed by their own facts with the same rules, else \`"${FALLBACK_CATEGORY_ID}"\`.
+Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description, when it is at least ${CHOICE_CONFIDENCE * 100}% sure; else \`"${FALLBACK_CATEGORY_ID}"\`. Jev chooses once for each item, and again only when its title, description, or labels change. After you change categories, **Re-evaluate items** asks again for your open items. A notification thread gets the category and tags of its PR or issue; rules are never checked on the notification.
 
 A change to \`categories\` replaces the whole list, so keep \`"${FALLBACK_CATEGORY_ID}"\`. See [Categories and tags](/docs/categories).
 
@@ -254,7 +259,7 @@ A change to \`categories\` replaces the whole list, so keep \`"${FALLBACK_CATEGO
 {
   "categories": [
     { "id": "website", "name": "Website", "color": "blue", "rule": "repo:acme/website", "description": "", "inbox": "fyi" },
-    { "id": "nightly", "name": "Nightly CI", "color": "gray", "rule": "type:ci repo:acme/nightly", "description": "", "push": "off", "triage": "snooze", "snoozeHours": 12 },
+    { "id": "nightly", "name": "Nightly", "color": "gray", "rule": "repo:acme/nightly", "description": "", "push": "off", "triage": "snooze", "snoozeHours": 12 },
     { "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
   ]
 }
@@ -272,9 +277,9 @@ ${table(
 		body: `Marks that cut across categories: an item can have none, one, or several. Up to ${MAX_TAGS}.
 
 - \`id\`, \`name\`, \`color\`: as for categories.
-- \`rule\`: a [query](/docs/query-language). \`about:"…"\` asks Jev, once for each item (and again when its title, description, or labels change). \`category:\` and \`tag:\` do not work here.
+- \`rule\`: a [query](/docs/query-language). \`about:"…"\` asks Jev, once for each item (and again when its title, description, or labels change). The rule looks only at the PR or issue: \`category:\`, \`tag:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
 
-Tags only mark items: they show on rows, as filter chips on the Pull requests and Issues tabs, and in feeds. They do not change the inbox.
+Tags only mark items: they show on rows (also on the notification rows of the item), as filter chips on the Pull requests and Issues tabs, and in feeds. They do not change the inbox.
 
 The defaults:
 
@@ -285,7 +290,7 @@ ${table(
 	},
 	tracked: {
 		type: 'array of strings',
-		body: `Single PRs and issues that Hush tracks whatever the sources find, as \`"owner/repo#123"\`. Up to ${MAX_TRACKED}. They show while they are open.
+		body: `Single PRs and issues that Hush tracks whatever the sources find, as \`"owner/repo#123"\`. Up to ${MAX_TRACKED}. They show while they are open, and their notifications come in to the inbox.
 
 \`\`\`json settings
 { "tracked": ["acme/web#482", "acme/api#77"] }
@@ -542,7 +547,15 @@ function limitsReference(): string {
 			['Poll when idle (no open tab for 15 minutes, no push devices)', `every ${dur(POLL_IDLE)}`],
 			['First sync after sign-in', `notifications from the last ${FIRST_SYNC_DAYS} days`],
 			['Inbox watcher (turn changes with no notification)', `every ${dur(WATCH_EVERY)}`],
-			['Pull requests and Issues tabs', `cached for ${dur(DASH_TTL)}; refresh any time`],
+			[
+				'Sources (the Pull requests and Issues tabs)',
+				`run every ${dur(DASH_TTL)} while Hush polls; refresh any time`
+			],
+			[
+				'Sources run again for a notification about an untracked PR or issue',
+				`at most every ${dur(TRACKED_REBUILD_GAP)}`
+			],
+			['An item that the sources stop finding stays tracked for', dur(TRACKED_KEEP)],
 			['Your teams', `looked up again every ${dur(TEAMS_TTL)}`],
 			[
 				'Polling stops with no visit for',
@@ -556,7 +569,7 @@ function limitsReference(): string {
 			],
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
 			['Done threads with no activity are forgotten after', '30 days'],
-			['Saved views', String(MAX_VIEWS)],
+			['Notification views', String(MAX_VIEWS)],
 			['Sources', String(MAX_SOURCES)],
 			['Tracked items', String(MAX_TRACKED)],
 			['GitHub searches per tab', String(MAX_QUERIES)],

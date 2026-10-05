@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedView, ThreadDTO } from './types';
-import { feedViewOk, markFeedView, parseMarkFeed, threadMatches, validateViews } from './views';
+import {
+	feedViewOk,
+	markFeedView,
+	parseMarkFeed,
+	threadMatches,
+	validateViews,
+	type MarkNames
+} from './views';
 
 const t = (over: Partial<ThreadDTO> = {}): ThreadDTO =>
 	({
@@ -41,7 +48,21 @@ const view = (over: Partial<SavedView> = {}): SavedView => ({
 	...over
 });
 
-describe('saved views', () => {
+describe('notification views', () => {
+	it('match on the category and tags of the thread’s PR or issue', () => {
+		const marks: MarkNames = {
+			categories: [{ id: 'bugs', name: 'Bugs', color: 'red', rule: '', description: '' }],
+			tags: [{ id: 'quick', name: 'Quick', color: 'green', rule: '' }]
+		};
+		const bug = t({ itemCategory: 'bugs', tags: ['quick'] });
+		expect(threadMatches('category:Bugs', bug, 'ian', marks)).toBe(true);
+		expect(threadMatches('category:bugs tag:quick', bug, 'ian', marks)).toBe(true);
+		expect(threadMatches('tag:Quick', t({ itemCategory: 'bugs', tags: [] }), 'ian', marks)).toBe(
+			false
+		);
+		expect(threadMatches('-category:bugs', t({ itemCategory: null }), 'ian', marks)).toBe(true);
+	});
+
 	it('match on text, like the Filter box', () => {
 		expect(threadMatches({ text: 'hogfm' }, t(), 'ian')).toBe(true);
 		expect(threadMatches({ text: 'failed website' }, t(), 'ian')).toBe(true);
@@ -87,8 +108,8 @@ describe('feeds', () => {
 		expect(feedViewOk('x:bugs')).toBe(false);
 	});
 
-	it('refuse category: and tag: in saved views', () => {
+	it('allow category: and tag: in notification views', () => {
 		const view = { id: 'a', name: 'A', base: 'inbox', query: 'tag:blocked' } as SavedView;
-		expect(validateViews([view])).toMatch(/cannot use category: or tag:/);
+		expect(validateViews([view])).toBeNull();
 	});
 });

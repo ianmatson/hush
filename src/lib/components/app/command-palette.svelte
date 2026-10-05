@@ -140,7 +140,7 @@
 		...(me.data?.settings.views ?? []).map((v) => ({
 			id: `go:view:${v.id}`,
 			label: v.name,
-			where: 'Saved view',
+			where: 'Notification view',
 			icon: Bookmark as Component,
 			keywords: ['view', 'saved', v.query],
 			run: () => goto(`/inbox?view=v:${v.id}`)
@@ -305,7 +305,7 @@
 			items: pageCommands
 		},
 		// Threads and PRs only once you type: hundreds of rows are noise in the empty palette.
-		{ heading: 'Saved views', items: goEntries.filter((e) => e.id.startsWith('go:view:')) },
+		{ heading: 'Notification views', items: goEntries.filter((e) => e.id.startsWith('go:view:')) },
 		{ heading: 'Inbox', items: search.trim() ? threadEntries : [] },
 		{ heading: 'Pull requests and issues', items: search.trim() ? dashEntries : [] },
 		{ heading: 'Go to', items: goEntries.filter((e) => !e.id.startsWith('go:view:')) },

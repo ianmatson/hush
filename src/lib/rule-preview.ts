@@ -10,7 +10,7 @@ import type {
 	Settings,
 	ThreadDTO
 } from './shared/types';
-import { threadMatches } from './shared/views';
+import { threadMatches, type MarkNames } from './shared/views';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { BuilderField } from './shared/rule-builder';
 
@@ -70,12 +70,13 @@ export function previewItems(
 export function previewThreads(
 	query: string,
 	me: string,
-	threads: ThreadDTO[] = cachedThreads()
+	threads: ThreadDTO[] = cachedThreads(),
+	marks?: MarkNames
 ): RulePreview | null {
 	if (!query.trim() || parseExpr(query).errors.length || !threads.length) return null;
 	const expr = compileExpr(query);
 	const matched = threads.filter((t) =>
-		exprMatches(expr, (when) => threadMatches(withoutAbout(when), t, me))
+		exprMatches(expr, (when) => threadMatches(withoutAbout(when), t, me, marks))
 	);
 	return {
 		matched: matched.length,
@@ -83,23 +84,6 @@ export function previewThreads(
 		noun: 'notifications',
 		examples: matched.slice(0, MAX_EXAMPLES).map((t) => ({ title: t.summary, detail: t.title })),
 		jevDecides: usesAbout(expr)
-	};
-}
-
-export function previewBoth(
-	query: string,
-	me: string,
-	settings: Pick<Settings, 'categories' | 'tags' | 'sources'>
-): RulePreview | null {
-	const items = previewItems(query, me, settings);
-	const threads = previewThreads(query, me);
-	if (!items || !threads) return items ?? threads;
-	return {
-		matched: items.matched,
-		total: items.total,
-		noun: `open PRs and issues, and ${threads.matched} of ${threads.total} notifications`,
-		examples: [...items.examples, ...threads.examples].slice(0, MAX_EXAMPLES),
-		jevDecides: items.jevDecides
 	};
 }
 

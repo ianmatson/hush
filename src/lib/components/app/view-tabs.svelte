@@ -7,7 +7,7 @@
 		/** Needs you: the count is a strong badge. */
 		strong?: boolean;
 		active: boolean;
-		/** A saved view (menus put a line before the first one). */
+		/** A notification view (menus put a line before the first one). */
 		saved?: boolean;
 	}
 </script>
@@ -124,7 +124,7 @@
 					</DropdownMenu.Item>
 				{/each}
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={onnew}><Plus />New view</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={onnew}><Plus />New notification view</DropdownMenu.Item>
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	</div>
@@ -160,8 +160,8 @@
 		<button
 			type="button"
 			class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background/60 hover:text-foreground"
-			aria-label="New view"
-			title="New view"
+			aria-label="New notification view"
+			title="New notification view"
 			onclick={onnew}><Plus class="size-4" /></button
 		>
 	</nav>

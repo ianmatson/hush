@@ -76,7 +76,7 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'inbox.notNeeded', label: 'Doesn’t need me…', scope: 'inbox', keys: ['n'] },
 	...range(1, 9).map((n) => ({
 		id: `inbox.view.${n}`,
-		label: `View ${n} (${n <= 5 ? 'built-in' : 'your saved views'})`,
+		label: `View ${n} (${n <= 5 ? 'built-in' : 'your notification views'})`,
 		scope: 'inbox' as const,
 		keys: [String(n)]
 	})),

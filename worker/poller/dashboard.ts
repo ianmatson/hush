@@ -7,8 +7,21 @@ import {
 } from '../../src/lib/shared/dashboard';
 import type { DashKind, DashResponse } from '../../src/lib/shared/types';
 import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
-import { fetchDetails, fetchSubjects, forTeams, needsDetails, searchShort } from '../github';
-import { sectionsFor, TRACKED_SOURCE } from '../../src/lib/shared/sources';
+import {
+	fetchDetails,
+	fetchSubjects,
+	forTeams,
+	needsDetails,
+	searchCounts,
+	searchShort
+} from '../github';
+import {
+	MAX_SOURCE_COUNT_SEARCHES,
+	sectionsFor,
+	sourceKinds,
+	TRACKED_SOURCE,
+	type SourceCount
+} from '../../src/lib/shared/sources';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
 
@@ -49,6 +62,33 @@ export abstract class PollerDashboard extends PollerSync {
 		this.dashRefreshing.set(kind, p);
 		this.ctx.waitUntil(p);
 		return true;
+	}
+
+	async countSource(query: string, scope: string): Promise<SourceCount> {
+		const who = await this.who();
+		if (!who) throw new Error('Not signed in.');
+		const { teams } = await this.teams();
+		const source = { id: 'count', name: '', query, enabled: true };
+		const dash = { ...who.settings.dash, scope };
+		const searches = sourceKinds(query).flatMap((kind) =>
+			expandSections(sectionsFor(kind, [source]), dash, teams).queries.map((q) => ({
+				kind,
+				q: q.q
+			}))
+		);
+		const asked = searches.slice(0, MAX_SOURCE_COUNT_SEARCHES);
+		const counts = await searchCounts(
+			who.token,
+			asked.map((s) => s.q)
+		);
+		const out: SourceCount = { pr: null, issue: null };
+		asked.forEach((s, k) => (out[s.kind] = (out[s.kind] ?? 0) + (counts[k] ?? 0)));
+		return out;
+	}
+
+	protected async rebuildTracked(kind: DashKind): Promise<void> {
+		await this.buildDashboard(kind, true, false);
+		this.broadcast({ type: 'dash', kind });
 	}
 
 	/**
@@ -122,7 +162,7 @@ export abstract class PollerDashboard extends PollerSync {
 		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
 		for (const h of hits) {
 			const subject = facts.get(h.key);
-			if (!subject || !forTeams(h.query, subject)) continue;
+			if (!subject || !forTeams(h.query, subject, who.me)) continue;
 			const e = byId.get(h.key) ?? {
 				facts: dashFactsOf(subject, who.me, teamSet, decided.get(h.key)),
 				sections: new Set<string>()
@@ -156,6 +196,15 @@ export abstract class PollerDashboard extends PollerSync {
 				})
 		);
 		const placed = this.placeItems(who, items, facts);
+		const marksChanged = this.storePlacements(placed, true);
+		const complete = !searchErrors.length && !detailErrors.length;
+		if (cached && cached.sig !== sig && complete)
+			await this.untrackMissing(
+				kind,
+				placed.map((i) => i.id)
+			);
+		await this.storeTrackedBuild(kind, complete);
+		if (marksChanged) await this.bumpVersion();
 		const data: DashResponse = {
 			kind,
 			items: placed,

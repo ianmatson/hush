@@ -19,7 +19,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 | Open source              | Yes (MIT)                                                                                     | Yes                                                                 |
 | Where your data is       | On your computer; token in the OS keychain                                                    | On Hush's servers; token encrypted                                  |
 | Sort order               | GitHub's reasons, with filters; group by repository or date                                   | Needs you, FYI, Muted, by whose turn it is                          |
-| Filters                  | Reason, type, state, user type (bots), review request type, account, `author:`/`org:`/`repo:` | Categories, tags, a query language, saved views                     |
+| Filters                  | Reason, type, state, user type (bots), review request type, account, `author:`/`org:`/`repo:` | Categories, tags, a query language, notification views              |
 | Alerts                   | Native desktop notifications, sound, unread count in the tray                                 | Web Push on desktop and phone, quiet hours, digests                 |
 | Actions                  | Mark read, mark done, unsubscribe, open on GitHub                                             | Done, snooze, mute, read; approve, comment, merge, close, re-run CI |
 | Several accounts         | Yes                                                                                           | No                                                                  |
@@ -65,7 +65,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 - It moves threads to Done by itself when they stop needing you.
 - Approve, comment, and merge without leaving the list.
 - Push to your phone, with quiet hours and digests; it keeps checking when your computer sleeps.
-- Categories, tags, snoozes, saved views, and Atom feeds.
+- Categories, tags, snoozes, notification views, and Atom feeds.
 
 ## Choose Gitify if…
 

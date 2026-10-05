@@ -42,7 +42,7 @@ describe('settings file', () => {
 				rules: [
 					{
 						name: 'Docs',
-						when: { repo: 'acme/website', kind: ['review'] },
+						when: { repo: 'acme/website', label: ['docs'] },
 						then: { category: 'fyi' }
 					}
 				],
@@ -55,7 +55,7 @@ describe('settings file', () => {
 		});
 		expect(typeof patch !== 'string' && patch.categories?.[0]).toMatchObject({
 			name: 'Docs',
-			rule: 'repo:acme/website needs:review',
+			rule: 'repo:acme/website label:docs',
 			inbox: 'fyi'
 		});
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
@@ -143,6 +143,22 @@ describe('inbox rules from before categories', () => {
 			DEFAULT_SETTINGS.categories.map((c) => c.id)
 		);
 		expect('rules' in s).toBe(false);
+	});
+
+	it('drop rules that look at the notification, which category rules cannot do', () => {
+		const s = parseSettings(
+			JSON.stringify({
+				rules: [
+					rule('repo:acme/web needs:review', { push: false }),
+					rule('event:mentioned', { category: 'action' }),
+					rule('type:ci', { category: 'muted' }),
+					rule('repo:acme/docs', { category: 'muted' })
+				]
+			})
+		);
+		expect(s.categories[0]).toMatchObject({ id: 'rule-4', rule: 'repo:acme/docs' });
+		expect(s.categories).toHaveLength(DEFAULT_SETTINGS.categories.length + 1);
+		expect(validateSettings(s, ['categories'])).toBeNull();
 	});
 
 	it('put a rule for every thread on the fallback category', () => {

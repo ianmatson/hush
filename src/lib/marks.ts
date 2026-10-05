@@ -1,4 +1,5 @@
-import type { MarkColor } from '$lib/shared/types';
+import { FALLBACK_CATEGORY_ID } from '$lib/shared/categories';
+import type { MarkColor, Settings } from '$lib/shared/types';
 
 export interface RowMark {
 	key: string;
@@ -9,25 +10,51 @@ export interface RowMark {
 }
 
 export const MARK_DOT: Record<MarkColor, string> = {
-	gray: 'bg-zinc-400',
-	red: 'bg-red-500',
-	orange: 'bg-orange-500',
-	amber: 'bg-amber-500',
-	green: 'bg-emerald-500',
-	teal: 'bg-teal-500',
-	blue: 'bg-blue-500',
-	violet: 'bg-violet-500',
-	pink: 'bg-pink-500'
+	gray: 'bg-mark-gray',
+	red: 'bg-mark-red',
+	orange: 'bg-mark-orange',
+	amber: 'bg-mark-amber',
+	green: 'bg-mark-green',
+	teal: 'bg-mark-teal',
+	blue: 'bg-mark-blue',
+	violet: 'bg-mark-violet',
+	pink: 'bg-mark-pink'
 };
 
 export const MARK_TEXT: Record<MarkColor, string> = {
-	gray: 'text-zinc-500',
-	red: 'text-red-500',
-	orange: 'text-orange-500',
-	amber: 'text-amber-500',
-	green: 'text-emerald-500',
-	teal: 'text-teal-500',
-	blue: 'text-blue-500',
-	violet: 'text-violet-500',
-	pink: 'text-pink-500'
+	gray: 'text-mark-gray',
+	red: 'text-mark-red',
+	orange: 'text-mark-orange',
+	amber: 'text-mark-amber',
+	green: 'text-mark-green',
+	teal: 'text-mark-teal',
+	blue: 'text-mark-blue',
+	violet: 'text-mark-violet',
+	pink: 'text-mark-pink'
 };
+
+export function rowMarks(
+	categoryId: string | null | undefined,
+	tagIds: string[] | undefined,
+	settings: Pick<Settings, 'categories' | 'tags'> | undefined
+): RowMark[] {
+	const category = settings?.categories.find(
+		(c) => c.id === categoryId && c.id !== FALLBACK_CATEGORY_ID
+	);
+	return [
+		...(category
+			? [
+					{
+						key: `c:${category.id}`,
+						name: category.name,
+						color: category.color,
+						kind: 'category' as const,
+						icon: category.icon
+					}
+				]
+			: []),
+		...(settings?.tags ?? [])
+			.filter((t) => tagIds?.includes(t.id))
+			.map((t) => ({ key: `t:${t.id}`, name: t.name, color: t.color, kind: 'tag' as const }))
+	];
+}

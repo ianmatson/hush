@@ -44,7 +44,8 @@ Check these, or Hush refuses the file:
 - `categories` keeps the category with the id `"other"`: it is the fallback. Up to 20 categories and 20 tags.
 - Each category has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to 40 characters), `color` (`gray`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, or `pink`), `rule` (a query, or `""`), and `description` (up to 200 characters, or `""`). Tags have the same keys, without `description`.
 - A category's `inbox` is `"auto"`, `"action"`, `"fyi"`, or `"muted"`; `push` is `"inherit"`, `"on"`, or `"off"`; `triage` is `"done"` or `"snooze"`. `triage: "snooze"` has `snoozeHours`, a whole number from 1 to 720.
-- Queries (a category's or tag's `rule`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. They cannot use `category:` or `tag:`. Up to 300 characters.
+- Queries (a category's or tag's `rule`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
+- Category and tag rules look only at the PR or issue. They cannot use `category:` or `tag:`, and they must not use `event:`, `needs:`, or `in:`, which are about notifications. A view's `query` can use all of these words.
 - View ids are 1 to 16 lower-case letters or digits, and unique; names are 1 to 40 characters; at most 12 views.
 - Source ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
@@ -78,19 +79,19 @@ Check these, or Hush refuses the file:
 }
 ```
 
-A thread in acme/web or acme/api is in My repos, and Hush decides if it needs you. Every other thread is in Other, which is always FYI. This removes the default categories; keep them in the list to keep them. Jev chooses only among categories with a description, so here it chooses nothing. A saved view per project is another way: it adds a tab and hides nothing.
+A PR or issue in acme/web or acme/api is in My repos, and Hush decides if its notifications need you. Every other item is in Other, and its notifications are always FYI. This removes the default categories; keep them in the list to keep them. Jev chooses only among categories with a description, so here it chooses nothing. A notification view per project is another way: it adds a tab and hides nothing.
 
-**“Push me only when someone reviews my PRs.”**
+**“Push me only about my own PRs.”**
 
 ```json settings
 {
 	"pushAction": false,
 	"categories": [
 		{
-			"id": "my-reviews",
-			"name": "Reviews on my PRs",
+			"id": "my-prs",
+			"name": "My PRs",
 			"color": "green",
-			"rule": "type:pr event:you-opened needs:changes,merge",
+			"rule": "type:pr author:@me",
 			"description": "",
 			"push": "on"
 		},
@@ -125,4 +126,6 @@ A thread in acme/web or acme/api is in My repos, and Hush decides if it needs yo
 
 ## Explain Hush to a user
 
-When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”), and “category: …” if the inbox settings of its category sorted it. On the Pull requests and Issues tabs, each row shows its category and tags.
+When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”), and the icons of its category and tags, which are those of its PR or issue. The inbox settings of that category can change the list. On the Pull requests and Issues tabs, each row shows its category and tags too.
+
+When a user asks why a notification is missing, see [What comes in](/docs/inbox#what-comes-in): Hush keeps only the notifications about the PRs and issues that the user's sources find or that the user tracks.

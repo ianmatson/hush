@@ -54,7 +54,7 @@ description: gh-dash is a terminal dashboard for GitHub pull requests, issues, a
 
 - It decides who must act next, from CI, reviews, and comments, not only from GitHub's reason.
 - Push alerts on desktop and phone, also when your computer is off.
-- Snooze, mute, categories, and saved views that act on threads by themselves.
+- Snooze, mute, categories, and notification views that act on threads by themselves.
 - Works on any device with a browser, also a phone.
 
 ## Choose gh-dash if…
