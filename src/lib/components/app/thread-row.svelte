@@ -97,7 +97,7 @@
 	data-selected={selected || undefined}
 	data-checked={checked || undefined}
 	class={cn(
-		'row group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 transition-colors select-none',
+		'row group relative flex items-start gap-2.5 rounded-xl border border-transparent px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
 		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]'
 	)}
@@ -108,7 +108,7 @@
 >
 	<SelectMark {checked} {selecting} label="Select {t.title}" {ontoggle}>
 		<!-- Same box as the round icon, so the dot sits on the circle's top-right edge. -->
-		<span class="relative block size-8">
+		<span class="relative block size-7 sm:size-8">
 			<KindIcon kind={t.kind} category={t.category} subjectType={t.subjectType} />
 			{#if t.unread}
 				<span
@@ -123,7 +123,7 @@
 		<div class="flex items-baseline gap-2">
 			<p
 				class={cn(
-					'truncate text-sm',
+					'truncate text-[0.8125rem] sm:text-sm',
 					t.unread
 						? 'font-semibold text-foreground'
 						: isAction
@@ -141,10 +141,10 @@
 			href={t.htmlUrl}
 			target="_blank"
 			rel="noreferrer"
-			class="mt-0.5 block truncate text-[0.8rem] text-muted-foreground select-text"
+			class="mt-0.5 block truncate text-xs text-muted-foreground select-text sm:text-[0.8rem]"
 			onclick={(e) => e.preventDefault()}
 		>
-			<span class="font-mono text-[0.75rem]">{ref}</span>
+			<span class="font-mono text-[0.7rem] sm:text-[0.75rem]">{ref}</span>
 			<span class="mx-1 opacity-50">·</span>{t.title}
 		</a>
 		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">

@@ -1,5 +1,6 @@
 import type { Component } from 'svelte';
 import type { SnoozeEvent } from '$lib/shared/snooze';
+import type { MarkColor } from '$lib/shared/types';
 import { SEP, tidySeparators } from '$lib/shared/menus';
 
 /** One entry of a built menu (see AppMenu). Pages build these from Settings → Menus. */
@@ -11,6 +12,8 @@ export type MenuEntry =
 			icon?: Component;
 			shortcut?: string;
 			disabled?: boolean;
+			checked?: boolean;
+			mark?: { kind: 'category' | 'tag'; color: MarkColor; icon?: string };
 			run: () => void;
 	  }
 	| { type: 'sep'; key: string }

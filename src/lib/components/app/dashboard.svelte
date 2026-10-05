@@ -922,7 +922,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<main data-page class="mx-auto max-w-4xl px-4 pt-4 pb-24">
+<main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
 			<Search

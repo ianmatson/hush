@@ -121,7 +121,7 @@
 			/>
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
-			<p class="mx-auto max-w-4xl px-4 pt-6 text-sm text-destructive">
+			<p class="mx-auto max-w-4xl px-3 pt-6 text-sm text-destructive sm:px-4">
 				Hush cannot reach its server: {me.error.message}
 			</p>
 		{:else}

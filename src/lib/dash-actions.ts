@@ -167,6 +167,7 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 			undefined,
 			ids.every((id) => ctx.byId(id)?.turn === g.turn)
 		);
+	const pinned = ids.some((x) => ctx.byId(x)?.categoryPinned);
 	const make = (id: string): MenuEntry | null => {
 		switch (id) {
 			case 'peek':
@@ -192,6 +193,7 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 						)
 					: null;
 			case 'move':
+				if (!ids.length) return null;
 				return {
 					type: 'sub',
 					key: id,
@@ -200,45 +202,49 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					items: ctx.groups.map((g) => moveItem(g, `move-${g.turn}`, g.label))
 				};
 			case 'category':
-				return ctx.categories.length
+				return ctx.categories.length && ids.length
 					? {
 							type: 'sub',
 							key: id,
 							label: n('Category'),
 							icon: FolderInput,
 							items: [
-								item('category-auto', 'Let Hush decide', Sparkles, () =>
-									ctx.setCategory(ids, null)
-								),
-								{ type: 'sep', key: 'category-sep' },
-								...ctx.categories.map((c) =>
-									item(
-										`category-${c.id}`,
-										c.name,
-										FolderInput,
-										() => ctx.setCategory(ids, c.id),
-										undefined,
-										ids.every((x) => ctx.byId(x)?.category === c.id)
-									)
-								)
+								...ctx.categories.map((c): MenuEntry => ({
+									type: 'item',
+									key: `category-${c.id}`,
+									label: c.name,
+									mark: { kind: 'category', color: c.color, icon: c.icon },
+									checked: ids.every((x) => ctx.byId(x)?.category === c.id),
+									run: () => ctx.setCategory(ids, c.id)
+								})),
+								...(pinned
+									? ([
+											{ type: 'sep', key: 'category-sep' },
+											item('category-auto', 'Choose automatically', Sparkles, () =>
+												ctx.setCategory(ids, null)
+											)
+										] satisfies MenuEntry[])
+									: [])
 							]
 						}
 					: null;
 			case 'tags':
-				return ctx.tags.length
+				return ctx.tags.length && ids.length
 					? {
 							type: 'sub',
 							key: id,
 							label: n('Tags'),
 							icon: TagIcon,
-							items: ctx.tags.map((t) => {
+							items: ctx.tags.map((t): MenuEntry => {
 								const tagged = ids.every((x) => ctx.byId(x)?.tags?.includes(t.id));
-								return item(
-									`tag-${t.id}`,
-									tagged ? `Remove ${t.name}` : `Add ${t.name}`,
-									TagIcon,
-									() => ctx.setTag(ids, t.id, tagged ? 'off' : 'on')
-								);
+								return {
+									type: 'item',
+									key: `tag-${t.id}`,
+									label: t.name,
+									mark: { kind: 'tag', color: t.color },
+									checked: tagged,
+									run: () => ctx.setTag(ids, t.id, tagged ? 'off' : 'on')
+								};
 							})
 						}
 					: null;

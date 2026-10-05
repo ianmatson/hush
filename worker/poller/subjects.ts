@@ -235,7 +235,12 @@ export abstract class PollerSubjects extends PollerDecisions {
 				pins.get(i.id),
 				who.settings
 			);
-			return { ...i, category: placed.category, tags: placed.tags };
+			return {
+				...i,
+				category: placed.category,
+				categoryPinned: placed.categoryBy === 'pin',
+				tags: placed.tags
+			};
 		});
 	}
 

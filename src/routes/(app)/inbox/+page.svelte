@@ -646,7 +646,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<main data-page class="mx-auto max-w-4xl px-4 pt-4 pb-24">
+<main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
 	{#if me.data?.lastPollError}
 		<Alert.Root variant="destructive" class="mb-4">
 			<Alert.Title>Hush cannot read your notifications</Alert.Title>

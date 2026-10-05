@@ -10,7 +10,11 @@
 </script>
 
 {#if orgNote.open && access}
-	<div class="mx-auto max-w-4xl px-4 pt-3" role="status" transition:fly={{ y: -6, duration: 160 }}>
+	<div
+		class="mx-auto max-w-4xl px-2 pt-3 sm:px-4"
+		role="status"
+		transition:fly={{ y: -6, duration: 160 }}
+	>
 		<div class="flex items-start gap-3 rounded-lg border bg-muted/40 px-3.5 py-2.5 text-sm">
 			<div class="grid min-w-0 flex-1 gap-1">
 				<p>

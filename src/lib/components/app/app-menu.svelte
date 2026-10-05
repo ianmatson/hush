@@ -3,7 +3,11 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import type { MenuEntry } from '$lib/menu';
 	import SnoozeItems from './snooze-items.svelte';
+	import MarkIcon from './marks/mark-icon.svelte';
 	import { MediaQuery } from 'svelte/reactivity';
+	import Check from '@lucide/svelte/icons/check';
+	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 
 	/**
 	 * The items of a right-click menu (`context`) or a "⋯" menu (`dropdown`), from one list, so
@@ -11,8 +15,16 @@
 	 */
 	let { entries, kind }: { entries: MenuEntry[]; kind: 'context' | 'dropdown' } = $props();
 	const M = $derived(kind === 'context' ? ContextMenu : DropdownMenu);
-	// A submenu beside a phone-wide menu has no room: list its items under a heading instead.
 	const narrow = new MediaQuery('max-width: 639px');
+
+	let openedKey = $state<string | null>(null);
+	const opened = $derived(
+		narrow.current && openedKey
+			? entries.find(
+					(e): e is Extract<MenuEntry, { type: 'sub' }> => e.type === 'sub' && e.key === openedKey
+				)
+			: undefined
+	);
 </script>
 
 {#snippet list(items: MenuEntry[])}
@@ -21,16 +33,17 @@
 			<M.Separator />
 		{:else if e.type === 'item'}
 			<M.Item disabled={e.disabled} onclick={e.run}>
-				{#if e.icon}<e.icon />{/if}{e.label}
+				{#if e.mark}
+					<MarkIcon kind={e.mark.kind} color={e.mark.color} icon={e.mark.icon} />
+				{:else if e.icon}<e.icon />{/if}{e.label}
+				{#if e.checked}<Check class="ml-auto" aria-label="Current" />{/if}
 				{#if e.shortcut && kind === 'context'}<M.Shortcut>{e.shortcut}</M.Shortcut>{/if}
 			</M.Item>
 		{:else if e.type === 'sub' && narrow.current}
-			<M.Group>
-				<M.GroupHeading class="flex items-center gap-2 text-xs text-muted-foreground"
-					>{#if e.icon}<e.icon class="size-3.5" />{/if}{e.label}</M.GroupHeading
-				>
-				{@render list(e.items)}
-			</M.Group>
+			<M.Item closeOnSelect={false} onclick={() => (openedKey = e.key)}>
+				{#if e.icon}<e.icon />{/if}{e.label}
+				<ChevronRight class="ml-auto text-muted-foreground" />
+			</M.Item>
 		{:else if e.type === 'sub'}
 			<M.Sub>
 				<M.SubTrigger
@@ -56,4 +69,12 @@
 	{/each}
 {/snippet}
 
-{@render list(entries)}
+{#if opened}
+	<M.Item closeOnSelect={false} onclick={() => (openedKey = null)} class="font-medium">
+		<ChevronLeft />{opened.label}
+	</M.Item>
+	<M.Separator />
+	{@render list(opened.items)}
+{:else}
+	{@render list(entries)}
+{/if}

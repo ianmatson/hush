@@ -76,7 +76,12 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 			group: 'main'
 		},
 		{ id: 'move', label: 'Move to', note: 'Every group', group: 'main' },
-		{ id: 'category', label: 'Category', note: 'Choose one, or let Hush decide', group: 'main' },
+		{
+			id: 'category',
+			label: 'Category',
+			note: 'Choose one, or go back to automatic',
+			group: 'main'
+		},
 		{ id: 'tags', label: 'Tags', note: 'Add or remove', group: 'main' },
 		{ id: 'undoMove', label: 'Undo move', note: 'Items you moved', group: 'main' },
 		{ id: 'hide', label: 'Hide until it changes / Show again', group: 'main' },

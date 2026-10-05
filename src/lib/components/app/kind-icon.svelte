@@ -49,6 +49,8 @@
 	);
 </script>
 
-<span class={cn('flex size-8 shrink-0 items-center justify-center rounded-full', spec.tone)}>
-	<spec.icon class="size-4" />
+<span
+	class={cn('flex size-7 shrink-0 items-center justify-center rounded-full sm:size-8', spec.tone)}
+>
+	<spec.icon class="size-3.5 sm:size-4" />
 </span>

@@ -20,7 +20,10 @@
 	];
 </script>
 
-<div data-page class="mx-auto flex max-w-4xl flex-col gap-6 px-4 pt-6 pb-24 md:flex-row">
+<div
+	data-page
+	class="mx-auto flex max-w-4xl flex-col gap-6 px-3 pt-4 pb-24 sm:px-4 sm:pt-6 md:flex-row"
+>
 	<nav
 		class="-mx-1 flex shrink-0 gap-1 overflow-x-auto px-1 md:w-44 md:flex-col md:overflow-visible"
 		aria-label="Settings"

@@ -167,7 +167,7 @@
 	data-selected={selected || undefined}
 	data-checked={checked || undefined}
 	class={cn(
-		'group relative flex items-start gap-3 rounded-xl border border-transparent bg-background px-3 py-3 transition-colors select-none',
+		'group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
 		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]',
 		i.dismissed && 'opacity-60'
@@ -187,7 +187,7 @@
 		</span>
 	{/if}
 	<SelectMark {checked} {selecting} label="Select {i.title}" {ontoggle}>
-		<Avatar.Root class="size-8">
+		<Avatar.Root class="size-7 sm:size-8">
 			<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
 			<Avatar.Fallback class="text-[0.65rem]">{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback>
 		</Avatar.Root>
@@ -200,7 +200,7 @@
 				target="_blank"
 				rel="noreferrer"
 				draggable="false"
-				class="line-clamp-2 text-sm font-medium sm:truncate"
+				class="line-clamp-2 text-[0.8125rem] font-medium sm:truncate sm:text-sm"
 				onclick={(e) => e.preventDefault()}>{i.title}</a
 			>
 			{#if show('time') && i.stale}
@@ -212,8 +212,10 @@
 			{/if}
 		</div>
 
-		<div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.8rem] text-muted-foreground">
-			<span class="truncate font-mono text-[0.75rem]">{i.repo}#{i.number}</span>
+		<div
+			class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:text-[0.8rem]"
+		>
+			<span class="truncate font-mono text-[0.7rem] sm:text-[0.75rem]">{i.repo}#{i.number}</span>
 			{#if show('author')}
 				<span class="opacity-50">·</span>
 				<span class="max-w-[45%] shrink-0 truncate">@{i.author}</span>
@@ -253,7 +255,9 @@
 			{/if}
 		</div>
 
-		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem]">
+		<div
+			class="mt-1 flex flex-wrap items-center gap-1 text-[0.68rem] sm:mt-1.5 sm:gap-1.5 sm:text-[0.7rem]"
+		>
 			<span
 				class={cn('relative rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
 				title={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}

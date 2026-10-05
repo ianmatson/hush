@@ -351,6 +351,7 @@ export interface DashItem {
 	commentsNeedMe?: boolean | null;
 	urgent?: boolean;
 	category?: string;
+	categoryPinned?: boolean;
 	tags?: string[];
 	// Computed.
 	sections: string[];
