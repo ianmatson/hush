@@ -78,7 +78,9 @@
 						value={c.key}
 						onValueChange={(key) => update(k, { key, value: '', negate: false })}
 					>
-						<Select.Trigger size="sm" class="w-52" aria-label="Field">{field.label}</Select.Trigger>
+						<Select.Trigger size="sm" class="w-52" aria-label="Field"
+							><span class="truncate">{field.label}</span></Select.Trigger
+						>
 						<Select.Content class="max-h-72">
 							{#each SEARCH_FIELDS as f (f.key)}
 								<Select.Item value={f.key} label={f.label} />

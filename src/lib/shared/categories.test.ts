@@ -159,6 +159,37 @@ describe('presets', () => {
 	it('collect the about: conditions of categories and tags', () => {
 		expect(markAboutTexts({ categories: DEFAULT_CATEGORIES, tags: DEFAULT_TAGS })).toHaveLength(4);
 	});
+
+	const defaults = settings(DEFAULT_CATEGORIES, DEFAULT_TAGS);
+	const labeled = (...labels: string[]) => thread({ labels });
+	it.each([
+		['incidents', labeled('hotfix', 'bug')],
+		['bugs', labeled('bug')],
+		['dependencies', thread({ author: 'dependabot[bot]', authorIsBot: true })],
+		['dependencies', thread({ author: 'renovate[bot]', authorIsBot: true })],
+		['dependencies', labeled('dependencies')],
+		['features', labeled('enhancement')],
+		['docs', labeled('documentation')],
+		['questions', thread({ kind: 'issue', labels: ['question'] }, { subjectType: 'Issue' })],
+		['maintenance', thread({ author: 'github-actions[bot]', authorIsBot: true })],
+		[FALLBACK_CATEGORY_ID, thread()]
+	])('place the item in %s by its labels or author', (category, t) => {
+		expect(place(t, defaults).category).toBe(category);
+	});
+	it('let Jev choose a category when no rule matches', () => {
+		expect(place(thread(), defaults, 'features')).toMatchObject({
+			category: 'features',
+			categoryBy: 'jev'
+		});
+	});
+	it('tag by labels and size', () => {
+		expect(place(labeled('blocked', 'security'), defaults).tags).toEqual(['blocked', 'security']);
+		expect(place(thread({ additions: 10, deletions: 2 }), defaults).tags).toEqual(['quick']);
+		expect(place(thread({ additions: 900 }), defaults).tags).toEqual(['large']);
+	});
+	it('do not push dependency bumps', () => {
+		expect(DEFAULT_CATEGORIES.find((c) => c.id === 'dependencies')?.push).toBe('off');
+	});
 });
 
 describe('validation', () => {

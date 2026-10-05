@@ -14,7 +14,7 @@ import { threadMatches, type MarkNames } from './shared/views';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { BuilderField } from './shared/rule-builder';
 
-const MAX_EXAMPLES = 3;
+const MAX_EXAMPLES = 20;
 const NO_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
 
 function withoutAbout(when: RuleMatch): RuleMatch {
@@ -62,7 +62,7 @@ export function previewItems(
 		noun: 'open PRs and issues',
 		examples: matched
 			.slice(0, MAX_EXAMPLES)
-			.map((i) => ({ title: i.title, detail: `${i.repo}#${i.number}` })),
+			.map((i) => ({ title: i.title, detail: `${i.repo}#${i.number}`, url: i.url })),
 		jevDecides: usesAbout(expr)
 	};
 }
@@ -82,7 +82,9 @@ export function previewThreads(
 		matched: matched.length,
 		total: threads.length,
 		noun: 'notifications',
-		examples: matched.slice(0, MAX_EXAMPLES).map((t) => ({ title: t.summary, detail: t.title })),
+		examples: matched
+			.slice(0, MAX_EXAMPLES)
+			.map((t) => ({ title: t.summary, detail: t.title, url: t.htmlUrl })),
 		jevDecides: usesAbout(expr)
 	};
 }

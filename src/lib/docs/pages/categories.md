@@ -24,7 +24,7 @@ An item gets every tag whose rule matches, plus the tags that you turn on by han
 
 Hush checks the rules on the PR or issue only, never on a notification. A category or tags that you choose for a PR or issue apply to its notifications too.
 
-Hush starts with presets that you can change or delete: [categories](/docs/settings#categories) (Incidents, Features, Bugs, Maintenance, Other) and [tags](/docs/settings#tags) (Blocked, Needs decision, Security, Breaking change, Quick).
+Hush starts with presets that you can change or delete: [categories](/docs/settings#categories) (Incidents, Bugs, Dependencies, Features, Docs, Questions, Maintenance, Other) and [tags](/docs/settings#tags) (Blocked, Needs decision, Security, Breaking change, Quick, Large). Most presets first look for GitHub's usual labels, such as `bug`, `enhancement`, `documentation`, and `dependencies`. When no label matches, Jev reads the item. Dependabot and Renovate PRs go to Dependencies, which does not push.
 
 ## Make a category
 

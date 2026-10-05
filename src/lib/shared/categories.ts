@@ -62,24 +62,49 @@ export const DEFAULT_CATEGORIES: ItemCategory[] = [
 		name: 'Incidents',
 		color: 'red',
 		icon: 'lucide:siren',
-		rule: '',
-		description: 'Production problems, outages, reverts, and urgent fixes'
-	},
-	{
-		id: 'features',
-		name: 'Features',
-		color: 'blue',
-		icon: 'lucide:sparkles',
-		rule: '',
-		description: 'New behaviour or product changes'
+		rule: 'label:incident,hotfix',
+		description: 'Outages, hotfixes, reverts, and urgent production problems'
 	},
 	{
 		id: 'bugs',
 		name: 'Bugs',
 		color: 'orange',
 		icon: 'lucide:bug',
-		rule: '',
-		description: 'Defects and their fixes'
+		rule: 'label:bug',
+		description: 'Defects, errors, and their fixes'
+	},
+	{
+		id: 'dependencies',
+		name: 'Dependencies',
+		color: 'violet',
+		icon: 'lucide:package',
+		rule: 'author:dependabot*,renovate* OR label:dependencies',
+		description: 'Dependency version bumps and lockfile updates',
+		push: 'off'
+	},
+	{
+		id: 'features',
+		name: 'Features',
+		color: 'blue',
+		icon: 'lucide:sparkles',
+		rule: 'label:enhancement,feature',
+		description: 'New features and changes to product behavior'
+	},
+	{
+		id: 'docs',
+		name: 'Docs',
+		color: 'green',
+		icon: 'lucide:book-open',
+		rule: 'label:documentation,docs',
+		description: 'Documentation, READMEs, guides, and examples'
+	},
+	{
+		id: 'questions',
+		name: 'Questions',
+		color: 'amber',
+		icon: 'lucide:message-square',
+		rule: 'type:issue label:question',
+		description: 'Questions and requests for help, not a change to the code'
 	},
 	{
 		id: 'maintenance',
@@ -87,7 +112,7 @@ export const DEFAULT_CATEGORIES: ItemCategory[] = [
 		color: 'teal',
 		icon: 'lucide:wrench',
 		rule: 'author:bots',
-		description: 'Dependency updates, CI, refactors, tests, docs, and chores'
+		description: 'Refactors, tests, CI and build changes, and other chores'
 	},
 	{ id: FALLBACK_CATEGORY_ID, name: 'Other', color: 'gray', rule: '', description: '' }
 ];
@@ -97,28 +122,102 @@ export const DEFAULT_TAGS: ItemTag[] = [
 		id: 'blocked',
 		name: 'Blocked',
 		color: 'amber',
-		rule: 'about:"It waits on something outside the control of its author"'
+		rule: 'label:blocked OR about:"It waits on something outside the control of its author"'
 	},
 	{
 		id: 'needs-decision',
 		name: 'Needs decision',
 		color: 'violet',
-		rule: 'about:"It asks for a choice between options before the work can go on"'
+		rule: 'label:"needs decision" OR about:"It asks for a choice between options before the work can go on"'
 	},
 	{
 		id: 'security',
 		name: 'Security',
 		color: 'red',
-		rule: 'about:"Vulnerabilities, secrets, permissions, or authentication"'
+		rule: 'label:security OR about:"Vulnerabilities, secrets, permissions, or authentication"'
 	},
 	{
 		id: 'breaking',
 		name: 'Breaking change',
 		color: 'pink',
-		rule: 'about:"It changes behaviour that other code or users depend on"'
+		rule: 'label:breaking,"breaking change" OR about:"It changes behavior that other code or users depend on"'
 	},
-	{ id: 'quick', name: 'Quick', color: 'green', rule: 'type:pr size:<50' }
+	{ id: 'quick', name: 'Quick', color: 'green', rule: 'type:pr size:<50' },
+	{ id: 'large', name: 'Large', color: 'orange', rule: 'type:pr size:>500' }
 ];
+
+const PREVIOUS_DEFAULT_MARKS = {
+	categories: JSON.stringify([
+		{
+			id: 'incidents',
+			name: 'Incidents',
+			color: 'red',
+			icon: 'lucide:siren',
+			rule: '',
+			description: 'Production problems, outages, reverts, and urgent fixes'
+		},
+		{
+			id: 'features',
+			name: 'Features',
+			color: 'blue',
+			icon: 'lucide:sparkles',
+			rule: '',
+			description: 'New behaviour or product changes'
+		},
+		{
+			id: 'bugs',
+			name: 'Bugs',
+			color: 'orange',
+			icon: 'lucide:bug',
+			rule: '',
+			description: 'Defects and their fixes'
+		},
+		{
+			id: 'maintenance',
+			name: 'Maintenance',
+			color: 'teal',
+			icon: 'lucide:wrench',
+			rule: 'author:bots',
+			description: 'Dependency updates, CI, refactors, tests, docs, and chores'
+		},
+		{ id: FALLBACK_CATEGORY_ID, name: 'Other', color: 'gray', rule: '', description: '' }
+	]),
+	tags: JSON.stringify([
+		{
+			id: 'blocked',
+			name: 'Blocked',
+			color: 'amber',
+			rule: 'about:"It waits on something outside the control of its author"'
+		},
+		{
+			id: 'needs-decision',
+			name: 'Needs decision',
+			color: 'violet',
+			rule: 'about:"It asks for a choice between options before the work can go on"'
+		},
+		{
+			id: 'security',
+			name: 'Security',
+			color: 'red',
+			rule: 'about:"Vulnerabilities, secrets, permissions, or authentication"'
+		},
+		{
+			id: 'breaking',
+			name: 'Breaking change',
+			color: 'pink',
+			rule: 'about:"It changes behaviour that other code or users depend on"'
+		},
+		{ id: 'quick', name: 'Quick', color: 'green', rule: 'type:pr size:<50' }
+	])
+};
+
+export const upgradeDefaultCategories = (categories: ItemCategory[]) =>
+	JSON.stringify(categories) === PREVIOUS_DEFAULT_MARKS.categories
+		? DEFAULT_CATEGORIES
+		: categories;
+
+export const upgradeDefaultTags = (tags: ItemTag[]) =>
+	JSON.stringify(tags) === PREVIOUS_DEFAULT_MARKS.tags ? DEFAULT_TAGS : tags;
 
 export interface ItemPins {
 	category?: string | null;

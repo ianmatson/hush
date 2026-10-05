@@ -3,18 +3,61 @@
 		matched: number;
 		total: number;
 		noun: string;
-		examples: { title: string; detail: string }[];
+		examples: { title: string; detail: string; url: string }[];
 		jevDecides: boolean;
 	}
 
-	export const RULE_TEMPLATES: { label: string; query: string }[] = [
-		{ label: 'Opened by a bot', query: 'author:bots' },
-		{ label: 'Dependency updates', query: 'author:dependabot*,renovate*' },
-		{ label: 'Docs', query: 'label:docs,documentation' },
-		{ label: 'Small pull requests', query: 'type:pr size:<50' },
-		{ label: 'Big pull requests', query: 'type:pr size:>500' },
-		{ label: 'Drafts', query: 'is:draft' },
-		{ label: 'About security (Jev)', query: 'about:"security, vulnerabilities, or secrets"' }
+	import type { Component } from 'svelte';
+	import Bot from '@lucide/svelte/icons/bot';
+	import Package from '@lucide/svelte/icons/package';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import Feather from '@lucide/svelte/icons/feather';
+	import Weight from '@lucide/svelte/icons/weight';
+	import PencilLine from '@lucide/svelte/icons/pencil-line';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
+
+	export interface RuleTemplate {
+		label: string;
+		hint: string;
+		query: string;
+		icon: Component;
+		jev?: boolean;
+	}
+
+	export const RULE_TEMPLATES: RuleTemplate[] = [
+		{ label: 'Opened by a bot', hint: 'Any bot account', query: 'author:bots', icon: Bot },
+		{
+			label: 'Dependency updates',
+			hint: 'Dependabot and Renovate',
+			query: 'author:dependabot*,renovate*',
+			icon: Package
+		},
+		{
+			label: 'Docs',
+			hint: 'Labeled docs or documentation',
+			query: 'label:docs,documentation',
+			icon: BookOpen
+		},
+		{
+			label: 'Small pull requests',
+			hint: 'Under 50 changed lines',
+			query: 'type:pr size:<50',
+			icon: Feather
+		},
+		{
+			label: 'Big pull requests',
+			hint: 'Over 500 changed lines',
+			query: 'type:pr size:>500',
+			icon: Weight
+		},
+		{ label: 'Drafts', hint: 'Draft pull requests', query: 'is:draft', icon: PencilLine },
+		{
+			label: 'About security',
+			hint: 'Security, vulnerabilities, or secrets',
+			query: 'about:"security, vulnerabilities, or secrets"',
+			icon: ShieldAlert,
+			jev: true
+		}
 	];
 </script>
 
@@ -35,6 +78,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Popover from '$lib/components/ui/popover';
 	import QueryInput from '../query-input.svelte';
 	import ConditionRow from './condition-row.svelte';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -61,7 +105,7 @@
 		allowGroups?: boolean;
 		suggestions?: Partial<Record<NonNullable<BuilderField['suggest']>, string[]>>;
 		preview?: (query: string) => RulePreview | null;
-		templates?: { label: string; query: string }[];
+		templates?: RuleTemplate[];
 	} = $props();
 
 	const fields = $derived(BUILDER_FIELDS.filter((f) => !exclude.includes(f.word)));
@@ -106,6 +150,15 @@
 		});
 
 	const defaultWord = $derived(fields[0]?.word ?? 'repo');
+	const HOVER_CLOSE_MS = 150;
+	let matchesOpen = $state(false);
+	let closeTimer: ReturnType<typeof setTimeout> | undefined;
+	function showMatches(on: boolean) {
+		clearTimeout(closeTimer);
+		if (on) matchesOpen = true;
+		else closeTimer = setTimeout(() => (matchesOpen = false), HOVER_CLOSE_MS);
+	}
+
 	const addCondition = () =>
 		commit({ ...builder, items: [...builder.items, emptyCondition(defaultWord)] });
 	const addGroup = () =>
@@ -156,11 +209,22 @@
 							<Button {...props} variant="ghost" size="xs"><Sparkles /> Start from…</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="w-56">
+					<DropdownMenu.Content align="end" class="w-64">
 						{#each templates as t (t.label)}
-							<DropdownMenu.Item onclick={() => useTemplate(t.query)}>
-								<span class="flex-1">{t.label}</span>
-								<span class="font-mono text-[0.65rem] text-muted-foreground">{t.query}</span>
+							<DropdownMenu.Item
+								class="items-start gap-2.5 py-2"
+								onclick={() => useTemplate(t.query)}
+							>
+								<t.icon class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+								<span class="grid min-w-0 flex-1 gap-0.5">
+									<span class="flex items-center gap-1.5 truncate text-sm"
+										>{t.label}{#if t.jev}<span
+												class="rounded bg-violet-500/10 px-1 py-px text-[0.65rem] font-medium text-violet-600 dark:text-violet-300"
+												>Jev</span
+											>{/if}</span
+									>
+									<span class="truncate text-xs text-muted-foreground">{t.hint}</span>
+								</span>
 							</DropdownMenu.Item>
 						{/each}
 					</DropdownMenu.Content>
@@ -224,7 +288,7 @@
 							>
 							<button
 								type="button"
-								class="rounded p-1 hover:bg-background hover:text-foreground"
+								class="flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-background hover:text-foreground"
 								aria-label="Remove group"
 								onclick={() => replaceItem(k, null)}><X class="size-3.5" /></button
 							>
@@ -270,18 +334,50 @@
 	{/if}
 
 	{#if result}
-		<div class="rounded-lg bg-muted/40 px-2.5 py-2 text-xs">
-			<p class="font-medium">
-				Matches {result.matched} of {result.total}
-				{result.noun}{#if result.jevDecides}<span class="font-normal text-muted-foreground">
-						· Jev decides the about: part later</span
-					>{/if}
-			</p>
-			{#each result.examples as e (e.title + e.detail)}
-				<p class="mt-1 truncate text-muted-foreground">
-					<span class="text-foreground">{e.title}</span> · {e.detail}
-				</p>
-			{/each}
-		</div>
+		<p class="rounded-lg bg-muted/40 px-2.5 py-2 text-xs font-medium">
+			Matches
+			{#if result.matched}
+				<Popover.Root bind:open={matchesOpen}>
+					<Popover.Trigger
+						class="cursor-help underline decoration-muted-foreground/60 decoration-dotted underline-offset-2 hover:decoration-foreground"
+						onmouseenter={() => showMatches(true)}
+						onmouseleave={() => showMatches(false)}
+						>{result.matched} of {result.total} {result.noun}</Popover.Trigger
+					>
+					<Popover.Content
+						align="start"
+						class="w-[min(28rem,calc(100vw-2rem))] p-1"
+						onmouseenter={() => showMatches(true)}
+						onmouseleave={() => showMatches(false)}
+						onOpenAutoFocus={(e) => e.preventDefault()}
+					>
+						<ul class="grid max-h-72 gap-0.5 overflow-y-auto">
+							{#each result.examples as e, k (k)}
+								<li>
+									<a
+										href={e.url}
+										target="_blank"
+										rel="noreferrer"
+										class="grid rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+									>
+										<span class="truncate font-medium">{e.title}</span>
+										<span class="truncate text-muted-foreground">{e.detail}</span>
+									</a>
+								</li>
+							{/each}
+						</ul>
+						{#if result.matched > result.examples.length}
+							<p class="px-2 py-1.5 text-xs text-muted-foreground">
+								And {result.matched - result.examples.length} more.
+							</p>
+						{/if}
+					</Popover.Content>
+				</Popover.Root>
+			{:else}
+				0 of {result.total} {result.noun}
+			{/if}{#if result.jevDecides}<span class="font-normal text-muted-foreground">
+					· Jev decides the about: part later</span
+				>{/if}
+		</p>
 	{/if}
 </div>

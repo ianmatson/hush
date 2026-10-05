@@ -52,7 +52,9 @@
 		value={condition.word}
 		onValueChange={(word) => set({ word, values: [], negate: false })}
 	>
-		<Select.Trigger size="sm" class="w-44" aria-label="Field">{field.label}</Select.Trigger>
+		<Select.Trigger size="sm" class="w-44" aria-label="Field"
+			><span class="truncate">{field.label}</span></Select.Trigger
+		>
 		<Select.Content class="max-h-72">
 			{#each fields as f (f.word)}
 				<Select.Item value={f.word} label={f.label} />

@@ -4,14 +4,11 @@
 	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { ListDrag } from '$lib/drag.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 
 	/**
-	 * A list you reorder by drag (mouse and pen, with the dashboards' lift and spring) or with the
-	 * ↑ ↓ buttons (every device). Used by Settings → Menus and the notification views.
+	 * A list you reorder by drag (with the dashboards' lift and spring), or with ↑ ↓ on the grip.
+	 * Used by Settings → Menus and the notification views.
 	 */
 	let {
 		items,
@@ -25,7 +22,7 @@
 		onchange: (items: T[]) => void;
 		/** The row's content. */
 		row: Snippet<[T]>;
-		/** Buttons after ↑ ↓, for example Remove. */
+		/** Buttons at the end of the row, for example Remove. */
 		actions?: Snippet<[T, number]>;
 		label: string;
 		empty?: string;
@@ -37,6 +34,17 @@
 		const [x] = next.splice(from, 1);
 		next.splice(to, 0, x);
 		onchange(next);
+	}
+
+	function onHandleKey(e: KeyboardEvent, item: T, k: number) {
+		if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+		e.preventDefault();
+		move(k, k + (e.key === 'ArrowUp' ? -1 : 1));
+		requestAnimationFrame(() =>
+			document
+				.querySelector<HTMLElement>(`[data-drag-id="${CSS.escape(item.key)}"] [data-drag-handle]`)
+				?.focus()
+		);
 	}
 
 	const drag = new ListDrag({
@@ -79,23 +87,16 @@
 	<div
 		class="flex min-w-0 cursor-grab items-center gap-2 px-1.5 py-1 text-sm active:cursor-grabbing"
 	>
-		<GripVertical class="hidden size-4 shrink-0 text-muted-foreground/60 sm:block" />
+		<button
+			type="button"
+			data-drag-handle
+			class="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+			aria-label="Reorder: drag, or press ↑ ↓"
+			tabindex={k < 0 ? -1 : 0}
+			onkeydown={(e) => onHandleKey(e, item, k)}><GripVertical class="size-4" /></button
+		>
 		<div class="flex min-w-0 flex-1 items-center gap-2">{@render row(item)}</div>
 		<span class="flex shrink-0 items-center" data-no-drag>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Move up"
-				disabled={k <= 0}
-				onclick={() => move(k, k - 1)}><ChevronUp /></Button
-			>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Move down"
-				disabled={k < 0 || k === items.length - 1}
-				onclick={() => move(k, k + 1)}><ChevronDown /></Button
-			>
 			{#if actions && k >= 0}{@render actions(item, k)}{/if}
 		</span>
 	</div>

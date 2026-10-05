@@ -5,7 +5,7 @@ description: Get fewer Dependabot pull requests with groups and a schedule, choo
 
 ## Short answer
 
-**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are FYI by default, and a category with the rule `author:dependabot*`, set to Muted, hides them.**
+**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are FYI by default. They go to the preset Dependencies category, which does not push; set it to Muted to hide them.**
 
 ## Why Dependabot is noisy
 

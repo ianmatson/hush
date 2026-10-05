@@ -38,7 +38,7 @@ export const SEARCH_FIELDS: SearchField[] = [
 	{ key: 'reviewed-by', label: 'Reviewed by', placeholder: PERSON, canNegate: true },
 	{
 		key: 'review-requested',
-		label: 'Review requested (person or their teams)',
+		label: 'Review requested',
 		placeholder: PERSON,
 		canNegate: true
 	},

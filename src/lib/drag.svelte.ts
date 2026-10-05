@@ -72,7 +72,9 @@ export class ListDrag {
 
 	/** Call from each row's `onpointerdown`. Mouse and pen only: touch must scroll the page. */
 	pointerdown(e: PointerEvent, id: string, row: HTMLElement) {
-		if (this.active || e.button !== 0 || e.pointerType === 'touch' || !this.#cfg.enabled()) return;
+		const touchOffHandle =
+			e.pointerType === 'touch' && !(e.target as Element).closest('[data-drag-handle]');
+		if (this.active || e.button !== 0 || touchOffHandle || !this.#cfg.enabled()) return;
 		if ((e.target as Element).closest('[data-no-drag]')) return;
 		const start = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
 

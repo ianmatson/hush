@@ -202,7 +202,8 @@
 								target="_blank"
 								rel="noreferrer">GitHub search</a
 							>. <code>@me</code> is you. <code>@team</code> is each tracked team. Without
-							<code>is:pr</code> or <code>is:issue</code>, a search finds both.
+							<code>is:pr</code> or <code>is:issue</code>, a search finds both. Drag a source to
+							move it: the tabs show the source chips, and an item's “Found by” list, in this order.
 						</Card.Description>
 					</div>
 					<Button

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { NOTIFICATION_WORDS } from '$lib/shared/query';
-	import { tick, untrack } from 'svelte';
+	import { tick, untrack, type Snippet } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -38,8 +38,8 @@
 	import * as Select from '$lib/components/ui/select';
 	import RuleBuilder from '$lib/components/app/rules/rule-builder.svelte';
 	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
-	import ArrowUp from '@lucide/svelte/icons/arrow-up';
-	import ArrowDown from '@lucide/svelte/icons/arrow-down';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import ReorderList from '$lib/components/app/reorder-list.svelte';
 	import Trash from '@lucide/svelte/icons/trash';
 	import Plus from '@lucide/svelte/icons/plus';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -155,12 +155,6 @@
 		else delete c.snoozeHours;
 	}
 
-	function move<T>(list: T[], i: number, d: number): T[] {
-		const next = [...list];
-		[next[i], next[i + d]] = [next[i + d], next[i]];
-		return next;
-	}
-
 	async function save() {
 		if (!draft || error) return;
 		saving = true;
@@ -224,6 +218,111 @@
 			{/each}
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
+{/snippet}
+
+{#snippet categoryHeader(c: ItemCategory, handle: Snippet | null)}
+	{@const fallback = c.id === FALLBACK_CATEGORY_ID}
+	{@const expanded = openCategory === c.id}
+	<div class="flex items-center gap-1.5 p-1.5">
+		{#if handle}
+			{@render handle()}
+		{:else if !fallback}
+			<span class="flex size-6 shrink-0 items-center justify-center text-muted-foreground/60"
+				><GripVertical class="size-4" /></span
+			>
+		{:else}
+			<span class="size-6 shrink-0"></span>
+		{/if}
+		<IconPicker
+			icon={c.icon}
+			color={c.color}
+			label={c.name}
+			onpick={(icon) => setIcon(c, icon)}
+			oncolor={(color) => (c.color = color)}
+		/>
+		<button
+			type="button"
+			class="min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-left hover:bg-muted/60"
+			aria-expanded={expanded}
+			aria-controls="category-{c.id}-details"
+			onclick={() => (openCategory = expanded ? null : c.id)}
+		>
+			<span class="block truncate text-sm font-medium">{c.name || 'Untitled'}</span>
+			<span class="block truncate text-xs text-muted-foreground">{categorySummary(c)}</span>
+		</button>
+		<FeedButton view={markFeedView('category', c.id)} name={c.name} feeds={feeds.data} />
+		<Button
+			variant="ghost"
+			size="icon-xs"
+			aria-label={expanded ? `Close ${c.name}` : `Edit ${c.name}`}
+			onclick={() => (openCategory = expanded ? null : c.id)}
+			><ChevronDown class={cn('transition-transform', expanded && 'rotate-180')} /></Button
+		>
+	</div>
+{/snippet}
+
+{#snippet categoryCard(c: ItemCategory, handle: Snippet | null)}
+	{@const fallback = c.id === FALLBACK_CATEGORY_ID}
+	{@const expanded = openCategory === c.id}
+	{@render categoryHeader(c, handle)}
+	<div data-no-drag>
+		{#if expanded}
+			<div
+				id="category-{c.id}-details"
+				class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t p-2.5"
+				transition:slide={DRAWER}
+			>
+				<div class="flex items-center gap-2">
+					<Input
+						bind:value={c.name}
+						data-name
+						data-category={c.id}
+						aria-label="Category name"
+						class="h-8 min-w-0 flex-1"
+					/>
+					{#if !fallback}
+						<Button
+							variant="ghost"
+							size="sm"
+							class="text-destructive"
+							onclick={() =>
+								draft && (draft.categories = draft.categories.filter((x) => x.id !== c.id))}
+							><Trash /> Delete</Button
+						>
+					{/if}
+				</div>
+				{#if fallback}
+					<p class="text-xs text-muted-foreground">
+						The fallback: items that no rule and no Jev choice place go here. It cannot be deleted.
+					</p>
+				{:else}
+					<RuleBuilder
+						bind:value={c.rule}
+						id="category-{c.id}-rule"
+						label="Rule (optional)"
+						exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
+						{suggestions}
+						preview={(q) => (me.data ? previewItems(q, me.data.login, me.data.settings) : null)}
+					/>
+					<div class="grid gap-1">
+						<label
+							for="category-{c.id}-description"
+							class="text-xs font-medium text-muted-foreground"
+							>Description for Jev (optional)</label
+						>
+						<Input
+							id="category-{c.id}-description"
+							bind:value={c.description}
+							maxlength={MAX_DESCRIPTION_CHARS}
+							class="h-8 text-xs"
+							placeholder="What belongs here, in a few words"
+						/>
+					</div>
+				{/if}
+				{@render inboxControls(c)}
+			</div>
+		{/if}
+	</div>
 {/snippet}
 
 {#snippet inboxControls(c: ItemCategory)}
@@ -311,8 +410,9 @@
 					<div class="grid gap-1.5">
 						<Card.Title>Categories</Card.Title>
 						<Card.Description>
-							Top to bottom: the first rule that matches wins. Without a match, Jev picks among the
-							categories with a description. Without that, the item goes to the last one.
+							Order matters: Hush checks the rules from the top, and the first one that matches
+							wins, so put specific categories above broad ones. Drag a category to move it. Without
+							a match, Jev picks among the categories with a description, and then Other.
 						</Card.Description>
 					</div>
 					<Button
@@ -324,128 +424,32 @@
 					</Button>
 				</div>
 			</Card.Header>
-			<Card.Content class="grid gap-3">
-				<ul class="grid gap-1.5" id="category-list">
-					{#each draft.categories as c, i (c.id)}
-						{@const fallback = c.id === FALLBACK_CATEGORY_ID}
-						{@const expanded = openCategory === c.id}
-						<li class={cn('rounded-lg border', expanded && 'bg-muted/30')}>
-							<div class="flex items-center gap-1.5 p-1.5">
-								<IconPicker
-									icon={c.icon}
-									color={c.color}
-									label={c.name}
-									onpick={(icon) => setIcon(c, icon)}
-									oncolor={(color) => (c.color = color)}
-								/>
-								<button
-									type="button"
-									class="min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-left hover:bg-muted/60"
-									aria-expanded={expanded}
-									aria-controls="category-{c.id}-details"
-									onclick={() => (openCategory = expanded ? null : c.id)}
-								>
-									<span class="block truncate text-sm font-medium">{c.name || 'Untitled'}</span>
-									<span class="block truncate text-xs text-muted-foreground"
-										>{categorySummary(c)}</span
-									>
-								</button>
-								<FeedButton
-									view={markFeedView('category', c.id)}
-									name={c.name}
-									feeds={feeds.data}
-								/>
-								{#if !fallback}
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										aria-label="Move up"
-										disabled={i === 0}
-										onclick={() => draft && (draft.categories = move(draft.categories, i, -1))}
-										><ArrowUp /></Button
-									>
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										aria-label="Move down"
-										disabled={draft.categories[i + 1]?.id === FALLBACK_CATEGORY_ID ||
-											i === draft.categories.length - 1}
-										onclick={() => draft && (draft.categories = move(draft.categories, i, 1))}
-										><ArrowDown /></Button
-									>
-								{/if}
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									aria-label={expanded ? `Close ${c.name}` : `Edit ${c.name}`}
-									onclick={() => (openCategory = expanded ? null : c.id)}
-									><ChevronDown
-										class={cn('transition-transform', expanded && 'rotate-180')}
-									/></Button
-								>
-							</div>
-							{#if expanded}
-								<div
-									id="category-{c.id}-details"
-									class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t p-2.5"
-									transition:slide={DRAWER}
-								>
-									<div class="flex items-center gap-2">
-										<Input
-											bind:value={c.name}
-											data-name
-											data-category={c.id}
-											aria-label="Category name"
-											class="h-8 min-w-0 flex-1"
-										/>
-										{#if !fallback}
-											<Button
-												variant="ghost"
-												size="sm"
-												class="text-destructive"
-												onclick={() =>
-													draft &&
-													(draft.categories = draft.categories.filter((x) => x.id !== c.id))}
-												><Trash /> Delete</Button
-											>
-										{/if}
-									</div>
-									{#if fallback}
-										<p class="text-xs text-muted-foreground">
-											The fallback: items that no rule and no Jev choice place go here. It cannot be
-											deleted.
-										</p>
-									{:else}
-										<RuleBuilder
-											bind:value={c.rule}
-											id="category-{c.id}-rule"
-											label="Rule (optional)"
-											exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
-											{suggestions}
-											preview={(q) =>
-												me.data ? previewItems(q, me.data.login, me.data.settings) : null}
-										/>
-										<div class="grid gap-1">
-											<label
-												for="category-{c.id}-description"
-												class="text-xs font-medium text-muted-foreground"
-												>Description for Jev (optional)</label
-											>
-											<Input
-												id="category-{c.id}-description"
-												bind:value={c.description}
-												maxlength={MAX_DESCRIPTION_CHARS}
-												class="h-8 text-xs"
-												placeholder="What belongs here, in a few words"
-											/>
-										</div>
-									{/if}
-									{@render inboxControls(c)}
-								</div>
-							{/if}
-						</li>
-					{/each}
-				</ul>
+			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
+				<ReorderList
+					items={draft.categories.filter((c) => c.id !== FALLBACK_CATEGORY_ID)}
+					key={(c) => c.id}
+					label="Categories, in order"
+					class="gap-1.5"
+					rowClass={(c) => cn('rounded-lg border bg-card', openCategory === c.id && 'bg-muted/30')}
+					onchange={(ordered) =>
+						draft &&
+						(draft.categories = [
+							...ordered,
+							...draft.categories.filter((c) => c.id === FALLBACK_CATEGORY_ID)
+						])}
+				>
+					{#snippet row(c, _index, handle)}
+						{@render categoryCard(c, handle)}
+					{/snippet}
+					{#snippet ghost(c)}
+						{@render categoryHeader(c, null)}
+					{/snippet}
+				</ReorderList>
+				{#each draft.categories.filter((c) => c.id === FALLBACK_CATEGORY_ID) as c (c.id)}
+					<div class={cn('rounded-lg border', openCategory === c.id && 'bg-muted/30')}>
+						{@render categoryCard(c, null)}
+					</div>
+				{/each}
 				<div>
 					<Button
 						variant="outline"
@@ -475,8 +479,8 @@
 					</Button>
 				</div>
 			</Card.Header>
-			<Card.Content class="grid gap-3">
-				<ul class="grid gap-1.5" id="tag-list">
+			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
+				<ul class="grid grid-cols-[minmax(0,1fr)] gap-1.5" id="tag-list">
 					{#each draft.tags as t (t.id)}
 						{@const expanded = openTag === t.id}
 						<li class={cn('rounded-lg border', expanded && 'bg-muted/30')}>
