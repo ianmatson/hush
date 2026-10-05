@@ -116,7 +116,7 @@ export abstract class PollerBase extends DurableObject<Env> {
 		for (let v = from; v && v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v]);
 		this.transaction(() => {
 			if (!from) return void this.ctx.storage.sql.exec(SCHEMA);
-			for (const step of steps) this.ctx.storage.sql.exec(step.sql);
+			for (const step of steps) if (step.sql.trim()) this.ctx.storage.sql.exec(step.sql);
 		});
 		const reset = steps.flatMap((s) => s.resetKeys ?? []);
 		if (reset.length) await this.ctx.storage.delete(reset);
