@@ -46,13 +46,15 @@
 	];
 </script>
 
-<div class="flex flex-wrap items-start gap-1.5">
+<div
+	class="flex flex-wrap items-start gap-1.5 rounded-md border bg-background p-1.5 sm:border-0 sm:bg-transparent sm:p-0"
+>
 	<Select.Root
 		type="single"
 		value={condition.word}
 		onValueChange={(word) => set({ word, values: [], negate: false })}
 	>
-		<Select.Trigger size="sm" class="w-44" aria-label="Field"
+		<Select.Trigger size="sm" class="w-full sm:w-44" aria-label="Field"
 			><span class="truncate">{field.label}</span></Select.Trigger
 		>
 		<Select.Content class="max-h-72">

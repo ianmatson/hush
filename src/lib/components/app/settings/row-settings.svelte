@@ -32,22 +32,20 @@
 
 <Card.Root id="rows">
 	<Card.Header>
-		<div class="flex items-start justify-between gap-2">
-			<div class="grid gap-1.5">
-				<Card.Title>Row contents</Card.Title>
-				<Card.Description
-					>Choose what each row shows. The title, the repository, the turn, and the main action
-					always show.</Card.Description
-				>
-			</div>
-			<Button
+		<Card.Title>Row contents</Card.Title>
+		<Card.Action class="row-span-1"
+			><Button
 				variant="ghost"
 				size="xs"
 				disabled={isDefault}
 				onclick={() => saveSettings({ rows: { ...rows, [kind]: DEFAULT_ROWS[kind] } })}
 				><RotateCcw /> Defaults</Button
-			>
-		</div>
+			></Card.Action
+		>
+		<Card.Description class="col-span-2"
+			>Choose what each row shows. The title, the repository, the turn, and the main action always
+			show.</Card.Description
+		>
 	</Card.Header>
 	<Card.Content class="grid gap-4">
 		<Tabs.Root bind:value={kind}>
@@ -86,6 +84,7 @@
 						onrowclick={noop}
 						ontoggle={noop}
 						onundomove={noop}
+						menu={() => []}
 					/>
 				{/key}
 			{/if}

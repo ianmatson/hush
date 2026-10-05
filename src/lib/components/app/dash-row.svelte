@@ -216,12 +216,14 @@
 		<div
 			class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:text-[0.8rem]"
 		>
-			<span class="truncate font-mono text-[0.7rem] sm:text-[0.75rem]"
-				><span class="hidden sm:inline">{owner}/</span>{repoName}#{i.number}</span
+			<span class="flex min-w-0 font-mono text-[0.7rem] sm:text-[0.75rem]"
+				><span class="truncate"><span class="hidden sm:inline">{owner}/</span>{repoName}</span><span
+					class="shrink-0">#{i.number}</span
+				></span
 			>
 			{#if show('author')}
 				<span class="opacity-50">·</span>
-				<span class="max-w-[45%] shrink-0 truncate">@{i.author}</span>
+				<span class="max-w-[45%] min-w-0 truncate">@{i.author}</span>
 			{/if}
 			{#if i.kind === 'pr' && show('size')}
 				<span class="hidden opacity-50 sm:inline">·</span>

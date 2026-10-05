@@ -9,8 +9,8 @@
 
 <svelte:head><title>General · Settings · Hush</title></svelte:head>
 
-<div class="grid gap-10">
-	<h1 class="text-lg font-semibold tracking-tight">General</h1>
+<div class="grid gap-6 sm:gap-10">
+	<h1 class="hidden text-lg font-semibold tracking-tight md:block">General</h1>
 	<AppearanceSettings />
 	<RowSettings />
 	<MenuSettings />

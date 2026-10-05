@@ -56,12 +56,17 @@
 {#snippet sources(group: 'title' | 'favicon' | 'appBadge')}
 	<!-- What counts: a small menu with checkboxes (six sources for each of the three places). -->
 	{@const on = SOURCES.filter((x) => prefs[group].sources.includes(x.id))}
-	<div class="flex items-center gap-3">
+	<div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-3 sm:flex">
 		<span class="text-xs text-muted-foreground">Count</span>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger disabled={!prefs[group].enabled}>
 				{#snippet child({ props })}
-					<Button {...props} variant="outline" size="sm" class="max-w-72 justify-start font-normal">
+					<Button
+						{...props}
+						variant="outline"
+						size="sm"
+						class="w-full justify-start font-normal sm:w-72"
+					>
 						<span class="truncate"
 							>{on.length === 0
 								? 'Nothing'
@@ -92,18 +97,16 @@
 
 <Card.Root>
 	<Card.Header>
-		<div class="flex items-start justify-between gap-2">
-			<div class="grid gap-1.5">
-				<Card.Title>Tab title & icon</Card.Title>
-				<Card.Description
-					>Show unread alerts (or what needs you) on the browser tab, and on the app icon when Hush
-					is installed.</Card.Description
-				>
-			</div>
-			<Button variant="ghost" size="xs" onclick={() => (prefs = structuredClone(DEFAULT_PREFS))}
+		<Card.Title>Tab title & icon</Card.Title>
+		<Card.Action class="row-span-1"
+			><Button variant="ghost" size="xs" onclick={() => (prefs = structuredClone(DEFAULT_PREFS))}
 				><RotateCcw /> Defaults</Button
-			>
-		</div>
+			></Card.Action
+		>
+		<Card.Description class="col-span-2"
+			>Show unread alerts (or what needs you) on the browser tab, and on the app icon when Hush is
+			installed.</Card.Description
+		>
 	</Card.Header>
 	<Card.Content class="grid gap-6">
 		<!-- Live preview with your current counts. -->
@@ -138,10 +141,10 @@
 				<Switch id="ts-title" bind:checked={prefs.title.enabled} />
 			</div>
 			{@render sources('title')}
-			<div class="flex items-center gap-3">
+			<div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-3 sm:flex">
 				<span class="text-xs text-muted-foreground">Format</span>
 				<Select.Root type="single" bind:value={prefs.title.style} disabled={!prefs.title.enabled}>
-					<Select.Trigger class="w-72">{styles[prefs.title.style]}</Select.Trigger>
+					<Select.Trigger class="w-full sm:w-72">{styles[prefs.title.style]}</Select.Trigger>
 					<Select.Content>
 						{#each Object.entries(styles) as [value, label] (value)}
 							<Select.Item {value} {label} />
@@ -162,7 +165,7 @@
 				<Switch id="ts-dot" bind:checked={prefs.favicon.enabled} />
 			</div>
 			{@render sources('favicon')}
-			<div class="flex flex-wrap items-center gap-3">
+			<div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-3 sm:flex sm:flex-wrap">
 				<span class="text-xs text-muted-foreground">Color</span>
 				<div class="flex gap-1.5" role="radiogroup" aria-label="Dot color">
 					{#each Object.entries(DOT_COLORS) as [name, hex] (name)}
@@ -186,7 +189,7 @@
 					bind:value={prefs.favicon.style}
 					disabled={!prefs.favicon.enabled}
 				>
-					<Select.Trigger class="w-32">{dotStyles[prefs.favicon.style]}</Select.Trigger>
+					<Select.Trigger class="w-full sm:w-32">{dotStyles[prefs.favicon.style]}</Select.Trigger>
 					<Select.Content>
 						{#each Object.entries(dotStyles) as [value, label] (value)}
 							<Select.Item {value} {label} />

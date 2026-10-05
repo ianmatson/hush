@@ -69,16 +69,20 @@
 			oninput={(e) => (value = e.currentTarget.value)}
 		/>
 	{:else}
-		<div class="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-dashed p-2.5">
+		<div
+			class="grid grid-cols-[minmax(0,1fr)] gap-2 sm:rounded-lg sm:border sm:border-dashed sm:p-2.5"
+		>
 			{#each conditions as c, k (k)}
 				{@const field = searchField(c.key) ?? SEARCH_FIELDS[0]}
-				<div class="flex flex-wrap items-center gap-1.5">
+				<div
+					class="flex flex-wrap items-center gap-1.5 rounded-md border bg-background p-1.5 sm:border-0 sm:bg-transparent sm:p-0"
+				>
 					<Select.Root
 						type="single"
 						value={c.key}
 						onValueChange={(key) => update(k, { key, value: '', negate: false })}
 					>
-						<Select.Trigger size="sm" class="w-52" aria-label="Field"
+						<Select.Trigger size="sm" class="w-full sm:w-52" aria-label="Field"
 							><span class="truncate">{field.label}</span></Select.Trigger
 						>
 						<Select.Content class="max-h-72">

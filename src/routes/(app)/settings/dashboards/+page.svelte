@@ -111,7 +111,7 @@
 <div class="grid gap-6">
 	<div class="flex items-end justify-between gap-4">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">Sources</h1>
+			<h1 class="hidden text-lg font-semibold tracking-tight md:block">Sources</h1>
 			<p class="text-sm text-muted-foreground">
 				Hush tracks every open pull request and issue that your sources find, also ones that do not
 				involve you. It groups them by whose turn it is.
@@ -120,6 +120,89 @@
 	</div>
 
 	{#if draft}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Sources</Card.Title>
+				<Card.Action class="row-span-1"
+					><Button
+						variant="ghost"
+						size="xs"
+						onclick={() => draft && (draft.sources = structuredClone(DEFAULT_SOURCES))}
+					>
+						<RotateCcw /> Defaults
+					</Button></Card.Action
+				>
+				<Card.Description class="col-span-2">
+					Each source is a <a
+						class="underline"
+						href="https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests"
+						target="_blank"
+						rel="noreferrer">GitHub search</a
+					>: <code>@me</code> is you, and <code>@team</code> is each tracked team. Drag to set the order
+					of the source chips on the tabs.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="grid gap-3">
+				<SectionEditor bind:sections={draft.sources} scope={draft.dash.scope} {previewTeam} />
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Tracked items</Card.Title>
+				<Card.Description>
+					Single pull requests and issues to track while they are open, whatever the sources find.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="grid gap-3">
+				{#if draft.tracked.length}
+					<ul class="grid grid-cols-[minmax(0,1fr)] gap-1">
+						{#each draft.tracked as key (key)}
+							<li
+								class="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 font-mono text-xs"
+							>
+								<span class="min-w-0 truncate">{key}</span>
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									aria-label="Stop tracking {key}"
+									onclick={() => draft && (draft.tracked = draft.tracked.filter((k) => k !== key))}
+									><Trash /></Button
+								>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				<form
+					class="flex gap-2"
+					onsubmit={(e) => {
+						e.preventDefault();
+						track();
+					}}
+				>
+					<label for="track" class="sr-only">PR or issue to track</label>
+					<Input
+						id="track"
+						bind:value={trackInput}
+						class="h-8 font-mono text-xs"
+						placeholder="https://github.com/acme/web/pull/482 or acme/web#482"
+						spellcheck={false}
+					/>
+					<Button
+						type="submit"
+						variant="outline"
+						size="sm"
+						disabled={!trackKey || draft.tracked.length >= MAX_TRACKED}><Plus /> Track</Button
+					>
+				</form>
+				{#if trackInput.trim() && !trackKey}
+					<p class="text-xs text-muted-foreground">
+						Paste the address of a pull request or issue, or write <code>owner/repo#123</code>.
+					</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
+
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Teams</Card.Title>
@@ -183,96 +266,10 @@
 					/>
 					<p class="text-xs text-muted-foreground">
 						Added to every search. For example <code>org:acme</code>, or
-						<code>-repo:acme/website</code>. Drafts, bots, and “stale after” are in settings.json
-						(General).
+						<code class="whitespace-nowrap">-repo:acme/website</code>. Drafts, bots, and “stale
+						after” are in settings.json (General).
 					</p>
 				</div>
-			</Card.Content>
-		</Card.Root>
-
-		<Card.Root>
-			<Card.Header>
-				<div class="flex items-start justify-between gap-2">
-					<div class="grid gap-1.5">
-						<Card.Title>Sources</Card.Title>
-						<Card.Description>
-							Any <a
-								class="underline"
-								href="https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests"
-								target="_blank"
-								rel="noreferrer">GitHub search</a
-							>. <code>@me</code> is you. <code>@team</code> is each tracked team. Without
-							<code>is:pr</code> or <code>is:issue</code>, a search finds both. Drag a source to
-							move it: the tabs show the source chips, and an item's “Found by” list, in this order.
-						</Card.Description>
-					</div>
-					<Button
-						variant="ghost"
-						size="xs"
-						onclick={() => draft && (draft.sources = structuredClone(DEFAULT_SOURCES))}
-					>
-						<RotateCcw /> Defaults
-					</Button>
-				</div>
-			</Card.Header>
-			<Card.Content class="grid gap-3">
-				<SectionEditor bind:sections={draft.sources} scope={draft.dash.scope} {previewTeam} />
-			</Card.Content>
-		</Card.Root>
-
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Tracked items</Card.Title>
-				<Card.Description>
-					Single pull requests and issues to track while they are open, whatever the sources find.
-				</Card.Description>
-			</Card.Header>
-			<Card.Content class="grid gap-3">
-				{#if draft.tracked.length}
-					<ul class="grid grid-cols-[minmax(0,1fr)] gap-1">
-						{#each draft.tracked as key (key)}
-							<li
-								class="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 font-mono text-xs"
-							>
-								<span class="min-w-0 truncate">{key}</span>
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									aria-label="Stop tracking {key}"
-									onclick={() => draft && (draft.tracked = draft.tracked.filter((k) => k !== key))}
-									><Trash /></Button
-								>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-				<form
-					class="flex gap-2"
-					onsubmit={(e) => {
-						e.preventDefault();
-						track();
-					}}
-				>
-					<label for="track" class="sr-only">PR or issue to track</label>
-					<Input
-						id="track"
-						bind:value={trackInput}
-						class="h-8 font-mono text-xs"
-						placeholder="https://github.com/acme/web/pull/482 or acme/web#482"
-						spellcheck={false}
-					/>
-					<Button
-						type="submit"
-						variant="outline"
-						size="sm"
-						disabled={!trackKey || draft.tracked.length >= MAX_TRACKED}><Plus /> Track</Button
-					>
-				</form>
-				{#if trackInput.trim() && !trackKey}
-					<p class="text-xs text-muted-foreground">
-						Paste the address of a pull request or issue, or write <code>owner/repo#123</code>.
-					</p>
-				{/if}
 			</Card.Content>
 		</Card.Root>
 

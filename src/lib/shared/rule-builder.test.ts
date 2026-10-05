@@ -75,8 +75,15 @@ describe('rule builder', () => {
 			'Repository is acme/* and author is not a bot.'
 		);
 		expect(describeBuilder(queryToBuilder('label:bug OR type:pr')!)).toBe(
-			'Label is bug or type is Pull request.'
+			'Label is bug or type is pull request.'
 		);
 		expect(describeBuilder({ mode: 'all', items: [] })).toBe('Matches everything.');
+		expect(describeBuilder(queryToBuilder('type:pr size:<50')!)).toBe(
+			'Under 50 changed lines and type is pull request.'
+		);
+		expect(describeBuilder(queryToBuilder('size:10..200')!)).toBe('10 to 200 changed lines.');
+		expect(describeBuilder(queryToBuilder('label:blocked OR about:"It waits"')!)).toBe(
+			'Label is blocked or about “It waits”.'
+		);
 	});
 });

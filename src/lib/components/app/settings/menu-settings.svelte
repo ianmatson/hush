@@ -210,8 +210,8 @@
 				<Card.Header>
 					<Card.Title>In the menu</Card.Title>
 					<Card.Description
-						>Drag, or use the arrows. Items that do not apply to a thread still stay out of its
-						menu, for example Done in the Done view.</Card.Description
+						>Drag a row, or press ↑ ↓ on its grip. Items that do not apply to a thread still stay
+						out of its menu, for example Done in the Done view.</Card.Description
 					>
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-4">

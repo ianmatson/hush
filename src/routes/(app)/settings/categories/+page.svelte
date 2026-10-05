@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { describeBuilder, queryToBuilder } from '$lib/shared/rule-builder';
 	import { NOTIFICATION_WORDS } from '$lib/shared/query';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
@@ -51,6 +52,8 @@
 	const me = createQuery(meQuery);
 	const feeds = createQuery(feedsQuery);
 	const MARK_WORDS = ['category', 'tag'];
+	const NO_RULE = 'No rule: only Jev, or your own choice, puts items here.';
+	const NO_TAG_RULE = 'No rule: an item gets this tag only when you add it.';
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
 
 	interface Draft {
@@ -126,9 +129,14 @@
 	let openTag = $state<string | null>(null);
 	const DRAWER = { duration: 180, easing: cubicOut };
 
+	function ruleWords(rule: string): string {
+		const builder = queryToBuilder(rule);
+		return builder ? describeBuilder(builder).replace(/\.$/, '') : rule.trim();
+	}
+
 	function categorySummary(c: ItemCategory): string {
 		const placement = c.rule.trim()
-			? c.rule.trim()
+			? ruleWords(c.rule)
 			: c.description.trim()
 				? `Jev: ${c.description.trim()}`
 				: c.id === FALLBACK_CATEGORY_ID
@@ -301,6 +309,7 @@
 						id="category-{c.id}-rule"
 						label="Rule (optional)"
 						exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
+						emptyText={NO_RULE}
 						{suggestions}
 						preview={(q) => (me.data ? previewItems(q, me.data.login, me.data.settings) : null)}
 					/>
@@ -327,14 +336,14 @@
 
 {#snippet inboxControls(c: ItemCategory)}
 	<div class="flex flex-wrap items-end gap-2">
-		<div class="grid gap-1">
+		<div class="grid w-full gap-1 sm:w-auto">
 			<span class="text-xs font-medium text-muted-foreground">In the inbox</span>
 			<Select.Root
 				type="single"
 				value={c.inbox ?? 'auto'}
 				onValueChange={(v) => (c.inbox = v as ItemCategory['inbox'])}
 			>
-				<Select.Trigger size="sm" class="w-44" aria-label="{c.name}: in the inbox"
+				<Select.Trigger size="sm" class="w-full sm:w-44" aria-label="{c.name}: in the inbox"
 					>{labelOf(CATEGORY_INBOX_OPTIONS, c.inbox ?? 'auto')}</Select.Trigger
 				>
 				<Select.Content>
@@ -344,14 +353,14 @@
 				</Select.Content>
 			</Select.Root>
 		</div>
-		<div class="grid gap-1">
+		<div class="grid w-full gap-1 sm:w-auto">
 			<span class="text-xs font-medium text-muted-foreground">Push</span>
 			<Select.Root
 				type="single"
 				value={c.push ?? 'inherit'}
 				onValueChange={(v) => (c.push = v as ItemCategory['push'])}
 			>
-				<Select.Trigger size="sm" class="w-56" aria-label="{c.name}: push"
+				<Select.Trigger size="sm" class="w-full sm:w-56" aria-label="{c.name}: push"
 					>{labelOf(CATEGORY_PUSH_OPTIONS, c.push ?? 'inherit')}</Select.Trigger
 				>
 				<Select.Content>
@@ -361,10 +370,10 @@
 				</Select.Content>
 			</Select.Root>
 		</div>
-		<div class="grid gap-1">
+		<div class="grid w-full gap-1 sm:w-auto">
 			<span class="text-xs font-medium text-muted-foreground">New threads</span>
 			<Select.Root type="single" value={c.triage ?? 'none'} onValueChange={(v) => setTriage(c, v)}>
-				<Select.Trigger size="sm" class="w-44" aria-label="{c.name}: new threads"
+				<Select.Trigger size="sm" class="w-full sm:w-44" aria-label="{c.name}: new threads"
 					>{labelOf(CATEGORY_TRIAGE_OPTIONS, c.triage ?? 'none')}</Select.Trigger
 				>
 				<Select.Content>
@@ -392,11 +401,10 @@
 
 <div class="grid gap-6">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">Categories & tags</h1>
+		<h1 class="hidden text-lg font-semibold tracking-tight md:block">Categories & tags</h1>
 		<p class="text-sm text-muted-foreground">
-			Every pull request and issue has exactly one category and any number of tags. Its
-			notifications get the same ones, and the category also decides what they do in the inbox.
-			Rules look at the PR or issue and use the
+			Each PR and issue has one category and any number of tags, and its notifications get the same.
+			Rules use the
 			<a class="underline" href="/docs/query-language" target="_blank" rel="noreferrer"
 				>query language</a
 			>; <code>about:"…"</code> asks Jev.
@@ -406,23 +414,20 @@
 	{#if draft}
 		<Card.Root id="categories">
 			<Card.Header>
-				<div class="flex items-start justify-between gap-2">
-					<div class="grid gap-1.5">
-						<Card.Title>Categories</Card.Title>
-						<Card.Description>
-							Order matters: Hush checks the rules from the top, and the first one that matches
-							wins, so put specific categories above broad ones. Drag a category to move it. Without
-							a match, Jev picks among the categories with a description, and then Other.
-						</Card.Description>
-					</div>
-					<Button
+				<Card.Title>Categories</Card.Title>
+				<Card.Action class="row-span-1"
+					><Button
 						variant="ghost"
 						size="xs"
 						onclick={() => draft && (draft.categories = structuredClone(DEFAULT_CATEGORIES))}
 					>
 						<RotateCcw /> Defaults
-					</Button>
-				</div>
+					</Button></Card.Action
+				>
+				<Card.Description class="col-span-2">
+					The first rule that matches wins, so drag specific categories above broad ones. With no
+					match, Jev picks one that has a description, or Other.
+				</Card.Description>
 			</Card.Header>
 			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
 				<ReorderList
@@ -463,21 +468,19 @@
 
 		<Card.Root id="tags">
 			<Card.Header>
-				<div class="flex items-start justify-between gap-2">
-					<div class="grid gap-1.5">
-						<Card.Title>Tags</Card.Title>
-						<Card.Description>
-							Each tag is checked on its own: an item gets every tag whose rule matches.
-						</Card.Description>
-					</div>
-					<Button
+				<Card.Title>Tags</Card.Title>
+				<Card.Action class="row-span-1"
+					><Button
 						variant="ghost"
 						size="xs"
 						onclick={() => draft && (draft.tags = structuredClone(DEFAULT_TAGS))}
 					>
 						<RotateCcw /> Defaults
-					</Button>
-				</div>
+					</Button></Card.Action
+				>
+				<Card.Description class="col-span-2">
+					Each tag is checked on its own: an item gets every tag whose rule matches.
+				</Card.Description>
 			</Card.Header>
 			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
 				<ul class="grid grid-cols-[minmax(0,1fr)] gap-1.5" id="tag-list">
@@ -495,7 +498,7 @@
 								>
 									<span class="block truncate text-sm font-medium">{t.name || 'Untitled'}</span>
 									<span class="block truncate text-xs text-muted-foreground"
-										>{t.rule.trim() ||
+										>{(t.rule.trim() && ruleWords(t.rule)) ||
 											'No rule yet: set it by hand from the right-click menu'}</span
 									>
 								</button>
@@ -538,6 +541,7 @@
 										id="tag-{t.id}-rule"
 										label="Rule"
 										exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
+										emptyText={NO_TAG_RULE}
 										{suggestions}
 										preview={(q) =>
 											me.data ? previewItems(q, me.data.login, me.data.settings) : null}

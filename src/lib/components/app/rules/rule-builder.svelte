@@ -67,6 +67,7 @@
 		BUILDER_FIELDS,
 		builderToQuery,
 		describeBuilder,
+		MATCHES_EVERYTHING,
 		emptyCondition,
 		queryToBuilder,
 		type BuilderCondition,
@@ -96,7 +97,8 @@
 		allowGroups = true,
 		suggestions = {},
 		preview,
-		templates = RULE_TEMPLATES
+		templates = RULE_TEMPLATES,
+		emptyText
 	}: {
 		value: string;
 		id: string;
@@ -106,6 +108,7 @@
 		suggestions?: Partial<Record<NonNullable<BuilderField['suggest']>, string[]>>;
 		preview?: (query: string) => RulePreview | null;
 		templates?: RuleTemplate[];
+		emptyText?: string;
 	} = $props();
 
 	const fields = $derived(BUILDER_FIELDS.filter((f) => !exclude.includes(f.word)));
@@ -138,7 +141,10 @@
 	}
 
 	const canShowVisually = $derived(queryToBuilder(value) !== null);
-	const summary = $derived(describeBuilder(builder));
+	const summary = $derived.by(() => {
+		const text = describeBuilder(builder);
+		return emptyText && text === MATCHES_EVERYTHING ? emptyText : text;
+	});
 	const result = $derived(preview ? preview(value) : null);
 
 	const replaceItem = (k: number, item: BuilderState['items'][number] | null) =>
@@ -257,7 +263,9 @@
 			</p>
 		{/if}
 	{:else}
-		<div class="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-dashed p-2.5">
+		<div
+			class="grid grid-cols-[minmax(0,1fr)] gap-2 sm:rounded-lg sm:border sm:border-dashed sm:p-2.5"
+		>
 			{#if builder.items.length > 1}
 				<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
 					Match {@render modeSelect(

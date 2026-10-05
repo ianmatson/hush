@@ -106,7 +106,7 @@
 <div class="grid gap-6">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">Keybinds</h1>
+			<h1 class="hidden text-lg font-semibold tracking-tight md:block">Keybinds</h1>
 			<p class="text-sm text-muted-foreground">
 				Every shortcut in Hush. Changes are saved at once and follow you to every device.
 			</p>

@@ -38,7 +38,7 @@
 
 <div class="grid gap-6">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">Inbox</h1>
+		<h1 class="hidden text-lg font-semibold tracking-tight md:block">Inbox</h1>
 		<p class="text-sm text-muted-foreground">
 			By default, only direct review requests, problems on your own PRs, direct mentions, and
 			replies to you are “Needs you”. Everything else is FYI.
@@ -98,7 +98,8 @@
 				>
 			</Card.Header>
 			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
-				<ul class="grid gap-1 rounded-lg border p-1 text-sm" aria-label="Built-in tabs">
+				<p class="text-xs font-medium text-muted-foreground">Built-in tabs</p>
+				<ul class="-mt-1.5 grid gap-1 rounded-lg border p-1 text-sm" aria-label="Built-in tabs">
 					{#each FEED_TABS as t (t.id)}
 						<li class="flex items-center gap-2 rounded-md py-0.5 pr-1 pl-2.5 hover:bg-muted/50">
 							<span class="min-w-0 flex-1 truncate">{t.label}</span>
@@ -106,46 +107,49 @@
 						</li>
 					{/each}
 				</ul>
-				<SortableList
-					items={viewRows}
-					onchange={(rows) => saveSettings({ views: rows.map((r) => r.view) }, 'Views saved')}
-					label="Notification views in order"
-					empty="No notification views yet."
-				>
-					{#snippet row(r)}
-						<span class="min-w-0 flex-1">
-							<span class="block truncate">{r.view.name}</span>
-							<span class="block truncate text-xs text-muted-foreground"
-								>{describeView(r.view)}</span
+				<p class="pt-1 text-xs font-medium text-muted-foreground">Your notification views</p>
+				<div class="-mt-1.5 rounded-lg border p-1">
+					<SortableList
+						items={viewRows}
+						onchange={(rows) => saveSettings({ views: rows.map((r) => r.view) }, 'Views saved')}
+						label="Notification views in order"
+						empty="No notification views yet."
+					>
+						{#snippet row(r)}
+							<span class="min-w-0 flex-1">
+								<span class="block truncate">{r.view.name}</span>
+								<span class="block truncate text-xs text-muted-foreground"
+									>{describeView(r.view)}</span
+								>
+							</span>
+						{/snippet}
+						{#snippet actions(r)}
+							<FeedButton view="v:{r.view.id}" name={r.view.name} feeds={feeds.data} />
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Edit {r.view.name}"
+								href="/inbox?view=v:{r.view.id}&edit=1"><Pencil /></Button
 							>
-						</span>
-					{/snippet}
-					{#snippet actions(r)}
-						<FeedButton view="v:{r.view.id}" name={r.view.name} feeds={feeds.data} />
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							aria-label="Edit {r.view.name}"
-							href="/inbox?view=v:{r.view.id}&edit=1"><Pencil /></Button
-						>
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							aria-label="Delete {r.view.name}"
-							onclick={() =>
-								saveSettings(
-									{ views: settings.views.filter((v) => v.id !== r.view.id) },
-									`View “${r.view.name}” deleted`
-								)}><Trash /></Button
-						>
-					{/snippet}
-				</SortableList>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Delete {r.view.name}"
+								onclick={() =>
+									saveSettings(
+										{ views: settings.views.filter((v) => v.id !== r.view.id) },
+										`View “${r.view.name}” deleted`
+									)}><Trash /></Button
+							>
+						{/snippet}
+					</SortableList>
+				</div>
 			</Card.Content>
 		</Card.Root>
 
 		<Card.Root>
 			<Card.Header>
-				<Card.Title>Rules</Card.Title>
+				<Card.Title>Categories</Card.Title>
 				<Card.Description
 					>Each category decides what happens to its threads: Needs you, FYI, or Muted, push, and a
 					move to Done or Snoozed. Set this in <a

@@ -54,7 +54,7 @@
 	<Card.Header>
 		<Card.Title>Settings file</Card.Title>
 		<Card.Description
-			>Keep a copy, move to another account, or share your rules. Appearance and your start page
+			>Keep a copy, move to another account, or share your setup. Appearance and your start page
 			stay in this browser.</Card.Description
 		>
 	</Card.Header>

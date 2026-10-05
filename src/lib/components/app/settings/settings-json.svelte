@@ -83,7 +83,8 @@
 	</Card.Header>
 	<Card.Content class="grid gap-3">
 		<Textarea
-			class="min-h-48 font-mono text-xs"
+			class="min-h-48 overflow-x-auto font-mono text-xs"
+			wrap="off"
 			spellcheck={false}
 			aria-label="settings.json"
 			{value}

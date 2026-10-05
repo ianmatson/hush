@@ -201,6 +201,20 @@ export function queryToBuilder(query: string): BuilderState | null {
 	return { mode, items };
 }
 
+function sizeWords(spec: string): string {
+	const range = /^(\d+)\.\.(\d+)$/.exec(spec);
+	if (range) return `${range[1]} to ${range[2]}`;
+	const m = /^(<=|>=|<|>)?(\d+)$/.exec(spec);
+	if (!m) return spec;
+	const words: Record<string, string> = {
+		'<': 'under',
+		'>': 'over',
+		'<=': 'at most',
+		'>=': 'at least'
+	};
+	return m[1] ? `${words[m[1]]} ${m[2]}` : m[2];
+}
+
 export function describeCondition(c: BuilderCondition): string {
 	const field = builderField(c.word);
 	const values = c.values.filter((v) => v.trim());
@@ -208,14 +222,20 @@ export function describeCondition(c: BuilderCondition): string {
 	const shown = values.map((v) => {
 		if (v.toLowerCase() === BOTS_VALUE && (c.word === 'author' || c.word === 'from'))
 			return 'a bot';
-		return field?.options?.find((o) => o.value === v)?.label ?? v;
+		const option = field?.options?.find((o) => o.value === v);
+		return option ? option.label.toLowerCase() : v;
 	});
 	const list =
 		shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(', ')} or ${shown.at(-1)}`;
 	const label = (field?.label ?? c.word).replace(/ \(Jev decides\)$/, '');
-	if (c.word === IS_WORD) return `${c.negate ? 'not ' : ''}${list.toLowerCase()}`;
+	const not = c.negate ? 'not ' : '';
+	if (c.word === IS_WORD) return `${not}${list.toLowerCase()}`;
+	if (c.word === 'about') return `${not}about “${values.join('” or “')}”`;
+	if (c.word === 'size') return `${not}${values.map(sizeWords).join(' or ')} changed lines`;
 	return `${label.toLowerCase()} ${c.negate ? 'is not' : 'is'} ${list}`;
 }
+
+export const MATCHES_EVERYTHING = 'Matches everything.';
 
 export function describeBuilder(state: BuilderState): string {
 	const joinWords = (parts: string[], mode: BuilderMode) =>
@@ -229,7 +249,7 @@ export function describeBuilder(state: BuilderState): string {
 			return inner.length > 1 ? `(${joinWords(inner, item.mode)})` : (inner[0] ?? '');
 		})
 		.filter(Boolean);
-	if (!parts.length) return 'Matches everything.';
+	if (!parts.length) return MATCHES_EVERYTHING;
 	const text = joinWords(parts, state.mode);
 	return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }

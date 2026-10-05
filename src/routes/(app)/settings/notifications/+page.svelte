@@ -130,7 +130,7 @@
 
 <div class="grid gap-6">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">Notifications</h1>
+		<h1 class="hidden text-lg font-semibold tracking-tight md:block">Notifications</h1>
 		<p class="text-sm text-muted-foreground">
 			Native push notifications, also when Hush is closed.
 		</p>
@@ -285,22 +285,24 @@
 						onCheckedChange={(v) =>
 							saveSettings({ pushDigestMinutes: v ? DEFAULT_DIGEST_MINUTES : null })}
 					/>
+					{#snippet extra()}
+						{#if settings.pushDigestMinutes !== null}
+							<label class="flex items-center gap-2 text-sm"
+								>Every <Input
+									type="number"
+									class="h-8 w-16"
+									min={DIGEST_MINUTES.min}
+									max={DIGEST_MINUTES.max}
+									value={settings.pushDigestMinutes}
+									onchange={(e) => {
+										const minutes = wholeIn(e.currentTarget.value, DIGEST_MINUTES);
+										if (minutes !== null) saveSettings({ pushDigestMinutes: minutes });
+									}}
+								/> minutes</label
+							>
+						{/if}
+					{/snippet}
 				</SettingRow>
-				{#if settings.pushDigestMinutes !== null}
-					<label class="flex items-center gap-2 py-3 text-sm"
-						>Every <Input
-							type="number"
-							class="h-8 w-20"
-							min={DIGEST_MINUTES.min}
-							max={DIGEST_MINUTES.max}
-							value={settings.pushDigestMinutes}
-							onchange={(e) => {
-								const minutes = wholeIn(e.currentTarget.value, DIGEST_MINUTES);
-								if (minutes !== null) saveSettings({ pushDigestMinutes: minutes });
-							}}
-						/> minutes</label
-					>
-				{/if}
 				<SettingRow
 					id="push-limit"
 					label="Limit"
@@ -311,38 +313,40 @@
 						checked={settings.pushLimit !== null}
 						onCheckedChange={(v) => saveSettings({ pushLimit: v ? DEFAULT_PUSH_LIMIT : null })}
 					/>
+					{#snippet extra()}
+						{#if settings.pushLimit}
+							{@const limit = settings.pushLimit}
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+								<label class="flex items-center gap-2"
+									>At most <Input
+										type="number"
+										class="h-8 w-16"
+										min={LIMIT_COUNT.min}
+										max={LIMIT_COUNT.max}
+										value={limit.count}
+										onchange={(e) => {
+											const count = wholeIn(e.currentTarget.value, LIMIT_COUNT);
+											if (count !== null) saveSettings({ pushLimit: { ...limit, count } });
+										}}
+									/> pushes</label
+								>
+								<label class="flex items-center gap-2"
+									>in <Input
+										type="number"
+										class="h-8 w-16"
+										min={LIMIT_MINUTES.min}
+										max={LIMIT_MINUTES.max}
+										value={limit.minutes}
+										onchange={(e) => {
+											const minutes = wholeIn(e.currentTarget.value, LIMIT_MINUTES);
+											if (minutes !== null) saveSettings({ pushLimit: { ...limit, minutes } });
+										}}
+									/> minutes</label
+								>
+							</div>
+						{/if}
+					{/snippet}
 				</SettingRow>
-				{#if settings.pushLimit}
-					{@const limit = settings.pushLimit}
-					<div class="flex flex-wrap items-center gap-2 py-3 text-sm">
-						<label class="flex items-center gap-2"
-							>At most <Input
-								type="number"
-								class="h-8 w-20"
-								min={LIMIT_COUNT.min}
-								max={LIMIT_COUNT.max}
-								value={limit.count}
-								onchange={(e) => {
-									const count = wholeIn(e.currentTarget.value, LIMIT_COUNT);
-									if (count !== null) saveSettings({ pushLimit: { ...limit, count } });
-								}}
-							/> pushes</label
-						>
-						<label class="flex items-center gap-2"
-							>in <Input
-								type="number"
-								class="h-8 w-20"
-								min={LIMIT_MINUTES.min}
-								max={LIMIT_MINUTES.max}
-								value={limit.minutes}
-								onchange={(e) => {
-									const minutes = wholeIn(e.currentTarget.value, LIMIT_MINUTES);
-									if (minutes !== null) saveSettings({ pushLimit: { ...limit, minutes } });
-								}}
-							/> minutes</label
-						>
-					</div>
-				{/if}
 				{#if settings.smartDecisions}
 					<SettingRow
 						id="push-urgent-now"
@@ -408,37 +412,41 @@
 						checked={!!quiet}
 						onCheckedChange={(v) => setQuiet(v ? {} : null)}
 					/>
+					{#snippet extra()}
+						{#if quiet}
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+								<label class="flex items-center gap-2"
+									>From <Input
+										type="time"
+										class="h-8 w-auto"
+										value={toClock(quiet.from)}
+										onchange={(e) => setClock('from', e.currentTarget.value)}
+									/></label
+								>
+								<label class="flex items-center gap-2"
+									>to <Input
+										type="time"
+										class="h-8 w-auto"
+										value={toClock(quiet.to)}
+										onchange={(e) => setClock('to', e.currentTarget.value)}
+									/></label
+								>
+								<span class="text-xs text-muted-foreground">
+									{quiet.from > quiet.to ? 'Ends the next morning.' : ''}
+									Time zone: {quiet.timeZone}.
+									{#if quiet.timeZone !== browserZone}
+										<button
+											type="button"
+											class="underline underline-offset-2 hover:text-foreground"
+											onclick={() => setQuiet({ timeZone: browserZone })}>Use {browserZone}</button
+										>
+									{/if}
+								</span>
+							</div>
+						{/if}
+					{/snippet}
 				</SettingRow>
 				{#if quiet}
-					<div class="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 text-sm">
-						<label class="flex items-center gap-2"
-							>From <Input
-								type="time"
-								class="h-8 w-auto"
-								value={toClock(quiet.from)}
-								onchange={(e) => setClock('from', e.currentTarget.value)}
-							/></label
-						>
-						<label class="flex items-center gap-2"
-							>to <Input
-								type="time"
-								class="h-8 w-auto"
-								value={toClock(quiet.to)}
-								onchange={(e) => setClock('to', e.currentTarget.value)}
-							/></label
-						>
-						<span class="text-xs text-muted-foreground">
-							{quiet.from > quiet.to ? 'Ends the next morning.' : ''}
-							Time zone: {quiet.timeZone}.
-							{#if quiet.timeZone !== browserZone}
-								<button
-									type="button"
-									class="underline underline-offset-2 hover:text-foreground"
-									onclick={() => setQuiet({ timeZone: browserZone })}>Use {browserZone}</button
-								>
-							{/if}
-						</span>
-					</div>
 					<SettingRow
 						id="quiet-weekends"
 						label="All weekend"
