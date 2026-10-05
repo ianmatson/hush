@@ -75,6 +75,8 @@
 	const dashQ = createQuery(() => dashQuery(kind));
 	const me = createQuery(meQuery);
 	const data = $derived(dashQ.data ?? null);
+	const pageOpenedAt = Date.now();
+	const revalidatingAfterOpen = $derived(dashQ.isFetching && dashQ.dataUpdatedAt < pageOpenedAt);
 	let refreshing = $state(false);
 	let section = $state<string | null>(null);
 	let query = $state('');
@@ -887,8 +889,8 @@
 		</div>
 	{/if}
 
-	<p class="mt-2 mb-2 px-1 text-xs text-muted-foreground">
-		{#if data && (refreshing || dashQ.isFetching || data.refreshing)}
+	<p class="mt-2 mb-2 flex h-4 items-center px-1 text-xs text-muted-foreground">
+		{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
 			<span class="inline-flex items-center gap-1"
 				><RefreshCw class="size-3 animate-spin" />Updating…</span
 			>
