@@ -98,7 +98,7 @@
 			<p class="text-xs text-muted-foreground">Hush counts the matches when it has this list.</p>
 		{/if}
 
-		<Dialog.Footer class="flex-row flex-wrap gap-2 sm:justify-between">
+		<Dialog.Footer class="flex-row flex-wrap justify-end gap-2 sm:justify-between">
 			{#if ondelete}
 				<Button variant="ghost" class="text-destructive" onclick={ondelete}>Delete view</Button>
 			{:else}

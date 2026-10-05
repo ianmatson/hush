@@ -94,7 +94,7 @@
 				>
 			</span>
 		</div>
-		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+		<div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
 			{@render children()}
 		</div>
 		{#if footer}
@@ -141,7 +141,7 @@
 					>
 				</div>
 			</div>
-			<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+			<div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
 				{#if open}{@render children()}{/if}
 			</div>
 			{#if footer && open}

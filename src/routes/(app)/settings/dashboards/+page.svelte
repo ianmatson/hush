@@ -229,12 +229,12 @@
 			</Card.Header>
 			<Card.Content class="grid gap-3">
 				{#if draft.tracked.length}
-					<ul class="grid gap-1">
+					<ul class="grid grid-cols-[minmax(0,1fr)] gap-1">
 						{#each draft.tracked as key (key)}
 							<li
 								class="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 font-mono text-xs"
 							>
-								{key}
+								<span class="min-w-0 truncate">{key}</span>
 								<Button
 									variant="ghost"
 									size="icon-xs"

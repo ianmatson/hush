@@ -351,14 +351,14 @@
 						onmouseleave={() => showMatches(false)}
 						onOpenAutoFocus={(e) => e.preventDefault()}
 					>
-						<ul class="grid max-h-72 gap-0.5 overflow-y-auto">
+						<ul class="grid max-h-72 grid-cols-[minmax(0,1fr)] gap-0.5 overflow-y-auto">
 							{#each result.examples as e, k (k)}
 								<li>
 									<a
 										href={e.url}
 										target="_blank"
 										rel="noreferrer"
-										class="grid rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+										class="grid grid-cols-[minmax(0,1fr)] rounded-md px-2 py-1.5 text-xs hover:bg-muted"
 									>
 										<span class="truncate font-medium">{e.title}</span>
 										<span class="truncate text-muted-foreground">{e.detail}</span>

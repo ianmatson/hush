@@ -118,6 +118,7 @@
 	// One fact, one badge: what the reason says, no badge repeats.
 	const said = $derived(saidBy(i.turnReason));
 	const show = (part: string) => !hidden.includes(part);
+	const [owner, repoName] = $derived(i.repo.split('/'));
 	const shownMarks = $derived(
 		marks.filter((m) => show(m.kind === 'category' ? 'category' : 'tags'))
 	);
@@ -215,7 +216,9 @@
 		<div
 			class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:text-[0.8rem]"
 		>
-			<span class="truncate font-mono text-[0.7rem] sm:text-[0.75rem]">{i.repo}#{i.number}</span>
+			<span class="truncate font-mono text-[0.7rem] sm:text-[0.75rem]"
+				><span class="hidden sm:inline">{owner}/</span>{repoName}#{i.number}</span
+			>
 			{#if show('author')}
 				<span class="opacity-50">·</span>
 				<span class="max-w-[45%] shrink-0 truncate">@{i.author}</span>

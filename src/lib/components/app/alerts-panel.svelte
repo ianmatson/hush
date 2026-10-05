@@ -118,13 +118,13 @@
 			</p>
 		</div>
 	{:else}
-		<ul class="grid p-1.5">
+		<ul class="grid grid-cols-[minmax(0,1fr)] p-1.5">
 			{#each alerts.data as a (a.id)}
 				{@const [line, repo] = a.body.split('\n')}
 				<li>
 					<button
 						type="button"
-						class="grid w-full gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
+						class="grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted"
 						onclick={() => choose(a)}
 					>
 						<span class="flex items-center gap-2">

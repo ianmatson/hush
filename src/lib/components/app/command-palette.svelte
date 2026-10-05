@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MediaQuery } from 'svelte/reactivity';
 	import { commandFor } from '$lib/keys.svelte';
 	import type { Component } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -40,6 +41,7 @@
 		where?: string;
 	}
 
+	const touchOnly = new MediaQuery('pointer: coarse');
 	const VIEWS: { id: View; label: string }[] = [
 		{ id: 'action', label: 'Needs you' },
 		{ id: 'fyi', label: 'FYI' },
@@ -169,13 +171,15 @@
 				['categories', 'Categories & tags', 'categories tags rules labels push feeds'],
 				['notifications', 'Notifications', 'push quiet']
 			] as const
-		).map(([slug, name, more]) => ({
-			id: `go:settings/${slug}`,
-			label: `Settings: ${name}`,
-			icon: Settings,
-			keywords: ['settings', 'preferences', slug, ...more.split(' ')],
-			run: () => goto(`/settings/${slug}`)
-		}))
+		)
+			.filter(([slug]) => slug !== 'keys' || !touchOnly.current)
+			.map(([slug, name, more]) => ({
+				id: `go:settings/${slug}`,
+				label: `Settings: ${name}`,
+				icon: Settings,
+				keywords: ['settings', 'preferences', slug, ...more.split(' ')],
+				run: () => goto(`/settings/${slug}`)
+			}))
 	]);
 
 	async function syncNow() {
@@ -338,7 +342,8 @@
 		{#if e.where}
 			<span class="shrink-0 text-xs text-muted-foreground">{e.where}</span>
 		{/if}
-		{#if e.shortcut}<Command.Shortcut>{e.shortcut}</Command.Shortcut>{/if}
+		{#if e.shortcut}<Command.Shortcut class="pointer-coarse:hidden">{e.shortcut}</Command.Shortcut
+			>{/if}
 	</Command.Item>
 {/snippet}
 

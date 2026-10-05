@@ -7,6 +7,9 @@
 	import Settings2 from '@lucide/svelte/icons/settings-2';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import Tags from '@lucide/svelte/icons/tags';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Check from '@lucide/svelte/icons/check';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	let { children } = $props();
 
@@ -16,24 +19,45 @@
 		{ href: '/settings/dashboards', label: 'Sources', icon: GitPullRequest },
 		{ href: '/settings/categories', label: 'Categories & tags', icon: Tags },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
-		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard }
+		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard, needsKeyboard: true }
 	];
+	const current = $derived(sections.find((s) => page.url.pathname === s.href));
 </script>
 
 <div
 	data-page
-	class="mx-auto flex max-w-4xl flex-col gap-6 px-3 pt-4 pb-24 sm:px-4 sm:pt-6 md:flex-row"
+	class="mx-auto flex max-w-4xl flex-col gap-4 px-3 pt-3 pb-24 sm:px-4 sm:pt-6 md:flex-row md:gap-6"
 >
-	<nav
-		class="-mx-1 flex shrink-0 gap-1 overflow-x-auto px-1 md:w-44 md:flex-col md:overflow-visible"
-		aria-label="Settings"
-	>
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger
+			class="flex h-10 w-full items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium md:hidden"
+			aria-label="Settings section"
+		>
+			{#if current}<current.icon class="size-4 text-muted-foreground" />{/if}
+			{current?.label ?? 'Settings'}
+			<ChevronDown class="ml-auto size-4 text-muted-foreground" />
+		</DropdownMenu.Trigger>
+		<DropdownMenu.Content align="start" class="w-(--bits-dropdown-menu-anchor-width)">
+			{#each sections as s (s.href)}
+				<DropdownMenu.Item class={cn(s.needsKeyboard && 'pointer-coarse:hidden')}>
+					{#snippet child({ props })}
+						<a {...props} href={s.href}>
+							<s.icon />{s.label}
+							{#if s === current}<Check class="ml-auto" />{/if}
+						</a>
+					{/snippet}
+				</DropdownMenu.Item>
+			{/each}
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+	<nav class="hidden w-44 shrink-0 flex-col gap-1 md:flex" aria-label="Settings">
 		{#each sections as s (s.href)}
 			<a
 				href={s.href}
 				class={cn(
-					'flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
-					page.url.pathname === s.href && 'bg-muted text-foreground'
+					'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+					page.url.pathname === s.href && 'bg-muted text-foreground',
+					s.needsKeyboard && 'pointer-coarse:hidden'
 				)}
 			>
 				<s.icon class="size-4" />{s.label}

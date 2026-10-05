@@ -71,7 +71,8 @@
 		if (selected) row?.scrollIntoView({ block: 'nearest' });
 	});
 
-	const ref = $derived(t.number ? `${t.repo}#${t.number}` : t.repo);
+	const [owner, repoName] = $derived(t.repo.split('/'));
+	const suffix = $derived(t.number ? `#${t.number}` : '');
 	const isAction = $derived(t.category === 'action');
 	const inInbox = $derived(
 		t.triage === 'inbox' || (t.triage === 'snoozed' && (t.snoozedUntil ?? 0) <= Date.now())
@@ -144,7 +145,9 @@
 			class="mt-0.5 block truncate text-xs text-muted-foreground select-text sm:text-[0.8rem]"
 			onclick={(e) => e.preventDefault()}
 		>
-			<span class="font-mono text-[0.7rem] sm:text-[0.75rem]">{ref}</span>
+			<span class="font-mono text-[0.7rem] sm:text-[0.75rem]"
+				><span class="hidden sm:inline">{owner}/</span>{repoName}{suffix}</span
+			>
 			<span class="mx-1 opacity-50">·</span>{t.title}
 		</a>
 		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">

@@ -214,8 +214,10 @@
 			<Card.Header>
 				<Card.Title>What to push</Card.Title>
 				<Card.Description
-					>Inbox rules can override this for specific repos, people, or kinds of activity. More in
-					settings.json (General).</Card.Description
+					>A category can always push, or never push, for its items (<a
+						class="underline"
+						href="/settings/categories">Categories & tags</a
+					>). More in settings.json (General).</Card.Description
 				>
 			</Card.Header>
 			<Card.Content class="divide-y">
@@ -233,7 +235,7 @@
 				<SettingRow
 					id="push-fyi"
 					label="FYI items"
-					description="Usually noisy. Use a rule for the repos you care about instead."
+					description="Usually noisy. Set a category to always push instead."
 				>
 					<Switch
 						id="push-fyi"
