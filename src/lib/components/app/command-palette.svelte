@@ -164,8 +164,9 @@
 				['general', 'General', 'appearance menus account export import'],
 				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
-				['inbox', 'Inbox, rules, views, and feeds', 'feeds'],
-				['dashboards', 'PR and issue dashboards', 'sections teams'],
+				['inbox', 'Inbox, views, and feeds', 'feeds defaults'],
+				['dashboards', 'Sources', 'sections searches tracked teams dashboards'],
+				['categories', 'Categories & tags', 'categories tags rules labels push feeds'],
 				['notifications', 'Notifications', 'push quiet']
 			] as const
 		).map(([slug, name, more]) => ({

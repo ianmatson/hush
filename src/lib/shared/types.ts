@@ -87,9 +87,12 @@ export interface Enrichment {
 	/** PRs: the newest approval or change request by someone who is not you or the author. */
 	lastVerdict?: { by: string; at: string } | null;
 	previousComment?: LastComment | null;
+	assignees?: string[];
+	reviewRequests?: string[];
 	commentsNeedMe?: boolean | null;
 	urgent?: boolean;
 	smart?: string[];
+	jevCategory?: string | null;
 }
 
 /** Everything the classifier needs to know about one notification thread. */
@@ -105,6 +108,10 @@ export interface ThreadFacts {
 	myTeams?: string[];
 	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
+	sources?: string[];
+	pinnedCategory?: string | null;
+	itemCategory?: { id: string; name: string };
+	itemTags?: { id: string; name: string }[];
 }
 
 export interface Classification {
@@ -147,9 +154,42 @@ export interface RuleMatch {
 	/** The latest activity is by a bot (true) or by a person (false). */
 	byBot?: boolean;
 	about?: string[];
+	source?: string[];
+	itemCategory?: string[];
+	itemTag?: string[];
+	assignee?: string | string[];
+	reviewRequested?: string[];
+	size?: string[];
 }
 
-export interface Rule {
+export type MarkColor =
+	'gray' | 'red' | 'orange' | 'amber' | 'green' | 'teal' | 'blue' | 'violet' | 'pink';
+
+export type CategoryInbox = 'auto' | Category;
+export type CategoryPush = 'inherit' | 'on' | 'off';
+export type CategoryTriage = 'done' | 'snooze';
+
+export interface ItemCategory {
+	id: string;
+	name: string;
+	color: MarkColor;
+	rule: string;
+	description: string;
+	icon?: string;
+	inbox?: CategoryInbox;
+	push?: CategoryPush;
+	triage?: CategoryTriage;
+	snoozeHours?: number;
+}
+
+export interface ItemTag {
+	id: string;
+	name: string;
+	color: MarkColor;
+	rule: string;
+}
+
+export interface LegacyInboxRule {
 	name?: string;
 	enabled?: boolean;
 	/** A query (shared/query.ts), such as "repo:acme/* needs:review". "" matches every thread. */
@@ -157,7 +197,7 @@ export interface Rule {
 	then: {
 		category?: Category;
 		push?: boolean;
-		/** Also move the thread: to Done, or snoozed for `snoozeHours` (see ruleTriage). */
+		/** Also move the thread: to Done, or snoozed for `snoozeHours` (see categoryTriage). */
 		triage?: 'done' | 'snooze';
 		snoozeHours?: number;
 	};
@@ -199,9 +239,11 @@ export interface Settings {
 	botsAreFyi: boolean;
 	/** A review request to one of your teams is "Needs you", not FYI. */
 	teamReviewsAreAction: boolean;
-	/** Evaluated top to bottom after the defaults; the first match wins. */
-	rules: Rule[];
 	dash: DashSettings;
+	sources: DashSection[];
+	tracked: string[];
+	categories: ItemCategory[];
+	tags: ItemTag[];
 	/** Saved views: extra inbox tabs, in order. */
 	views: SavedView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
@@ -210,6 +252,7 @@ export interface Settings {
 	menus: { inbox: string[]; dash: string[]; v?: number };
 	/** Swipe actions on touch screens, for each list (see shared/swipe.ts). */
 	swipe: import('./swipe').SwipeSettings;
+	rows: import('./row-parts').RowSettings;
 }
 
 // --- Pull request and issue dashboards ------------------------------------------
@@ -226,8 +269,6 @@ export interface DashSection {
 }
 
 export interface DashSettings {
-	pr: DashSection[];
-	issue: DashSection[];
 	/** Appended to every query, e.g. "org:acme archived:false". */
 	scope: string;
 	/** "org/team" slugs that `@team` must skip. */
@@ -309,6 +350,8 @@ export interface DashItem {
 	lastCommitAt: string | null;
 	commentsNeedMe?: boolean | null;
 	urgent?: boolean;
+	category?: string;
+	tags?: string[];
 	// Computed.
 	sections: string[];
 	turn: Turn;

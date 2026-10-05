@@ -19,7 +19,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 | Open source              | Yes (MIT)                                                                                     | Yes                                                                 |
 | Where your data is       | On your computer; token in the OS keychain                                                    | On Hush's servers; token encrypted                                  |
 | Sort order               | GitHub's reasons, with filters; group by repository or date                                   | Needs you, FYI, Muted, by whose turn it is                          |
-| Filters                  | Reason, type, state, user type (bots), review request type, account, `author:`/`org:`/`repo:` | Rules, a query language, saved views                                |
+| Filters                  | Reason, type, state, user type (bots), review request type, account, `author:`/`org:`/`repo:` | Categories, tags, a query language, saved views                     |
 | Alerts                   | Native desktop notifications, sound, unread count in the tray                                 | Web Push on desktop and phone, quiet hours, digests                 |
 | Actions                  | Mark read, mark done, unsubscribe, open on GitHub                                             | Done, snooze, mute, read; approve, comment, merge, close, re-run CI |
 | Several accounts         | Yes                                                                                           | No                                                                  |
@@ -32,7 +32,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 
 **Gitify** shows your GitHub notifications in a small window from the menu bar or tray. You narrow the list with filters: the reason GitHub gives, the type, the state (open, closed, merged, draft), the user type (for example, to hide bots), the review request type (direct or team), the account, and include or exclude tokens such as `author:`, `org:`, and `repo:`. Filters combine with AND. You can group by repository or by date, and show only threads you participate in. Gitify does not decide which threads need you; it shows what GitHub sends, filtered your way.
 
-**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, new comments) and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve or push a fix, Hush moves the thread to Done by itself. [Rules](/docs/rules) change the defaults per repository, author, type, or reason.
+**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, new comments) and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve or push a fix, Hush moves the thread to Done by itself. [Categories](/docs/categories) change the defaults per repository, author, type, or reason.
 
 ## Pull requests
 
@@ -65,7 +65,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 - It moves threads to Done by itself when they stop needing you.
 - Approve, comment, and merge without leaving the list.
 - Push to your phone, with quiet hours and digests; it keeps checking when your computer sleeps.
-- Rules, snoozes, saved views, and Atom feeds.
+- Categories, tags, snoozes, saved views, and Atom feeds.
 
 ## Choose Gitify if…
 

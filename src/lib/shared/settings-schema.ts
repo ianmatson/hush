@@ -1,8 +1,16 @@
-import { validateRules } from './classify';
 import { validateDash } from './dashboard';
+import { validateSources, validateTracked } from './sources';
+import {
+	categoriesWithLegacyRules,
+	DEFAULT_CATEGORIES,
+	markQueries,
+	validateCategories,
+	validateTags
+} from './categories';
 import { MAX_SMART_CONDITIONS, smartConditions } from './decisions';
 import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
+import { validateRows } from './row-parts';
 import { validateKeys } from './keymap';
 import { formatQuery } from './query';
 import { validateQuietHours } from './quiet';
@@ -14,14 +22,15 @@ import {
 	validatePushRepeat
 } from './push-policy';
 import { DEFAULT_SETTINGS } from './settings';
-import type { RuleMatch, Settings } from './types';
+import type { ItemCategory, LegacyInboxRule, RuleMatch, Settings } from './types';
 import { validateViews } from './views';
 
 /**
  * Every setting, for the settings.json editor and the docs: one entry per key (and per key of
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
-export type SettingsPage = 'inbox' | 'dashboards' | 'notifications' | 'general' | 'keys';
+export type SettingsPage =
+	'inbox' | 'dashboards' | 'categories' | 'notifications' | 'general' | 'keys';
 export interface SettingInfo {
 	key: string;
 	page: SettingsPage | null;
@@ -110,13 +119,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'smartDecisions',
 		page: 'inbox',
-		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, and checks the about: conditions of your rules and views (up to ${MAX_SMART_CONDITIONS}).`
-	},
-	{
-		key: 'rules',
-		page: 'inbox',
-		description:
-			'Inbox rules, top to bottom; the first match wins. Each is { "name", "enabled", "when": a query, "then": { "category", "push", "triage", "snoozeHours" } }.'
+		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, and checks the about: conditions of your categories, tags, and views (up to ${MAX_SMART_CONDITIONS}).`
 	},
 	{
 		key: 'views',
@@ -125,12 +128,28 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'Saved views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
 	},
 	{
-		key: 'dash.pr',
+		key: 'sources',
 		page: 'dashboards',
 		description:
-			'Pull request sections: saved GitHub searches { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team.'
+			'The GitHub searches that decide which PRs and issues Hush tracks: { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue covers both.'
 	},
-	{ key: 'dash.issue', page: 'dashboards', description: 'Issue sections, the same as dash.pr.' },
+	{
+		key: 'categories',
+		page: 'categories',
+		description:
+			'Where each PR, issue, and notification lives: exactly one category each. { "id", "name", "color", "rule": a query, "description": for Jev, "inbox": "auto" | "action" | "fyi" | "muted", "push": "inherit" | "on" | "off", "triage": "done" | "snooze", "snoozeHours" }. The first category whose rule matches wins; else Jev picks among categories with a description; else "other". "inbox", "push", and "triage" act on the inbox threads of the category.'
+	},
+	{
+		key: 'tags',
+		page: 'categories',
+		description:
+			'Marks that cut across categories: zero or more each. { "id", "name", "color", "rule": a query }. A rule with about:"…" asks Jev.'
+	},
+	{
+		key: 'tracked',
+		page: 'dashboards',
+		description: 'Single PRs and issues to track, as "owner/repo#123", whatever the sources find.'
+	},
 	{
 		key: 'dash.scope',
 		page: 'dashboards',
@@ -175,6 +194,24 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		description: 'What a swipe on a PR or issue does on the dashboards, the same way.'
 	},
 	{
+		key: 'rows.pr',
+		page: 'general',
+		description:
+			'Parts to hide on pull request rows, such as ["sources", "labels"]. Parts: time, author, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, category, tags, labels, sources.'
+	},
+	{
+		key: 'rows.issue',
+		page: 'general',
+		description:
+			'Parts to hide on issue rows. Parts: time, author, comments, moved, changes, category, tags, labels, sources.'
+	},
+	{
+		key: 'rows.thread',
+		page: 'general',
+		description:
+			'Parts to hide on inbox notification rows. Parts: time, why, changes, override, category, resolved, draft, snooze.'
+	},
+	{
 		key: 'keys',
 		page: 'keys',
 		description:
@@ -183,10 +220,10 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 ];
 
 /** Settings that are objects of their own settings (a change to one key keeps the others). */
-const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe']);
+const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe', 'rows']);
 /** Settings that change how threads are sorted: a change re-sorts the stored threads. */
 export const RECLASSIFY_KEYS: (keyof Settings)[] = [
-	'rules',
+	'categories',
 	'botsAreFyi',
 	'reviewResolution',
 	'teamReviewsAreAction',
@@ -248,12 +285,16 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 		v === 'strict' || v === 'any_review'
 			? null
 			: '"reviewResolution" must be "strict" or "any_review".',
-	rules: validateRules,
 	views: validateViews,
 	dash: validateDash,
+	sources: validateSources,
+	categories: validateCategories,
+	tags: validateTags,
+	tracked: validateTracked,
 	menus: validateMenus,
 	keys: validateKeys,
-	swipe: validateSwipe
+	swipe: validateSwipe,
+	rows: validateRows
 };
 
 /**
@@ -272,10 +313,10 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 					return `Unknown setting "${k}.${sub}".`;
 	}
 	if (
-		(keys.includes('rules') || keys.includes('views')) &&
-		smartConditions(next.rules, next.views).length > MAX_SMART_CONDITIONS
+		['views', 'categories', 'tags'].some((k) => keys.includes(k)) &&
+		smartConditions(next.views, markQueries(next)).length > MAX_SMART_CONDITIONS
 	)
-		return `Rules and views can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
+		return `Views, categories, and tags can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
 	return null;
 }
 
@@ -317,6 +358,11 @@ export function settingsFromFile(text: string): Partial<Settings> | string {
 			.filter((k) => raw[k] !== undefined)
 			.map((k) => [k, raw[k]])
 	) as Partial<Settings>;
+	if (Array.isArray(raw.rules) && raw.rules.length)
+		patch.categories = categoriesWithLegacyRules(
+			(patch.categories as ItemCategory[] | undefined) ?? DEFAULT_CATEGORIES,
+			raw.rules as LegacyInboxRule[]
+		);
 	return Object.keys(patch).length ? patch : 'The file has no settings.';
 }
 

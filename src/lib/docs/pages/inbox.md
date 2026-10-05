@@ -10,8 +10,8 @@ description: How Hush sorts notifications, what each tab and row shows, and how 
 | **Needs you** | Threads where you are the next person who must act.                              |
 | **FYI**       | Activity that you may want to know about, but that does not need you.            |
 | **Snoozed**   | Threads that you snoozed. They come back at the time, or when the thing happens. |
-| **Done**      | Threads that you (or Hush, or a rule) finished.                                  |
-| **Muted**     | Threads that you muted, or that a rule mutes.                                    |
+| **Done**      | Threads that you (or Hush, or a category) finished.                              |
+| **Muted**     | Threads that you muted, or that a category mutes.                                |
 
 After these come your [saved views](/docs/views). Keys {{key:inbox.view.1}} to {{key:inbox.view.5}} open the built-in tabs, and {{key:inbox.view.6}} to {{key:inbox.view.9}} your first four saved views.
 
@@ -39,15 +39,15 @@ Hush reads each notification and the pull request or issue behind it (CI, review
 
 **Conversations:** a person mentioned you, or replied in a thread that you commented in (and you did not reply since).
 
-With [smart decisions](/docs/settings#smartdecisions) on, Hush also reads the newest comments. When they need nothing from you (thanks, approval, a status update, +1), a reply or a mention is FYI, and a comment on your PR or issue is not your turn.
+With [smart decisions](/docs/settings#smartdecisions) on (the default), Hush also reads the newest comments. When they need nothing from you (thanks, approval, a status update, +1), a reply or a mention is FYI, and a comment on your PR or issue is not your turn.
 
 **Other:** security and Dependabot alerts, repository invitations, deployments that wait for your approval, and workflow runs that failed.
 
 Everything else is **FYI**: team mentions, repositories that you watch, merged and closed work, passing CI, releases. With [`botsAreFyi`](/docs/settings#botsarefyi) on (the default), PRs, comments, and mentions by bots are FYI too. A review request to you by name still needs you, also on a bot's PR.
 
-Turn the two bot and team settings on or off in **Settings → Inbox → Defaults**.
+Turn the bot, team, and smart decisions settings on or off in **Settings → Inbox → Defaults**.
 
-The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” on the Pull requests tab. To change where threads go, write [rules](/docs/rules).
+The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” on the Pull requests tab. To change where threads go, use the inbox settings of a [category](/docs/categories#inbox-settings).
 
 ## Rows
 
@@ -56,7 +56,7 @@ Each row shows:
 - **What happened**, in one line: “CI failed on your PR”, “@alice requests your review”, “@github-actions commented on your PR”.
 - The title, the repository, and the number.
 - **Why GitHub notified you**: “Review requested”, “You opened this”, “Watching repo”… A row does not show a fact twice: when the first line already says why, or that it is a draft, that tag is left out.
-- **rule: …** when one of your rules sorted it.
+- **category: …** when the inbox settings of its [category](/docs/categories#inbox-settings) sorted it.
 - **What changed since you looked**, for a PR or issue: “+2 commits”, “CI fails”, “@alice approved”, “3 new comments”. See [Since you looked](#since-you-looked).
 - A note such as “✓ You approved” when Hush moved it to Done by itself.
 - The time and the condition of a snooze.
@@ -106,7 +106,6 @@ When Hush puts a thread in Needs you and it does not need you, press {{key:inbox
 | **Someone else already reviewed it**   | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.             |
 | **Team review requests don't need me** | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                     |
 | **A bot opened it**                    | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                          |
-| **I don't work on acme/website**       | Adds a [rule](/docs/rules) at the top: `repo:acme/website` is FYI.                                                                           |
 | **Only this one**                      | Moves only this thread to FYI, until it changes (a new notification). For a PR or issue, also to Other on the Pull requests and Issues tabs. |
 
 Hush shows only the answers that would change something for this thread. After each one, **Undo** in the message puts everything back. A thread that you moved says “You said: doesn't need me”.
@@ -122,7 +121,7 @@ The Snooze menu has times and conditions. A time is on your computer's clock.
 
 A snooze “until” also ends after 7 days, so nothing sleeps forever. If the PR or issue is merged or closed first, the snooze ends at once, because the event can no longer happen. When a snooze ends because the thing happened, Hush pushes “Snooze over: CI passed”. Conditions that are already true are not offered.
 
-A [rule](/docs/rules) can snooze threads for a number of hours when they arrive.
+A [category](/docs/categories#inbox-settings) can snooze its new threads for a number of hours.
 
 ## Select many
 
@@ -149,9 +148,9 @@ While the box has text, choose **Search: everywhere** under it to search every t
 
 ## Right-click menu
 
-Right-click a row (or choose “⋯” on a phone) for every action: Peek, the main action, Open on GitHub, Done, Snooze, Mute, Move to inbox, Mark as read, Copy link, **Make a rule…**, and selection. With a selection, the menu acts on all selected rows. You can change the items and their order: see [Menus](/docs/appearance-and-menus#menus).
+Right-click a row (or choose “⋯” on a phone) for every action: Peek, the main action, Open on GitHub, Done, Snooze, Mute, Move to inbox, Mark as read, Copy link, **Make a category…**, and selection. With a selection, the menu acts on all selected rows. You can change the items and their order: see [Menus](/docs/appearance-and-menus#menus).
 
-**Make a rule…** opens **Settings → Inbox** with a new rule for this thread's repository and type.
+**Make a category…** opens **Settings → Categories & tags** with a new category. Its rule is this thread's repository and type, and its threads go to FYI. Change it, and choose **Save**. See [Categories and tags](/docs/categories).
 
 ## Sync
 

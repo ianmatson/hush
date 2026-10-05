@@ -9,7 +9,7 @@ This page is for AI agents, scripts, and people who automate their setup. It say
 
 - [/llms.txt](/llms.txt) lists every page, with its Markdown address.
 - [/llms-full.txt](/llms-full.txt) has every page in one file.
-- Every page is Markdown at its address plus `.md`: [/docs/settings.md](/docs/settings.md), [/docs/rules.md](/docs/rules.md)… The docs home is [/docs/index.md](/docs/index.md).
+- Every page is Markdown at its address plus `.md`: [/docs/settings.md](/docs/settings.md), [/docs/categories.md](/docs/categories.md)… The docs home is [/docs/index.md](/docs/index.md).
 
 The reference tables (settings, keys, query words, menu items) are made from Hush's own source code when the site is built, so they match the version that runs.
 
@@ -20,15 +20,15 @@ Hush has no public API. Its API accepts only a signed-in browser session, and it
 1. Write the user's settings as JSON (see below).
 2. Give it to the user, who pastes it into **Settings → General → Edit settings.json** and chooses **Save**, or imports it as a file in **Settings → General → Settings file**.
 
-Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about sorting, pushes, views, sections, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
+Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about sorting, pushes, categories, tags, views, sources, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
 
 ## Write settings.json
 
 - Write only what differs from the defaults. Leave out every setting that you do not change.
-- **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their rules deletes their rules.
-- `rules`, `views`, `dash.pr`, `dash.issue`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
+- **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their categories puts back the default categories.
+- `categories`, `tags`, `views`, `sources`, `tracked`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
-- Every key, type, default, and limit is in [settings.json](/docs/settings). The conditions of rules and views are queries (text): every word is in the [query language](/docs/query-language#words).
+- Every key, type, default, and limit is in [settings.json](/docs/settings). The rules of categories and tags, and the conditions of views, are queries (text): every word is in the [query language](/docs/query-language#words).
 
 To make a settings file to import, put the settings in this wrapper:
 
@@ -40,11 +40,13 @@ To make a settings file to import, put the settings in this wrapper:
 
 Check these, or Hush refuses the file:
 
-- Every rule has `when` (a query, as text; `""` matches every thread) and `then` with at least one of `category`, `push`, or `triage`.
-- `category` is `"action"`, `"fyi"`, or `"muted"`. `triage: "snooze"` has `snoozeHours`, a whole number from 1 to 720.
-- Queries (a rule's `when`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
+- There is no `rules` setting: Hush refuses it as unknown. Inbox rules are [categories](/docs/categories) now.
+- `categories` keeps the category with the id `"other"`: it is the fallback. Up to 20 categories and 20 tags.
+- Each category has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to 40 characters), `color` (`gray`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, or `pink`), `rule` (a query, or `""`), and `description` (up to 200 characters, or `""`). Tags have the same keys, without `description`.
+- A category's `inbox` is `"auto"`, `"action"`, `"fyi"`, or `"muted"`; `push` is `"inherit"`, `"on"`, or `"off"`; `triage` is `"done"` or `"snooze"`. `triage: "snooze"` has `snoozeHours`, a whole number from 1 to 720.
+- Queries (a category's or tag's `rule`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. They cannot use `category:` or `tag:`. Up to 300 characters.
 - View ids are 1 to 16 lower-case letters or digits, and unique; names are 1 to 40 characters; at most 12 views.
-- Section ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters; at most 20 sections for each tab.
+- Source ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
 - `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.
@@ -52,34 +54,47 @@ Check these, or Hush refuses the file:
 
 ## Recipes
 
-**“Only my repositories may need me.”** Rules have no “not”, so keep what needs you in your repositories with a first rule, and make everything else FYI with a wide rule after it:
+**“Only my repositories may need me.”** Make one category for your repositories, and set the fallback, Other, to FYI:
 
 ```json settings
 {
-	"rules": [
+	"categories": [
 		{
-			"name": "My repos can need me",
-			"when": "repo:acme/web,acme/api in:needs-you",
-			"then": { "category": "action" }
+			"id": "mine",
+			"name": "My repos",
+			"color": "blue",
+			"rule": "repo:acme/web,acme/api",
+			"description": ""
 		},
-		{ "name": "Everything else is FYI", "when": "", "then": { "category": "fyi" } }
+		{
+			"id": "other",
+			"name": "Other",
+			"color": "gray",
+			"rule": "",
+			"description": "",
+			"inbox": "fyi"
+		}
 	]
 }
 ```
 
-A thread that needs you in acme/web or acme/api matches the first rule and stays in Needs you. Every other thread matches the second rule. A saved view per project is another way: it adds a tab and hides nothing.
+A thread in acme/web or acme/api is in My repos, and Hush decides if it needs you. Every other thread is in Other, which is always FYI. This removes the default categories; keep them in the list to keep them. Jev chooses only among categories with a description, so here it chooses nothing. A saved view per project is another way: it adds a tab and hides nothing.
 
 **“Push me only when someone reviews my PRs.”**
 
 ```json settings
 {
 	"pushAction": false,
-	"rules": [
+	"categories": [
 		{
+			"id": "my-reviews",
 			"name": "Reviews on my PRs",
-			"when": "type:pr event:you-opened needs:changes,merge",
-			"then": { "push": true }
-		}
+			"color": "green",
+			"rule": "type:pr event:you-opened needs:changes,merge",
+			"description": "",
+			"push": "on"
+		},
+		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
 	]
 }
 ```
@@ -110,4 +125,4 @@ A thread that needs you in acme/web or acme/api matches the first rule and stays
 
 ## Explain Hush to a user
 
-When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”), and “rule: …” if a rule sorted it.
+When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”), and “category: …” if the inbox settings of its category sorted it. On the Pull requests and Issues tabs, each row shows its category and tags.

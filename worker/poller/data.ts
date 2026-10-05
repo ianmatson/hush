@@ -1,16 +1,20 @@
 import {
 	classify,
 	classifyDefault,
-	firstMatchingRule,
 	globToRegExp,
-	ruleTriage,
-	validateRules,
+	categoryTriage,
 	withOverride
 } from '../../src/lib/shared/classify';
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
-import { FEED_TABS, threadMatches } from '../../src/lib/shared/views';
+import {
+	FEED_TABS,
+	parseMarkFeed,
+	threadMatches,
+	type MarkFeedSubject
+} from '../../src/lib/shared/views';
+import { itemFeedEntry, threadFeedEntry, type FeedEntry } from '../feed-entries';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import {
 	RECLASSIFY_KEYS,
@@ -30,7 +34,6 @@ import type {
 	DashItem,
 	DashKind,
 	DashResponse,
-	Rule,
 	Settings,
 	ThreadDTO,
 	Turn,
@@ -53,9 +56,15 @@ import {
 } from './schema';
 import { FILL_DONE_WITHIN_MS, FILL_MAX, MIN, MUTED_BY_USER, type PollStatus } from './shared';
 import { DECISION_FILL_KEY } from './decisions';
-import { smartConditions } from '../../src/lib/shared/decisions';
 
 const DECISION_FILL_DELAY_MS = 2_000;
+const PLACEMENT_KEYS = ['categories', 'tags', 'sources'] as const;
+
+export interface PinChange {
+	category?: string | null;
+	tag?: string;
+	tagState?: 'on' | 'off' | 'auto';
+}
 
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
@@ -79,9 +88,10 @@ const BULK_MAX = 20;
 const MUTED_AT = '9999-12-31T23:59:59Z';
 
 /** Why a thread or item does not need you ("Doesn't need me…"): what each answer changes. */
-export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'repo' | 'once';
-const NOT_NEEDED = new Set<NotNeededAnswer>(['others-reviewed', 'team', 'bots', 'repo', 'once']);
+export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'once';
+const NOT_NEEDED = new Set<NotNeededAnswer>(['others-reviewed', 'team', 'bots', 'once']);
 const MAX_DEVICES = 10;
+const FEED_ENTRIES = 50;
 const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all', 'inbox']);
 /** An open inbox records a visit (and brings the next poll forward) at most this often. */
 const SEEN_EVERY = 5 * MIN;
@@ -389,17 +399,44 @@ export abstract class PollerData extends PollerDashboard {
 	 * An Atom feed of one inbox tab (see worker/feeds.ts): its name and its threads, newest first.
 	 * Null when the tab is gone (a deleted saved view).
 	 */
-	async feedThreads(view: string): Promise<{ name: string; rows: ThreadWithFacts[] } | null> {
+	async feedEntries(view: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
+		const mark = parseMarkFeed(view);
+		if (mark) return this.markFeed(mark);
 		const tab = FEED_TABS.find((t) => t.id === view);
 		const saved = tab ? null : (await this.settings()).views.find((v) => `v:${v.id}` === view);
 		if (!tab && !saved) return null;
 		const { where, args } = viewWhere(saved?.base ?? view);
 		const rows = this.threads(`${where} ORDER BY gh_updated_at DESC LIMIT 300`, ...args);
-		if (!saved) return { name: tab!.label, rows: rows.slice(0, 50) };
-		const me = await this.login();
+		const me = saved ? await this.login() : '';
+		const matching = saved ? rows.filter((r) => threadMatches(saved.query, toDTO(r), me)) : rows;
 		return {
-			name: saved.name,
-			rows: rows.filter((r) => threadMatches(saved.query, toDTO(r), me)).slice(0, 50)
+			name: saved?.name ?? tab!.label,
+			entries: matching.slice(0, FEED_ENTRIES).map(threadFeedEntry)
+		};
+	}
+
+	private async markFeed(target: {
+		subject: MarkFeedSubject;
+		id: string;
+	}): Promise<{ name: string; entries: FeedEntry[] } | null> {
+		const settings = await this.settings();
+		const marks = target.subject === 'category' ? settings.categories : settings.tags;
+		const mark = marks.find((m) => m.id === target.id);
+		if (!mark) return null;
+		const items: DashItem[] = [];
+		for (const kind of ['pr', 'issue'] as const) {
+			const cached = await this.ctx.storage.get<{ data: DashResponse }>(`dash:${kind}`);
+			items.push(...(cached?.data.items ?? []));
+		}
+		const inFeed = (i: DashItem) =>
+			target.subject === 'category' ? i.category === target.id : !!i.tags?.includes(target.id);
+		return {
+			name: mark.name,
+			entries: items
+				.filter((i) => !i.dismissed && inFeed(i))
+				.sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))
+				.slice(0, FEED_ENTRIES)
+				.map(itemFeedEntry)
 		};
 	}
 
@@ -408,74 +445,6 @@ export abstract class PollerData extends PollerDashboard {
 	/** Team slugs whose review requests count in the inbox (Settings → Inbox). */
 	private async inboxTeamsFor(settings: Settings): Promise<string[]> {
 		return settings.teamReviewsAreAction ? (await this.teams()).teams.map((t) => t.slug) : [];
-	}
-
-	/**
-	 * Try rules on your stored threads without saving them: how many threads each rule would catch
-	 * (first match wins), a few examples, and how many threads would change category compared with
-	 * the saved rules.
-	 */
-	async previewRules(rules: unknown): Promise<
-		| Refusal
-		| {
-				perRule: {
-					matches: number;
-					inInbox: number;
-					examples: { title: string; repo: string; category: string }[];
-				}[];
-				moves: { action: number; fyi: number; muted: number; done: number; snoozed: number };
-				total: number;
-		  }
-	> {
-		const err = validateRules(rules);
-		if (err) return { error: err, status: 400 };
-		const me = await this.login();
-		const saved = await this.settings();
-		const settings: Settings = { ...saved, rules: rules as Rule[] };
-		const myTeams = await this.inboxTeamsFor(settings);
-		const rows = this.threads('1');
-		type Example = { title: string; repo: string; category: string };
-		const perRule = settings.rules.map(() => ({
-			matches: 0,
-			inInbox: 0,
-			open: [] as Example[],
-			other: [] as Example[]
-		}));
-		const moves = { action: 0, fyi: 0, muted: 0, done: 0, snoozed: 0 };
-		for (const r of rows) {
-			if (r.rule === MUTED_BY_USER) continue;
-			const facts = factsFromRow(r, me, myTeams);
-			const base = classifyDefault(facts, settings);
-			const i = firstMatchingRule(facts, settings.rules, base);
-			const categoryWith = (list: Rule[], k: number) =>
-				k < 0 ? base.category : (list[k].then.category ?? base.category);
-			const category = categoryWith(settings.rules, i);
-			if (i >= 0) {
-				const p = perRule[i];
-				p.matches++;
-				const open = r.triage === 'inbox' || r.triage === 'snoozed';
-				if (open) p.inInbox++;
-				const list = open ? p.open : p.other;
-				if (list.length < 3) list.push({ title: r.title, repo: r.repo, category });
-			}
-			// The effect of your edits: compare with the rules you have saved now.
-			const before = categoryWith(saved.rules, firstMatchingRule(facts, saved.rules, base));
-			if (category !== before) moves[category as keyof typeof moves]++;
-			// A rule that moves threads acts on the inbox threads it starts to match (see reclassify).
-			const then = i >= 0 ? settings.rules[i].then : null;
-			const name = i >= 0 ? settings.rules[i].name || `Rule ${i + 1}` : null;
-			if (then?.triage && r.triage === 'inbox' && name !== r.rule)
-				moves[then.triage === 'done' ? 'done' : 'snoozed']++;
-		}
-		return {
-			// Examples: threads in the inbox first.
-			perRule: perRule.map(({ open, other, ...p }) => ({
-				...p,
-				examples: [...open, ...other].slice(0, 3)
-			})),
-			moves,
-			total: rows.length
-		};
 	}
 
 	/** Change some settings (each one checked), and re-classify the threads if it matters. */
@@ -496,20 +465,59 @@ export abstract class PollerData extends PollerDashboard {
 		if (err) return { error: err, status: 400 };
 		await this.saveSettings(next);
 		if (old.smartDecisions && !next.smartDecisions) this.forgetDecisions();
-		if (this.needsDecisionFill(old, next)) await this.startDecisionFill();
+		if (!old.smartDecisions && this.decisionsOn(next)) await this.startDecisionFill();
 		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
 		// must not rewrite every thread.
 		const affects = RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
 		const reclassified = affects ? await this.reclassify(next) : 0;
+		if (PLACEMENT_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]))) {
+			const who = await this.who();
+			if (who) await this.rePlaceCachedItems(who);
+		}
 		return { settings: next, reclassified };
 	}
 
-	private needsDecisionFill(old: Settings, next: Settings): boolean {
-		if (!this.decisionsOn(next)) return false;
-		if (!old.smartDecisions) return true;
-		const ids = (s: Settings) => smartConditions(s.rules, s.views).map((c) => c.id);
-		const known = new Set(ids(old));
-		return ids(next).some((id) => !known.has(id));
+	async pinItems(ids: string[], change: PinChange): Promise<{ ok: true }> {
+		const pins = this.itemPins(ids);
+		this.transaction(() => {
+			for (const id of ids) {
+				const pin = pins.get(id) ?? {};
+				const tagsOn = new Set(pin.tagsOn ?? []);
+				const tagsOff = new Set(pin.tagsOff ?? []);
+				if (change.tag) {
+					tagsOn.delete(change.tag);
+					tagsOff.delete(change.tag);
+					if (change.tagState === 'on') tagsOn.add(change.tag);
+					if (change.tagState === 'off') tagsOff.add(change.tag);
+				}
+				const category = change.category === undefined ? (pin.category ?? null) : change.category;
+				if (!category && !tagsOn.size && !tagsOff.size) {
+					this.run('DELETE FROM item_pins WHERE key = ?', id);
+					continue;
+				}
+				this.run(
+					`INSERT INTO item_pins (key, category, tags_on, tags_off) VALUES (?, ?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET category = excluded.category, tags_on = excluded.tags_on,
+             tags_off = excluded.tags_off`,
+					id,
+					category,
+					JSON.stringify([...tagsOn]),
+					JSON.stringify([...tagsOff])
+				);
+			}
+		});
+		const who = await this.who();
+		if (!who) return { ok: true };
+		if (change.category !== undefined) await this.reclassify(who.settings);
+		await this.rePlaceCachedItems(who);
+		return { ok: true };
+	}
+
+	async reevaluateItems(): Promise<{ items: number }> {
+		const keys = (await this.cachedItemKeys()).slice(0, FILL_MAX);
+		this.forgetIdentityAnswersOf(keys);
+		await this.startDecisionFill();
+		return { items: keys.length };
 	}
 
 	private async startDecisionFill(): Promise<void> {
@@ -535,7 +543,7 @@ export abstract class PollerData extends PollerDashboard {
        ORDER BY gh_updated_at DESC LIMIT ${FILL_MAX}`,
 			doneSince
 		);
-		const subjects = [
+		const threadSubjects = [
 			...new Map(
 				rows.flatMap((r) => {
 					const f = factsOf(r);
@@ -543,9 +551,11 @@ export abstract class PollerData extends PollerDashboard {
 				})
 			).values()
 		];
-		await this.decideSubjects(who, subjects, { allAreInboxThreads: true });
+		await this.decideSubjects(who, threadSubjects, { allAreInboxThreads: true });
+		const itemKeys = (await this.cachedItemKeys()).slice(0, FILL_MAX);
+		await this.decideSubjects(who, [...this.storedSubjectFacts(itemKeys).values()]);
 		await this.reclassify(who.settings);
-		await this.patchDashCaches(who, subjects, this.decisionsOf(who, subjects));
+		await this.rePlaceCachedItems(who);
 	}
 
 	/**
@@ -562,7 +572,7 @@ export abstract class PollerData extends PollerDashboard {
 			if (r.rule === MUTED_BY_USER) continue;
 			const c = withOverride(classify(factsFromRow(r, me, myTeams), settings), r, r.gh_updated_at);
 			const moved =
-				r.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
+				r.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? categoryTriage(c, now) : null;
 			const same =
 				!moved &&
 				c.category === r.category &&
@@ -820,14 +830,7 @@ export abstract class PollerData extends PollerDashboard {
 				? { reviewResolution: 'any_review' }
 				: answer === 'team'
 					? { teamReviewsAreAction: false }
-					: answer === 'bots'
-						? { botsAreFyi: true }
-						: {
-								rules: [
-									{ name: `${repo} is FYI`, when: `repo:${repo}`, then: { category: 'fyi' } },
-									...old.rules
-								]
-							};
+					: { botsAreFyi: true };
 		const undo = Object.fromEntries(
 			Object.keys(patch).map((k) => [k, old[k as keyof Settings]])
 		) as Partial<Settings>;

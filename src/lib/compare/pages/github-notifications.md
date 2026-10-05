@@ -19,7 +19,7 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 | Price                    | Included with GitHub                                                                      | Free in beta; planned $3 a month or $30 a year                        |
 | Open source              | No                                                                                        | Yes                                                                   |
 | Sort order               | Time (newest or oldest first)                                                             | Needs you, FYI, Muted, by whose turn it is                            |
-| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Rules, a query language, up to 12 saved views                         |
+| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Categories, tags, a query language, up to 12 saved views              |
 | Push                     | GitHub Mobile: mentions, assignments, review requests, deployment approvals, Actions runs | Web Push for "Needs you" items, with quiet hours, digests, and limits |
 | Review a PR              | Yes, with the full diff (web and Mobile)                                                  | Approve, comment, merge, close, re-run CI; no diff view               |
 | GitHub Enterprise Server | Yes                                                                                       | No (github.com only)                                                  |
@@ -35,7 +35,7 @@ The reason that GitHub gives is fixed when the notification arrives. A thread wi
 
 **Hush** reads the same notifications, then reads the pull request or issue behind each one: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what needs you](/docs/inbox#what-needs-you).
 
-You can change the defaults with [rules](/docs/rules): for example, a repository that is only FYI, or a bot to mute.
+You can change the defaults with [categories](/docs/categories): for example, a repository that is only FYI, or a bot to mute.
 
 ## Pull requests and reviews
 
@@ -68,7 +68,7 @@ You can change the defaults with [rules](/docs/rules): for example, a repository
 
 - It sorts by who must act next, not by time, and keeps that up to date as the pull request changes.
 - It moves threads to Done by itself when they stop needing you, and brings them back when they need you again.
-- Rules can send a repository, a bot, or a person to FYI or Muted, or push them always.
+- Categories can send a repository, a bot, or a person to FYI or Muted, or push them always.
 - Push for exactly the "Needs you" list, with quiet hours, digests, and limits, on any device with a modern browser.
 - Snooze for a time, or until something happens (for example, until CI passes).
 - One view of issues and pull requests that involve you, also when no notification came.
@@ -83,7 +83,7 @@ You can change the defaults with [rules](/docs/rules): for example, a repository
 
 - You work on github.com and get many notifications each day.
 - You want one short list of what waits on you, and pushes for that list only.
-- You want rules and snoozes that GitHub does not have.
+- You want categories, tags, and snoozes that GitHub does not have.
 
 ## Sources
 

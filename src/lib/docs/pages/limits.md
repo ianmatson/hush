@@ -1,6 +1,6 @@
 ---
 title: Limits, timing, and data
-description: How often Hush checks GitHub, what it stores, how long it keeps it, and the limits on views, sections, and devices.
+description: How often Hush checks GitHub, what it stores, how long it keeps it, and the limits on views, sources, categories, and devices.
 ---
 
 ## Timing and limits
@@ -16,10 +16,10 @@ Hush sees what GitHub puts in your notifications, and the facts of the pull requ
 ## What Hush stores
 
 - **Your account**: your GitHub login, name, and avatar, and your token, encrypted.
-- **Your data**, in storage of its own for each user: your threads and their state, the facts of each PR and issue (CI, reviews, the start of the description, the 2 newest comments), Jev's answers if you turned on smart decisions, your settings, your alert history, when each item last pushed and why, the pushes that wait (quiet hours, a digest, a limit), your push devices, and your hidden and moved dashboard items.
+- **Your data**, in storage of its own for each user: your threads and their state, the facts of each PR and issue (CI, reviews, the start of the description, the 2 newest comments), Jev's answers (unless you turned off smart decisions), your pinned categories and tags, your settings, your alert history, when each item last pushed and why, the pushes that wait (quiet hours, a digest, a limit), your push devices, and your hidden and moved dashboard items.
 - **Sessions and feeds**: a hash of each sign-in session (with its browser and when it was last used), and a hash of each feed address.
 
-Hush keeps Done threads until they have had no activity for 30 days, and alerts for 30 days. **Delete account** (Settings → General → Account) deletes all of it at once. Nothing is shared with anyone (except TypeSafe's Jev model, if you turn on [smart decisions](/docs/settings#smartdecisions); see [Privacy](/privacy)), and Hush has no analytics.
+Hush keeps Done threads until they have had no activity for 30 days, and alerts for 30 days. **Delete account** (Settings → General → Account) deletes all of it at once. Nothing is shared with anyone (except TypeSafe's Jev model, unless you turn off [smart decisions](/docs/settings#smartdecisions); see [Privacy](/privacy)), and Hush has no analytics.
 
 The browser keeps a copy of your lists, so that Hush opens at once, and the comments that you did not send yet (see [The comment box](/docs/peek#the-comment-box)). **Sign out** clears both.
 

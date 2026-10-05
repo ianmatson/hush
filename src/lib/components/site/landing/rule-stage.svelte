@@ -5,13 +5,13 @@
 	const SETTINGS_JSON = `{
   "pushRepeat": "reason",
   "pushDigestMinutes": 30,
-  "rules": [
-    {
-      "name": "Mute dependabot",
-      "when": "repo:PostHog/* author:dependabot*",
-      "then": { "category": "muted" }
-    },
-    { "when": "from:joethreepwood", "then": { "push": true } }
+  "categories": [
+    { "id": "deps", "name": "Dependencies", "color": "teal",
+      "rule": "repo:PostHog/* author:dependabot*",
+      "inbox": "muted" },
+    { "id": "joe", "name": "Joe", "color": "blue",
+      "rule": "from:joethreepwood", "push": "on" },
+    { "id": "other", "name": "Other", "color": "gray" }
   ],
   "views": [
     { "id": "docs", "name": "Docs reviews",
@@ -125,8 +125,8 @@
 			{/each}
 		</ul>
 		<div class="rule-foot">
-			<span>If you save: <b>3 to Muted</b></span>
-			<span class="save">Save rules</span>
+			<span>Dependencies: <b>3 to Muted</b></span>
+			<span class="save">Save categories</span>
 		</div>
 	</div>
 </div>

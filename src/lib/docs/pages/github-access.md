@@ -11,7 +11,7 @@ You sign in with GitHub. Hush asks for three scopes:
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `notifications` | Read your notifications, and mark them read, done, or muted.                                                                         |
 | `repo`          | Read the pull requests and issues behind them (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close. |
-| `read:org`      | Find your teams, for team review requests and `@team` sections.                                                                      |
+| `read:org`      | Find your teams, for team review requests and `@team` sources.                                                                       |
 
 GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
 

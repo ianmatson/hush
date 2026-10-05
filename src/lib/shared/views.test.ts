@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedView, ThreadDTO } from './types';
-import { threadMatches, validateViews } from './views';
+import { feedViewOk, markFeedView, parseMarkFeed, threadMatches, validateViews } from './views';
 
 const t = (over: Partial<ThreadDTO> = {}): ThreadDTO =>
 	({
@@ -71,5 +71,24 @@ describe('saved views', () => {
 		expect(validateViews([view(), view()])).toMatch(/same id/);
 		expect(validateViews([view({ query: 'nope:1' })])).toMatch(/nope/);
 		expect(validateViews([view({ query: { repo: 'x' } as never })])).toMatch(/must be a query/);
+	});
+});
+
+describe('feeds', () => {
+	it('exist for tabs, saved views, categories, and tags', () => {
+		expect(feedViewOk('action')).toBe(true);
+		expect(feedViewOk('v:abc')).toBe(true);
+		expect(markFeedView('category', 'bugs')).toBe('c:bugs');
+		expect(parseMarkFeed(markFeedView('tag', 'needs-decision'))).toEqual({
+			subject: 'tag',
+			id: 'needs-decision'
+		});
+		expect(feedViewOk('c:bugs')).toBe(true);
+		expect(feedViewOk('x:bugs')).toBe(false);
+	});
+
+	it('refuse category: and tag: in saved views', () => {
+		const view = { id: 'a', name: 'A', base: 'inbox', query: 'tag:blocked' } as SavedView;
+		expect(validateViews([view])).toMatch(/cannot use category: or tag:/);
 	});
 });

@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-	classify,
-	globToRegExp,
-	ruleTriage,
-	shouldPush,
-	validateRules,
-	withOverride
-} from './classify';
+import { classify, globToRegExp, categoryTriage, shouldPush, withOverride } from './classify';
+import { DEFAULT_CATEGORIES } from './categories';
 import { DEFAULT_SETTINGS } from './settings';
-import type { Classification, Enrichment, Settings, ThreadFacts } from './types';
+import type { Classification, Enrichment, ItemCategory, Settings, ThreadFacts } from './types';
 
 const pr = (e: Partial<Enrichment> = {}): Enrichment => ({
 	kind: 'pr',
@@ -32,6 +26,18 @@ const facts = (over: Partial<ThreadFacts> = {}): ThreadFacts => ({
 
 const run = (f: ThreadFacts, s: Partial<Settings> = {}) =>
 	classify(f, { ...DEFAULT_SETTINGS, ...s });
+
+const category = (name: string, rule: string, inbox: Partial<ItemCategory> = {}): ItemCategory => ({
+	id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+	name,
+	color: 'gray',
+	rule,
+	description: '',
+	...inbox
+});
+const withCategories = (...first: ItemCategory[]): Partial<Settings> => ({
+	categories: [...first, ...DEFAULT_CATEGORIES]
+});
 
 describe('default classification', () => {
 	it('flags a direct review request as action, linking to the diff', () => {
@@ -152,75 +158,77 @@ describe('default classification', () => {
 	});
 });
 
-describe('rules', () => {
-	it('first matching rule wins and can mute', () => {
+describe('categories in the inbox', () => {
+	it('the first matching category wins and can change push', () => {
 		const c = run(
 			facts({ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) }),
-			{
-				rules: [
-					{ name: 'mute docs', when: 'repo:acme/website', then: { category: 'muted' } },
-					{
-						name: 'quiet acme',
-						when: 'repo:acme/* needs:review',
-						then: { push: false }
-					},
-					{ name: 'never reached', when: '', then: { category: 'muted' } }
-				]
-			}
+			withCategories(
+				category('Docs', 'repo:acme/website', { inbox: 'muted' }),
+				category('Quiet acme', 'repo:acme/* needs:review', { push: 'off' }),
+				category('Never reached', 'repo:acme/*', { inbox: 'muted' })
+			)
 		);
-		expect(c).toMatchObject({ category: 'action', rule: 'quiet acme', push: false });
+		expect(c).toMatchObject({ category: 'action', rule: 'Quiet acme', push: false });
 		expect(shouldPush(c, DEFAULT_SETTINGS)).toBe(false);
 	});
 
-	it('skips disabled rules', () => {
-		const c = run(facts(), { rules: [{ enabled: false, when: '', then: { category: 'muted' } }] });
+	it('leaves Hush’s decision alone for a category with no inbox settings', () => {
+		const c = run(facts(), withCategories(category('Web', 'repo:acme/web')));
 		expect(c.category).toBe('fyi');
+		expect(c.rule).toBeUndefined();
 	});
 
-	it('validates rule shape', () => {
-		expect(validateRules([{ when: '', then: { category: 'action' } }])).toBeNull();
-		expect(validateRules({})).toMatch(/array/);
-		// The query is text; a part that Hush does not understand is an error, not a silent miss.
-		expect(validateRules([{ when: { repo: 'acme/*' }, then: { category: 'fyi' } }])).toMatch(
-			/"when" must be a query/
+	it('places threads that are not PRs or issues by their thread facts, else in Other', () => {
+		const release = facts({ subjectType: 'Release', enrichment: null });
+		const releases = category('Releases', 'type:release', { inbox: 'action', push: 'on' });
+		expect(run(release, withCategories(releases))).toMatchObject({
+			category: 'action',
+			push: true,
+			rule: 'Releases'
+		});
+		const other = DEFAULT_CATEGORIES.map((c) =>
+			c.id === 'other' ? { ...c, inbox: 'muted' as const } : c
 		);
-		expect(validateRules([{ when: 'nope:1', then: { push: true } }])).toMatch(/nope/);
-		expect(validateRules([{ when: 'x'.repeat(301), then: { push: true } }])).toMatch(/300/);
-		expect(validateRules([{ when: '-author:bots', then: { category: 'fyi' } }])).toBeNull();
-		expect(validateRules([{ when: '', then: {} }])).toMatch(/needs category, push, or triage/);
-		expect(validateRules([{ when: 'is:merged', then: { triage: 'done' } }])).toBeNull();
-		expect(validateRules([{ when: 'is:gone', then: { triage: 'done' } }])).toBeTruthy();
-		expect(validateRules([{ when: '', then: { triage: 'snooze', snoozeHours: 4 } }])).toBeNull();
-		expect(validateRules([{ when: '', then: { triage: 'later' } }])).toBeTruthy();
-		for (const snoozeHours of [0, 1.5, 721])
-			expect(validateRules([{ when: '', then: { triage: 'snooze', snoozeHours } }])).toBeTruthy();
+		expect(run(release, { categories: other }).category).toBe('muted');
+	});
+
+	it('follows a pinned category, then Jev, before the fallback', () => {
+		const loud = category('Loud', '', { inbox: 'action', description: 'Loud things' });
+		const s = withCategories(loud);
+		expect(run(facts({ pinnedCategory: 'loud' }), s).category).toBe('action');
+		expect(run(facts({ enrichment: pr({ jevCategory: 'loud' }) }), s).category).toBe('action');
+		expect(run(facts(), s).category).toBe('fyi');
 	});
 
 	it('matches on state', () => {
-		const rules = [{ name: 'merged', when: 'is:merged', then: { triage: 'done' as const } }];
-		expect(run(facts({ enrichment: pr({ state: 'merged' }) }), { rules }).rule).toBe('merged');
-		expect(run(facts(), { rules }).rule).toBeUndefined();
-		expect(run(facts({ enrichment: null }), { rules }).rule).toBeUndefined();
+		const s = withCategories(category('Merged', 'is:merged', { triage: 'done' }));
+		expect(run(facts({ enrichment: pr({ state: 'merged' }) }), s).rule).toBe('Merged');
+		expect(run(facts(), s).rule).toBeUndefined();
+		expect(run(facts({ enrichment: null }), s).rule).toBeUndefined();
 	});
 
-	it('ruleTriage moves only for rules that ask', () => {
+	it('categoryTriage moves only for categories that ask', () => {
 		const now = 1_000_000;
-		const done = run(facts(), { rules: [{ name: 'x', when: '', then: { triage: 'done' } }] });
-		expect(ruleTriage(done, now)).toEqual({ triage: 'done', note: 'Rule: x' });
-		const snooze = run(facts(), {
-			rules: [{ when: '', then: { triage: 'snooze', snoozeHours: 4 } }]
-		});
-		expect(ruleTriage(snooze, now)).toEqual({
+		const done = run(facts(), withCategories(category('X', 'repo:acme/*', { triage: 'done' })));
+		expect(categoryTriage(done, now)).toEqual({ triage: 'done', note: 'Category: X' });
+		const snooze = run(
+			facts(),
+			withCategories(category('Later', 'repo:acme/*', { triage: 'snooze', snoozeHours: 4 }))
+		);
+		expect(categoryTriage(snooze, now)).toEqual({
 			triage: 'snoozed',
 			until: now + 4 * 3_600_000,
-			note: 'Rule: Rule 1'
+			note: 'Category: Later'
 		});
-		const day = run(facts(), { rules: [{ when: '', then: { triage: 'snooze' } }] });
-		expect(ruleTriage(day, now)).toMatchObject({ until: now + 24 * 3_600_000 });
+		const day = run(facts(), withCategories(category('Day', 'repo:acme/*', { triage: 'snooze' })));
+		expect(categoryTriage(day, now)).toMatchObject({ until: now + 24 * 3_600_000 });
 		expect(
-			ruleTriage(run(facts(), { rules: [{ when: '', then: { push: true } }] }), now)
+			categoryTriage(
+				run(facts(), withCategories(category('Push', 'repo:acme/*', { push: 'on' }))),
+				now
+			)
 		).toBeNull();
-		expect(ruleTriage(run(facts()), now)).toBeNull();
+		expect(categoryTriage(run(facts()), now)).toBeNull();
 	});
 
 	it('globs match owner/repo case-insensitively', () => {
@@ -265,13 +273,12 @@ describe('latest activity', () => {
 	});
 
 	it('matches who did it', () => {
-		const rules = [{ name: 'ci bots', when: 'from:github-*', then: { triage: 'done' as const } }];
-		expect(run(mine({ lastComment: bot }), { rules }).rule).toBe('ci bots');
-		const people = [{ name: 'people', when: '-from:bots', then: { category: 'action' as const } }];
-		expect(run(mine({ lastComment: bot }), { rules: people }).rule).toBeUndefined();
+		const ci = withCategories(category('ci bots', 'from:github-*', { triage: 'done' }));
+		expect(run(mine({ lastComment: bot }), ci).rule).toBe('ci bots');
+		const people = withCategories(category('people', '-from:bots', { inbox: 'action' }));
+		expect(run(mine({ lastComment: bot }), people).rule).toBeUndefined();
 		expect(
-			run(mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }), { rules: people })
-				.rule
+			run(mine({ lastComment: { ...bot, author: 'alice', authorIsBot: false } }), people).rule
 		).toBe('people');
 	});
 });

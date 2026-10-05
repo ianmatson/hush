@@ -99,11 +99,14 @@ export function enrichmentOf(
 		authorIsBot: s.authorIsBot,
 		labels: s.labels.map((l) => l.name),
 		assignedToMe: s.assignees.some((a) => a.toLowerCase() === meL),
+		assignees: s.assignees,
+		reviewRequests: s.reviewRequests.map((r) => r.name),
 		lastComment: s.lastComment,
 		previousComment: s.previousComment ?? null,
 		commentsNeedMe: decisions.commentsNeedMe,
 		urgent: decisions.urgent,
-		smart: decisions.smart
+		smart: decisions.smart,
+		jevCategory: decisions.category
 	};
 	if (s.kind === 'issue') return { ...base, state: s.state === 'closed' ? 'closed' : 'open' };
 	return {

@@ -20,7 +20,7 @@ description: Notifier for GitHub is a small browser extension that counts unread
 | Open source              | Yes (MIT)                                                           | Yes                                                 |
 | Where your data is       | In your browser; no server                                          | On Hush's servers; token encrypted                  |
 | Sorting                  | None; can count only threads you participate in                     | Needs you, FYI, Muted, by whose turn it is          |
-| Triage                   | None; a click opens GitHub                                          | Done, snooze, mute, read, rules                     |
+| Triage                   | None; a click opens GitHub                                          | Done, snooze, mute, read, categories                |
 | Alerts                   | Optional desktop alerts with sound; can limit them to chosen owners | Web Push on desktop and phone, quiet hours, digests |
 | How often                | About once a minute, as GitHub allows                               | Every 5 minutes                                     |
 | GitHub Enterprise Server | Yes (custom root URL)                                               | No                                                  |
@@ -47,7 +47,7 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 ## Where Hush is better
 
 - It tells you which threads need you, not only how many are unread.
-- Triage in one place: done, snooze, mute, rules, saved views.
+- Triage in one place: done, snooze, mute, categories, saved views.
 - Approve, comment, and merge pull requests from the list.
 - Push to your phone, with quiet hours and digests, also when Hush is not open.
 - Active development; Notifier for GitHub has had no release since June 2025.
@@ -61,7 +61,7 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 ## Choose Hush if…
 
 - The badge never goes to zero, and you want to know what to read first.
-- You want rules, snoozes, and pull request actions.
+- You want categories, snoozes, and pull request actions.
 - You want alerts on your phone.
 
 ## Sources

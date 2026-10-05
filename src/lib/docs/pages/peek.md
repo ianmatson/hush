@@ -26,7 +26,7 @@ Other kinds (an invitation, for example) show what GitHub sent, and a link to it
 
 ## What it shows
 
-- **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: your workflow run. Rule: CI is FYI.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requested from you.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
+- **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: your workflow run. Category: CI.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requested from you.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened.
 - For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.

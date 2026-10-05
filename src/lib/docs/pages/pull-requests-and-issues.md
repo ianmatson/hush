@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The dashboards of open work that involves you, grouped by whose turn it is.
 ---
 
-The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Each tab is a set of saved GitHub searches, called **sections**. Hush groups the results by whose turn it is.
+The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Your [sources](#sources), saved GitHub searches, decide what Hush tracks. Hush groups the results by whose turn it is, and gives each item a [category and tags](#categories-and-tags).
 
 ## Groups
 
@@ -23,7 +23,7 @@ Inside a group, the most urgent items come first (failing CI before a comment), 
 | Your turn         | CI failing · Changes requested · Merge conflict · 2 open threads · Ready to merge · @alice commented (on your PR) · Review requested · Re-review requested · Assigned to you · New commits since your review | Assigned to you · @alice replied                           |
 | Your team's turn  | Review for acme/web                                                                                                                                                                                          |                                                            |
 | Waiting on others | CI running · Waiting for review · Waiting on author · You approved · Waiting for a reply · @alice reviewed (with [`any_review`](/docs/settings#reviewresolution))                                            | Waiting for replies · No replies yet · Waiting for a reply |
-| Other             | Draft · Bot PR · the section's name                                                                                                                                                                          | the section's name                                         |
+| Other             | Draft · Bot PR · the source's name                                                                                                                                                                           | the source's name                                          |
 
 The rules are the same as for the inbox's [Needs you](/docs/inbox#what-needs-you).
 
@@ -39,33 +39,44 @@ A pull request is on top of another one when its base branch is the head branch 
 
 - The row shows the stack's most urgent pull request first. “2 of 4” is its place in the stack, from the base branch up. Click the row to peek it.
 - The [peek](/docs/peek) lists the whole stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack, and the row in the list turns to show the same pull request as the peek.
-- A pull request that is in the stack but not in your sections shows as “Not in this list”. You can peek it, but it has no actions in the list.
+- A pull request that is in the stack but not in your sources shows as “Not in this list”. You can peek it, but it has no actions in the list.
 - Drag the row to move the whole stack to another group.
 
 Hush finds up to 3 open pull requests under each pull request in your list, in the same repository.
 
-## Sections
+## Sources
 
-The sections are tabs above the list: **All**, then each section with its count. {{key:dash.section.0}} shows all; {{key:dash.section.1}} to {{key:dash.section.9}} show one section. An item can be in more than one section.
+A source is a saved [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). Hush tracks every open PR and issue that any of your sources finds.
 
-The default sections:
+{{ref:sources}}
 
-- **Pull requests:** Review requested from you, Team review requests, Your PRs, You reviewed, Assigned to you, Mentions you. “Mentions your teams” is off.
-- **Issues:** Assigned to you, You opened, Mentions you, You commented. “Mentions your teams” is off.
+The chips above the list are your sources: **All**, then each source with its count. {{key:dash.section.0}} shows all; {{key:dash.section.1}} to {{key:dash.section.9}} show one source. An item can be found by more than one source.
 
-Change them in **Settings → PRs & issues**:
+Change them in **Settings → Sources**:
 
-- Each section has a name and a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests). `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams (it leaves out your own PRs, which are in **Your PRs**).
-- Turn a section off with its switch, move it up or down, delete it, or choose **Add section**. The link button opens the same search on GitHub, to check it.
+- Each source has a name and a search. `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams (it leaves out your own PRs).
+- A search with `is:pr`, or a word that only pull requests have (such as `review-requested:` or `reviewed-by:`), finds pull requests. With `is:issue`, issues. With neither, both.
+- Turn a source off with its switch, move it up or down, delete it, or choose **Add source**. The link button opens the same search on GitHub, to check it.
+- **Tracked items:** paste the address of a PR or issue (or `owner/repo#123`). Hush shows it while it is open, whatever the sources find.
 - **Scope** is added to every search: for example `org:acme`, or `-repo:acme/website`.
 - **Teams** lists your teams. Turn off big teams (such as “everyone”) to cut noise. **Look up teams again** finds new teams at once; otherwise Hush looks every 6 hours.
-- **Defaults** puts back the default sections. Nothing changes until you choose **Save**.
+- **Defaults** puts back the default sources. Nothing changes until you choose **Save**.
 
 More options are only in [settings.json](/docs/settings): hide others' drafts ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)), hide bots' PRs ([`dash.hideBots`](/docs/settings#dash-hidebots)), and the stale days.
 
+## Categories and tags
+
+Every item has exactly one **category** and any number of **tags**. They show on each row. After the source chips come a chip for each category and each tag, with its count: click one to see only its items, and click it again to see all. The turn groups stay the same.
+
+To change an item's category, right-click it and choose **Category**, then a category, or **Hush decides** to remove your choice. **Tags** turns a tag on or off for the item. Both work on a selection too.
+
+Set up categories and tags, and how Hush places items, in **Settings → Categories & tags**. See [Categories and tags](/docs/categories).
+
 ## Filter
 
-The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box. The query words of the inbox (`repo:`, `needs:`…) do not work here.
+The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box.
+
+Text with a `word:` in it is a [query](/docs/query-language): `repo:acme/web label:bug`, `review-requested:@me size:<50`. Here, and only here, `category:` and `tag:` work too: `category:bugs tag:quick`.
 
 ## Actions
 
@@ -82,7 +93,7 @@ The filter box above the list finds items by text. An item shows when the text i
 
 ### Not my turn
 
-When an item in **Your turn** is not your turn, press {{key:dash.notNeeded}}, or choose **Not my turn** at the top of the [peek](/docs/peek) or in its menu. The answers are the same as [Doesn't need me](/docs/inbox#doesnt-need-me) in the inbox: they fix a setting, add a rule, or move only this item to Other (and its thread in the inbox to FYI) until it changes.
+When an item in **Your turn** is not your turn, press {{key:dash.notNeeded}}, or choose **Not my turn** at the top of the [peek](/docs/peek) or in its menu. The answers are the same as [Doesn't need me](/docs/inbox#doesnt-need-me) in the inbox: they fix a setting, or move only this item to Other (and its thread in the inbox to FYI) until it changes.
 
 ### Move an item to another group
 
@@ -94,4 +105,4 @@ Select many items to move, hide, or copy them together, the same as in the [inbo
 
 Hush keeps the results for 15 minutes. When you open the tab after that, it shows the saved list at once ("Updating…") and searches GitHub again in the background; the list changes when the new results arrive.
 
-A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 50 results for each section). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}} to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).
+A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 50 results for each source). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}} to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).

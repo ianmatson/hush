@@ -1,11 +1,11 @@
 ---
 title: How to stop Dependabot and bot notification noise on GitHub
-description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and send bot pull requests to FYI or Muted with Hush rules.
+description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and send bot pull requests to FYI or Muted with Hush categories.
 ---
 
 ## Short answer
 
-**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are FYI by default, and the rule `author:dependabot*` → Muted hides them.**
+**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are FYI by default, and a category with the rule `author:dependabot*`, set to Muted, hides them.**
 
 ## Why Dependabot is noisy
 
@@ -73,31 +73,48 @@ A bot is a login that ends in `[bot]`, or that starts with dependabot, renovate,
 
 Dependabot **alerts** are different: they go to **Needs you**, because a vulnerability usually needs someone to act. The [peek](/docs/peek) lists the open alerts of the repository, with the severity and the version that fixes each one.
 
-To change this, write [rules](/docs/rules). The first rule that matches wins:
+To change this, make [categories](/docs/categories) with inbox settings. The first category whose rule matches wins:
 
 ```json settings
 {
-	"rules": [
+	"categories": [
 		{
-			"name": "Mute Dependabot PRs",
-			"when": "author:dependabot* in:fyi",
-			"then": { "category": "muted" }
+			"id": "dependabot",
+			"name": "Dependabot PRs",
+			"color": "gray",
+			"rule": "author:dependabot* in:fyi",
+			"description": "",
+			"inbox": "muted"
 		},
-		{ "name": "Renovate is done", "when": "author:renovate* in:fyi", "then": { "triage": "done" } },
 		{
-			"name": "Sandbox alerts can wait",
-			"when": "type:dependabot repo:acme/sandbox",
-			"then": { "category": "fyi", "push": false }
-		}
+			"id": "renovate",
+			"name": "Renovate",
+			"color": "gray",
+			"rule": "author:renovate* in:fyi",
+			"description": "",
+			"triage": "done"
+		},
+		{
+			"id": "sandbox-alerts",
+			"name": "Sandbox alerts",
+			"color": "amber",
+			"rule": "type:dependabot repo:acme/sandbox",
+			"description": "",
+			"inbox": "fyi",
+			"push": "off"
+		},
+		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
 	]
 }
 ```
+
+A change to `categories` replaces the whole list, so keep `other`, the fallback. This example also removes the default categories; to keep them, add them to the list, below these.
 
 - `author:dependabot*` matches the login `dependabot[bot]`. With `in:fyi`, a Dependabot pull request that asks for your review by name still needs you.
 - `author:` matches who opened a pull request or issue. To match alerts, use `type:dependabot` (Dependabot alerts) or `type:vulnerability` (vulnerability alerts).
 - To see bot activity in one place, make a [saved view](/docs/views) with `from:bots`, or leave bots out of a view with `-author:bots`.
 
-A rule that mutes a thread acts in Hush only. To stop GitHub from sending a thread, choose **Mute** on the thread: Hush also unsubscribes you on GitHub.
+A category that mutes a thread acts in Hush only. To stop GitHub from sending a thread, choose **Mute** on the thread: Hush also unsubscribes you on GitHub.
 
 ## Sources
 

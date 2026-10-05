@@ -42,6 +42,15 @@ interface ModelResponse {
 	usage?: { input_tokens?: number };
 }
 
+interface WrappedModelResponse {
+	state?: string;
+	result?: ModelResponse;
+}
+
+const unwrapResponse = (
+	res: (ModelResponse & WrappedModelResponse) | null
+): ModelResponse | null => (res?.answers ? res : (res?.result ?? null));
+
 export async function decide(env: DecisionEnv, request: DecisionRequest): Promise<Decided | null> {
 	if (!env.AI) return null;
 	const noAnswer = new AbortController();
@@ -50,11 +59,16 @@ export async function decide(env: DecisionEnv, request: DecisionRequest): Promis
 		DECISION_WAIT_MS
 	);
 	try {
-		const res = (await env.AI.run(env.DECISION_MODEL || DEFAULT_DECISION_MODEL, request, {
-			signal: noAnswer.signal,
-			tags: ['hush-decisions']
-		})) as ModelResponse | null;
-		if (!res?.answers || typeof res.answers !== 'object') return null;
+		const res = unwrapResponse(
+			(await env.AI.run(env.DECISION_MODEL || DEFAULT_DECISION_MODEL, request, {
+				signal: noAnswer.signal,
+				tags: ['hush-decisions']
+			})) as (ModelResponse & WrappedModelResponse) | null
+		);
+		if (!res?.answers || typeof res.answers !== 'object') {
+			console.error('decision without answers', JSON.stringify(res)?.slice(0, 300));
+			return null;
+		}
 		return {
 			answers: res.answers,
 			tokens: res.usage?.input_tokens ?? estimateTokens(request),

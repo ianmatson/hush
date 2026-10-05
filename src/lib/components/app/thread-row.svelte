@@ -34,9 +34,11 @@
 		onrowclick,
 		ontoggle,
 		menu,
-		showList = false
+		showList = false,
+		hidden = []
 	}: {
 		thread: ThreadDTO;
+		hidden?: string[];
 		/** Say which list it is in (a search of every tab). */
 		showList?: boolean;
 		/** The keyboard cursor is on this row. */
@@ -72,7 +74,8 @@
 	);
 	// One fact, one badge: what the summary says, no badge repeats.
 	const said = $derived(saidBy(t.summary));
-	const showWhy = $derived(whyAddsInfo(t.why, t.summary));
+	const show = (part: string) => !hidden.includes(part);
+	const showWhy = $derived(whyAddsInfo(t.why, t.summary) && show('why'));
 	const changes = $derived(newChanges(t.changes ?? [], said, [t.summary, t.why]));
 	const stop = (fn: () => void) => (e: MouseEvent) => {
 		e.stopPropagation();
@@ -123,7 +126,9 @@
 			>
 				{t.summary}
 			</p>
-			<span class="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(t.updatedAt)}</span>
+			{#if show('time')}
+				<span class="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(t.updatedAt)}</span>
+			{/if}
 		</div>
 		<a
 			href={t.htmlUrl}
@@ -150,23 +155,25 @@
 				>
 			{/if}
 			{#if showWhy}<span class="rounded-md bg-muted px-1.5 py-0.5">{t.why}</span>{/if}
-			{#if changes.length}<ChangeChips {changes} />{/if}
-			{#if t.override}
+			{#if changes.length && show('changes')}<ChangeChips {changes} />{/if}
+			{#if t.override && show('override')}
 				<span class="rounded-md border border-dashed px-1.5 py-0.5">You said: doesn’t need me</span>
 			{/if}
-			{#if t.rule}
-				<span class="rounded-md border border-dashed px-1.5 py-0.5">rule: {t.rule}</span>
+			{#if t.rule && show('category')}
+				<span class="rounded-md border border-dashed px-1.5 py-0.5"
+					>{t.rule === 'Muted by you' ? 'You muted it' : `category: ${t.rule}`}</span
+				>
 			{/if}
-			{#if t.resolvedNote}
+			{#if t.resolvedNote && show('resolved')}
 				<span
 					class="flex items-center gap-1 rounded-md bg-signal-merge/10 px-1.5 py-0.5 text-signal-merge"
 					><Check class="size-3" />{t.resolvedNote}</span
 				>
 			{/if}
-			{#if t.draft && !said.has('draft')}
+			{#if t.draft && !said.has('draft') && show('draft')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5">Draft</span>
 			{/if}
-			{#if t.triage === 'snoozed' && t.snoozedUntil && t.snoozedUntil > Date.now()}
+			{#if show('snooze') && t.triage === 'snoozed' && t.snoozedUntil && t.snoozedUntil > Date.now()}
 				{@const ev = SNOOZE_EVENTS.find((e) => e.id === t.snoozeEvent)}
 				{@const at = new Date(t.snoozedUntil).toLocaleString(undefined, {
 					weekday: 'short',

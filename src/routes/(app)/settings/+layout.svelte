@@ -6,13 +6,15 @@
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import Settings2 from '@lucide/svelte/icons/settings-2';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
+	import Tags from '@lucide/svelte/icons/tags';
 
 	let { children } = $props();
 
 	const sections = [
 		{ href: '/settings/general', label: 'General', icon: Settings2 },
 		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
-		{ href: '/settings/dashboards', label: 'PRs & issues', icon: GitPullRequest },
+		{ href: '/settings/dashboards', label: 'Sources', icon: GitPullRequest },
+		{ href: '/settings/categories', label: 'Categories & tags', icon: Tags },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
 		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard }
 	];

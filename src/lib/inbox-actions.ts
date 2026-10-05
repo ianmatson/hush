@@ -179,9 +179,9 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 				);
 			case 'rule':
 				return one
-					? item(id, 'Make a rule…', ListFilter, () =>
+					? item(id, 'Make a category…', ListFilter, () =>
 							goto(
-								`/settings/inbox?rule=${encodeURIComponent(formatQuery({ repo: one.repo, type: [one.subjectType] }))}`
+								`/settings/categories?new=category&rule=${encodeURIComponent(formatQuery({ repo: one.repo, type: [one.subjectType] }))}`
 							)
 						)
 					: null;

@@ -56,11 +56,6 @@
 				effect: 'PRs, comments, and mentions by bots are FYI.'
 			});
 		out.push({
-			id: 'repo',
-			label: `I don’t work on ${t.repo}`,
-			effect: `A rule: everything in ${t.repo} is FYI.`
-		});
-		out.push({
 			id: 'once',
 			label: 'Only this one',
 			effect: `Only this ${t.id.includes('#') || t.review ? 'PR or issue' : 'thread'} goes to ${t.elsewhere}, until it changes.`

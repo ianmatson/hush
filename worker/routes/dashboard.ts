@@ -2,6 +2,7 @@ import type { DashKind, Turn } from '../../src/lib/shared/types';
 import { routes, poller, json, query } from '../app';
 
 const TURNS = new Set<Turn>(['you', 'team', 'them', 'none']);
+const PIN_STATES = new Set(['on', 'off', 'auto']);
 
 /**
  * Save a drop: an optional move to another group (`turn`, or null to undo a move) and the new
@@ -75,6 +76,41 @@ const app = routes()
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
 		return c.json(await poller(c.env, c.get('user').id).mute(ids));
 	})
+	.post(
+		'/api/items/pin',
+		json<{
+			ids: string[];
+			category?: string | null;
+			tag?: string;
+			tagState?: 'on' | 'off' | 'auto';
+		}>(),
+		async (c) => {
+			const body = c.req.valid('json');
+			const ids = Array.isArray(body.ids)
+				? (body.ids as unknown[])
+						.filter((id): id is string => typeof id === 'string' && id.length <= 100)
+						.slice(0, 300)
+				: [];
+			if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
+			const category = body.category;
+			if (category !== undefined && category !== null && typeof category !== 'string')
+				return c.json({ error: 'Invalid category' }, 400);
+			if (body.tag !== undefined && typeof body.tag !== 'string')
+				return c.json({ error: 'Invalid tag' }, 400);
+			if (body.tag !== undefined && !PIN_STATES.has(body.tagState ?? ''))
+				return c.json({ error: 'Invalid tag state' }, 400);
+			return c.json(
+				await poller(c.env, c.get('user').id).pinItems(ids, {
+					category,
+					tag: body.tag,
+					tagState: body.tagState
+				})
+			);
+		}
+	)
+	.post('/api/items/reevaluate', async (c) =>
+		c.json(await poller(c.env, c.get('user').id).reevaluateItems())
+	)
 	.post('/api/dashboard/unhide', json<{ ids: string[] }>(), async (c) => {
 		const u = c.get('user');
 		const body = c.req.valid('json');

@@ -8,13 +8,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import type { MeDTO, Rule } from '$lib/shared/types';
+	import type { ItemCategory, MeDTO } from '$lib/shared/types';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
 	/**
 	 * The first run: what Hush found (the "noise report"), and three one-tap questions. Answered or
 	 * skipped once per account.
 	 */
+	const READ_ONLY_CATEGORY_ID = 'read-only';
 	const me = createQuery(meQuery);
 	const syncing = $derived(!!me.data?.firstSync);
 	// While the first sync runs, the counts grow: ask again every few seconds.
@@ -55,16 +56,20 @@
 	async function finish(save: boolean) {
 		const settings = me.data?.settings;
 		if (save && settings) {
-			const rules: Rule[] = [
-				...quiet.map((repo) => ({
-					name: `${repo} is FYI`,
-					when: `repo:${repo}`,
-					then: { category: 'fyi' as const }
-				})),
-				...settings.rules
+			const readOnly: ItemCategory = {
+				id: READ_ONLY_CATEGORY_ID,
+				name: 'Read only',
+				color: 'gray',
+				rule: quiet.map((repo) => `repo:${repo}`).join(' OR '),
+				description: '',
+				inbox: 'fyi'
+			};
+			const categories = [
+				readOnly,
+				...settings.categories.filter((c) => c.id !== READ_ONLY_CATEGORY_ID)
 			];
 			await saveSettings(
-				{ teamReviewsAreAction: teams, ...(quiet.length ? { rules } : {}) },
+				{ teamReviewsAreAction: teams, ...(quiet.length ? { categories } : {}) },
 				'Saved'
 			);
 		}

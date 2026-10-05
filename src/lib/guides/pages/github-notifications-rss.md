@@ -64,10 +64,19 @@ Make a saved view, then make a feed of it. For example, a view of releases, and 
 
 The feed of a view stops working when you delete the view.
 
+### A feed of open pull requests and issues
+
+Each [category and tag](/docs/categories) can have a feed too, in **Settings → Categories & tags**. It lists the open pull requests and issues in the category, or with the tag, newest update first. For example, a tag for small pull requests:
+
+```json settings
+{ "tags": [{ "id": "quick", "name": "Quick", "color": "green", "rule": "type:pr size:<50" }] }
+```
+
 ## When to use what
 
 - **Releases of projects that you use:** GitHub's `releases.atom`. It needs no account.
 - **Your own notifications, sorted, in a reader:** a Hush feed of Needs you or a saved view.
+- **Open pull requests and issues of one kind, in a reader:** a Hush feed of a category or a tag.
 - **Push to your phone in place of a reader:** see [push notifications for review requests and CI](/guides/github-push-notifications).
 
 ## Sources

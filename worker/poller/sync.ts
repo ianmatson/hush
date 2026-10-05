@@ -1,4 +1,4 @@
-import { classify, ruleTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import { classify, categoryTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { ThreadFacts } from '../../src/lib/shared/types';
@@ -106,7 +106,8 @@ export abstract class PollerSync extends PollerSubjects {
 				htmlUrl: subjectHtmlUrl(n),
 				enrichment,
 				me,
-				myTeams
+				myTeams,
+				pinnedCategory: key ? (this.itemPins([key]).get(key)?.category ?? null) : null
 			};
 			let c = withOverride(classify(facts, settings), ex, n.updated_at);
 			if (ex?.category === 'muted' && ex.rule === MUTED_BY_USER)
@@ -128,7 +129,7 @@ export abstract class PollerSync extends PollerSubjects {
 				}
 			}
 			// New activity: a rule that moves threads acts now (not for a snooze that just woke).
-			const moved = triage === 'inbox' && !wokeBy ? ruleTriage(c, now) : null;
+			const moved = triage === 'inbox' && !wokeBy ? categoryTriage(c, now) : null;
 			if (moved) triage = moved.triage;
 			const keepSnooze = triage === 'snoozed' && !moved;
 

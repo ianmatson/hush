@@ -23,7 +23,39 @@ The list under **Devices** has every device that gets push, with “(this device
 | **FYI items** ([`pushFyi`](/docs/settings#pushfyi))                 | off     | FYI threads too. Usually noisy.                                                                         |
 | [`pushTurnChanges`](/docs/settings#pushturnchanges) (settings.json) | on      | A thread that becomes your turn with no new notification, for example new commits after your review.    |
 
-[Rules](/docs/rules) decide for the threads they match: `"push": true` pushes even FYI threads, and `"push": false` stops the push even for Needs you. This is the best way to hear about one repository or one person.
+Each [category](/docs/categories#inbox-settings) can change this for its threads, in **Settings → Categories & tags → Push**:
+
+- **Use the notification settings** (`"push": "inherit"`, the default): the settings above decide.
+- **Always push** (`"push": "on"`): pushes its threads, also FYI threads.
+- **Never push** (`"push": "off"`): never pushes its threads, also Needs you.
+
+This is the best way to hear about one repository or one person, or to silence one:
+
+```json settings
+{
+	"categories": [
+		{
+			"id": "web",
+			"name": "Web",
+			"color": "blue",
+			"rule": "repo:acme/web",
+			"description": "",
+			"push": "on"
+		},
+		{
+			"id": "bots",
+			"name": "Bots",
+			"color": "gray",
+			"rule": "author:bots",
+			"description": "",
+			"push": "off"
+		},
+		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
+	]
+}
+```
+
+A change to `categories` replaces the whole list, so keep `other`: it is the fallback.
 
 Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 items arrive in one check, they come as one push: “5 things need you”.
 
@@ -37,7 +69,7 @@ Busy PRs change many times a day. These settings, in **Settings → Notification
 - **Push the same item again** ([`pushRepeat`](/docs/settings#pushrepeat)): by default, an item pushes once, and then not again until you open Hush, read it on GitHub, or act on it. **Again when the reason changes** also pushes when, for example, “Review requested” becomes “Changes requested”. **Each update** pushes every time. A snooze that ends always pushes.
 - **Digest** ([`pushDigestMinutes`](/docs/settings#pushdigestminutes)): pushes wait, and one push lists them every 5 to 240 minutes.
 - **Limit** ([`pushLimit`](/docs/settings#pushlimit)): after this many pushes in this many minutes, the rest wait and go as one push.
-- **Push blocking items at once** ([`pushUrgentNow`](/docs/settings#pushurgentnow)): off by default, and it needs [smart decisions](/docs/settings#smartdecisions). A “Needs you” item whose text says it blocks something or is about an incident skips the digest and the limit. Quiet hours still hold it.
+- **Push blocking items at once** ([`pushUrgentNow`](/docs/settings#pushurgentnow)): off by default, and it needs [smart decisions](/docs/settings#smartdecisions) (on by default). A “Needs you” item whose text says it blocks something or is about an incident skips the digest and the limit. Quiet hours still hold it.
 - **Push while Hush is open** ([`pushWhileOpen`](/docs/settings#pushwhileopen)): off by default. While you use Hush on any device, new items show in Hush and do not push. They still go in the [alert history](#alert-history). Hush is in use when its tab or app has focus and you used it in the last 5 minutes.
 - **Clear notifications** ([`clearNotifications`](/docs/settings#clearnotifications)): by default, Hush removes its alerts from a device when you open Hush there. **Each one, when you open its item** removes only the alert of the item that you peek at.
 

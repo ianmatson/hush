@@ -23,7 +23,7 @@
 
 	const SIGN_IN_URL = `${APP_URL}/login`;
 	const DESCRIPTION =
-		'Hush for GitHub is an open-source web app that keeps the clutter out of your GitHub notifications: a short Needs you list sorted by whose turn it is, rules and views that you control, and approve, comment, and merge from the inbox.';
+		'Hush for GitHub is an open-source web app that keeps the clutter out of your GitHub notifications: a short Needs you list sorted by whose turn it is, categories and views that you control, and approve, comment, and merge from the inbox.';
 
 	const CALM = [
 		{
@@ -120,8 +120,8 @@
 					Hush reads the PR or issue behind each notification, and puts it where it belongs: <b
 						>Needs you</b
 					>
-					when you are next to act, <b>FYI</b> when you only want to know, and muted when your rules say
-					so.
+					when you are next to act, <b>FYI</b> when you only want to know, and muted when your categories
+					say so.
 				</p>
 			</div>
 			<NoiseSort />
@@ -158,12 +158,14 @@
 				<div class="intro">
 					<h2 id="config-title">Sorted <em>your way.</em></h2>
 					<p>
-						Write a rule in one line, such as <code>author:dependabot*</code>, and send what it
-						catches to <b>Muted</b>. Save any filter as its own tab. Change every key, menu, and
+						Give a category a one-line rule, such as <code>author:dependabot*</code>, and send what
+						it catches to <b>Muted</b>. Save any filter as its own tab. Change every key, menu, and
 						swipe. All of it lives in one <code>settings.json</code> that you can edit, export, or hand
 						to an agent.
 					</p>
-					<a class="link" href="/docs/rules">How rules work <span aria-hidden="true">→</span></a>
+					<a class="link" href="/docs/categories"
+						>How categories work <span aria-hidden="true">→</span></a
+					>
 				</div>
 				<RuleStage />
 			</div>

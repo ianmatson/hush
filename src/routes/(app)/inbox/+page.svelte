@@ -19,6 +19,7 @@
 	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
 	import { formatQuery, parseQuery, type ParsedQuery } from '$lib/shared/query';
 	import { conditionId, smartConditions } from '$lib/shared/decisions';
+	import { markQueries } from '$lib/shared/categories';
 	import { saveSettings } from '$lib/save-settings';
 	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
@@ -37,6 +38,7 @@
 	import SnoozeItems from '$lib/components/app/snooze-items.svelte';
 	import WhyLine from '$lib/components/app/why-line.svelte';
 	import WelcomeCard from '$lib/components/app/welcome-card.svelte';
+	import JevNotice from '$lib/components/app/jev-notice.svelte';
 	import NotNeededDialog, {
 		type NotNeededTarget
 	} from '$lib/components/app/not-needed-dialog.svelte';
@@ -126,7 +128,10 @@
 	const filter = $derived(parseQuery(query));
 	const checkedConditionIds = $derived(
 		new Set(
-			smartConditions(me.data?.settings.rules ?? [], me.data?.settings.views ?? []).map((c) => c.id)
+			smartConditions(
+				me.data?.settings.views ?? [],
+				me.data ? markQueries(me.data.settings) : []
+			).map((c) => c.id)
 		)
 	);
 	const aboutHint = $derived.by(() => {
@@ -783,7 +788,7 @@
 
 	<!-- A new tab replaces the list at once and fades the new one in. The rows' own transitions are
 	     local, so they play only for changes inside one tab (done, snooze, filter). -->
-	{#if me.data && !me.data.onboarded}<WelcomeCard />{/if}
+	{#if me.data && !me.data.onboarded}<WelcomeCard />{:else}<JevNotice />{/if}
 
 	{#key viewParam}
 		<div in:fade={{ duration: 150 }}>
@@ -846,6 +851,7 @@
 											<ThreadRow
 												thread={t}
 												showList={searching}
+												hidden={me.data?.settings.rows.thread ?? []}
 												selected={t.id === selectedId}
 												checked={sel.has(t.id)}
 												selecting={sel.size > 0}
@@ -948,7 +954,7 @@
 			seenAt={t.seenAt ?? null}
 			notes={[
 				t.why && `GitHub: ${t.why.charAt(0).toLowerCase()}${t.why.slice(1)}`,
-				t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Rule: ${t.rule}`),
+				t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Category: ${t.rule}`),
 				t.override && 'You said it doesn’t need you, until it changes',
 				t.resolvedNote && `Hush moved it: ${t.resolvedNote}`
 			]}

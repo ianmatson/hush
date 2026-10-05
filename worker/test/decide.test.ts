@@ -43,6 +43,21 @@ describe('decide', () => {
 			model: 'jev-1.13.0'
 		});
 	});
+	it('reads answers that come inside a completed result', async () => {
+		const run = vi.fn(async () => ({
+			state: 'Completed',
+			result: {
+				model: 'jev-1.13.0',
+				answers: { reply: { type: 'noul', noul: 0.04 } },
+				usage: { input_tokens: 321 }
+			}
+		}));
+		expect(await decide({ AI: model(run) }, request)).toEqual({
+			answers: { reply: { type: 'noul', noul: 0.04 } },
+			tokens: 321,
+			model: 'jev-1.13.0'
+		});
+	});
 	it('estimates the tokens when Jev does not report them', async () => {
 		const out = await decide(
 			{ AI: model(async () => ({ answers: { reply: { type: 'noul', noul: 0.9 } } })) },

@@ -3,6 +3,7 @@ import {
 	MIGRATIONS,
 	SCHEMA,
 	SCHEMA_VERSION,
+	THREADS,
 	subjectRefOf,
 	toDTO,
 	viewWhere,
@@ -140,11 +141,20 @@ describe('schema migrations', () => {
 		expect(columns([v7, ...steps])).toEqual(columns([SCHEMA]));
 	});
 
-	it('moves schema 10 (with item_pins) to the current schema without a wipe', () => {
-		const v10 = `${SCHEMA}\nCREATE TABLE item_pins (key TEXT PRIMARY KEY, category TEXT, tags_on TEXT NOT NULL DEFAULT '[]', tags_off TEXT NOT NULL DEFAULT '[]');`;
-		expect(MIGRATIONS[10]?.to).toBe(SCHEMA_VERSION);
-		expect(MIGRATIONS[9]?.to).toBe(SCHEMA_VERSION);
-		expect(columns([v10, MIGRATIONS[10].sql])).toEqual(columns([SCHEMA]));
+	const withoutItemPins = SCHEMA.replace(/\nCREATE TABLE IF NOT EXISTS item_pins[^\n]*/, '');
+
+	it.each([
+		[9, withoutItemPins],
+		[10, SCHEMA],
+		[11, withoutItemPins]
+	])('schema %i plus its steps equals a new schema', (from, start) => {
+		const steps: string[] = [];
+		for (let v = from; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
+		expect(columns([start, ...steps])).toEqual(columns([SCHEMA]));
+	});
+
+	it('runs no empty step into the current schema', () => {
+		expect(MIGRATIONS[SCHEMA_VERSION - 1]?.sql.trim()).toBeTruthy();
 	});
 });
 
@@ -158,6 +168,21 @@ describe('queries that run on every poll or watch', () => {
 		);
 	};
 	const readsEveryThread = (details: string[]) => details.some((d) => /^SCAN threads\b/.test(d));
+
+	it('reads threads with their facts, decisions, and pinned category by thread columns', () => {
+		const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+		const db = new DatabaseSync(':memory:');
+		db.exec(SCHEMA);
+		db.exec(`INSERT INTO item_pins (key, category) VALUES ('o/r#1', 'bugs')`);
+		db.exec(`INSERT INTO threads (id, repo, subject_type, subject_key, title, html_url, reason, unread,
+		  gh_updated_at, category, kind, summary, why, action_label, action_url, triage, first_seen_at)
+		  VALUES ('t1', 'o/r', 'Issue', 'o/r#1', 'T', 'u', 'mention', 1, 'x', 'fyi', 'none', '', '', '', '', 'inbox', 0)`);
+		const rows = db.prepare(`${THREADS} WHERE category != 'muted' AND triage = 'inbox'`).all() as {
+			id: string;
+			pin_category: string | null;
+		}[];
+		expect(rows).toEqual([expect.objectContaining({ id: 't1', pin_category: 'bugs' })]);
+	});
 
 	it.each([
 		[

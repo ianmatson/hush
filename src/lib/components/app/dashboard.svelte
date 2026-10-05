@@ -36,6 +36,13 @@
 	import type { DashItem, DashKind, DashResponse, Turn } from '$lib/shared/types';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
+	import type { Classification } from '$lib/shared/types';
+	import { itemQueryFacts } from '$lib/shared/categories';
+	import { exprMatches, parseExpr } from '$lib/shared/query';
+	import { ruleMatches } from '$lib/shared/classify';
+	import type { RowMark } from '$lib/marks';
+	import MarkFilter from './marks/mark-filter.svelte';
+	import { FALLBACK_CATEGORY_ID } from '$lib/shared/categories';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -53,16 +60,16 @@
 	import NotNeededDialog, { type NotNeededTarget } from './not-needed-dialog.svelte';
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
+	import JevNotice from './jev-notice.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
-	import Keyboard from '@lucide/svelte/icons/keyboard';
+	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import Eye from '@lucide/svelte/icons/eye';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import CircleSlash from '@lucide/svelte/icons/circle-slash';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import Link from '@lucide/svelte/icons/link';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
@@ -79,6 +86,8 @@
 	const revalidatingAfterOpen = $derived(dashQ.isFetching && dashQ.dataUpdatedAt < pageOpenedAt);
 	let refreshing = $state(false);
 	let section = $state<string | null>(null);
+	let categoryFilter = $state<string | null>(null);
+	let tagFilter = $state<string | null>(null);
 	let query = $state('');
 	let showHidden = $state(false);
 	let selectedId = $state<string | null>(null);
@@ -117,10 +126,55 @@
 	);
 	const groupLabel = (t: Turn) => ALL_GROUPS.find((g) => g.turn === t)!.label;
 
+	const categories = $derived(me.data?.settings.categories ?? []);
+	const tags = $derived(me.data?.settings.tags ?? []);
+
+	function marksFor(i: DashItem): RowMark[] {
+		const category = categories.find((c) => c.id === i.category && c.id !== FALLBACK_CATEGORY_ID);
+		return [
+			...(category
+				? [
+						{
+							key: `c:${category.id}`,
+							name: category.name,
+							color: category.color,
+							kind: 'category' as const,
+							icon: category.icon
+						}
+					]
+				: []),
+			...tags
+				.filter((t) => i.tags?.includes(t.id))
+				.map((t) => ({ key: `t:${t.id}`, name: t.name, color: t.color, kind: 'tag' as const }))
+		];
+	}
+
+	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
+	const categoryCount = (id: string) => visibleItems.filter((i) => i.category === id).length;
+	const tagCount = (id: string) => visibleItems.filter((i) => i.tags?.includes(id)).length;
+	const hiddenParts = $derived(me.data?.settings.rows[kind] ?? []);
+
 	const sectionNames = $derived(
 		Object.fromEntries((data?.sections ?? []).map((s) => [s.id, s.name]))
 	);
 	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed).length ?? 0);
+
+	const queryExpr = $derived.by(() => {
+		if (!query.includes(':')) return null;
+		const parsed = parseExpr(query);
+		return parsed.errors.length ? null : parsed.expr;
+	});
+	function matchesQuery(i: DashItem, q: string) {
+		const settings = me.data?.settings;
+		if (queryExpr && settings) {
+			const facts = itemQueryFacts(i, me.data!.login, settings);
+			const c = { category: 'fyi', kind: 'none' } as Classification;
+			return exprMatches(queryExpr, (when) => ruleMatches(when, facts, c));
+		}
+		return `${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
+			.toLowerCase()
+			.includes(q);
+	}
 
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
@@ -128,10 +182,9 @@
 			(i) =>
 				i.dismissed === showHidden &&
 				(!section || i.sections.includes(section)) &&
-				(!q ||
-					`${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
-						.toLowerCase()
-						.includes(q))
+				(!categoryFilter || i.category === categoryFilter) &&
+				(!tagFilter || !!i.tags?.includes(tagFilter)) &&
+				(!q || matchesQuery(i, q))
 		);
 	});
 
@@ -500,6 +553,8 @@
 		const k = kind;
 		untrack(() => {
 			section = null;
+			categoryFilter = null;
+			tagFilter = null;
 			selectedId = null;
 			sel.clear();
 			groupMotion = false;
@@ -518,6 +573,8 @@
 			if (!item) return;
 			query = '';
 			section = null;
+			categoryFilter = null;
+			tagFilter = null;
 			showHidden = !!item.dismissed;
 			sel.clear();
 			peekedOutsideKey = null;
@@ -541,6 +598,56 @@
 	function setDismissed(ids: Set<string>, dismissed: boolean) {
 		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
 			old ? { ...old, items: old.items.map((x) => (ids.has(x.id) ? { ...x, dismissed } : x)) } : old
+		);
+	}
+
+	async function pin(
+		ids: string[],
+		change: { category?: string | null; tag?: string; tagState?: 'on' | 'off' },
+		patch: (x: DashItem) => DashItem,
+		message: string
+	) {
+		const set = new Set(ids);
+		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
+		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
+			old ? { ...old, items: old.items.map((x) => (set.has(x.id) ? patch(x) : x)) } : old
+		);
+		sel.clear();
+		try {
+			await api.pinItems(ids, change);
+			toast(message, {
+				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} ${noun}`
+			});
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
+		}
+	}
+
+	function setCategory(ids: string[], category: string | null) {
+		const name = categories.find((c) => c.id === category)?.name;
+		return pin(
+			ids,
+			{ category },
+			(x) => (category ? { ...x, category } : x),
+			name ? `Moved to “${name}”` : 'Hush decides the category again'
+		);
+	}
+
+	function setTag(ids: string[], tag: string, state: 'on' | 'off') {
+		const name = tags.find((t) => t.id === tag)?.name ?? tag;
+		return pin(
+			ids,
+			{ tag, tagState: state },
+			(x) => ({
+				...x,
+				tags:
+					state === 'on'
+						? [...new Set([...(x.tags ?? []), tag])]
+						: (x.tags ?? []).filter((t) => t !== tag)
+			}),
+			state === 'on' ? `Tagged “${name}”` : `Removed “${name}”`
 		);
 	}
 
@@ -797,6 +904,14 @@
 		get menu() {
 			return me.data?.settings.menus.dash;
 		},
+		get categories() {
+			return categories;
+		},
+		get tags() {
+			return tags;
+		},
+		setCategory,
+		setTag,
 		sel,
 		byId,
 		peek: peekThis,
@@ -849,16 +964,13 @@
 			>
 				<RefreshCw class={cn(refreshing && 'animate-spin')} />
 			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				class="hidden sm:inline-flex"
-				aria-label="Keyboard shortcuts"
-				onclick={() => (helpOpen = true)}><Keyboard /></Button
-			>
-			<Button variant="ghost" size="icon-sm" aria-label="Edit sections" href="/settings/dashboards"
-				><SlidersHorizontal /></Button
-			>
+			<MarkFilter
+				kind="category"
+				marks={categories}
+				count={categoryCount}
+				bind:value={categoryFilter}
+			/>
+			<MarkFilter kind="tag" marks={tags} count={tagCount} bind:value={tagFilter} />
 		</div>
 	</div>
 
@@ -866,7 +978,7 @@
 		<div
 			class="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1"
 			role="tablist"
-			aria-label="Sections"
+			aria-label="Sources"
 		>
 			{#each [{ id: null, name: 'All' }, ...data.sections] as s (s.id ?? 'all')}
 				{@const count = sectionCount(s.id)}
@@ -886,6 +998,12 @@
 					<span class="tabular-nums opacity-70">{count}</span>
 				</button>
 			{/each}
+			<a
+				href="/settings/dashboards"
+				class="flex shrink-0 items-center rounded-full px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+				aria-label="Edit sources"
+				title="Edit sources"><Pencil class="size-3.5" /></a
+			>
 		</div>
 	{/if}
 
@@ -899,6 +1017,7 @@
 		{:else}Loading from GitHub…{/if}
 	</p>
 
+	<JevNotice />
 	{#if dashQ.isError}
 		<Alert.Root variant="destructive" class="mb-3"
 			><Alert.Description>{dashQ.error.message}</Alert.Description></Alert.Root
@@ -957,7 +1076,7 @@
 			{:else}
 				<p class="font-medium">No open {noun} involve you.</p>
 				<p class="mt-1 text-sm text-muted-foreground">
-					<a class="underline" href="/settings/dashboards">Edit the sections</a> to track more.
+					<a class="underline" href="/settings/dashboards">Edit the sources</a> to track more.
 				</p>
 			{/if}
 		</div>
@@ -1079,6 +1198,8 @@
 			{#if first}
 				<DashRow
 					item={first}
+					marks={marksFor(first)}
+					hidden={hiddenParts}
 					checked={sel.has(first.id)}
 					{sectionNames}
 					draggable={false}
@@ -1134,6 +1255,8 @@
 	<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
 		<DashRow
 			item={i}
+			marks={marksFor(i)}
+			hidden={hiddenParts}
 			selected={i.id === selectedId && !peekedOutsideMember}
 			checked={sel.has(i.id)}
 			selecting={sel.size > 0}

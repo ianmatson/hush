@@ -48,8 +48,8 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 		{ id: 'copy', label: 'Copy link', group: 'main' },
 		{
 			id: 'rule',
-			label: 'Make a rule…',
-			note: 'Opens the rule editor with this repo and type',
+			label: 'Make a category…',
+			note: 'A new category with this repo and type',
 			group: 'main'
 		},
 		{ id: 'select', label: 'Select / Deselect', group: 'main' },
@@ -76,6 +76,8 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 			group: 'main'
 		},
 		{ id: 'move', label: 'Move to', note: 'Every group', group: 'main' },
+		{ id: 'category', label: 'Category', note: 'Choose one, or let Hush decide', group: 'main' },
+		{ id: 'tags', label: 'Tags', note: 'Add or remove', group: 'main' },
 		{ id: 'undoMove', label: 'Undo move', note: 'Items you moved', group: 'main' },
 		{ id: 'hide', label: 'Hide until it changes / Show again', group: 'main' },
 		{ id: 'mute', label: 'Mute / Unmute', note: 'Hidden until you unmute it', group: 'main' },
@@ -114,6 +116,8 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'github',
 		SEP,
 		'move',
+		'category',
+		'tags',
 		'undoMove',
 		'hide',
 		'mute',
@@ -129,12 +133,14 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
  * Items added after a menu may have been saved. A saved menu older than an item's version gets
  * that item once (after `after`, or at the end); later choices are yours.
  */
-export const MENUS_VERSION = 4;
+export const MENUS_VERSION = 5;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
 	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
 	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
 	{ kind: 'dash', id: 'not-needed', after: 'hide', version: 3 },
-	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 }
+	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 },
+	{ kind: 'dash', id: 'category', after: 'move', version: 5 },
+	{ kind: 'dash', id: 'tags', after: 'category', version: 5 }
 ];
 
 /** Saved menus, upgraded to the current version. */

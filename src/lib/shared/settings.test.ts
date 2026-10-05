@@ -49,9 +49,14 @@ describe('settings file', () => {
 				views: [{ id: 'web', name: 'Web', base: 'inbox', when: { repo: 'acme/web-*' } }]
 			}
 		};
-		expect(settingsFromFile(JSON.stringify(v1))).toEqual({
-			rules: [{ name: 'Docs', when: 'repo:acme/website needs:review', then: { category: 'fyi' } }],
+		const patch = settingsFromFile(JSON.stringify(v1));
+		expect(patch).toMatchObject({
 			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
+		});
+		expect(typeof patch !== 'string' && patch.categories?.[0]).toMatchObject({
+			name: 'Docs',
+			rule: 'repo:acme/website needs:review',
+			inbox: 'fyi'
 		});
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
@@ -61,7 +66,7 @@ describe('settings schema', () => {
 	it('documents every setting', () => {
 		const keys = SETTINGS_DOCS.map((d) => d.key);
 		for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
-			if (k === 'dash' || k === 'menus' || k === 'swipe')
+			if (k === 'dash' || k === 'menus' || k === 'swipe' || k === 'rows')
 				for (const sub of Object.keys(v)) expect(keys).toContain(`${k}.${sub}`);
 			else expect(keys).toContain(k);
 		}
@@ -75,7 +80,7 @@ describe('settings schema', () => {
 
 	it('keeps the rest of a group', () => {
 		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } as never });
-		expect(s.dash.pr).toEqual(DEFAULT_SETTINGS.dash.pr);
+		expect(s.dash.scope).toEqual(DEFAULT_SETTINGS.dash.scope);
 		expect(settingsOverrides(s)).toEqual({ dash: { hideBots: false } });
 	});
 
@@ -91,7 +96,59 @@ describe('settings schema', () => {
 		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
 			/"A"/
 		);
-		expect(check({ rules: [{ when: 'repo:acme/*', then: { category: 'fyi' } }] })).toBeNull();
+		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
+		const other = DEFAULT_SETTINGS.categories.map((c) =>
+			c.id === 'other' ? { ...c, triage: 'snooze' as const, snoozeHours: 0 } : c
+		);
+		expect(check({ categories: other })).toMatch(/snoozeHours/);
+	});
+});
+
+describe('inbox rules from before categories', () => {
+	const rule = (when: string, then: object, more: object = {}) => ({ when, then, ...more });
+
+	it('become categories first, in the same order, with the same names', () => {
+		const s = parseSettings(
+			JSON.stringify({
+				rules: [
+					rule('repo:acme/docs', { category: 'muted' }, { name: 'Docs' }),
+					rule('author:renovate*', { push: false, triage: 'snooze', snoozeHours: 6 }),
+					rule('repo:acme/old', { category: 'fyi' }, { enabled: false })
+				]
+			})
+		);
+		expect(s.categories.slice(0, 2)).toEqual([
+			{
+				id: 'rule-1',
+				name: 'Docs',
+				color: 'gray',
+				rule: 'repo:acme/docs',
+				description: '',
+				inbox: 'muted',
+				push: 'inherit'
+			},
+			{
+				id: 'rule-2',
+				name: 'Rule 2',
+				color: 'gray',
+				rule: 'author:renovate*',
+				description: '',
+				inbox: 'auto',
+				push: 'off',
+				triage: 'snooze',
+				snoozeHours: 6
+			}
+		]);
+		expect(s.categories.slice(2).map((c) => c.id)).toEqual(
+			DEFAULT_SETTINGS.categories.map((c) => c.id)
+		);
+		expect('rules' in s).toBe(false);
+	});
+
+	it('put a rule for every thread on the fallback category', () => {
+		const s = parseSettings(JSON.stringify({ rules: [rule('', { category: 'fyi' })] }));
+		expect(s.categories.find((c) => c.id === 'other')).toMatchObject({ inbox: 'fyi' });
+		expect(s.categories).toHaveLength(DEFAULT_SETTINGS.categories.length);
 	});
 });
 

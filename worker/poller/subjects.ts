@@ -1,7 +1,15 @@
-import { classify, ruleTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import {
+	classify,
+	classifyDefault,
+	categoryTriage,
+	shouldPush,
+	withOverride
+} from '../../src/lib/shared/classify';
+import { FALLBACK_CATEGORY_ID, placeItem, type ItemPins } from '../../src/lib/shared/categories';
+import { TRACKED_SOURCE } from '../../src/lib/shared/sources';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
-import type { DashResponse } from '../../src/lib/shared/types';
+import type { DashItem, DashResponse, ThreadFacts } from '../../src/lib/shared/types';
 import {
 	dashFactsOf,
 	enrichmentOf,
@@ -121,7 +129,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 			if (!cached || !cached.data.items.some((i) => byId.has(i.id))) continue;
 			teamSet ??= new Set((await this.teams()).teams.map((t) => t.slug));
 			const names = Object.fromEntries(cached.data.sections.map((x) => [x.id, x.name]));
-			const items = sortItems(
+			const patched = sortItems(
 				cached.data.items.flatMap((i) => {
 					const sub = byId.get(i.id);
 					if (!sub) return [i];
@@ -140,6 +148,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 					];
 				})
 			);
+			const items = this.placeItems(who, patched, byId);
 			const data: DashResponse = {
 				...cached.data,
 				items,
@@ -151,6 +160,102 @@ export abstract class PollerSubjects extends PollerDecisions {
 			await this.ctx.storage.put(key, { sig: cached.sig, data });
 			this.broadcast({ type: 'dash', kind });
 		}
+	}
+
+	protected storedSubjectFacts(keys: string[]): Map<string, SubjectFacts> {
+		const out = new Map<string, SubjectFacts>();
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const r of this.all<{ key: string; facts: string }>(
+				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
+				...chunk
+			))
+				out.set(r.key, JSON.parse(r.facts) as SubjectFacts);
+		}
+		return out;
+	}
+
+	protected itemPins(keys: string[]): Map<string, ItemPins> {
+		const out = new Map<string, ItemPins>();
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const r of this.all<{
+				key: string;
+				category: string | null;
+				tags_on: string;
+				tags_off: string;
+			}>(
+				`SELECT key, category, tags_on, tags_off FROM item_pins WHERE key IN (${marks(chunk.length)})`,
+				...chunk
+			))
+				out.set(r.key, {
+					category: r.category,
+					tagsOn: JSON.parse(r.tags_on) as string[],
+					tagsOff: JSON.parse(r.tags_off) as string[]
+				});
+		}
+		return out;
+	}
+
+	protected placeItems(
+		who: Who,
+		items: DashItem[],
+		known: Map<string, SubjectFacts> = new Map()
+	): DashItem[] {
+		if (!items.length) return items;
+		const keys = items.map((i) => i.id);
+		const facts = new Map(known);
+		const missing = keys.filter((k) => !facts.has(k));
+		for (const [k, f] of this.storedSubjectFacts(missing)) facts.set(k, f);
+		const decided = this.decisionsOf(who, [...facts.values()]);
+		const pins = this.itemPins(keys);
+		const sourceNames = new Map(
+			[...who.settings.sources, TRACKED_SOURCE].map((x) => [x.id, x.name])
+		);
+		return items.map((i) => {
+			const s = facts.get(i.id);
+			if (!s) return { ...i, category: FALLBACK_CATEGORY_ID, tags: [] };
+			const d = decided.get(i.id);
+			const t: ThreadFacts = {
+				repo: s.repo,
+				subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
+				title: s.title,
+				reason: '',
+				htmlUrl: s.url,
+				enrichment: enrichmentOf(s, who.me, d),
+				me: who.me,
+				myTeams: who.inboxTeams,
+				sources: i.sections.map((id) => sourceNames.get(id) ?? id)
+			};
+			const placed = placeItem(
+				t,
+				classifyDefault(t, who.settings),
+				d?.category ?? null,
+				pins.get(i.id),
+				who.settings
+			);
+			return { ...i, category: placed.category, tags: placed.tags };
+		});
+	}
+
+	protected async rePlaceCachedItems(who: Who): Promise<void> {
+		for (const kind of ['pr', 'issue'] as const) {
+			const key = `dash:${kind}`;
+			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
+			if (!cached) continue;
+			const items = this.placeItems(who, cached.data.items);
+			await this.ctx.storage.put(key, { sig: cached.sig, data: { ...cached.data, items } });
+			this.broadcast({ type: 'dash', kind });
+		}
+	}
+
+	protected async cachedItemKeys(): Promise<string[]> {
+		const keys = new Set<string>();
+		for (const kind of ['pr', 'issue'] as const) {
+			const cached = await this.ctx.storage.get<{ data: DashResponse }>(`dash:${kind}`);
+			for (const i of cached?.data.items ?? []) keys.add(i.id);
+		}
+		return [...keys];
 	}
 
 	/**
@@ -168,6 +273,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const candidates: PushCandidate[] = [];
 		const resolved: Resolved[] = [];
 		const now = Date.now();
+		const pins = this.itemPins([...new Set(items.map((i) => i.row.subject_key!))]);
 		for (const { row: r, fresh, before } of items) {
 			const e = enrichmentOf(fresh, me, decided.get(r.subject_key!));
 			const c = withOverride(
@@ -180,7 +286,8 @@ export abstract class PollerSubjects extends PollerDecisions {
 						htmlUrl: r.html_url,
 						enrichment: e,
 						me,
-						myTeams
+						myTeams,
+						pinnedCategory: pins.get(r.subject_key!)?.category ?? null
 					},
 					settings
 				),
@@ -204,7 +311,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 			// A rule that moves threads acts when it starts to match (and not again after you moved
 			// the thread back yourself: then the rule already matched).
 			const moved =
-				out.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? ruleTriage(c, now) : null;
+				out.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? categoryTriage(c, now) : null;
 			const triage = moved?.triage ?? out.triage;
 			const resolvedAt = moved ? null : out.resolvedAt;
 			const note =

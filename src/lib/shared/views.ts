@@ -1,5 +1,5 @@
 import { ruleMatches } from './classify';
-import { compileQuery, queryError } from './query';
+import { compileExpr, exprMatches, queryError, usesItemMarks, type QueryExpr } from './query';
 import type { Classification, RuleMatch, SavedView, ThreadDTO, ViewBase } from './types';
 
 export const VIEW_BASES: { id: ViewBase; label: string }[] = [
@@ -17,37 +17,55 @@ export const FEED_TABS: { id: string; label: string }[] = [
 	{ id: 'fyi', label: 'FYI' },
 	{ id: 'inbox', label: 'Needs you + FYI' }
 ];
+export type MarkFeedSubject = 'category' | 'tag';
+const MARK_FEED_PREFIX: Record<MarkFeedSubject, string> = { category: 'c', tag: 't' };
+const MARK_FEED_VIEW = /^([ct]):([a-z0-9-]{1,40})$/;
+
+export const markFeedView = (subject: MarkFeedSubject, id: string) =>
+	`${MARK_FEED_PREFIX[subject]}:${id}`;
+
+export function parseMarkFeed(view: string): { subject: MarkFeedSubject; id: string } | null {
+	const m = MARK_FEED_VIEW.exec(view);
+	if (!m) return null;
+	return { subject: m[1] === 'c' ? 'category' : 'tag', id: m[2] };
+}
+
 export const feedViewOk = (view: string) =>
-	FEED_TABS.some((t) => t.id === view) || /^v:[a-z0-9]{1,16}$/.test(view);
+	FEED_TABS.some((t) => t.id === view) ||
+	/^v:[a-z0-9]{1,16}$/.test(view) ||
+	parseMarkFeed(view) !== null;
 
 /**
  * Does a thread match a query (a saved view, or the Filter box)? The words mean the same as in
  * rules; "in:" is the thread's list now (the view's base already picks it).
  */
 export function threadMatches(query: string | RuleMatch, t: ThreadDTO, me: string): boolean {
-	const when = typeof query === 'string' ? compileQuery(query) : query;
+	const expr: QueryExpr =
+		typeof query === 'string' ? compileExpr(query) : { kind: 'match', when: query };
 	const c = { category: t.category, kind: t.kind } as Classification;
-	return ruleMatches(
-		when,
-		{
-			repo: t.repo,
-			subjectType: t.subjectType,
-			title: t.title,
-			reason: t.reason,
-			htmlUrl: t.htmlUrl,
-			me,
-			activity: t.activity,
-			enrichment: {
-				kind: 'other',
-				author: t.author ?? undefined,
-				authorIsBot: t.authorIsBot,
-				labels: t.labels,
-				draft: t.draft,
-				state: t.state ?? undefined,
-				smart: t.smart
-			}
-		},
-		c
+	return exprMatches(expr, (when) =>
+		ruleMatches(
+			when,
+			{
+				repo: t.repo,
+				subjectType: t.subjectType,
+				title: t.title,
+				reason: t.reason,
+				htmlUrl: t.htmlUrl,
+				me,
+				activity: t.activity,
+				enrichment: {
+					kind: 'other',
+					author: t.author ?? undefined,
+					authorIsBot: t.authorIsBot,
+					labels: t.labels,
+					draft: t.draft,
+					state: t.state ?? undefined,
+					smart: t.smart
+				}
+			},
+			c
+		)
 	);
 }
 
@@ -66,6 +84,7 @@ export function validateViews(views: unknown) {
 		if (!VIEW_BASES.some((b) => b.id === v.base)) return `"${v.name}": unknown base.`;
 		const err = queryError(v.query);
 		if (err) return `"${v.name}": ${typeof v.query === 'string' ? err : `"query" ${err}`}`;
+		if (usesItemMarks(v.query)) return `"${v.name}": views cannot use category: or tag:.`;
 	}
 	return null;
 }

@@ -24,7 +24,7 @@ description: Graphite's pull request inbox next to Hush for GitHub notifications
 | Code review              | Full diff, comments, approve, merge, stacks, merge queue (Team plan and up), AI review                               | Approve, comment, merge, close, re-run CI; no diff                    |
 | Alerts                   | In-app; Slack (Starter plan and up)                                                                                  | Web Push with quiet hours and digests; Atom feeds                     |
 | GitHub Enterprise Server | Enterprise plan only                                                                                                 | No                                                                    |
-| Team features            | Insights, automations, shared inbox sections, ACLs, SAML (by plan)                                                   | Team review requests and `@team` sections only                        |
+| Team features            | Insights, automations, shared inbox sections, ACLs, SAML (by plan)                                                   | Team review requests and `@team` sources only                         |
 
 ## What each one is for
 

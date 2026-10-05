@@ -35,7 +35,7 @@ export const NAV: { group: string; pages: string[] }[] = [
 	},
 	{
 		group: 'Make it yours',
-		pages: ['rules', 'views', 'query-language', 'keybinds', 'appearance-and-menus']
+		pages: ['categories', 'views', 'query-language', 'keybinds', 'appearance-and-menus']
 	},
 	{ group: 'Reference', pages: ['settings', 'limits', 'agents', 'troubleshooting'] }
 ];

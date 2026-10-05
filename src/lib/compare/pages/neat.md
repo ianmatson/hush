@@ -8,7 +8,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, for free, wit
 **Neat is a free macOS menu bar app for GitHub and Linear notifications, with keyboard navigation, filters for projects, users, and events, and all data stored on your Mac. Hush is a web app that decides whose turn it is on each GitHub thread, keeps a "Needs you" list, and pushes it to desktop and phone browsers.**
 
 - Choose Neat if you work on a Mac and want notifications in the menu bar, with nothing stored on a server.
-- Choose Hush if you use other systems or a phone, or want pull request dashboards, rules, and actions in one place.
+- Choose Hush if you use other systems or a phone, or want pull request dashboards, categories, and actions in one place.
 
 ## At a glance
 
@@ -19,7 +19,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, for free, wit
 | Open source                         | No                                                              | Yes                                                                 |
 | Where your data is                  | On your Mac ("100% locally stored")                             | On Hush's servers; token encrypted                                  |
 | Sources                             | GitHub and Linear                                               | GitHub                                                              |
-| Sorting                             | Filters for projects, users, and events; pin to set priority    | Needs you, FYI, Muted, by whose turn it is; rules                   |
+| Sorting                             | Filters for projects, users, and events; pin to set priority    | Needs you, FYI, Muted, by whose turn it is; categories              |
 | Actions                             | Preview without marking read, mark done, pin, mute, mark unread | Done, snooze, mute, read; approve, comment, merge, close, re-run CI |
 | Alerts                              | Desktop and menu bar                                            | Web Push on desktop and phone, quiet hours, digests                 |
 | Windows, Linux, phone               | Not documented                                                  | Yes, in a browser                                                   |
@@ -30,7 +30,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, for free, wit
 
 **Neat** shows your GitHub notifications in a menu bar window. It says it pings you "only when an issue needs your attention", and lets you choose which projects, users, and events get through, for example to stop a noisy bot. You can pin a notification to set its priority. Neat does not document how it decides what needs your attention.
 
-**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, comments) and decides if you are the next person who must act. [What needs you](/docs/inbox#what-needs-you) lists the cases. [Rules](/docs/rules) change where threads go, and Hush moves a thread to Done by itself when it stops needing you.
+**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, comments) and decides if you are the next person who must act. [What needs you](/docs/inbox#what-needs-you) lists the cases. [Categories](/docs/categories) change where threads go, and Hush moves a thread to Done by itself when it stops needing you.
 
 ## Pull requests
 
@@ -72,7 +72,7 @@ Neat released seven versions from 18 to 20 August 2026 (v0.0.58 to v0.0.64). The
 ## Choose Hush if…
 
 - You use Windows, Linux, or a phone, or more than one computer.
-- You want to know exactly why a thread needs you, and change that with rules.
+- You want to know exactly why a thread needs you, and change that with categories.
 - You want to act on pull requests from the same list.
 
 ## Sources
@@ -82,6 +82,6 @@ Neat released seven versions from 18 to 20 August 2026 (v0.0.58 to v0.0.64). The
 - [Neat on GitHub Marketplace](https://github.com/marketplace/notifications-by-neat): price, "macOS only"
 - [Neat privacy policy](https://neat.run/privacy)
 - [Neat releases](https://github.com/neat-run/activity-feed-public/releases): v0.0.64, 20 August 2026
-- Hush: [inbox](/docs/inbox), [rules](/docs/rules), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
+- Hush: [inbox](/docs/inbox), [categories and tags](/docs/categories), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

@@ -4,7 +4,7 @@
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import { newChanges, saidBy } from '$lib/shared/badges';
-	import { BUILT_IN_SECTIONS } from '$lib/shared/dashboard';
+	import { DEFAULT_SOURCE_IDS } from '$lib/shared/sources';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -29,6 +29,9 @@
 	import SelectMark from './select-mark.svelte';
 	import AppMenu from './app-menu.svelte';
 	import type { MenuEntry } from '$lib/menu';
+	import MarkIcon from './marks/mark-icon.svelte';
+	import { MAX_ROW_LABELS } from '$lib/shared/row-parts';
+	import type { RowMark } from '$lib/marks';
 
 	let {
 		item: i,
@@ -38,6 +41,8 @@
 		draggable = true,
 		showSections = false,
 		sectionNames,
+		marks = [],
+		hidden = [],
 		onopen,
 		onhide,
 		onmute,
@@ -58,6 +63,8 @@
 		draggable?: boolean;
 		showSections?: boolean;
 		sectionNames: Record<string, string>;
+		marks?: RowMark[];
+		hidden?: string[];
 		onopen: (i: DashItem, url: string) => void;
 		onhide: (i: DashItem) => void;
 		/** Mute (hidden until unmuted, and its threads muted), or unmute. */
@@ -110,6 +117,10 @@
 
 	// One fact, one badge: what the reason says, no badge repeats.
 	const said = $derived(saidBy(i.turnReason));
+	const show = (part: string) => !hidden.includes(part);
+	const shownMarks = $derived(
+		marks.filter((m) => show(m.kind === 'category' ? 'category' : 'tags'))
+	);
 	/** CI changed since you last looked: a dot on the CI badge (or on the reason, if it is about CI). */
 	const ciNew = $derived(!!i.changes?.some((c) => c.kind === 'ci'));
 	const changes = $derived(
@@ -122,7 +133,7 @@
 	/** Your own searches say something the reason does not; the built-in ones only repeat it. */
 	const sections = $derived(
 		showSections
-			? i.sections.filter((s) => !BUILT_IN_SECTIONS.has(s) && sectionNames[s] !== i.turnReason)
+			? i.sections.filter((s) => !DEFAULT_SOURCE_IDS.has(s) && sectionNames[s] !== i.turnReason)
 			: []
 	);
 
@@ -192,20 +203,22 @@
 				class="line-clamp-2 text-sm font-medium sm:truncate"
 				onclick={(e) => e.preventDefault()}>{i.title}</a
 			>
-			{#if i.stale}
+			{#if show('time') && i.stale}
 				<span class="shrink-0 text-xs font-medium text-signal-warn tabular-nums"
 					>waiting {since(i.waitingSince)}</span
 				>
-			{:else}
+			{:else if show('time')}
 				<span class="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(i.updatedAt)}</span>
 			{/if}
 		</div>
 
 		<div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.8rem] text-muted-foreground">
 			<span class="truncate font-mono text-[0.75rem]">{i.repo}#{i.number}</span>
-			<span class="opacity-50">·</span>
-			<span class="max-w-[45%] shrink-0 truncate">@{i.author}</span>
-			{#if i.kind === 'pr'}
+			{#if show('author')}
+				<span class="opacity-50">·</span>
+				<span class="max-w-[45%] shrink-0 truncate">@{i.author}</span>
+			{/if}
+			{#if i.kind === 'pr' && show('size')}
 				<span class="hidden opacity-50 sm:inline">·</span>
 				<Tooltip.Root>
 					<Tooltip.Trigger class="hidden shrink-0 font-mono text-[0.72rem] sm:inline">
@@ -215,10 +228,28 @@
 					<Tooltip.Content>Size {size}</Tooltip.Content>
 				</Tooltip.Root>
 			{/if}
-			{#if i.comments}
+			{#if i.comments && show('comments')}
 				<span class="flex shrink-0 items-center gap-0.5"
 					><MessageSquare class="size-3" />{i.comments}</span
 				>
+			{/if}
+			{#if shownMarks.length}
+				<span class="opacity-50">·</span>
+				<span class="flex shrink-0 items-center gap-1" aria-label="Category and tags">
+					{#each shownMarks as m (m.key)}
+						<Tooltip.Root>
+							<Tooltip.Trigger
+								class="flex size-4 items-center justify-center"
+								aria-label={m.kind === 'category' ? `Category: ${m.name}` : `Tag: ${m.name}`}
+							>
+								<MarkIcon kind={m.kind} color={m.color} icon={m.icon} class="size-3.5" />
+							</Tooltip.Trigger>
+							<Tooltip.Content
+								>{m.kind === 'category' ? 'Category' : 'Tag'}: {m.name}</Tooltip.Content
+							>
+						</Tooltip.Root>
+					{/each}
+				</span>
 			{/if}
 		</div>
 
@@ -228,7 +259,7 @@
 				title={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
 				>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
 			>
-			{#if stack}
+			{#if stack && show('stack')}
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						{#snippet child({ props })}
@@ -247,7 +278,7 @@
 					>
 				</Tooltip.Root>
 			{/if}
-			{#if i.movedByYou}
+			{#if i.movedByYou && show('moved')}
 				<span
 					class="flex items-center gap-0.5 rounded-md border border-dashed py-0.5 pr-0.5 pl-1.5 text-muted-foreground"
 				>
@@ -262,8 +293,8 @@
 					>
 				</span>
 			{/if}
-			{#if changes.length}<ChangeChips {changes} />{/if}
-			{#if ci && !said.has('ci')}
+			{#if changes.length && show('changes')}<ChangeChips {changes} />{/if}
+			{#if ci && !said.has('ci') && show('ci')}
 				<span
 					class={cn('relative flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}
 					title={ciNew ? 'Changed since you last looked' : undefined}
@@ -272,22 +303,22 @@
 					{#if ciNew}{@render newDot()}{/if}
 				</span>
 			{/if}
-			{#if review && !said.has('review')}
+			{#if review && !said.has('review') && show('review')}
 				<span class={cn('rounded-md bg-muted px-1.5 py-0.5', review.tone)}>{review.label}</span>
 			{/if}
-			{#if i.openThreads && !said.has('threads')}
+			{#if i.openThreads && !said.has('threads') && show('threads')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-signal-reply"
 					>{i.openThreads} open {i.openThreads === 1 ? 'thread' : 'threads'}</span
 				>
 			{/if}
-			{#if i.mergeable === 'CONFLICTING' && !said.has('conflicts')}
+			{#if i.mergeable === 'CONFLICTING' && !said.has('conflicts') && show('conflicts')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-signal-warn">Conflicts</span>
 			{/if}
-			{#if i.draft && !said.has('draft')}
+			{#if i.draft && !said.has('draft') && show('draft')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">Draft</span>
 			{/if}
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
-			{#each i.labels.slice(0, 3) as l (l.name)}
+			{#each show('labels') ? i.labels.slice(0, MAX_ROW_LABELS) : [] as l (l.name)}
 				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}
 				<span
 					class={cn(
@@ -298,7 +329,7 @@
 					title={added ? 'Added since you last looked' : undefined}>{l.name}</span
 				>
 			{/each}
-			{#each sections as s (s)}
+			{#each show('sources') ? sections : [] as s (s)}
 				<span
 					class="hidden rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground sm:inline"
 					>{sectionNames[s] ?? s}</span

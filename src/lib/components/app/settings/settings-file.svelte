@@ -32,7 +32,9 @@
 		if (typeof patch === 'string') return toast.error(patch);
 		const n = (list: unknown[] | undefined, one: string) =>
 			list ? `${list.length} ${one}${list.length === 1 ? '' : 's'}` : null;
-		const what = [n(patch.rules, 'rule'), n(patch.views, 'view')].filter(Boolean).join(', ');
+		const what = [n(patch.categories, 'category'), n(patch.views, 'view')]
+			.filter(Boolean)
+			.join(', ');
 		if (
 			!confirm(
 				`Replace your settings with the ones in “${file.name}”?${what ? ` It has ${what}.` : ''} Settings that are not in the file go back to their defaults. Export first to keep a copy.`
