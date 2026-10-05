@@ -17,7 +17,7 @@
 	import { Selection } from '$lib/selection.svelte';
 	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
 	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
-	import { formatQuery, parseQuery, type ParsedQuery } from '$lib/shared/query';
+	import { leavesOf, parseExpr } from '$lib/shared/query';
 	import { conditionId, smartConditions } from '$lib/shared/decisions';
 	import { markQueries } from '$lib/shared/categories';
 	import { saveSettings } from '$lib/save-settings';
@@ -39,6 +39,8 @@
 	import WhyLine from '$lib/components/app/why-line.svelte';
 	import WelcomeCard from '$lib/components/app/welcome-card.svelte';
 	import JevNotice from '$lib/components/app/jev-notice.svelte';
+	import FilterBuilder from '$lib/components/app/rules/filter-builder.svelte';
+	import { previewThreads, ruleSuggestions } from '$lib/rule-preview';
 	import NotNeededDialog, {
 		type NotNeededTarget
 	} from '$lib/components/app/not-needed-dialog.svelte';
@@ -125,7 +127,8 @@
 
 	let syncing = $state(false);
 	// The Filter box speaks the query language (shared/query.ts); parts with errors are left out.
-	const filter = $derived(parseQuery(query));
+	const filter = $derived(parseExpr(query));
+	const ITEM_MARK_WORDS = ['category', 'tag'];
 	const checkedConditionIds = $derived(
 		new Set(
 			smartConditions(
@@ -135,7 +138,7 @@
 		)
 	);
 	const aboutHint = $derived.by(() => {
-		const about = filter.when.about ?? [];
+		const about = leavesOf(filter.expr).flatMap((w) => w.about ?? []);
 		if (!about.length) return '';
 		if (!me.data?.settings.smartDecisions)
 			return 'about: needs smart decisions (Settings → Inbox).';
@@ -156,7 +159,7 @@
 			(t) =>
 				!pending.has(t.id) &&
 				(searching || !saved || threadMatches(saved.query, t, login)) &&
-				threadMatches(filter.when, t, login)
+				threadMatches(query, t, login)
 		);
 	});
 	const order = $derived(visible.map((t) => t.id));
@@ -603,16 +606,16 @@
 		query: ''
 	});
 	/** Open the editor: a view to edit, or a new one (from the current tab and filter text). */
-	function editView(v: SavedView | null, from?: ParsedQuery) {
+	function editView(v: SavedView | null, fromFilter = false) {
 		viewEditing = v
 			? structuredClone($state.snapshot(v))
 			: {
-					name: from ? query.trim().slice(0, 40) : '',
+					name: fromFilter ? query.trim().slice(0, 40) : '',
 					base:
 						view === 'action' || view === 'fyi' || view === 'snoozed' || view === 'done'
 							? view
 							: 'inbox',
-					query: from ? formatQuery(from.when) : ''
+					query: fromFilter ? query.trim() : ''
 				};
 		viewEditorOpen = true;
 	}
@@ -639,20 +642,6 @@
 			goto('/inbox?view=action');
 		}
 	}
-	// Suggestions for the view's repository and author conditions.
-	const viewSuggest = $derived.by(() => {
-		const all = Object.values(baseThreads)
-			.flatMap((l) => l ?? [])
-			.concat(threadsQ.data?.threads ?? []);
-		const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort();
-		const repos = uniq(all.map((t) => t.repo));
-		return {
-			repo: [...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos],
-			author: uniq(all.map((t) => t.author)),
-			label: uniq(all.flatMap((t) => t.labels))
-		};
-	});
-
 	const count = (v: View) => (v === 'action' || v === 'fyi' || v === 'snoozed' ? counts[v] : null);
 </script>
 
@@ -698,8 +687,16 @@
 				bind:ref={searchEl}
 				bind:value={query}
 				placeholder="Filter: words, or repo:, needs:, from:…"
-				class="h-8 pl-8"
+				class="h-8 pr-8 pl-8"
 				aria-label="Filter threads"
+			/>
+			<FilterBuilder
+				bind:value={query}
+				id="inbox-filter"
+				exclude={ITEM_MARK_WORDS}
+				suggestions={ruleSuggestions(me.data?.settings)}
+				preview={(q) =>
+					me.data && threadsQ.data ? previewThreads(q, me.data.login, threadsQ.data.threads) : null}
 			/>
 			<QuerySuggest input={searchEl} value={query} onpick={(next) => (query = next)} />
 			<!-- A filter error: under the box, over the list. -->
@@ -726,7 +723,7 @@
 					<Tooltip.Trigger
 						class="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 						aria-label="Save this filter as a view"
-						onclick={() => editView(null, filter)}
+						onclick={() => editView(null, true)}
 					>
 						<BookmarkPlus class="size-3.5" />
 					</Tooltip.Trigger>
@@ -1048,7 +1045,6 @@
 	initial={viewEditing}
 	threads={{ ...baseThreads, [view]: threadsQ.data?.threads }}
 	me={me.data?.login ?? ''}
-	suggest={viewSuggest}
 	onsave={saveView}
 	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
 />

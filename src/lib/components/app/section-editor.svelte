@@ -10,6 +10,12 @@
 	import Trash from '@lucide/svelte/icons/trash';
 	import Plus from '@lucide/svelte/icons/plus';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { tick } from 'svelte';
+	import { cn } from '$lib/utils';
+	import SearchBuilder from './rules/search-builder.svelte';
 
 	let {
 		sections = $bindable(),
@@ -21,6 +27,9 @@
 		previewTeam: string | null;
 	} = $props();
 
+	let openSource = $state<string | null>(null);
+	const DRAWER = { duration: 180, easing: cubicOut };
+
 	function move(i: number, d: number) {
 		const next = [...sections];
 		[next[i], next[i + d]] = [next[i + d], next[i]];
@@ -29,7 +38,11 @@
 
 	function add() {
 		const id = `custom-${Math.random().toString(36).slice(2, 8)}`;
-		sections = [...sections, { id, name: 'New source', query: 'is:open ', enabled: true }];
+		sections = [...sections, { id, name: 'New source', query: 'is:open', enabled: true }];
+		openSource = id;
+		void tick().then(() =>
+			document.querySelector<HTMLInputElement>(`[data-source="${id}"]`)?.focus()
+		);
 	}
 
 	/** Open the same search on GitHub, to check a query. */
@@ -41,21 +54,27 @@
 	}
 </script>
 
-<ul class="grid gap-2">
+<ul class="grid gap-1.5">
 	{#each sections as s, i (s.id)}
-		<!-- Phones: toggle, name, and buttons on one line; the query on its own line below. -->
-		<li
-			class="flex flex-wrap items-center gap-2 rounded-lg border p-2.5 sm:grid sm:grid-cols-[auto_12rem_1fr_auto]"
-		>
-			<Switch bind:checked={s.enabled} aria-label="Show {s.name}" />
-			<Input bind:value={s.name} aria-label="Source name" class="h-8 min-w-0 flex-1 sm:flex-none" />
-			<Input
-				bind:value={s.query}
-				aria-label="GitHub search query"
-				class="order-last h-8 w-full font-mono text-xs sm:order-none sm:w-auto"
-				spellcheck={false}
-			/>
-			<div class="flex shrink-0 items-center justify-end gap-0.5">
+		{@const expanded = openSource === s.id}
+		<li class={cn('rounded-lg border', expanded && 'bg-muted/30')}>
+			<div class="flex items-center gap-1.5 p-1.5">
+				<Switch bind:checked={s.enabled} aria-label="Show {s.name}" class="mx-1" />
+				<button
+					type="button"
+					class="min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-left hover:bg-muted/60"
+					aria-expanded={expanded}
+					aria-controls="source-{s.id}-details"
+					onclick={() => (openSource = expanded ? null : s.id)}
+				>
+					<span
+						class={cn('block truncate text-sm font-medium', !s.enabled && 'text-muted-foreground')}
+						>{s.name || 'Untitled'}</span
+					>
+					<span class="block truncate font-mono text-[0.7rem] text-muted-foreground"
+						>{s.query || 'No search yet'}</span
+					>
+				</button>
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						{#snippet child({ props })}
@@ -89,10 +108,35 @@
 				<Button
 					variant="ghost"
 					size="icon-xs"
-					aria-label="Delete source"
-					onclick={() => (sections = sections.filter((x) => x.id !== s.id))}><Trash /></Button
+					aria-label={expanded ? `Close ${s.name}` : `Edit ${s.name}`}
+					onclick={() => (openSource = expanded ? null : s.id)}
+					><ChevronDown class={cn('transition-transform', expanded && 'rotate-180')} /></Button
 				>
 			</div>
+			{#if expanded}
+				<div
+					id="source-{s.id}-details"
+					class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t p-2.5"
+					transition:slide={DRAWER}
+				>
+					<div class="flex items-center gap-2">
+						<Input
+							bind:value={s.name}
+							aria-label="Source name"
+							data-source={s.id}
+							class="h-8 min-w-0 flex-1"
+						/>
+						<Button
+							variant="ghost"
+							size="sm"
+							class="text-destructive"
+							onclick={() => (sections = sections.filter((x) => x.id !== s.id))}
+							><Trash /> Delete</Button
+						>
+					</div>
+					<SearchBuilder bind:value={s.query} id="source-{s.id}-query" />
+				</div>
+			{/if}
 		</li>
 	{/each}
 </ul>

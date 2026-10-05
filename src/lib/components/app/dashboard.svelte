@@ -42,6 +42,9 @@
 	import { ruleMatches } from '$lib/shared/classify';
 	import type { RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
+	import FilterBuilder from './rules/filter-builder.svelte';
+	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
+	import PillRow, { type Pill } from './pill-row.svelte';
 	import { FALLBACK_CATEGORY_ID } from '$lib/shared/categories';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -75,6 +78,7 @@
 	import Undo from '@lucide/svelte/icons/undo-2';
 
 	let { kind }: { kind: DashKind } = $props();
+	const THREAD_ONLY_WORDS = ['event', 'needs', 'in'];
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
@@ -590,6 +594,13 @@
 		localStorage.setItem(`hush:collapsed:${kind}`, JSON.stringify(collapsed));
 	});
 
+	const sourcePills = $derived<Pill[]>(
+		[{ id: null, name: 'All' }, ...(data?.sections ?? [])].map((s) => {
+			const count = sectionCount(s.id);
+			return { id: s.id, label: s.name, count, dim: !count };
+		})
+	);
+
 	function sectionCount(id: string | null) {
 		return (data?.items ?? []).filter((i) => !i.dismissed && (!id || i.sections.includes(id)))
 			.length;
@@ -941,8 +952,16 @@
 				bind:ref={searchEl}
 				bind:value={query}
 				placeholder="Filter {noun}"
-				class="h-8 pl-8"
+				class="h-8 pr-8 pl-8"
 				aria-label="Filter {noun}"
+			/>
+			<FilterBuilder
+				bind:value={query}
+				id="dash-filter-{kind}"
+				exclude={THREAD_ONLY_WORDS}
+				suggestions={ruleSuggestions(me.data?.settings)}
+				preview={(q) =>
+					me.data && data ? previewItems(q, me.data.login, me.data.settings, data.items) : null}
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">
@@ -975,35 +994,14 @@
 	</div>
 
 	{#if data}
-		<div
-			class="-mx-1 mt-3 flex gap-1 overflow-x-auto px-1 pb-1"
-			role="tablist"
-			aria-label="Sources"
-		>
-			{#each [{ id: null, name: 'All' }, ...data.sections] as s (s.id ?? 'all')}
-				{@const count = sectionCount(s.id)}
-				<button
-					role="tab"
-					aria-selected={section === s.id}
-					class={cn(
-						'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-						section === s.id
-							? 'border-foreground/20 bg-foreground text-background'
-							: 'text-muted-foreground hover:bg-muted hover:text-foreground',
-						!count && section !== s.id && 'opacity-50'
-					)}
-					onclick={() => (section = section === s.id ? null : s.id)}
-				>
-					{s.name}
-					<span class="tabular-nums opacity-70">{count}</span>
-				</button>
-			{/each}
-			<a
-				href="/settings/dashboards"
-				class="flex shrink-0 items-center rounded-full px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-				aria-label="Edit sources"
-				title="Edit sources"><Pencil class="size-3.5" /></a
-			>
+		<div class="mt-3">
+			<PillRow
+				pills={sourcePills}
+				bind:value={section}
+				label="Sources"
+				toggle
+				action={{ label: 'Edit sources', href: '/settings/dashboards', icon: Pencil }}
+			/>
 		</div>
 	{/if}
 

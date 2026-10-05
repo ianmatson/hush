@@ -35,7 +35,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Select from '$lib/components/ui/select';
-	import QueryInput from '$lib/components/app/query-input.svelte';
+	import RuleBuilder from '$lib/components/app/rules/rule-builder.svelte';
+	import { previewBoth, previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -48,6 +49,9 @@
 
 	const me = createQuery(meQuery);
 	const feeds = createQuery(feedsQuery);
+	const MARK_WORDS = ['category', 'tag'];
+	const THREAD_ONLY_WORDS = ['event', 'needs', 'in'];
+	const suggestions = $derived(ruleSuggestions(me.data?.settings));
 
 	interface Draft {
 		categories: ItemCategory[];
@@ -383,7 +387,7 @@
 							{#if expanded}
 								<div
 									id="category-{c.id}-details"
-									class="grid gap-2 border-t p-2.5"
+									class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t p-2.5"
 									transition:slide={DRAWER}
 								>
 									<div class="flex items-center gap-2">
@@ -412,11 +416,14 @@
 											deleted.
 										</p>
 									{:else}
-										<QueryInput
+										<RuleBuilder
 											bind:value={c.rule}
 											id="category-{c.id}-rule"
 											label="Rule (optional)"
-											placeholder="repo:acme/api label:bug OR about:&quot;a crash&quot;"
+											exclude={MARK_WORDS}
+											{suggestions}
+											preview={(q) =>
+												me.data ? previewBoth(q, me.data.login, me.data.settings) : null}
 										/>
 										<div class="grid gap-1">
 											<label
@@ -502,7 +509,7 @@
 							{#if expanded}
 								<div
 									id="tag-{t.id}-details"
-									class="grid gap-2 border-t p-2.5"
+									class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t p-2.5"
 									transition:slide={DRAWER}
 								>
 									<div class="flex items-center gap-2">
@@ -522,11 +529,14 @@
 											><Trash /> Delete</Button
 										>
 									</div>
-									<QueryInput
+									<RuleBuilder
 										bind:value={t.rule}
 										id="tag-{t.id}-rule"
 										label="Rule"
-										placeholder="about:&quot;waits on something outside the author's control&quot;"
+										exclude={[...MARK_WORDS, ...THREAD_ONLY_WORDS]}
+										{suggestions}
+										preview={(q) =>
+											me.data ? previewItems(q, me.data.login, me.data.settings) : null}
 									/>
 								</div>
 							{/if}

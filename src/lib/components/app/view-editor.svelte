@@ -1,16 +1,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { SavedView, ThreadDTO, ViewBase } from '$lib/shared/types';
-	import { RULE_FIELDS, type RuleField } from '$lib/shared/rule-fields';
-	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
-	import { formatQuery, parseQuery } from '$lib/shared/query';
+	import { VIEW_BASES } from '$lib/shared/views';
+	import { previewThreads, ruleSuggestions } from '$lib/rule-preview';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import ConditionsEditor from './conditions-editor.svelte';
-	import QueryInput from './query-input.svelte';
+	import RuleBuilder from './rules/rule-builder.svelte';
 
 	/**
 	 * Create or edit a saved view: a name, a base list, and conditions (the same as rules, also as
@@ -21,7 +19,6 @@
 		initial,
 		threads,
 		me,
-		suggest,
 		onsave,
 		ondelete
 	}: {
@@ -31,7 +28,6 @@
 		/** Threads of each base list the page has, for the live count. */
 		threads: Partial<Record<ViewBase, ThreadDTO[]>>;
 		me: string;
-		suggest: Partial<Record<RuleField, string[]>>;
 		onsave: (v: Omit<SavedView, 'id'> & { id?: string }) => void;
 		ondelete?: () => void;
 	} = $props();
@@ -46,10 +42,9 @@
 		if (open) untrack(() => (draft = structuredClone($state.snapshot(initial))));
 	});
 
-	// "Category" is the base's job; "Hush's default" means little outside rules.
-	const FIELDS = RULE_FIELDS.filter((f) => f.key !== 'category');
+	const EXCLUDED_WORDS = ['in', 'category', 'tag'];
 	const list = $derived(threads[draft.base]);
-	const count = $derived(list?.filter((t) => threadMatches(draft.query, t, me)).length);
+	const suggestions = $derived(open ? ruleSuggestions(undefined) : {});
 	const nameOk = $derived(!!draft.name.trim());
 </script>
 
@@ -89,24 +84,17 @@
 			</div>
 		</div>
 
-		<ConditionsEditor
-			bind:when={() => parseQuery(draft.query).when, (when) => (draft.query = formatQuery(when))}
-			fields={FIELDS}
-			{suggest}
-			idPrefix="view"
-			title="Only threads where"
-			emptyNote="No conditions: the view shows every thread of its base."
+		<RuleBuilder
+			bind:value={draft.query}
+			id="view-query"
+			label="Only threads where"
+			exclude={EXCLUDED_WORDS}
+			{suggestions}
+			preview={(q) => (list ? previewThreads(q, me, list) : null)}
 		/>
-		<QueryInput bind:value={draft.query} id="view-query" />
-
-		<p class="text-xs text-muted-foreground" aria-live="polite">
-			{#if count !== undefined}
-				<span class="font-medium text-foreground">{count}</span>
-				{count === 1 ? 'thread matches' : 'threads match'} now.
-			{:else}
-				Hush counts the matches when it has this list.
-			{/if}
-		</p>
+		{#if !list}
+			<p class="text-xs text-muted-foreground">Hush counts the matches when it has this list.</p>
+		{/if}
 
 		<Dialog.Footer class="flex-row flex-wrap gap-2 sm:justify-between">
 			{#if ondelete}
