@@ -1295,7 +1295,7 @@
 
 {#snippet stackRow(stack: Stack)}
 	{@const front = rotated(stack)[0]}
-	<div class="grid overflow-y-clip *:[grid-area:1/1]">
+	<div class="grid grid-cols-[minmax(0,1fr)] overflow-y-clip *:min-w-0 *:[grid-area:1/1]">
 		{#key front.key}
 			<div in:rotateIn={rotationDirection} out:rotateOut={rotationDirection}>
 				{@render stackMember(stack, front)}

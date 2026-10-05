@@ -95,12 +95,13 @@
 
 <div class="relative w-full min-w-0 sm:w-auto sm:flex-1" bind:clientWidth={width}>
 	<!-- Hidden copy, only to measure each tab's width. -->
-	<div
-		bind:this={measure}
-		class="pointer-events-none invisible absolute top-0 left-0 flex gap-0.5 p-0.5 text-sm"
-		aria-hidden="true"
-	>
-		{#each tabs as t (t.key)}{@render tab(t)}{/each}
+	<div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+		<div
+			bind:this={measure}
+			class="invisible absolute top-0 left-0 flex w-max gap-0.5 p-0.5 text-sm"
+		>
+			{#each tabs as t (t.key)}{@render tab(t)}{/each}
+		</div>
 	</div>
 
 	<!-- Phones: one menu. -->
