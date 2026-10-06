@@ -607,7 +607,17 @@ export interface PeekCan {
 		autoMerge: { on: boolean; method: MergeMethod | null; canEnable: boolean; canDisable: boolean };
 		/** Workflow runs with a failed job, for "Re-run failed jobs". */
 		failedRuns: number[];
+		stack: PeekStack;
 	};
+}
+
+export interface PeekStack {
+	gitHubStacksEnabled: boolean;
+	numberOnGitHub: number | null;
+	openPrsBelowOnGitHub: number[];
+	mergesIntoDefaultBranch: boolean;
+	openPrsAboveNearestFirst: number[];
+	branchesAbove: boolean;
 }
 
 /**

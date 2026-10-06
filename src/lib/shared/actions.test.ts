@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ghActions, mainAction } from './actions';
+import { NO_STACK } from './stack-merge';
 import type { PeekDTO } from './types';
 
 const pr = (over: Partial<PeekDTO> = {}, can: Partial<PeekDTO['can']['pr']> = {}): PeekDTO =>
@@ -31,6 +32,7 @@ const pr = (over: Partial<PeekDTO> = {}, can: Partial<PeekDTO['can']['pr']> = {}
 				mergeAsAdmin: false,
 				autoMerge: { on: false, method: null, canEnable: false, canDisable: false },
 				failedRuns: [],
+				stack: NO_STACK,
 				...can
 			}
 		},
