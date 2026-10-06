@@ -593,6 +593,7 @@ export interface PeekCan {
 	author: boolean;
 	close: boolean;
 	reopen: boolean;
+	update?: boolean;
 	/** The conversation is not locked (or you may still write in it). */
 	comment: boolean;
 	/** Your permission on the repository: ADMIN, MAINTAIN, WRITE, TRIAGE, or READ. */

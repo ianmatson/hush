@@ -71,6 +71,17 @@ describe('actions on GitHub', () => {
 		);
 	});
 
+	it('offers ready for review on a draft and convert to draft otherwise, when you can edit it', () => {
+		const editable = { ...pr().can, update: true };
+		expect(ids(pr({ can: editable }))).toContain('draft');
+		const draft = pr({ draft: true, can: editable });
+		expect(ids(draft)).toContain('ready');
+		expect(ids(draft)).not.toContain('draft');
+		expect(ids(pr())).not.toContain('draft');
+		expect(mainAction(null, ghActions(draft))?.id).toBe('ready');
+		expect(mainAction('review', ghActions(pr({ can: editable })))?.id).toBe('approve');
+	});
+
 	it('closes issues as done or not planned, and reopens closed ones', () => {
 		const issue = pr({ kind: 'issue', can: { ...pr().can, pr: undefined } });
 		expect(ids(issue)).toEqual(['comment', 'close', 'close_not_planned']);

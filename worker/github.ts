@@ -595,7 +595,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       id number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
       baseRefName headRefName headRefOid reviewDecision mergeable mergeStateStatus locked
       ${REACTION_FIELDS}
-      viewerDidAuthor viewerCanClose viewerCanReopen viewerCanMergeAsAdmin
+      viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate viewerCanMergeAsAdmin
       viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
       repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }
       author { ${PERSON} }
@@ -738,6 +738,7 @@ export async function fetchPeek(
 			author: !!n.viewerDidAuthor,
 			close: !!n.viewerCanClose,
 			reopen: !!n.viewerCanReopen,
+			update: !!n.viewerCanUpdate,
 			comment: !n.locked || WRITERS.has(n.repository?.viewerPermission),
 			permission: n.repository?.viewerPermission ?? null
 		}

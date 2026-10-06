@@ -149,6 +149,17 @@ const app = routes()
 							);
 				break;
 			}
+			case 'ready':
+			case 'draft': {
+				if (typeof b.id !== 'string' || !b.id) return c.json({ error: 'Not a pull request.' }, 400);
+				error = await graphql(
+					action === 'ready'
+						? 'mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { clientMutationId } }'
+						: 'mutation($id: ID!) { convertPullRequestToDraft(input: { pullRequestId: $id }) { clientMutationId } }',
+					{ id: b.id }
+				);
+				break;
+			}
 			case 'close':
 			case 'close_not_planned':
 			case 'reopen': {
