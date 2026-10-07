@@ -1,7 +1,7 @@
 import { toast } from 'svelte-sonner';
 import { api } from '$lib/api';
 import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
-import { holdPeekOn, markPeekItemEnded } from '$lib/peek.svelte';
+import { holdPeekOn, releasePeekHold } from '$lib/peek.svelte';
 import { reportResolved } from '$lib/recheck';
 import { GH_ACTIONS, type GhActionId } from '$lib/shared/actions';
 import type { MergeMethod, PeekDTO, PeekEntry } from '$lib/shared/types';
@@ -18,7 +18,7 @@ export async function sendAction(
 	opts: { body?: string; method?: MergeMethod } = {}
 ): Promise<boolean> {
 	acting.id = id;
-	if (GH_ACTIONS[id].endsItem) markPeekItemEnded(p.repo, p.number);
+	if (GH_ACTIONS[id].endsItem) releasePeekHold();
 	else holdPeekOn(p.repo, p.number);
 	try {
 		const res = await api.ghAction({
