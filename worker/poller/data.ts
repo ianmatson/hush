@@ -105,8 +105,11 @@ const marks = (n: number) => Array(n).fill('?').join(',');
 export abstract class PollerData extends PollerDashboard {
 	// In the top class (worker/poller.ts), with the poll schedule.
 	abstract touch(origin?: string): Promise<void>;
-	abstract setHasPush(hasPush: boolean): Promise<void>;
 	abstract status(): Promise<PollStatus>;
+
+	async alertChannelsChanged(): Promise<void> {
+		await this.updateHasAlertChannel();
+	}
 
 	/** For /api/me: your settings and the poll status, in one call. */
 	async me(): Promise<{ settings: Settings; status: PollStatus; onboarded: boolean }> {
@@ -451,6 +454,8 @@ export abstract class PollerData extends PollerDashboard {
 		const err = validateSettings(next, Object.keys(body));
 		if (err) return { error: err, status: 400 };
 		await this.saveSettings(next);
+		if (JSON.stringify(old.alertChannels) !== JSON.stringify(next.alertChannels))
+			await this.updateHasAlertChannel();
 		if (old.smartDecisions && !next.smartDecisions) this.forgetDecisions();
 		if (!old.smartDecisions && this.decisionsOn(next)) await this.startDecisionFill();
 		// Only these settings change how threads are sorted; the rest (menus, dashboards, push)
@@ -642,14 +647,13 @@ export abstract class PollerData extends PollerDashboard {
 			sub.label?.slice(0, 80) ?? null,
 			Date.now()
 		);
-		await this.setHasPush(true);
+		await this.updateHasAlertChannel();
 		return { ok: true };
 	}
 
 	async unsubscribe(endpoint: string): Promise<{ ok: true }> {
 		this.run('DELETE FROM push_devices WHERE endpoint = ?', endpoint);
-		const left = this.one<{ n: number }>('SELECT COUNT(*) AS n FROM push_devices');
-		await this.setHasPush((left?.n ?? 0) > 0);
+		await this.updateHasAlertChannel();
 		return { ok: true };
 	}
 

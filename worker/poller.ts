@@ -46,10 +46,6 @@ export class Poller extends PollerData {
 		await this.ctx.storage.setAlarm(Date.now() + 500);
 	}
 
-	async setHasPush(hasPush: boolean): Promise<void> {
-		await this.ctx.storage.put('hasPush', hasPush);
-	}
-
 	/** The UI calls this when it is open. An idle account (15-minute polls) polls again within 5. */
 	async touch(origin?: string): Promise<void> {
 		const now = Date.now();

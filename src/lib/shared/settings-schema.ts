@@ -90,6 +90,16 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'With smart decisions on: push a “Needs you” item at once, also during a digest or over the push limit, when its text says it blocks something or is an incident. Quiet hours still hold it.'
 	},
 	{
+		key: 'alertChannels.push',
+		page: 'notifications',
+		description: 'Send alerts as push notifications to your devices.'
+	},
+	{
+		key: 'alertChannels.slack',
+		page: 'notifications',
+		description: 'Send alerts as Slack direct messages, when Slack is connected.'
+	},
+	{
 		key: 'clearNotifications',
 		page: 'notifications',
 		description:
@@ -220,7 +230,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 ];
 
 /** Settings that are objects of their own settings (a change to one key keeps the others). */
-const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe', 'rows']);
+const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe', 'rows', 'alertChannels']);
 /** Settings that change how threads are sorted: a change re-sorts the stored threads. */
 export const RECLASSIFY_KEYS: (keyof Settings)[] = [
 	'categories',
@@ -266,6 +276,16 @@ export function mergeSettings(base: Settings, patch: Partial<Settings>): Setting
 
 const bool = (k: string) => (v: unknown) =>
 	typeof v === 'boolean' ? null : `"${k}" must be true or false.`;
+function validateAlertChannels(v: unknown): string | null {
+	const channels = v as Record<string, unknown> | null;
+	if (!channels || typeof channels !== 'object' || Array.isArray(channels))
+		return '"alertChannels" must be { "push": true or false, "slack": true or false }.';
+	for (const channel of ['push', 'slack'])
+		if (typeof channels[channel] !== 'boolean')
+			return `"alertChannels.${channel}" must be true or false.`;
+	return null;
+}
+
 const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	pushAction: bool('pushAction'),
 	pushFyi: bool('pushFyi'),
@@ -279,6 +299,7 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	pushLimit: validatePushLimit,
 	pushWhileOpen: bool('pushWhileOpen'),
 	pushUrgentNow: bool('pushUrgentNow'),
+	alertChannels: validateAlertChannels,
 	smartDecisions: bool('smartDecisions'),
 	clearNotifications: validateClearNotifications,
 	reviewResolution: (v) =>

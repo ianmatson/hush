@@ -1,7 +1,7 @@
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
-import { routes } from '../app';
+import { poller, routes } from '../app';
 import {
 	SLACK_AUTHORIZE_URL,
 	SLACK_BOT_SCOPES,
@@ -73,10 +73,12 @@ const app = routes()
 		const install = await exchangeSlackCode(c.env, code);
 		if ('error' in install) return fail(install.error);
 		await saveSlackInstall(c.env, c.get('user').id, install);
+		await poller(c.env, c.get('user').id).alertChannelsChanged();
 		return c.redirect(settingsUrl({ slack: 'connected' }));
 	})
 	.delete('/api/slack', async (c) => {
 		await removeSlackConnection(c.env, c.get('user').id);
+		await poller(c.env, c.get('user').id).alertChannelsChanged();
 		return c.json({ ok: true });
 	})
 	.post('/api/slack/test', async (c) => {
@@ -103,7 +105,12 @@ const app = routes()
 		}
 		const outcome = slackEventOutcome(payload);
 		if (outcome.kind === 'challenge') return c.json({ challenge: outcome.challenge });
-		if (outcome.kind === 'workspace-removed') await removeSlackWorkspace(c.env, outcome.teamId);
+		if (outcome.kind === 'workspace-removed') {
+			const userIds = await removeSlackWorkspace(c.env, outcome.teamId);
+			c.executionCtx.waitUntil(
+				Promise.allSettled(userIds.map((id) => poller(c.env, id).alertChannelsChanged()))
+			);
+		}
 		return c.json({ ok: true });
 	});
 

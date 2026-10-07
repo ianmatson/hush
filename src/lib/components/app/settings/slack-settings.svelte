@@ -4,10 +4,14 @@
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { keys, queryClient, slackQuery } from '$lib/queries';
+	import { keys, meQuery, queryClient, slackQuery } from '$lib/queries';
+	import { saveSettings } from '$lib/save-settings';
+	import type { AlertChannels } from '$lib/shared/types';
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
+	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
 	const CONNECTED_PARAM = 'slack';
@@ -15,6 +19,13 @@
 
 	const slack = createQuery(slackQuery);
 	const connection = $derived(slack.data?.connection ?? null);
+	const me = createQuery(meQuery);
+	const channels = $derived(me.data?.settings.alertChannels);
+
+	function saveChannel(channel: keyof AlertChannels, on: boolean) {
+		if (!channels) return Promise.resolve(false);
+		return saveSettings({ alertChannels: { ...channels, [channel]: on } });
+	}
 	let busy = $state<'test' | 'disconnect' | null>(null);
 
 	async function run(action: 'test' | 'disconnect', request: () => Promise<unknown>, done: string) {
@@ -60,7 +71,7 @@
 				approve the app.</Card.Description
 			>
 		</Card.Header>
-		<Card.Content>
+		<Card.Content class="grid gap-4">
 			<div class="flex items-center justify-between gap-4">
 				<div>
 					<p class="text-sm font-medium">
@@ -87,6 +98,32 @@
 					{/if}
 				</div>
 			</div>
+			{#if connection && channels}
+				<div class="divide-y border-t pt-4">
+					<SettingRow
+						id="alerts-slack"
+						label="Alerts in Slack"
+						description="Send each alert as a direct message."
+					>
+						<SavedSwitch
+							id="alerts-slack"
+							checked={channels.slack}
+							onsave={(v) => saveChannel('slack', v)}
+						/>
+					</SettingRow>
+					<SettingRow
+						id="alerts-push"
+						label="Push to devices too"
+						description="Off: alerts go only to Slack."
+					>
+						<SavedSwitch
+							id="alerts-push"
+							checked={channels.push}
+							onsave={(v) => saveChannel('push', v)}
+						/>
+					</SettingRow>
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 {/if}

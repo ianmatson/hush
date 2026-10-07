@@ -9,6 +9,10 @@ import {
 	type PushMark
 } from '../../src/lib/shared/push-policy';
 import type { Settings } from '../../src/lib/shared/types';
+import { deliveredByAnyChannel, type ChannelSend } from '../alert-channels';
+import { slackIsConfigured } from '../slack';
+import { sendSlackAlerts } from '../slack-alerts';
+import { slackConnection } from '../slack-store';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import { PollerBase } from './base';
 import { MAX_INDIVIDUAL_PUSHES, ALERT_LOG_KEEP, NON_THREAD_TAGS, PUSH_MARK_KEEP } from './shared';
@@ -29,13 +33,15 @@ export interface PushCandidate {
 	urgent?: boolean;
 }
 
+type OpenChannels = { push: boolean; slack: boolean };
+
 type Held = { count: number; messages: PushMessage[]; duringQuiet: boolean };
 type LegacyQuietHeld = { count: number; lines: string[] };
 
 /** Push alerts: send them, record them in the alert history, and update them when resolved. */
 export abstract class PollerAlerts extends PollerBase {
 	protected async deliver(candidates: PushCandidate[]): Promise<void> {
-		if (!candidates.length || !(await this.updateHasPush())) return;
+		if (!candidates.length || !(await this.updateHasAlertChannel())) return;
 		const settings = await this.settings();
 		const pushUrgentNow = settings.smartDecisions && settings.pushUrgentNow;
 		const urgent = pushUrgentNow ? candidates.filter((c) => c.urgent) : [];
@@ -136,10 +142,25 @@ export abstract class PollerAlerts extends PollerBase {
 		this.run('DELETE FROM push_marks WHERE pushed_at < ?', now - PUSH_MARK_KEEP);
 	}
 
-	private async updateHasPush(): Promise<boolean> {
+	protected async updateHasAlertChannel(): Promise<boolean> {
+		const open = await this.openChannels(await this.settings());
+		const hasChannel = open.push || open.slack;
+		await this.putChanged({ hasPush: hasChannel });
+		return hasChannel;
+	}
+
+	private async openChannels(settings: Settings): Promise<OpenChannels> {
 		const devices = this.one<{ n: number }>('SELECT COUNT(*) AS n FROM push_devices')?.n ?? 0;
-		await this.putChanged({ hasPush: devices > 0 });
-		return devices > 0 && !!this.env.VAPID_PRIVATE_KEY;
+		return {
+			push: settings.alertChannels.push && devices > 0 && !!this.env.VAPID_PRIVATE_KEY,
+			slack: settings.alertChannels.slack && (await this.slackIsConnected())
+		};
+	}
+
+	private async slackIsConnected(): Promise<boolean> {
+		const userId = await this.ctx.storage.get<number>('userId');
+		if (!userId || !slackIsConfigured(this.env)) return false;
+		return !!(await slackConnection(this.env, userId));
 	}
 
 	private async origin(): Promise<string> {
@@ -240,6 +261,20 @@ export abstract class PollerAlerts extends PollerBase {
 	}
 
 	private async sendNow(messages: PushMessage[]): Promise<boolean> {
+		if (!messages.length) return false;
+		const open = await this.openChannels(await this.settings());
+		const sends: ChannelSend[] = [];
+		if (open.push) sends.push(() => this.sendPushNow(messages));
+		if (open.slack) sends.push(() => this.sendSlackNow(messages));
+		return deliveredByAnyChannel(sends);
+	}
+
+	private async sendSlackNow(messages: PushMessage[]): Promise<boolean> {
+		const userId = await this.ctx.storage.get<number>('userId');
+		return userId ? sendSlackAlerts(this.env, userId, messages) : false;
+	}
+
+	private async sendPushNow(messages: PushMessage[]): Promise<boolean> {
 		const devices = this.all<{ endpoint: string; p256dh: string; auth: string }>(
 			'SELECT endpoint, p256dh, auth FROM push_devices'
 		);

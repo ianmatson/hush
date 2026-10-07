@@ -212,6 +212,11 @@ export interface QuietHours {
 	timeZone: string;
 }
 
+export interface AlertChannels {
+	push: boolean;
+	slack: boolean;
+}
+
 export interface Settings {
 	/** Send Web Push for Action items. */
 	pushAction: boolean;
@@ -226,6 +231,7 @@ export interface Settings {
 	pushLimit: import('./push-policy').PushLimit | null;
 	pushWhileOpen: boolean;
 	pushUrgentNow: boolean;
+	alertChannels: AlertChannels;
 	smartDecisions: boolean;
 	clearNotifications: import('./push-policy').ClearNotifications;
 	/** A thread open in the peek for a moment is marked as read. */

@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	pushLimit: null,
 	pushWhileOpen: false,
 	pushUrgentNow: false,
+	alertChannels: { push: true, slack: true },
 	smartDecisions: true,
 	clearNotifications: 'open',
 	peekMarksRead: true,
@@ -70,7 +71,8 @@ export function parseSettings(json: string | null | undefined): Settings {
 				inbox: { ...DEFAULT_SWIPE.inbox, ...(raw.swipe?.inbox ?? {}) },
 				dash: { ...DEFAULT_SWIPE.dash, ...(raw.swipe?.dash ?? {}) }
 			},
-			rows: { ...DEFAULT_ROWS, ...(raw.rows ?? {}) }
+			rows: { ...DEFAULT_ROWS, ...(raw.rows ?? {}) },
+			alertChannels: { ...DEFAULT_SETTINGS.alertChannels, ...(raw.alertChannels ?? {}) }
 		};
 	} catch {
 		return structuredClone(DEFAULT_SETTINGS);

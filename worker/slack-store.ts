@@ -97,9 +97,13 @@ export async function removeSlackConnection(env: Env, userId: number) {
 	await env.DB.prepare('DELETE FROM slack_connections WHERE user_id = ?').bind(userId).run();
 }
 
-export async function removeSlackWorkspace(env: Env, teamId: string) {
+export async function removeSlackWorkspace(env: Env, teamId: string): Promise<number[]> {
+	const connected = await env.DB.prepare('SELECT user_id FROM slack_connections WHERE team_id = ?')
+		.bind(teamId)
+		.all<{ user_id: number }>();
 	await env.DB.batch([
 		env.DB.prepare('DELETE FROM slack_connections WHERE team_id = ?').bind(teamId),
 		env.DB.prepare('DELETE FROM slack_workspaces WHERE team_id = ?').bind(teamId)
 	]);
+	return connected.results.map((r) => r.user_id);
 }
