@@ -24,7 +24,7 @@ Every inbox thread is about a pull request or an issue, so every thread has a pe
 - The labels and the assignees.
 - The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted, not shown.
 - The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
-- **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. With no messages, this part is not shown.
+- **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The part starts closed: its title shows the number of messages, or a spinner while Hush searches. Click the title to show the messages. With no messages, this part is not shown.
 - A comment box at the end.
 
 A thread that stays open in the peek for a moment is marked as read, also on GitHub. Turn this off with [`peekMarksRead`](/docs/settings#peekmarksread).
