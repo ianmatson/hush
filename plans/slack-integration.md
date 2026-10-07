@@ -71,7 +71,7 @@ Both apps are in the PostHog workspace (`TSS5W8YQZ`). Their manifests are in `sl
 - `notifications.md`: a "Slack" section that explains the app and how to install it. It becomes the Marketplace installation landing page.
 - `privacy.md`: what Hush stores for Slack (encrypted bot token, Slack user ID, DM channel ID) and when it deletes it (disconnect, uninstall, revoked token).
 - `peek.md`, `README.md`.
-- **Support address:** create `support@hush-gh.com` with Cloudflare Email Routing, forwarded to a personal inbox. Hush has no public contact address now. Add it to the site (docs footer or troubleshooting page) and `SECURITY.md`.
+- **Support address:** `support@hush-gh.com` exists (Cloudflare Email Routing rule "Hush support", forwarded to the Cloudflare account owner's inbox). Add it to the site (docs footer or troubleshooting page) and `SECURITY.md`.
 - One post to `#hush` when alerts ship.
 
 ### Marketplace listing
