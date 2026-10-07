@@ -534,8 +534,15 @@
 	}
 
 	// --- Everything else --------------------------------------------------------------
+	let cursorRowEnded = false;
 	$effect(() => {
+		if (selectedId !== null) cursorRowEnded = false;
 		if (!navigable.some((i) => i.id === selectedId) && !heldOutOfKeyboardOrder(selectedId)) {
+			if (owns && selectedId !== null && selectedId === peek.endedId) {
+				selectedId = null;
+				cursorRowEnded = true;
+			}
+			if (cursorRowEnded) return void untrack(() => sel.prune(order));
 			const stack = selectedId ? stackOf.get(selectedId) : undefined;
 			const standIn = stack && navigable.find((i) => stackOf.get(i.id) === stack);
 			selectedId = standIn?.id ?? navigable[0]?.id ?? null;
@@ -566,6 +573,7 @@
 			categoryFilter = null;
 			tagFilter = null;
 			selectedId = null;
+			cursorRowEnded = false;
 			sel.clear();
 			groupMotion = false;
 			collapsed = readCollapsed(k);

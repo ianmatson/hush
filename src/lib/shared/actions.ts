@@ -30,6 +30,7 @@ export interface GhActionInfo {
 	confirm?: boolean;
 	/** The action that takes it back from the toast. */
 	undo?: GhActionId;
+	endsItem?: boolean;
 }
 
 export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
@@ -51,7 +52,13 @@ export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
 		done: 'Failed jobs are running again',
 		command: 'peek.rerun'
 	},
-	merge: { label: 'Merge', done: 'Merged', command: 'peek.merge', confirm: true },
+	merge: {
+		label: 'Merge',
+		done: 'Merged',
+		command: 'peek.merge',
+		confirm: true,
+		endsItem: true
+	},
 	auto_merge: { label: 'Enable auto-merge', done: 'Auto-merge is on', undo: 'auto_merge_off' },
 	auto_merge_off: { label: 'Turn off auto-merge', done: 'Auto-merge is off', undo: 'auto_merge' },
 	ready: {
@@ -66,11 +73,18 @@ export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
 		command: 'peek.draftReady',
 		undo: 'ready'
 	},
-	close: { label: 'Close', done: 'Closed', command: 'peek.closeReopen', undo: 'reopen' },
+	close: {
+		label: 'Close',
+		done: 'Closed',
+		command: 'peek.closeReopen',
+		undo: 'reopen',
+		endsItem: true
+	},
 	close_not_planned: {
 		label: 'Close as not planned',
 		done: 'Closed as not planned',
-		undo: 'reopen'
+		undo: 'reopen',
+		endsItem: true
 	},
 	reopen: { label: 'Reopen', done: 'Reopened', command: 'peek.closeReopen', undo: 'close' }
 };
