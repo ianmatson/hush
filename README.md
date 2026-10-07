@@ -85,6 +85,8 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 
+Each push to `main` deploys with GitHub Actions (`.github/workflows/deploy.yml`): it runs `pnpm check`, `pnpm test`, and `pnpm run deploy`. It needs two repository secrets: `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` with the permissions Workers Scripts: Edit, D1: Edit, Workers Routes: Edit (zone hush-gh.com), and DNS: Edit (zone hush-gh.com, for the custom domains). Run it by hand from the Actions tab with **Run workflow**.
+
 `deploy` refreshes the wrangler login first and retries the migration step once: right after a token refresh, the D1 API can refuse the new token for a few seconds (error 7403).
 
 Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users must sign in again). Changing the VAPID keys breaks existing push subscriptions.
