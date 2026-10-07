@@ -1,6 +1,6 @@
 import { toast } from 'svelte-sonner';
 import { api } from '$lib/api';
-import { keys, queryClient } from '$lib/queries';
+import { keys, refetchUnlessLive } from '$lib/queries';
 
 /**
  * "Did it work?" You open a PR or issue on GitHub from Hush (to review, reply, fix CI…). When you
@@ -32,10 +32,7 @@ async function checkReturned() {
 		due.slice(-MAX_PER_RETURN).map(([, o]) => api.recheck(o.repo, o.number).catch(() => null))
 	);
 	reportResolved(results.flatMap((r) => r?.resolved ?? []));
-	await Promise.all([
-		queryClient.invalidateQueries({ queryKey: keys.threadsAll }),
-		queryClient.invalidateQueries({ queryKey: keys.dashAll })
-	]);
+	await refetchUnlessLive(keys.threadsAll, keys.dashAll);
 }
 
 /** A toast for threads a check moved to Done. */

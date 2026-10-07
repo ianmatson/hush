@@ -100,7 +100,7 @@ export function connectLive(): () => void {
 			ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send('ping'), PING_EVERY);
 			// Back after a drop: catch up on what changed while the socket was down.
 			if (opened)
-				for (const queryKey of [keys.threadsAll, keys.alerts, keys.me])
+				for (const queryKey of [keys.threadsAll, keys.dashAll, keys.alerts, keys.me])
 					void queryClient.invalidateQueries({ queryKey });
 			opened = true;
 		};

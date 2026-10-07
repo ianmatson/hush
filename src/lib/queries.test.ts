@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$app/environment', () => ({ browser: false }));
 vi.mock('$lib/api', () => ({ api: {}, ApiError: class extends Error {} }));
 
-const { keys, queryClient, reconcileViews } = await import('./queries');
+const { keys, queryClient, reconcileViews, refetchUnlessLive } = await import('./queries');
+const { live } = await import('./live-state.svelte');
 
 const list = (n: number) => ({
 	threads: Array.from({ length: n }, (_, i) => ({ id: String(i) })),
@@ -33,5 +34,24 @@ describe('reconcileViews', () => {
 			fyi: 0,
 			snoozed: 1
 		});
+	});
+});
+
+describe('refetchUnlessLive', () => {
+	beforeEach(() => {
+		queryClient.clear();
+		queryClient.setQueryData(keys.alerts, []);
+	});
+
+	it('leaves the cache alone while the live socket is connected', async () => {
+		live.connected = true;
+		await refetchUnlessLive(keys.alerts);
+		expect(queryClient.getQueryState(keys.alerts)?.isInvalidated).toBe(false);
+	});
+
+	it('invalidates the given queries while the live socket is down', async () => {
+		live.connected = false;
+		await refetchUnlessLive(keys.alerts);
+		expect(queryClient.getQueryState(keys.alerts)?.isInvalidated).toBe(true);
 	});
 });

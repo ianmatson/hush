@@ -1,4 +1,4 @@
-import { QueryCache, QueryClient, queryOptions } from '@tanstack/svelte-query';
+import { QueryCache, QueryClient, queryOptions, type QueryKey } from '@tanstack/svelte-query';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { browser } from '$app/environment';
 import { live } from '$lib/live-state.svelte';
@@ -71,6 +71,11 @@ export const keys = {
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
 	alerts: ['alerts'] as const
 };
+
+export function refetchUnlessLive(...queryKeys: QueryKey[]): Promise<unknown> {
+	if (live.connected) return Promise.resolve();
+	return Promise.all(queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+}
 
 /**
  * Without the live socket: the server gets new data only when it polls GitHub (every 5 or 15

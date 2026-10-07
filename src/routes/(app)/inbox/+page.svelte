@@ -14,7 +14,14 @@
 	import { toast } from 'svelte-sonner';
 	import { createQueries, createQuery } from '@tanstack/svelte-query';
 	import { api, type ActionBody, type ThreadAction } from '$lib/api';
-	import { keys, meQuery, queryClient, setCounts, threadsQuery } from '$lib/queries';
+	import {
+		keys,
+		meQuery,
+		queryClient,
+		refetchUnlessLive,
+		setCounts,
+		threadsQuery
+	} from '$lib/queries';
 	import { Selection } from '$lib/selection.svelte';
 	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
 	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
@@ -289,7 +296,7 @@
 			if (status.lastError) toast.error(status.lastError);
 			reportResolved(status.resolved ?? []);
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: keys.threadsAll }),
+				refetchUnlessLive(keys.threadsAll),
 				queryClient.invalidateQueries({ queryKey: keys.me })
 			]);
 		} catch (err) {
@@ -321,8 +328,7 @@
 			const res = await api.actMany(ids.slice(i, i + BULK_MAX), action, body);
 			setCounts(res.counts);
 		}
-		// Other views changed too; refetch them when they are next used.
-		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+		refetchUnlessLive(keys.threadsAll);
 	}
 
 	async function act(ids: string[], action: ThreadAction, body?: ActionBody) {
