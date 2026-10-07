@@ -5,6 +5,7 @@ import {
 	forTeams,
 	gh,
 	needsDetails,
+	peekEntryFromRest,
 	searchShort,
 	toSubject
 } from './github';
@@ -227,5 +228,48 @@ describe('toSubject stack links', () => {
 	it('stops at a loop', () => {
 		const s = toSubject(top(pr(2, 'b1', pr(3, 'b2'))));
 		expect(s.stackBelowNearestFirst?.map((l) => l.number)).toEqual([2]);
+	});
+});
+
+describe('peekEntryFromRest', () => {
+	const user = {
+		login: 'ann',
+		avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4',
+		type: 'User'
+	};
+
+	it('matches the peek timeline shape for a new comment', () => {
+		expect(
+			peekEntryFromRest('comment', {
+				node_id: 'IC_1',
+				html_url: 'https://github.com/o/r/pull/2#issuecomment-3',
+				body_html: '<p>hi</p>',
+				created_at: '2026-10-07T10:00:00Z',
+				user
+			})
+		).toEqual({
+			type: 'comment',
+			author: {
+				login: 'ann',
+				avatar: 'https://avatars.githubusercontent.com/u/1?v=4&s=48',
+				bot: false
+			},
+			at: '2026-10-07T10:00:00Z',
+			url: 'https://github.com/o/r/pull/2#issuecomment-3',
+			html: '<p>hi</p>',
+			reactions: { id: 'IC_1', canReact: true, groups: [] }
+		});
+	});
+
+	it('keeps the review state and its submit time', () => {
+		const entry = peekEntryFromRest('review', {
+			node_id: 'PRR_1',
+			html_url: 'https://github.com/o/r/pull/2#pullrequestreview-4',
+			submitted_at: '2026-10-07T11:00:00Z',
+			state: 'APPROVED',
+			user
+		});
+		expect(entry).toMatchObject({ type: 'review', state: 'APPROVED', inline: 0, html: '' });
+		expect(entry.at).toBe('2026-10-07T11:00:00Z');
 	});
 });

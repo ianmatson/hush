@@ -14,11 +14,13 @@ export const peek = $state<{
 	/** Why the item is in its list (the owner's "why" line). */
 	header: Snippet | null;
 	footer: Snippet | null;
-}>({ owner: null, target: null, header: null, footer: null });
+	heldId: string | null;
+}>({ owner: null, target: null, header: null, footer: null, heldId: null });
 
 export const peekIsOpen = () => peek.owner !== null;
 
 export function claimPeek(owner: string) {
+	if (peek.owner !== owner) peek.heldId = null;
 	peek.owner = owner;
 }
 
@@ -27,4 +29,14 @@ export function closePeek() {
 	peek.target = null;
 	peek.header = null;
 	peek.footer = null;
+	peek.heldId = null;
+}
+
+export function holdPeekOn(repo: string, number: number) {
+	const target = peek.target;
+	if (target && target.repo === repo && target.number === number) peek.heldId = target.id;
+}
+
+export function releasePeekHoldUnlessOn(id: string | null) {
+	if (peek.heldId !== null && peek.heldId !== id) peek.heldId = null;
 }

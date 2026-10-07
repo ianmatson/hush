@@ -57,7 +57,8 @@
 	import AppMenu from './app-menu.svelte';
 	import { meQuery } from '$lib/queries';
 	import { openOnGitHub } from '$lib/recheck';
-	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
+	import { claimPeek, closePeek, peek, releasePeekHoldUnlessOn } from '$lib/peek.svelte';
+	import { keepHeldRow } from '$lib/shared/held-row';
 	import WhyLine from './why-line.svelte';
 	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
 	import NotNeededDialog, { type NotNeededTarget } from './not-needed-dialog.svelte';
@@ -161,9 +162,12 @@
 			.includes(q);
 	}
 
+	const peekOwner = $derived(kind === 'pr' ? 'pulls' : 'issues');
+	const owns = $derived(peek.owner === peekOwner);
+	let filteredBefore: DashItem[] = [];
 	const filtered = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		return (data?.items ?? []).filter(
+		const listed = (data?.items ?? []).filter(
 			(i) =>
 				i.dismissed === showHidden &&
 				(!section || i.sections.includes(section)) &&
@@ -171,7 +175,17 @@
 				(!tagFilter || !!i.tags?.includes(tagFilter)) &&
 				(!q || matchesQuery(i, q))
 		);
+		return keepHeldRow(
+			listed,
+			untrack(() => filteredBefore),
+			peek.owner === peekOwner && selectedId === peek.heldId ? peek.heldId : null
+		);
 	});
+	$effect.pre(() => {
+		filteredBefore = filtered;
+	});
+	const heldOutOfKeyboardOrder = (id: string | null) =>
+		id !== null && id === peek.heldId && owns && filtered.some((i) => i.id === id);
 
 	/** Groups in display order: new items on top, then your manual order. */
 	const arrangedGroups = $derived(
@@ -236,8 +250,6 @@
 
 	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this page
 	// owns it ------------------------------------------------------------------------------
-	const peekOwner = $derived(kind === 'pr' ? 'pulls' : 'issues');
-	const owns = $derived(peek.owner === peekOwner);
 	const peekOpen = $derived(peek.owner !== null);
 	// Read the cursor row even while not owned: a derived whose dependencies change between runs
 	// (only `owns` while not owned) missed later cursor moves.
@@ -248,7 +260,10 @@
 		return m && !m.itemInList ? m : null;
 	});
 	const peekItem = $derived.by(() => {
-		const row = navigable[selectedIndex] ?? null;
+		const row =
+			navigable[selectedIndex] ??
+			(heldOutOfKeyboardOrder(selectedId) ? filtered.find((i) => i.id === selectedId) : null) ??
+			null;
 		return owns && !peekedOutsideMember ? row : null;
 	});
 	const peekCurrentKey = $derived(peekedOutsideMember?.key ?? peekItem?.id ?? null);
@@ -298,6 +313,7 @@
 				};
 				return;
 			}
+			releasePeekHoldUnlessOn(i?.id ?? null);
 			if (!i) return closePeek();
 			peek.target = {
 				id: i.id,
@@ -513,7 +529,7 @@
 
 	// --- Everything else --------------------------------------------------------------
 	$effect(() => {
-		if (!navigable.some((i) => i.id === selectedId)) {
+		if (!navigable.some((i) => i.id === selectedId) && !heldOutOfKeyboardOrder(selectedId)) {
 			const stack = selectedId ? stackOf.get(selectedId) : undefined;
 			const standIn = stack && navigable.find((i) => stackOf.get(i.id) === stack);
 			selectedId = standIn?.id ?? navigable[0]?.id ?? null;

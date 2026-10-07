@@ -47,7 +47,8 @@
 		type NotNeededTarget
 	} from '$lib/components/app/not-needed-dialog.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
-	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
+	import { claimPeek, closePeek, peek, releasePeekHoldUnlessOn } from '$lib/peek.svelte';
+	import { keepHeldRow } from '$lib/shared/held-row';
 	import AppMenu from '$lib/components/app/app-menu.svelte';
 	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
 	import { palette } from '$lib/palette.svelte';
@@ -154,14 +155,27 @@
 	const pending = new SvelteSet<string>();
 	const sel = new Selection();
 
+	const peekOwner = $derived(`inbox:${view}`);
+	let shownBefore: ThreadDTO[] = [];
 	const visible = $derived.by(() => {
 		const login = me.data?.login ?? '';
-		return (threadsQ.data?.threads ?? []).filter(
+		const listed = (threadsQ.data?.threads ?? []).filter(
 			(t) =>
 				!pending.has(t.id) &&
 				(searching || !saved || threadMatches(saved.query, t, login, me.data?.settings)) &&
 				threadMatches(query, t, login, me.data?.settings)
 		);
+		const heldId = peek.heldId;
+		const keepsHeldRow =
+			heldId !== null && heldId === selectedId && peek.owner === peekOwner && !pending.has(heldId);
+		return keepHeldRow(
+			listed,
+			untrack(() => shownBefore),
+			keepsHeldRow ? heldId : null
+		);
+	});
+	$effect.pre(() => {
+		shownBefore = visible;
 	});
 	const order = $derived(visible.map((t) => t.id));
 	const selectedIndex = $derived(visible.findIndex((t) => t.id === selectedId));
@@ -174,7 +188,6 @@
 	});
 	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this view
 	// owns it ------------------------------------------------------------------------------
-	const peekOwner = $derived(`inbox:${view}`);
 	const owns = $derived(peek.owner === peekOwner);
 	const peekOpen = $derived(peek.owner !== null);
 	let peekSnoozeOpen = $state(false);
@@ -206,6 +219,7 @@
 		const t = peekThread;
 		if (!owns || !threadsQ.data) return;
 		untrack(() => {
+			releasePeekHoldUnlessOn(t?.id ?? null);
 			if (!t) return closePeek();
 			peek.target = {
 				id: t.id,
