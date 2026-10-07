@@ -5,6 +5,7 @@ import {
 	mentionPattern,
 	mentionQuery,
 	mentionsInstallFrom,
+	membershipByAnyToken,
 	mentionsOf,
 	searchMentions
 } from '../slack-mentions';
@@ -183,5 +184,32 @@ describe('githubOrgMembership', () => {
 	it('does not know on other errors, such as an org that has not approved Hush', async () => {
 		answer(403, { message: 'OAuth App access restrictions' });
 		expect(await githubOrgMembership('gho_1', 'PostHog')).toBe('unknown');
+	});
+});
+
+describe('membershipByAnyToken', () => {
+	it('asks with the next token when GitHub hides the membership from the sign-in token', async () => {
+		const fetch = vi
+			.fn()
+			.mockResolvedValueOnce(
+				Response.json({ message: 'OAuth App access restrictions' }, { status: 403 })
+			)
+			.mockResolvedValueOnce(Response.json({ state: 'active' }));
+		vi.stubGlobal('fetch', fetch);
+		expect(await membershipByAnyToken(['gho_signin', 'ghp_own'], 'PostHog')).toBe('member');
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('stops at the first clear answer', async () => {
+		const fetch = vi.fn().mockResolvedValue(Response.json({}, { status: 404 }));
+		vi.stubGlobal('fetch', fetch);
+		expect(await membershipByAnyToken(['gho_signin', 'ghp_own'], 'PostHog')).toBe('not-member');
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not know when no token gets an answer', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({}, { status: 403 })));
+		expect(await membershipByAnyToken(['gho_signin'], 'PostHog')).toBe('unknown');
+		expect(await membershipByAnyToken([], 'PostHog')).toBe('unknown');
 	});
 });

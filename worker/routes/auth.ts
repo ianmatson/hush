@@ -189,9 +189,9 @@ const app = routes()
 		await startSession(c, viewer.user.id);
 		await poller(c.env, viewer.user.id).start(viewer.user.id, c.env.APP_URL);
 		c.executionCtx.waitUntil(
-			refreshSlackMentionsAccess(c.env, viewer.user.id, token).catch((err) =>
-				console.error('slack mentions access check failed', (err as Error).message)
-			)
+			getUser(c.env, viewer.user.id)
+				.then((user) => (user ? refreshSlackMentionsAccess(c.env, user) : undefined))
+				.catch((err) => console.error('slack mentions access check failed', (err as Error).message))
 		);
 		// The app then runs the org access check once, unless this browser said "Don't show again".
 		return c.redirect(

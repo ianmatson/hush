@@ -73,7 +73,7 @@ pnpm check        # svelte-check + Worker tsc
 
 Slack alerts use the **Hush** Slack app (`A0C7BMZE291`, public distribution). Peek mentions use **Hush Mentions** (`A0C72HLTBPH`, internal to the PostHog workspace). Without `SLACK_CLIENT_ID`, Settings shows no Slack alerts.
 
-Peek mentions are on only with `SLACK_MENTIONS_CLIENT_ID`, `SLACK_MENTIONS_CLIENT_SECRET`, `SLACK_MENTIONS_TEAM_ID`, and `SLACK_MENTIONS_GITHUB_ORG`. Hush shows them only to active members of that GitHub org (checked with the sign-in token at most once a day), and the OAuth callback refuses any Slack workspace other than `SLACK_MENTIONS_TEAM_ID`. The PostHog GitHub org must approve the Hush OAuth app, or GitHub hides the membership. Search results are never stored: each peek searches Slack again.
+Peek mentions are on only with `SLACK_MENTIONS_CLIENT_ID`, `SLACK_MENTIONS_CLIENT_SECRET`, `SLACK_MENTIONS_TEAM_ID`, and `SLACK_MENTIONS_GITHUB_ORG`. Hush shows them only to active members of that GitHub org (checked at most once a day with the sign-in token, or with your own token when the org hides the membership from the sign-in token), and the OAuth callback refuses any Slack workspace other than `SLACK_MENTIONS_TEAM_ID`. The PostHog GitHub org must approve the Hush OAuth app, or GitHub hides the membership. Search results are never stored: each peek searches Slack again.
 
 Each app's manifest is in `slack/<app>/manifest.json`. Change the manifest there, then push it with the Slack CLI:
 

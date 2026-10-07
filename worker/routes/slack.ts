@@ -2,7 +2,6 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
 import type { SlackMentionDTO, SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
-import { appToken } from '../db';
 import { poller, routes, type AppEnv } from '../app';
 import {
 	SLACK_AUTHORIZE_URL,
@@ -66,11 +65,9 @@ const settingsUrl = (c: Context<AppEnv>, params: Record<string, string>) =>
 async function mentionsStatus(c: Context<AppEnv>): Promise<SlackStatusDTO['mentions']> {
 	const user = c.get('user');
 	if (!slackMentionsConfigured(c.env)) return { available: false, connected: false };
-	const githubToken = await appToken(c.env, user).catch(() => null);
-	if (githubToken)
-		await refreshSlackMentionsAccess(c.env, user.id, githubToken).catch((err) =>
-			console.error('slack mentions access check failed', (err as Error).message)
-		);
+	await refreshSlackMentionsAccess(c.env, user).catch((err) =>
+		console.error('slack mentions access check failed', (err as Error).message)
+	);
 	if (!(await slackMentionsAllowed(c.env, user.id))) return { available: false, connected: false };
 	return { available: true, connected: !!(await slackMentionsToken(c.env, user.id)) };
 }

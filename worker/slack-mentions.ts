@@ -1,5 +1,5 @@
 import type { SlackMentionDTO } from '../src/lib/shared/types';
-import type { Env } from './db';
+import { appToken, userToken, type Env, type UserRow } from './db';
 import { gh } from './github';
 import { SLACK_API, slackAnswer, type SlackAnswer } from './slack';
 import { saveSlackMentionsAccess, slackMentionsCheckedAt } from './slack-store';
@@ -160,17 +160,30 @@ export async function searchMentions(
 	return { ok: true, mentions: mentionsOf(answer.results?.messages ?? [], ref) };
 }
 
+export async function membershipByAnyToken(tokens: string[], org: string): Promise<OrgMembership> {
+	for (const token of tokens) {
+		const membership = await githubOrgMembership(token, org);
+		if (membership !== 'unknown') return membership;
+	}
+	return 'unknown';
+}
+
+async function githubTokensOf(env: Env, user: UserRow): Promise<string[]> {
+	const signIn = await appToken(env, user).catch(() => null);
+	const own = user.token_source === 'own' ? await userToken(env, user).catch(() => null) : null;
+	return [signIn, own].filter((t): t is string => !!t);
+}
+
 export async function refreshSlackMentionsAccess(
 	env: Env,
-	userId: number,
-	githubToken: string,
+	user: UserRow,
 	now = Date.now()
 ): Promise<void> {
 	const org = env.SLACK_MENTIONS_GITHUB_ORG;
 	if (!slackMentionsConfigured(env) || !org) return;
-	const checkedAt = await slackMentionsCheckedAt(env, userId);
+	const checkedAt = await slackMentionsCheckedAt(env, user.id);
 	if (checkedAt && now - checkedAt < ACCESS_RECHECK_MS) return;
-	const membership = await githubOrgMembership(githubToken, org);
+	const membership = await membershipByAnyToken(await githubTokensOf(env, user), org);
 	if (membership === 'unknown') return;
-	await saveSlackMentionsAccess(env, userId, membership === 'member');
+	await saveSlackMentionsAccess(env, user.id, membership === 'member');
 }
