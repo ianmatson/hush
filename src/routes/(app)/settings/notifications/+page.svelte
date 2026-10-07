@@ -45,6 +45,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import SlackSettings from '$lib/components/app/settings/slack-settings.svelte';
 	import Trash from '@lucide/svelte/icons/trash';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
@@ -212,6 +213,8 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
+
+	<SlackSettings />
 
 	{#if settings}
 		<Card.Root>

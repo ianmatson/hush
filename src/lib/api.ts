@@ -127,6 +127,9 @@ export const api = {
 		),
 	unsubscribe: (endpoint: string) => ok(client.api.push.unsubscribe.$post({ json: { endpoint } })),
 	testPush: () => ok(client.api.push.test.$post()),
+	slack: () => ok(client.api.slack.$get()),
+	disconnectSlack: () => ok(client.api.slack.$delete()),
+	testSlack: () => ok(client.api.slack.test.$post()),
 	countSource: (q: string, scope: string) =>
 		ok(client.api.sources.count.$get({ query: { q, scope } })),
 	dashboard: (kind: DashKind, refresh = false) =>

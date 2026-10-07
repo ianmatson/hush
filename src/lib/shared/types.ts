@@ -484,6 +484,11 @@ export interface MeDTO {
  * The orgs your GitHub sign-in can see. GitHub leaves out, with no error or count, every org that
  * has not approved Hush; so Hush cannot tell which orgs are missing, only show what it sees.
  */
+export interface SlackStatusDTO {
+	available: boolean;
+	connection: { teamName: string; connectedAt: number } | null;
+}
+
 export type OrgAccess =
 	{ available: false } | { available: true; orgs: string[]; approveUrl: string };
 
