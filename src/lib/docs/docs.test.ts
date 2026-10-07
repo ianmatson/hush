@@ -79,7 +79,7 @@ describe('docs', () => {
 		]);
 		for (const p of pages)
 			for (const [, href] of renderMarkdown(p.markdown).html.matchAll(/ href="([^"]+)"/g)) {
-				if (/^https?:/.test(href)) continue;
+				if (/^(https?|mailto):/.test(href)) continue;
 				const [path, hash] = href.split('#');
 				const target = path || p.path;
 				if (files.has(target)) continue;

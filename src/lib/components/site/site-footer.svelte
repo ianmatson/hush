@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { APP_URL, REPO_URL } from '$lib/site';
+	import { APP_URL, REPO_URL, SUPPORT_EMAIL } from '$lib/site';
 	import { COMPARE_PAGES, GUIDE_PAGES, SITE_ABOUT_PAGES, SITE_SECTIONS } from './site-nav';
 </script>
 
@@ -11,6 +11,7 @@
 				<a href={link.href}>{link.label}</a>
 			{/each}
 			<a href={REPO_URL} rel="noreferrer">GitHub</a>
+			<a href="mailto:{SUPPORT_EMAIL}">Support</a>
 			<a href="{APP_URL}/login">Sign in</a>
 		</nav>
 		{#if GUIDE_PAGES.length > 0}

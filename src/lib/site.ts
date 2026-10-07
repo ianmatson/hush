@@ -12,3 +12,5 @@ export const APP_URL = import.meta.env.DEV ? '' : 'https://app.hush-gh.com';
 
 /** The source code. */
 export const REPO_URL = 'https://github.com/ianmatson/hush';
+
+export const SUPPORT_EMAIL = 'support@hush-gh.com';
