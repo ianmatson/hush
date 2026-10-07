@@ -593,6 +593,7 @@ export interface PeekCan {
 	author: boolean;
 	close: boolean;
 	reopen: boolean;
+	update?: boolean;
 	/** The conversation is not locked (or you may still write in it). */
 	comment: boolean;
 	/** Your permission on the repository: ADMIN, MAINTAIN, WRITE, TRIAGE, or READ. */
@@ -607,7 +608,17 @@ export interface PeekCan {
 		autoMerge: { on: boolean; method: MergeMethod | null; canEnable: boolean; canDisable: boolean };
 		/** Workflow runs with a failed job, for "Re-run failed jobs". */
 		failedRuns: number[];
+		stack: PeekStack;
 	};
+}
+
+export interface PeekStack {
+	gitHubStacksEnabled: boolean;
+	numberOnGitHub: number | null;
+	openPrsBelowOnGitHub: number[];
+	mergesIntoDefaultBranch: boolean;
+	openPrsAboveNearestFirst: number[];
+	branchesAbove: boolean;
 }
 
 /**

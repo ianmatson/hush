@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ghActions, mainAction } from './actions';
+import { NO_STACK } from './stack-merge';
 import type { PeekDTO } from './types';
 
 const pr = (over: Partial<PeekDTO> = {}, can: Partial<PeekDTO['can']['pr']> = {}): PeekDTO =>
@@ -31,6 +32,7 @@ const pr = (over: Partial<PeekDTO> = {}, can: Partial<PeekDTO['can']['pr']> = {}
 				mergeAsAdmin: false,
 				autoMerge: { on: false, method: null, canEnable: false, canDisable: false },
 				failedRuns: [],
+				stack: NO_STACK,
 				...can
 			}
 		},
@@ -67,6 +69,17 @@ describe('actions on GitHub', () => {
 		expect(ids(pr({}, { autoMerge: { ...auto, on: true, canDisable: true } }))).toContain(
 			'auto_merge_off'
 		);
+	});
+
+	it('offers ready for review on a draft and convert to draft otherwise, when you can edit it', () => {
+		const editable = { ...pr().can, update: true };
+		expect(ids(pr({ can: editable }))).toContain('draft');
+		const draft = pr({ draft: true, can: editable });
+		expect(ids(draft)).toContain('ready');
+		expect(ids(draft)).not.toContain('draft');
+		expect(ids(pr())).not.toContain('draft');
+		expect(mainAction(null, ghActions(draft))?.id).toBe('ready');
+		expect(mainAction('review', ghActions(pr({ can: editable })))?.id).toBe('approve');
 	});
 
 	it('closes issues as done or not planned, and reopens closed ones', () => {

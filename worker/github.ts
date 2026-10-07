@@ -14,6 +14,8 @@ import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts } from '../src/lib/shared/subject';
+import { NO_STACK } from '../src/lib/shared/stack-merge';
+import { readStack } from './stacks';
 
 const API = 'https://api.github.com';
 const UA = 'hush-notifications (+https://github.com)';
@@ -593,7 +595,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       id number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
       baseRefName headRefName headRefOid reviewDecision mergeable mergeStateStatus locked
       ${REACTION_FIELDS}
-      viewerDidAuthor viewerCanClose viewerCanReopen viewerCanMergeAsAdmin
+      viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate viewerCanMergeAsAdmin
       viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
       repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }
       author { ${PERSON} }
@@ -736,6 +738,7 @@ export async function fetchPeek(
 			author: !!n.viewerDidAuthor,
 			close: !!n.viewerCanClose,
 			reopen: !!n.viewerCanReopen,
+			update: !!n.viewerCanUpdate,
 			comment: !n.locked || WRITERS.has(n.repository?.viewerPermission),
 			permission: n.repository?.viewerPermission ?? null
 		}
@@ -778,7 +781,16 @@ export async function fetchPeek(
 			canEnable: !!n.viewerCanEnableAutoMerge,
 			canDisable: !!n.viewerCanDisableAutoMerge
 		},
-		failedRuns
+		failedRuns,
+		stack:
+			n.state === 'OPEN'
+				? await readStack(token, `${owner}/${repo}`, {
+						number: n.number,
+						head: n.headRefName,
+						base: n.baseRefName,
+						defaultBranch: r.defaultBranchRef?.name ?? ''
+					}).catch(() => NO_STACK)
+				: NO_STACK
 	};
 	const peek: PeekDTO = {
 		...base,

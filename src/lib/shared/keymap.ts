@@ -100,6 +100,7 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'peek.rerun', label: 'Re-run failed jobs', scope: 'peek', keys: ['Shift+r'] },
 	{ id: 'peek.merge', label: 'Merge (press twice)', scope: 'peek', keys: ['Shift+m'] },
 	{ id: 'peek.closeReopen', label: 'Close or reopen', scope: 'peek', keys: ['Shift+x'] },
+	{ id: 'peek.draftReady', label: 'Ready for review or draft', scope: 'peek', keys: ['Shift+d'] },
 
 	{ id: 'editor.send', label: 'Send the comment', scope: 'editor', keys: ['Mod+Enter'] },
 	{ id: 'editor.suggestNext', label: 'Suggestions: next', scope: 'editor', keys: ['ArrowDown'] },

@@ -13,6 +13,7 @@
 		mainAction,
 		type GhActionId
 	} from '$lib/shared/actions';
+	import { NO_STACK, stackMergeNotice, stackMergePlan } from '$lib/shared/stack-merge';
 	import type { ActionKind, MergeMethod } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
@@ -38,11 +39,20 @@
 	const others = $derived(bar.filter((s) => s.id !== main?.id));
 	const has = (id: GhActionId) => states.find((s) => s.id === id);
 
+	const stackPlan = $derived(p ? stackMergePlan(p.number, p.can.pr?.stack ?? NO_STACK) : null);
+	const stackNotice = $derived(stackPlan ? stackMergeNotice(stackPlan) : null);
+
 	let method = $state<MergeMethod>('SQUASH');
+	let mergeCommitPickedFor = '';
 	$effect(() => {
 		const m = p?.can.pr?.methods ?? [];
+		const keepsStackedCommits = stackPlan?.kind === 'leaves_behind' && m.includes('MERGE');
+		const pr = `${repo}#${number}`;
 		untrack(() => {
-			if (m.length && !m.includes(method)) method = m[0];
+			if (keepsStackedCommits && mergeCommitPickedFor !== pr) {
+				mergeCommitPickedFor = pr;
+				method = 'MERGE';
+			} else if (m.length && !m.includes(method)) method = m[0];
 		});
 	});
 	const label = (id: GhActionId) => (id === 'merge' ? MERGE_LABEL[method] : GH_ACTIONS[id].label);
@@ -62,6 +72,7 @@
 		if (id === 'comment' || id === 'request_changes') return focusComposer(id);
 		if (GH_ACTIONS[id].confirm && confirming !== id) {
 			confirming = id;
+			if (id === 'merge' && stackNotice) toast.info(stackNotice, { duration: 8000 });
 			clearTimeout(confirmTimer);
 			confirmTimer = setTimeout(() => (confirming = null), 4000);
 			return;

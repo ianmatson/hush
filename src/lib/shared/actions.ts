@@ -12,6 +12,8 @@ export type GhActionId =
 	| 'merge'
 	| 'auto_merge'
 	| 'auto_merge_off'
+	| 'ready'
+	| 'draft'
 	| 'close'
 	| 'close_not_planned'
 	| 'reopen';
@@ -52,6 +54,18 @@ export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
 	merge: { label: 'Merge', done: 'Merged', command: 'peek.merge', confirm: true },
 	auto_merge: { label: 'Enable auto-merge', done: 'Auto-merge is on', undo: 'auto_merge_off' },
 	auto_merge_off: { label: 'Turn off auto-merge', done: 'Auto-merge is off', undo: 'auto_merge' },
+	ready: {
+		label: 'Ready for review',
+		done: 'Ready for review',
+		command: 'peek.draftReady',
+		undo: 'draft'
+	},
+	draft: {
+		label: 'Convert to draft',
+		done: 'Converted to draft',
+		command: 'peek.draftReady',
+		undo: 'ready'
+	},
 	close: { label: 'Close', done: 'Closed', command: 'peek.closeReopen', undo: 'reopen' },
 	close_not_planned: {
 		label: 'Close as not planned',
@@ -112,6 +126,7 @@ export function ghActions(p: PeekDTO): GhActionState[] {
 		if (pr.autoMerge.on) {
 			if (pr.autoMerge.canDisable) out.push({ id: 'auto_merge_off' });
 		} else if (pr.autoMerge.canEnable) out.push({ id: 'auto_merge' });
+		if (p.can.update) out.push({ id: p.draft ? 'ready' : 'draft' });
 	}
 	if (p.can.comment) out.push({ id: 'comment' });
 	if (open && p.can.close) {
@@ -133,6 +148,7 @@ export function mainAction(kind: ActionKind | null, states: GhActionState[]): Gh
 	const want = kind ? pick[kind] : undefined;
 	return (
 		states.find((s) => s.id === want && !s.blocked) ??
+		states.find((s) => s.id === 'ready') ??
 		states.find((s) => s.id === 'comment') ??
 		null
 	);

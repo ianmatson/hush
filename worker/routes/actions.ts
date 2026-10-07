@@ -2,6 +2,8 @@ import { GH_ACTIONS, type GhActionId } from '../../src/lib/shared/actions';
 import type { MergeMethod } from '../../src/lib/shared/types';
 import { userToken } from '../db';
 import { gh } from '../github';
+import { linkStack, mergeStackThrough, readPrRefs, readStack } from '../stacks';
+import { stackMergePlan } from '../../src/lib/shared/stack-merge';
 import { REACTION_CONTENTS } from '../../src/lib/shared/reactions';
 import { routes, poller, json } from '../app';
 
@@ -111,6 +113,18 @@ const app = routes()
 			case 'merge': {
 				if (!b.method || !METHODS.has(b.method))
 					return c.json({ error: 'Choose a merge method.' }, 400);
+				const plan = await readPrRefs(token, repo, number)
+					.then((refs) => readStack(token, repo, refs))
+					.then((stack) => stackMergePlan(number, stack))
+					.catch((e: Error) => e);
+				if (plan instanceof Error)
+					return c.json({ error: `Hush could not read the stack: ${plan.message}` }, 502);
+				if (plan.kind === 'link') error = await linkStack(token, repo, plan.chainBottomFirst);
+				if (error) break;
+				if (plan.kind === 'link' || plan.kind === 'stack') {
+					error = await mergeStackThrough(token, repo, number, b.method);
+					break;
+				}
 				const res = await call(`/repos/${repo}/pulls/${number}/merge`, 'PUT', {
 					merge_method: b.method.toLowerCase(),
 					...(typeof b.sha === 'string' && /^[0-9a-f]{40}$/.test(b.sha) ? { sha: b.sha } : {})
@@ -133,6 +147,17 @@ const app = routes()
 								'mutation($id: ID!) { disablePullRequestAutoMerge(input: { pullRequestId: $id }) { clientMutationId } }',
 								{ id: b.id }
 							);
+				break;
+			}
+			case 'ready':
+			case 'draft': {
+				if (typeof b.id !== 'string' || !b.id) return c.json({ error: 'Not a pull request.' }, 400);
+				error = await graphql(
+					action === 'ready'
+						? 'mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { clientMutationId } }'
+						: 'mutation($id: ID!) { convertPullRequestToDraft(input: { pullRequestId: $id }) { clientMutationId } }',
+					{ id: b.id }
+				);
 				break;
 			}
 			case 'close':
