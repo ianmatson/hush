@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePeekLink, peekLinkUrl } from './peek-link';
+import { parsePeekLink, peekLinkParam, peekLinkUrl } from './peek-link';
 
 describe('parsePeekLink', () => {
 	it('reads owner/repo/number and owner/repo#number', () => {
@@ -44,5 +44,13 @@ describe('peekLinkUrl', () => {
 		expect(peekLinkUrl({ repo: 'acme/web', number: 7 })).toBe(
 			'https://github.com/acme/web/issues/7'
 		);
+	});
+});
+
+describe('peekLinkParam', () => {
+	it('writes owner/repo/number, which parsePeekLink reads back', () => {
+		const link = { repo: 'PostHog/posthog.com', number: 20788 };
+		expect(peekLinkParam(link)).toBe('PostHog/posthog.com/20788');
+		expect(parsePeekLink(peekLinkParam(link))).toEqual(link);
 	});
 });

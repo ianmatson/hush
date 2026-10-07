@@ -17,6 +17,10 @@ export const peek = $state<{
 	heldId: string | null;
 }>({ owner: null, target: null, header: null, footer: null, heldId: null });
 
+export const LINK_PEEK_OWNER = 'link';
+
+export const linkedPeekTarget = () => (peek.owner === LINK_PEEK_OWNER ? peek.target : null);
+
 export const peekIsOpen = () => peek.owner !== null;
 
 export function claimPeek(owner: string) {
