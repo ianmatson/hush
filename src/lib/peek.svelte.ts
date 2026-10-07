@@ -15,7 +15,8 @@ export const peek = $state<{
 	header: Snippet | null;
 	footer: Snippet | null;
 	heldId: string | null;
-}>({ owner: null, target: null, header: null, footer: null, heldId: null });
+	endedId: string | null;
+}>({ owner: null, target: null, header: null, footer: null, heldId: null, endedId: null });
 
 export const LINK_PEEK_OWNER = 'link';
 
@@ -34,6 +35,7 @@ export function closePeek() {
 	peek.header = null;
 	peek.footer = null;
 	peek.heldId = null;
+	peek.endedId = null;
 }
 
 export function holdPeekOn(repo: string, number: number) {
@@ -41,8 +43,10 @@ export function holdPeekOn(repo: string, number: number) {
 	if (target && target.repo === repo && target.number === number) peek.heldId = target.id;
 }
 
-export function releasePeekHold() {
+export function markPeekItemEnded(repo: string, number: number) {
 	peek.heldId = null;
+	const target = peek.target;
+	if (target && target.repo === repo && target.number === number) peek.endedId = target.id;
 }
 
 export function releasePeekHoldUnlessOn(id: string | null) {
