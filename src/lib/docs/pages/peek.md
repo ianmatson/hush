@@ -16,7 +16,9 @@ Every inbox thread is about a pull request or an issue, so every thread has a pe
 
 ### Open the peek from a link
 
-Add `?peek=` and a pull request or issue to the address of the Inbox, Pull requests, or Issues tab, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue.
+Add `?peek=` and a pull request or issue to the address of the Inbox, Pull requests, or Issues tab, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue. When the item is in the list of that tab, the peek opens on its row, with the buttons of the page.
+
+The address follows the peek: when you open the peek or move it to another item, the address changes to its `?peek=` link. Reload the page, or copy the address, and the peek opens on the same item. When you close the peek, the address loses its `?peek=`.
 
 ## What it shows
 

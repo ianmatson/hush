@@ -22,3 +22,5 @@ export function parsePeekLink(value: string | null): PeekLink | null {
 
 export const peekLinkUrl = ({ repo, number }: PeekLink) =>
 	`https://github.com/${repo}/issues/${number}`;
+
+export const peekLinkParam = ({ repo, number }: PeekLink) => `${repo}/${number}`;

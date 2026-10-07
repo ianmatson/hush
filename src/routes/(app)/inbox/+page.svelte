@@ -54,7 +54,13 @@
 		type NotNeededTarget
 	} from '$lib/components/app/not-needed-dialog.svelte';
 	import SnoozeSheet from '$lib/components/app/snooze-sheet.svelte';
-	import { claimPeek, closePeek, peek, releasePeekHoldUnlessOn } from '$lib/peek.svelte';
+	import {
+		claimPeek,
+		closePeek,
+		linkedPeekTarget,
+		peek,
+		releasePeekHoldUnlessOn
+	} from '$lib/peek.svelte';
 	import { keepHeldRow } from '$lib/shared/held-row';
 	import AppMenu from '$lib/components/app/app-menu.svelte';
 	import { alreadyTrue, subjectKind } from '$lib/shared/snooze';
@@ -286,6 +292,16 @@
 			sel.clear();
 			selectedId = r.id;
 			take();
+		});
+	});
+	$effect(() => {
+		const linked = linkedPeekTarget();
+		const t = linked
+			? threadsQ.data?.threads.find((t) => t.repo === linked.repo && t.number === linked.number)
+			: null;
+		if (!t) return;
+		untrack(() => {
+			palette.peekRequest = { page: 'inbox', view, id: t.id };
 		});
 	});
 
