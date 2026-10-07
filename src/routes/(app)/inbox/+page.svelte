@@ -324,8 +324,14 @@
 						}
 					: old
 			);
-			run(ids, action).catch((e) => toast.error(e.message));
-			if (ids.length > 1) toast(LABEL[action]!, { description: `${ids.length} threads` });
+			run(ids, action)
+				.then(() => {
+					if (ids.length > 1) toast(LABEL[action]!, { description: `${ids.length} threads` });
+				})
+				.catch((e) => {
+					toast.error(e.message);
+					queryClient.invalidateQueries({ queryKey: keys.threads(view) });
+				});
 			return;
 		}
 		// Optimistic: the rows leave this view now. Stop any refetch that could bring them back.

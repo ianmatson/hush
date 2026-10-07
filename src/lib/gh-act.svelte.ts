@@ -50,20 +50,9 @@ export async function sendWithUndo(
 	const undo = GH_ACTIONS[id].undo;
 	toast.success(GH_ACTIONS[id].done, {
 		description: `${p.repo}#${p.number}`,
-		...(undo && undo !== 'delay'
-			? { action: { label: 'Undo', onClick: () => void sendWithUndo(p, undo, opts) } }
-			: {})
+		...(undo ? { action: { label: 'Undo', onClick: () => void sendWithUndo(p, undo, opts) } } : {})
 	});
 	return true;
-}
-
-/** Approve after 5 seconds, unless you press Undo: an approval cannot be withdrawn. */
-export function approveLater(p: PeekDTO, body?: string) {
-	const timer = setTimeout(() => void sendWithUndo(p, 'approve', { body }), 5000);
-	toast(`Approving ${p.repo}#${p.number}…`, {
-		duration: 5000,
-		action: { label: 'Undo', onClick: () => clearTimeout(timer) }
-	});
 }
 
 /**

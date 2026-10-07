@@ -44,7 +44,11 @@
 		}
 	}
 	async function off() {
-		await api.feedOff(view);
+		try {
+			await api.feedOff(view);
+		} catch (err) {
+			return void toast.error((err as Error).message);
+		}
 		queryClient.setQueryData<FeedDTO[]>(keys.feeds, (old) => old?.filter((x) => x.view !== view));
 		toast.success(`Feed for “${name}” turned off. Its URL no longer works.`);
 	}

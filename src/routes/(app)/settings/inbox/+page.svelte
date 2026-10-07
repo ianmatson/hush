@@ -8,7 +8,7 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Trash from '@lucide/svelte/icons/trash-2';
 	import { Button } from '$lib/components/ui/button';
-	import { Switch } from '$lib/components/ui/switch';
+	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
 	import * as Card from '$lib/components/ui/card';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import Rss from '@lucide/svelte/icons/rss';
@@ -54,10 +54,10 @@
 					label="Bot activity is FYI"
 					description="Comments and review requests from dependabot, renovate, codecov, and other bots."
 				>
-					<Switch
+					<SavedSwitch
 						id="bots"
 						checked={settings.botsAreFyi}
-						onCheckedChange={(v) => saveSettings({ botsAreFyi: v })}
+						onsave={(v) => saveSettings({ botsAreFyi: v })}
 					/>
 				</SettingRow>
 				<SettingRow
@@ -65,10 +65,10 @@
 					label="Team review requests need me"
 					description="A review request to a team you are in goes to “Needs you” (and push), not FYI."
 				>
-					<Switch
+					<SavedSwitch
 						id="team-reviews"
 						checked={settings.teamReviewsAreAction}
-						onCheckedChange={(v) => saveSettings({ teamReviewsAreAction: v })}
+						onsave={(v) => saveSettings({ teamReviewsAreAction: v })}
 					/>
 				</SettingRow>
 				<SettingRow
@@ -76,10 +76,10 @@
 					label="Smart decisions"
 					description="Jev, a decision model, reads the newest comments, and your about: conditions. Comments that need nothing from you (thanks, +1) stop being your turn. It sends titles, descriptions, and comments to TypeSafe."
 				>
-					<Switch
+					<SavedSwitch
 						id="smart-decisions"
 						checked={settings.smartDecisions}
-						onCheckedChange={(v) => saveSettings({ smartDecisions: v })}
+						onsave={(v) => saveSettings({ smartDecisions: v })}
 					/>
 				</SettingRow>
 				{#if settings.smartDecisions && smartStatus}

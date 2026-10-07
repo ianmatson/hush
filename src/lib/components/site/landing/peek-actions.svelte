@@ -75,9 +75,7 @@
 		</div>
 
 		<div class="toast">
-			<span>Approving in 5s…</span>
-			<b>Undo</b>
-			<span class="fuse"></span>
+			<span>Approved PostHog/posthog.com#20387</span>
 		</div>
 	</div>
 
@@ -322,20 +320,6 @@
 		box-shadow: 0 16px 30px -12px rgb(0 0 0 / 0.4);
 		animation: toast var(--loop) var(--ease) infinite;
 	}
-	.toast b {
-		font-weight: 600;
-		color: color-mix(in oklab, var(--signal-review) 60%, var(--background));
-	}
-	.fuse {
-		position: absolute;
-		left: 0;
-		bottom: 0;
-		height: 2px;
-		width: 100%;
-		background: var(--signal-review);
-		transform-origin: left;
-		animation: fuse var(--loop) linear infinite;
-	}
 
 	.rail {
 		position: relative;
@@ -435,16 +419,6 @@
 			opacity: 0;
 		}
 	}
-	@keyframes fuse {
-		0%,
-		68% {
-			scale: 1 1;
-		}
-		94%,
-		100% {
-			scale: 0 1;
-		}
-	}
 
 	@media (max-width: 72rem) {
 		.alert {
@@ -477,8 +451,7 @@
 		.typed,
 		.suggest,
 		.primary,
-		.toast,
-		.fuse {
+		.toast {
 			animation: none;
 		}
 		.typed {

@@ -104,7 +104,11 @@
 			!confirm('Delete your Hush account? This removes your token, rules, feeds, and push devices.')
 		)
 			return;
-		await api.deleteAccount();
+		try {
+			await api.deleteAccount();
+		} catch (err) {
+			return void toast.error((err as Error).message);
+		}
 		leaveTo('/login');
 	}
 </script>

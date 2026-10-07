@@ -10,7 +10,7 @@
 		previewItem
 	} from '$lib/row-preview';
 	import { Button } from '$lib/components/ui/button';
-	import { Switch } from '$lib/components/ui/switch';
+	import SavedSwitch from './saved-switch.svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import DashRow from '$lib/components/app/dash-row.svelte';
@@ -24,7 +24,7 @@
 
 	function toggle(part: string, on: boolean) {
 		const hidden = rows[kind].filter((p) => p !== part);
-		void saveSettings({ rows: { ...rows, [kind]: on ? hidden : [...hidden, part] } });
+		return saveSettings({ rows: { ...rows, [kind]: on ? hidden : [...hidden, part] } });
 	}
 
 	const isDefault = $derived(JSON.stringify(rows[kind]) === JSON.stringify(DEFAULT_ROWS[kind]));
@@ -94,9 +94,9 @@
 			{#each ROW_PARTS[kind] as part (part.id)}
 				<label class="flex items-center justify-between gap-3 text-sm">
 					<span>{part.label}</span>
-					<Switch
+					<SavedSwitch
 						checked={!rows[kind].includes(part.id)}
-						onCheckedChange={(on) => toggle(part.id, on)}
+						onsave={(on) => toggle(part.id, on)}
 					/>
 				</label>
 			{/each}

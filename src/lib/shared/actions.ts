@@ -26,11 +26,8 @@ export interface GhActionInfo {
 	body?: 'required' | 'optional';
 	/** Cannot be undone: the button (or key) asks once more ("Confirm merge"). */
 	confirm?: boolean;
-	/**
-	 * How to take it back from the toast. "delay": Hush waits 5 seconds before it sends it (an
-	 * approval cannot be withdrawn). An action id: that action reverses it.
-	 */
-	undo?: 'delay' | GhActionId;
+	/** The action that takes it back from the toast. */
+	undo?: GhActionId;
 }
 
 export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
@@ -38,8 +35,7 @@ export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
 		label: 'Approve',
 		done: 'Approved',
 		command: 'peek.approve',
-		body: 'optional',
-		undo: 'delay'
+		body: 'optional'
 	},
 	request_changes: {
 		label: 'Request changes',

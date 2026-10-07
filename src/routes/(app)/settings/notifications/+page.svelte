@@ -39,7 +39,7 @@
 
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
-	import { Switch } from '$lib/components/ui/switch';
+	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Card from '$lib/components/ui/card';
@@ -62,7 +62,7 @@
 	});
 	const quietNow = $derived(inQuietHours(quiet, now));
 
-	function setQuiet(patch: Partial<QuietHours> | null) {
+	function setQuiet(patch: Partial<QuietHours> | null): Promise<boolean> {
 		const next: QuietHours | null =
 			patch === null
 				? null
@@ -70,7 +70,7 @@
 						...(quiet ?? { from: 22 * 60, to: 7 * 60, weekends: false, timeZone: browserZone }),
 						...patch
 					};
-		saveSettings({ quietHours: next }, next ? 'Quiet hours saved' : 'Quiet hours off');
+		return saveSettings({ quietHours: next }, next ? 'Quiet hours saved' : 'Quiet hours off');
 	}
 
 	function setClock(key: 'from' | 'to', value: string) {
@@ -113,8 +113,12 @@
 	}
 
 	async function removeDevice(endpoint: string) {
-		await api.unsubscribe(endpoint);
-		if (thisDevice?.endpoint === endpoint) await thisDevice.unsubscribe();
+		try {
+			await api.unsubscribe(endpoint);
+			if (thisDevice?.endpoint === endpoint) await thisDevice.unsubscribe();
+		} catch (err) {
+			toast.error((err as Error).message);
+		}
 		await refreshDevice();
 	}
 
@@ -226,10 +230,10 @@
 					label="“Needs you” items"
 					description="Review requests, failed CI on your PRs, replies, direct mentions."
 				>
-					<Switch
+					<SavedSwitch
 						id="push-action"
 						checked={settings.pushAction}
-						onCheckedChange={(v) => saveSettings({ pushAction: v })}
+						onsave={(v) => saveSettings({ pushAction: v })}
 					/>
 				</SettingRow>
 				<SettingRow
@@ -237,10 +241,10 @@
 					label="FYI items"
 					description="Usually noisy. Set a category to always push instead."
 				>
-					<Switch
+					<SavedSwitch
 						id="push-fyi"
 						checked={settings.pushFyi}
-						onCheckedChange={(v) => saveSettings({ pushFyi: v })}
+						onsave={(v) => saveSettings({ pushFyi: v })}
 					/>
 				</SettingRow>
 			</Card.Content>
@@ -279,11 +283,10 @@
 					label="Digest"
 					description="Send pushes together, as one notification at a fixed interval."
 				>
-					<Switch
+					<SavedSwitch
 						id="push-digest"
 						checked={settings.pushDigestMinutes !== null}
-						onCheckedChange={(v) =>
-							saveSettings({ pushDigestMinutes: v ? DEFAULT_DIGEST_MINUTES : null })}
+						onsave={(v) => saveSettings({ pushDigestMinutes: v ? DEFAULT_DIGEST_MINUTES : null })}
 					/>
 					{#snippet extra()}
 						{#if settings.pushDigestMinutes !== null}
@@ -308,10 +311,10 @@
 					label="Limit"
 					description="After this many pushes, the rest wait and go as one digest."
 				>
-					<Switch
+					<SavedSwitch
 						id="push-limit"
 						checked={settings.pushLimit !== null}
-						onCheckedChange={(v) => saveSettings({ pushLimit: v ? DEFAULT_PUSH_LIMIT : null })}
+						onsave={(v) => saveSettings({ pushLimit: v ? DEFAULT_PUSH_LIMIT : null })}
 					/>
 					{#snippet extra()}
 						{#if settings.pushLimit}
@@ -353,10 +356,10 @@
 						label="Push blocking items at once"
 						description="A “Needs you” item whose text says it blocks something or is an incident skips the digest and the limit. Quiet hours still hold it."
 					>
-						<Switch
+						<SavedSwitch
 							id="push-urgent-now"
 							checked={settings.pushUrgentNow}
-							onCheckedChange={(v) => saveSettings({ pushUrgentNow: v })}
+							onsave={(v) => saveSettings({ pushUrgentNow: v })}
 						/>
 					</SettingRow>
 				{/if}
@@ -365,10 +368,10 @@
 					label="Push while Hush is open"
 					description="Off: while you use Hush on a device, new items show only in Hush."
 				>
-					<Switch
+					<SavedSwitch
 						id="push-while-open"
 						checked={settings.pushWhileOpen}
-						onCheckedChange={(v) => saveSettings({ pushWhileOpen: v })}
+						onsave={(v) => saveSettings({ pushWhileOpen: v })}
 					/>
 				</SettingRow>
 				<SettingRow
@@ -407,11 +410,7 @@
 					label="Quiet hours"
 					description={quiet ? (quietNow ? 'Quiet now.' : 'Not quiet now.') : 'Off.'}
 				>
-					<Switch
-						id="quiet-on"
-						checked={!!quiet}
-						onCheckedChange={(v) => setQuiet(v ? {} : null)}
-					/>
+					<SavedSwitch id="quiet-on" checked={!!quiet} onsave={(v) => setQuiet(v ? {} : null)} />
 					{#snippet extra()}
 						{#if quiet}
 							<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
@@ -452,10 +451,10 @@
 						label="All weekend"
 						description="Also quiet all day on Saturday and Sunday."
 					>
-						<Switch
+						<SavedSwitch
 							id="quiet-weekends"
 							checked={quiet.weekends}
-							onCheckedChange={(v) => setQuiet({ weekends: v })}
+							onsave={(v) => setQuiet({ weekends: v })}
 						/>
 					</SettingRow>
 				{/if}

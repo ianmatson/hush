@@ -57,7 +57,6 @@
 		reference,
 		peek,
 		place,
-		approving = false,
 		confirmingMerge = false,
 		rerunning = false,
 		ondone,
@@ -79,7 +78,6 @@
 		reference: string;
 		peek: DemoPeek;
 		place: 'inbox' | 'away' | 'dash';
-		approving?: boolean;
 		confirmingMerge?: boolean;
 		rerunning?: boolean;
 		ondone: () => void;
@@ -553,13 +551,8 @@
 				{/if}
 			</div>
 			{#if peek.main === 'approve'}
-				<button
-					type="button"
-					class={buttonClass('default', 'sm')}
-					disabled={approving}
-					onclick={onapprove}
-				>
-					{#if approving}<LoaderCircle class="animate-spin" />Approving…{:else}Approve{/if}
+				<button type="button" class={buttonClass('default', 'sm')} onclick={onapprove}>
+					Approve
 				</button>
 			{:else if peek.main === 'rerun' && (failing || rerunning)}
 				<button

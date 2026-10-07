@@ -68,12 +68,17 @@
 				readOnly,
 				...settings.categories.filter((c) => c.id !== READ_ONLY_CATEGORY_ID)
 			];
-			await saveSettings(
+			const saved = await saveSettings(
 				{ teamReviewsAreAction: teams, ...(quiet.length ? { categories } : {}) },
 				'Saved'
 			);
+			if (!saved) return;
 		}
-		await api.onboarded();
+		try {
+			await api.onboarded();
+		} catch (err) {
+			return void toast.error((err as Error).message);
+		}
 		queryClient.setQueryData<MeDTO>(keys.me, (old) => (old ? { ...old, onboarded: true } : old));
 	}
 </script>

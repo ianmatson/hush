@@ -33,7 +33,6 @@
 	}
 
 	const TOAST_MS = 4500;
-	const APPROVE_DELAY_MS = 5000;
 	const RERUN_MS = 3500;
 	const MERGE_CONFIRM_MS = 4000;
 	const ALERT_THREAD = 't-review';
@@ -61,7 +60,6 @@
 	let hiddenDash = $state<string[]>([]);
 	let peekOpen = $state(false);
 	let alertShown = $state(true);
-	let approvingId = $state<string | null>(null);
 	let rerunningId = $state<string | null>(null);
 	let confirmingMergeId = $state<string | null>(null);
 	let toast = $state<Toast | null>(null);
@@ -69,7 +67,6 @@
 
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
-	let approveTimer: ReturnType<typeof setTimeout> | undefined;
 	let toastKey = 0;
 
 	function later(ms: number, run: () => void) {
@@ -84,7 +81,6 @@
 	onDestroy(() => {
 		for (const id of timers) clearTimeout(id);
 		clearTimeout(toastTimer);
-		clearTimeout(approveTimer);
 	});
 
 	function showToast(text: string, undo?: () => void, fuseMs?: number) {
@@ -234,26 +230,12 @@
 	}
 
 	function approve(peek: PeekData, reference: string, threadId?: string) {
-		approvingId = reference;
-		clearTimeout(approveTimer);
-		showToast(
-			'Approving in 5s…',
-			() => {
-				clearTimeout(approveTimer);
-				approvingId = null;
-				showToast('Approval canceled. Nothing was sent.');
-			},
-			APPROVE_DELAY_MS
-		);
-		approveTimer = setTimeout(() => {
-			approvingId = null;
-			const mine = peek.pr?.reviews.find((r) => r.who.login === DEMO_ME.login);
-			if (mine) mine.state = 'APPROVED';
-			else peek.pr?.reviews.push({ who: DEMO_ME, state: 'APPROVED' });
-			addEntry(peek, { who: DEMO_ME, verb: 'approved', tone: 'good', text: '' });
-			resolve(threadId, 'You approved');
-			showToast(`Approved ${reference}.`);
-		}, APPROVE_DELAY_MS);
+		const mine = peek.pr?.reviews.find((r) => r.who.login === DEMO_ME.login);
+		if (mine) mine.state = 'APPROVED';
+		else peek.pr?.reviews.push({ who: DEMO_ME, state: 'APPROVED' });
+		addEntry(peek, { who: DEMO_ME, verb: 'approved', tone: 'good', text: '' });
+		resolve(threadId, 'You approved');
+		showToast(`Approved ${reference}.`);
 	}
 
 	function rerun(peek: PeekData, reference: string, threadId?: string) {
@@ -578,7 +560,6 @@
 						reference={refOf(t)}
 						peek={t.peek}
 						place={t.triage === 'inbox' && !t.muted ? 'inbox' : 'away'}
-						approving={approvingId === refOf(t)}
 						rerunning={rerunningId === refOf(t)}
 						confirmingMerge={confirmingMergeId === refOf(t)}
 						ondone={() => markDone(t.id)}
@@ -611,7 +592,6 @@
 						{reference}
 						{peek}
 						place="dash"
-						approving={approvingId === reference}
 						rerunning={rerunningId === reference}
 						confirmingMerge={confirmingMergeId === reference}
 						ondone={() => {}}

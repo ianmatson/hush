@@ -69,12 +69,15 @@
 			queryClient.invalidateQueries({ queryKey: ['dash'] })
 		]);
 
+	let choosing = $state(false);
+
 	async function choose(answer: NotNeededAnswer) {
 		const t = target;
-		if (!t) return;
-		target = null;
+		if (!t || choosing) return;
+		choosing = true;
 		try {
 			const r = await api.notNeeded(t.id, answer);
+			if (target === t) target = null;
 			if (r.settings) setSettings(r.settings);
 			await refresh();
 			toast.success(answer === 'once' ? 'Moved, until it changes' : 'Hush will sort this way now', {
@@ -94,6 +97,8 @@
 			});
 		} catch (err) {
 			toast.error((err as Error).message);
+		} finally {
+			choosing = false;
 		}
 	}
 </script>
@@ -109,6 +114,7 @@
 				<Button
 					variant="outline"
 					class="h-auto flex-col items-start gap-0.5 py-2 text-left whitespace-normal"
+					disabled={choosing}
 					onclick={() => choose(a.id)}
 				>
 					<span class="font-medium">{a.label}</span>

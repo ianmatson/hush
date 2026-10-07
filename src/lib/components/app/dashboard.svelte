@@ -497,7 +497,10 @@
 									})),
 									[]
 								)
-								.catch((err) => toast.error(err.message));
+								.catch((err) => {
+									toast.error(err.message);
+									queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
+								});
 						}
 					}
 				});
@@ -706,7 +709,10 @@
 							label: 'Undo',
 							onClick: () => {
 								setDismissed(set, false);
-								api.unhide([...set]).catch((e) => toast.error(e.message));
+								api.unhide([...set]).catch((e) => {
+									toast.error(e.message);
+									setDismissed(set, true);
+								});
 							}
 						}
 					: undefined

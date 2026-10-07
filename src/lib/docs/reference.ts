@@ -528,11 +528,9 @@ function actionsReference(): string {
 			a.body === 'required' ? 'required' : a.body === 'optional' ? 'optional' : '',
 			a.confirm
 				? 'Asks again: press twice'
-				: a.undo === 'delay'
-					? 'Sent after 5 seconds; Undo stops it'
-					: a.undo
-						? `Undo: ${GH_ACTIONS[a.undo].label.toLowerCase()}`
-						: ''
+				: a.undo
+					? `Undo: ${GH_ACTIONS[a.undo].label.toLowerCase()}`
+					: ''
 		])
 	);
 }

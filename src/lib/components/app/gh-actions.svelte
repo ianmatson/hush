@@ -5,7 +5,7 @@
 	import { peekQuery } from '$lib/queries';
 	import { palette } from '$lib/palette.svelte';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
-	import { acting, approveLater, focusComposer, sendWithUndo } from '$lib/gh-act.svelte';
+	import { acting, focusComposer, sendWithUndo } from '$lib/gh-act.svelte';
 	import {
 		GH_ACTIONS,
 		MERGE_LABEL,
@@ -23,8 +23,8 @@
 	/**
 	 * Actions on GitHub in the peek's bottom bar: the main one for what the thread asks of you, and
 	 * the rest in "More" (shared/actions.ts). Comment is only the comment box at the end of the
-	 * conversation, and request changes goes there too. Merge asks once more; approve waits 5 seconds (it cannot be
-	 * withdrawn); close and auto-merge offer Undo. Keys: shared/keymap.ts.
+	 * conversation, and request changes goes there too. Merge asks once more; close and auto-merge
+	 * offer Undo. Keys: shared/keymap.ts.
 	 */
 	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
 
@@ -67,7 +67,6 @@
 			return;
 		}
 		confirming = null;
-		if (id === 'approve') return approveLater(p);
 		void sendWithUndo(p, id, { method });
 	}
 

@@ -30,7 +30,7 @@
 		threads: Partial<Record<ViewBase, ThreadDTO[]>>;
 		me: string;
 		settings?: Settings;
-		onsave: (v: Omit<SavedView, 'id'> & { id?: string }) => void;
+		onsave: (v: Omit<SavedView, 'id'> & { id?: string }) => Promise<void>;
 		ondelete?: () => void;
 	} = $props();
 
@@ -39,6 +39,16 @@
 		base: 'inbox',
 		query: ''
 	});
+	let saving = $state(false);
+	async function save() {
+		saving = true;
+		try {
+			await onsave($state.snapshot(draft));
+		} finally {
+			saving = false;
+		}
+	}
+
 	// Start from `initial` each time the dialog opens.
 	$effect(() => {
 		if (open) untrack(() => (draft = structuredClone($state.snapshot(initial))));
@@ -106,7 +116,7 @@
 			{/if}
 			<div class="flex gap-2">
 				<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-				<Button disabled={!nameOk} onclick={() => onsave($state.snapshot(draft))}>Save view</Button>
+				<Button disabled={!nameOk || saving} onclick={save}>Save view</Button>
 			</div>
 		</Dialog.Footer>
 	</Dialog.Content>

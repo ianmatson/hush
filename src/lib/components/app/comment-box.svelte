@@ -2,13 +2,7 @@
 	import { tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
-	import {
-		acting,
-		approveLater,
-		composer,
-		sendAction,
-		type ComposeIntent
-	} from '$lib/gh-act.svelte';
+	import { acting, composer, sendAction, type ComposeIntent } from '$lib/gh-act.svelte';
 	import { GH_ACTIONS, ghActions } from '$lib/shared/actions';
 	import type { PeekDTO } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
@@ -81,9 +75,8 @@
 	async function submit(intent: ComposeIntent) {
 		const body = text.trim();
 		if (intent !== 'approve' && !body) return void box?.focus();
-		if (intent === 'approve') approveLater(p, body || undefined);
-		else if (!(await sendAction(p, intent, { body }))) return;
-		else toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
+		if (!(await sendAction(p, intent, { body: body || undefined }))) return;
+		toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
 		text = '';
 		composer.intent = 'comment';
 	}
