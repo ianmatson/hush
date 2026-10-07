@@ -207,19 +207,19 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'rows.pr',
 		page: 'general',
 		description:
-			'Parts to hide on pull request rows, such as ["sources", "labels"]. Parts: time, author, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, category, tags, labels, sources.'
+			'Parts to hide on pull request rows, such as ["sources", "labels"]. Parts: time, author, external, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, category, tags, markNames, labels, sources.'
 	},
 	{
 		key: 'rows.issue',
 		page: 'general',
 		description:
-			'Parts to hide on issue rows. Parts: time, author, comments, moved, changes, category, tags, labels, sources.'
+			'Parts to hide on issue rows. Parts: time, author, external, comments, moved, changes, category, tags, markNames, labels, sources.'
 	},
 	{
 		key: 'rows.thread',
 		page: 'general',
 		description:
-			'Parts to hide on inbox notification rows. Parts: time, why, changes, override, category, resolved, draft, snooze.'
+			'Parts to hide on inbox notification rows. Parts: time, why, changes, override, category, tags, markNames, resolved, draft, snooze.'
 	},
 	{
 		key: 'keys',

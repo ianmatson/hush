@@ -207,7 +207,7 @@ fragment P on PullRequest {
   id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable bodyText
   repository { nameWithOwner defaultBranchRef { name } }
   baseRefName ${stackBelowFields(MAX_STACK_LEVELS_BELOW)}
-  author { login avatarUrl(size: 48) __typename }
+  author { login avatarUrl(size: 48) __typename } authorAssociation
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
   comments(last: 2) { totalCount nodes { author { login __typename } bodyText url createdAt } }
@@ -224,7 +224,7 @@ fragment P on PullRequest {
 fragment I on Issue {
   id number title url state createdAt updatedAt bodyText
   repository { nameWithOwner }
-  author { login avatarUrl(size: 48) __typename }
+  author { login avatarUrl(size: 48) __typename } authorAssociation
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
   comments(last: 2) { totalCount nodes { author { login __typename } bodyText url createdAt } }
@@ -294,6 +294,7 @@ export function toSubject(n: Node): SubjectFacts {
 		author: n.author?.login ?? 'ghost',
 		authorAvatar: n.author?.avatarUrl ?? null,
 		authorIsBot: n.author?.__typename === 'Bot' || isBot(n.author?.login),
+		authorAssociation: n.authorAssociation ?? null,
 		createdAt: n.createdAt,
 		updatedAt: n.updatedAt,
 		state: n.merged ? 'merged' : n.state === 'CLOSED' ? 'closed' : 'open',
@@ -765,6 +766,7 @@ export async function fetchPeek(
 		state: n.merged ? 'merged' : n.state === 'CLOSED' ? 'closed' : 'open',
 		draft: !!n.isDraft,
 		author: person(n.author),
+		authorAssociation: n.authorAssociation ?? null,
 		createdAt: n.createdAt,
 		html: n.bodyHTML ?? '',
 		reactions: reactionsOf(n),

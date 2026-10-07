@@ -10,11 +10,13 @@ export type RowSettings = Record<RowKind, string[]>;
 const ITEM_PARTS: RowPart[] = [
 	{ id: 'time', label: 'Updated or waiting time' },
 	{ id: 'author', label: 'Author' },
+	{ id: 'external', label: 'External contributor' },
 	{ id: 'comments', label: 'Comment count' },
 	{ id: 'moved', label: 'Moved by you' },
 	{ id: 'changes', label: 'Changes since you looked' },
 	{ id: 'category', label: 'Category' },
 	{ id: 'tags', label: 'Tags' },
+	{ id: 'markNames', label: 'Category and tag names' },
 	{ id: 'labels', label: 'GitHub labels' },
 	{ id: 'sources', label: 'Sources' }
 ];
@@ -30,7 +32,7 @@ const PR_ONLY_PARTS: RowPart[] = [
 ];
 
 export const ROW_PARTS: Record<RowKind, RowPart[]> = {
-	pr: [...ITEM_PARTS.slice(0, 3), ...PR_ONLY_PARTS, ...ITEM_PARTS.slice(3)],
+	pr: [...ITEM_PARTS.slice(0, 4), ...PR_ONLY_PARTS, ...ITEM_PARTS.slice(4)],
 	issue: ITEM_PARTS,
 	thread: [
 		{ id: 'time', label: 'Updated time' },
@@ -39,6 +41,7 @@ export const ROW_PARTS: Record<RowKind, RowPart[]> = {
 		{ id: 'override', label: '“Doesn’t need me” note' },
 		{ id: 'category', label: 'Category' },
 		{ id: 'tags', label: 'Tags' },
+		{ id: 'markNames', label: 'Category and tag names' },
 		{ id: 'resolved', label: 'Why Hush moved it' },
 		{ id: 'draft', label: 'Draft' },
 		{ id: 'snooze', label: 'Snoozed until' }
@@ -54,9 +57,9 @@ export const ROW_KINDS: { id: RowKind; label: string }[] = [
 export const MAX_ROW_LABELS = 2;
 
 export const DEFAULT_ROWS: RowSettings = {
-	pr: ['threads', 'labels', 'sources'],
-	issue: ['labels', 'sources'],
-	thread: ['why', 'changes']
+	pr: ['threads', 'markNames', 'labels', 'sources'],
+	issue: ['markNames', 'labels', 'sources'],
+	thread: ['why', 'changes', 'markNames']
 };
 
 export const rowShows = (rows: RowSettings | undefined, kind: RowKind, part: string) =>

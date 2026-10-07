@@ -12,7 +12,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import KindIcon from './kind-icon.svelte';
-	import MarkIcon from './marks/mark-icon.svelte';
+	import MarkList from './marks/mark-list.svelte';
 	import type { RowMark } from '$lib/marks';
 	import SelectMark from './select-mark.svelte';
 	import SnoozeItems from './snooze-items.svelte';
@@ -193,24 +193,12 @@
 				>
 			{/if}
 			{#if shownMarks.length}
-				<span class="flex shrink-0 items-center gap-1" aria-label="Category and tags">
-					{#each shownMarks as m (m.key)}
-						<Tooltip.Root>
-							<Tooltip.Trigger
-								class="flex size-4 items-center justify-center"
-								aria-label={m.kind === 'category' ? `Category: ${m.name}` : `Tag: ${m.name}`}
-							>
-								<MarkIcon kind={m.kind} color={m.color} icon={m.icon} class="size-3.5" />
-							</Tooltip.Trigger>
-							<Tooltip.Content
-								>{m.kind === 'category' ? 'Category' : 'Tag'}: {m.name}{m.kind === 'category' &&
-								t.rule === m.name
-									? ' (it sets where this goes)'
-									: ''}</Tooltip.Content
-							>
-						</Tooltip.Root>
-					{/each}
-				</span>
+				<MarkList
+					marks={shownMarks}
+					showNames={show('markNames')}
+					tooltipSuffix={(m) =>
+						m.kind === 'category' && t.rule === m.name ? ' (it sets where this goes)' : ''}
+				/>
 			{/if}
 		</div>
 	</div>

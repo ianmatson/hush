@@ -74,7 +74,7 @@ Each row shows:
 - A dot when it is unread.
 - The **main action** button: Review, Fix CI, Address, Resolve, Merge, Reply, Triage, or Open. It opens the right page on GitHub (the files of a PR to review, its checks to fix CI) and marks the thread as read.
 
-To choose the parts that rows show, go to **Settings → General → Row contents**. The Notifications row has **Category** and **Tags** parts, and more. See [`rows.thread`](/docs/settings#rows-thread).
+To choose the parts that rows show, go to **Settings → General → Row contents**. The Notifications row has **Category**, **Tags**, and **Category and tag names** parts, and more. See [`rows.thread`](/docs/settings#rows-thread).
 
 Click a row to [peek](/docs/peek) at it.
 

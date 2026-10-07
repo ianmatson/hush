@@ -22,6 +22,7 @@ export interface SubjectFacts {
 	author: string;
 	authorAvatar: string | null;
 	authorIsBot: boolean;
+	authorAssociation?: string | null;
 	createdAt: string;
 	updatedAt: string;
 	state: 'open' | 'closed' | 'merged';
@@ -158,6 +159,7 @@ export function dashFactsOf(
 		author: s.author,
 		authorAvatar: s.authorAvatar,
 		authorIsBot: s.authorIsBot,
+		authorAssociation: s.authorAssociation ?? null,
 		createdAt: s.createdAt,
 		updatedAt: s.updatedAt,
 		state: s.state,

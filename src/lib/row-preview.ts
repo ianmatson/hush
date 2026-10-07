@@ -14,6 +14,7 @@ const PREVIEW_ITEM: DashItem = {
 	author: 'octocat',
 	authorAvatar: null,
 	authorIsBot: false,
+	authorAssociation: 'FIRST_TIME_CONTRIBUTOR',
 	createdAt: hoursAgo(50),
 	updatedAt: hoursAgo(2),
 	state: 'open',
