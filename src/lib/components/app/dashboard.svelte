@@ -534,18 +534,16 @@
 	}
 
 	// --- Everything else --------------------------------------------------------------
-	let cursorRowEnded = false;
+	let lastCursorIndex = 0;
 	$effect(() => {
-		if (selectedId !== null) cursorRowEnded = false;
+		if (selectedIndex >= 0) lastCursorIndex = selectedIndex;
+	});
+	$effect(() => {
 		if (!navigable.some((i) => i.id === selectedId) && !heldOutOfKeyboardOrder(selectedId)) {
-			if (owns && selectedId !== null && selectedId === peek.endedId) {
-				selectedId = null;
-				cursorRowEnded = true;
-			}
-			if (cursorRowEnded) return void untrack(() => sel.prune(order));
 			const stack = selectedId ? stackOf.get(selectedId) : undefined;
 			const standIn = stack && navigable.find((i) => stackOf.get(i.id) === stack);
-			selectedId = standIn?.id ?? navigable[0]?.id ?? null;
+			const rowThatTookItsPlace = navigable[Math.min(lastCursorIndex, navigable.length - 1)];
+			selectedId = standIn?.id ?? rowThatTookItsPlace?.id ?? null;
 		}
 		untrack(() => sel.prune(order));
 	});
@@ -573,7 +571,6 @@
 			categoryFilter = null;
 			tagFilter = null;
 			selectedId = null;
-			cursorRowEnded = false;
 			sel.clear();
 			groupMotion = false;
 			collapsed = readCollapsed(k);
