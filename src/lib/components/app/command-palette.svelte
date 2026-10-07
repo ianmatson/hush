@@ -7,7 +7,15 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, leaveTo, meQuery, queryClient, threadsQuery } from '$lib/queries';
+	import {
+		dashQuery,
+		keys,
+		leaveTo,
+		meQuery,
+		queryClient,
+		refetchUnlessLive,
+		threadsQuery
+	} from '$lib/queries';
 	import Bookmark from '@lucide/svelte/icons/bookmark';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
@@ -186,7 +194,7 @@
 		const t = toast.loading('Syncing with GitHub…');
 		try {
 			const status = await api.sync();
-			await queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+			await refetchUnlessLive(keys.threadsAll);
 			await queryClient.invalidateQueries({ queryKey: keys.me });
 			if (status.lastError) toast.error(status.lastError, { id: t });
 			else toast.success('Synced', { id: t });

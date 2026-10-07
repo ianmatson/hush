@@ -1,6 +1,6 @@
 import { toast } from 'svelte-sonner';
 import { api } from '$lib/api';
-import { keys, queryClient } from '$lib/queries';
+import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
 import { holdPeekOn } from '$lib/peek.svelte';
 import { reportResolved } from '$lib/recheck';
 import { GH_ACTIONS, type GhActionId } from '$lib/shared/actions';
@@ -32,8 +32,10 @@ export async function sendAction(
 		});
 		reportResolved(res.resolved);
 		if (res.entry) appendToPeekTimeline(p.repo, p.number, res.entry);
-		for (const queryKey of [keys.peek(p.repo, p.number), keys.threadsAll, keys.dashAll])
-			queryClient.invalidateQueries({ queryKey });
+		const entryIsTheOnlyPeekChange = id === 'comment' && res.entry !== null;
+		if (!entryIsTheOnlyPeekChange)
+			queryClient.invalidateQueries({ queryKey: keys.peek(p.repo, p.number) });
+		refetchUnlessLive(keys.threadsAll, keys.dashAll);
 		return true;
 	} catch (err) {
 		toast.error(`${GH_ACTIONS[id].label}: ${(err as Error).message}`);

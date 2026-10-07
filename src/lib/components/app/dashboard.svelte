@@ -18,7 +18,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { ListDrag } from '$lib/drag.svelte';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, queryClient } from '$lib/queries';
+	import { dashQuery, keys, queryClient, refetchUnlessLive } from '$lib/queries';
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
@@ -629,9 +629,9 @@
 			toast(message, {
 				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} ${noun}`
 			});
+			refetchUnlessLive(keys.dash(kind));
 		} catch (err) {
 			toast.error((err as Error).message);
-		} finally {
 			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
 		}
 	}
@@ -685,7 +685,7 @@
 		try {
 			if (mute) await api.muteItems([...set]);
 			else await api.unhide([...set]);
-			queryClient.invalidateQueries({ queryKey: keys.threadsAll });
+			refetchUnlessLive(keys.threadsAll);
 			toast(mute ? 'Muted' : 'Unmuted', {
 				description: items.length === 1 ? items[0].title : `${items.length} items`,
 				action: mute

@@ -5,7 +5,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import { followWhileGrowing, revealEntry } from '$lib/reveal';
 	import { peekQuery } from '$lib/queries';
-	import { keys, queryClient } from '$lib/queries';
+	import { keys, refetchUnlessLive } from '$lib/queries';
 	import { reportResolved } from '$lib/recheck';
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
@@ -42,9 +42,7 @@
 		if (!sync?.changed || at === synced) return;
 		synced = at;
 		reportResolved(sync.resolved);
-		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
-		queryClient.invalidateQueries({ queryKey: keys.dashAll });
-		queryClient.invalidateQueries({ queryKey: keys.alerts });
+		refetchUnlessLive(keys.threadsAll, keys.dashAll, keys.alerts);
 	});
 	let composerEnd = $state<HTMLElement | null>(null);
 	let shownEntryCount: number | null = null;
