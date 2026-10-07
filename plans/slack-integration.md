@@ -68,9 +68,31 @@ Both apps are in the PostHog workspace (`TSS5W8YQZ`). Their manifests are in `sl
 
 ## PR 4: Docs and Marketplace preparation
 
-- `notifications.md`, `peek.md`, `privacy.md`, `README.md`.
-- Marketplace list: privacy policy, support contact, landing page, icons, install count from `slack_workspaces`.
+- `notifications.md`: a "Slack" section that explains the app and how to install it. It becomes the Marketplace installation landing page.
+- `privacy.md`: what Hush stores for Slack (encrypted bot token, Slack user ID, DM channel ID) and when it deletes it (disconnect, uninstall, revoked token).
+- `peek.md`, `README.md`.
+- **Support address:** create `support@hush-gh.com` with Cloudflare Email Routing, forwarded to a personal inbox. Hush has no public contact address now. Add it to the site (docs footer or troubleshooting page) and `SECURITY.md`.
 - One post to `#hush` when alerts ship.
+
+### Marketplace listing
+
+| Field                     | Value                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| Categories                | Developer Tools, Productivity                                                      |
+| Installation landing page | `https://hush-gh.com/docs/notifications#slack` (until then, `https://hush-gh.com`) |
+| Privacy policy URL        | `https://hush-gh.com/privacy`                                                      |
+| Support URL               | `https://hush-gh.com/docs/troubleshooting`                                         |
+| Support email             | `support@hush-gh.com`                                                              |
+| Supported languages       | English                                                                            |
+| Pricing                   | Free. Change it before paid plans start.                                           |
+| App icon                  | `slack/assets/icon-1024.png`                                                       |
+
+### Before submission
+
+- [ ] Docs Slack section and privacy page are live.
+- [ ] `support@hush-gh.com` delivers mail.
+- [ ] Event subscriptions are on for **Hush** (after PR 1 deploys).
+- [ ] 10 or more active workspaces. Count them from `slack_workspaces`.
 
 ## Not included now
 
