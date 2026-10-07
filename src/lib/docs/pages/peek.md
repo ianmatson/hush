@@ -14,6 +14,10 @@ The peek shows one pull request or issue next to your list. Click a row, or pres
 
 Every inbox thread is about a pull request or an issue, so every thread has a peek.
 
+### Open the peek from a link
+
+Add `?peek=` and a pull request or issue to a Hush address, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue.
+
 ## What it shows
 
 - **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this. Category: Bugs.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).

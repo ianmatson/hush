@@ -17,7 +17,9 @@
 	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
 	import Peek from './peek.svelte';
-	import { closePeek, peek } from '$lib/peek.svelte';
+	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
+	import { PEEK_PARAM, parsePeekLink, peekLinkUrl } from '$lib/shared/peek-link';
+	import { untrack } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -43,6 +45,29 @@
 		if (!justSignedIn || !me.data) return;
 		justSignedIn = false;
 		if (me.data.tokenSource === 'app') openOrgNote().catch(() => {});
+	});
+
+	const LINK_PEEK_OWNER = 'link';
+	$effect(() => {
+		const url = page.url;
+		if (!ready || !me.data || !url.searchParams.has(PEEK_PARAM)) return;
+		const link = parsePeekLink(url.searchParams.get(PEEK_PARAM));
+		url.searchParams.delete(PEEK_PARAM);
+		goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true });
+		if (!link) return;
+		untrack(() => {
+			claimPeek(LINK_PEEK_OWNER);
+			peek.header = null;
+			peek.footer = null;
+			peek.target = {
+				id: `${LINK_PEEK_OWNER}:${link.repo}#${link.number}`,
+				repo: link.repo,
+				number: link.number,
+				title: `${link.repo}#${link.number}`,
+				url: peekLinkUrl(link),
+				need: null
+			};
+		});
 	});
 
 	const isRestoring = useIsRestoring();
