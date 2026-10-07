@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { followWhileGrowing, revealEntry } from '$lib/reveal';
 	import { peekQuery } from '$lib/queries';
 	import { keys, queryClient } from '$lib/queries';
 	import { reportResolved } from '$lib/recheck';
@@ -41,6 +45,15 @@
 		queryClient.invalidateQueries({ queryKey: keys.threadsAll });
 		queryClient.invalidateQueries({ queryKey: keys.dashAll });
 		queryClient.invalidateQueries({ queryKey: keys.alerts });
+	});
+	let composerEnd = $state<HTMLElement | null>(null);
+	let shownEntryCount: number | null = null;
+	$effect.pre(() => {
+		const count = q.data?.timeline.items.length;
+		if (count === undefined) return;
+		const entryAdded = shownEntryCount !== null && count > shownEntryCount;
+		shownEntryCount = count;
+		if (entryAdded && composerEnd) untrack(() => followWhileGrowing(composerEnd!));
 	});
 	let allChecks = $state(false);
 	// A new item starts with the passed checks folded.
@@ -256,8 +269,8 @@
 			<PeekSlack {repo} {number} kind={p.kind} />
 		{/if}
 
-		<section class="grid gap-3">
-			<h3 class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+		<section class="grid">
+			<h3 class="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
 				<MessageSquare class="size-3.5" />Activity
 				{#if p.timeline.total > p.timeline.items.length}
 					<a
@@ -272,11 +285,16 @@
 				{/if}
 			</h3>
 			{#if !p.timeline.items.length}
-				<p class="text-sm text-muted-foreground">No comments yet.</p>
+				<p
+					class="pb-3 text-sm text-muted-foreground"
+					out:slide={{ duration: 200, easing: cubicOut }}
+				>
+					No comments yet.
+				</p>
 			{/if}
 			{#each p.timeline.items as e (e.url)}
 				{@const tone = e.type === 'review' ? (REVIEW[e.state ?? '']?.tone ?? '') : ''}
-				<div class="grid gap-1.5">
+				<div class="grid gap-1.5 pb-3" in:revealEntry>
 					<div class="flex items-center gap-2 text-xs">
 						{@render avatar(e.author.avatar)}
 						<span class="truncate font-medium">{e.author.login}</span>
@@ -301,6 +319,7 @@
 				</div>
 			{/each}
 			<CommentBox {p} />
+			<div bind:this={composerEnd}></div>
 		</section>
 	</article>
 {/if}

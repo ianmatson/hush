@@ -646,6 +646,44 @@ const person = (a: Node | null | undefined): PeekPerson => ({
 	bot: a?.__typename === 'Bot' || isBot(a?.login)
 });
 
+const PEEK_AVATAR_SIZE = '48';
+
+export interface RestFullMediaTimelineEntry {
+	node_id: string;
+	html_url: string;
+	body_html?: string;
+	created_at?: string;
+	submitted_at?: string;
+	state?: PeekEntry['state'];
+	user: { login: string; avatar_url: string; type: string } | null;
+}
+
+function restAvatar(url: string): string {
+	const sized = new URL(url);
+	sized.searchParams.set('s', PEEK_AVATAR_SIZE);
+	return sized.toString();
+}
+
+export function peekEntryFromRest(
+	type: PeekEntry['type'],
+	j: RestFullMediaTimelineEntry,
+	now = new Date()
+): PeekEntry {
+	return {
+		type,
+		author: {
+			login: j.user?.login ?? 'ghost',
+			avatar: j.user ? restAvatar(j.user.avatar_url) : null,
+			bot: j.user?.type === 'Bot' || isBot(j.user?.login)
+		},
+		at: j.submitted_at ?? j.created_at ?? now.toISOString(),
+		url: j.html_url,
+		html: j.body_html ?? '',
+		...(type === 'review' ? { state: j.state ?? 'COMMENTED', inline: 0 } : {}),
+		reactions: { id: j.node_id, canReact: true, groups: [] }
+	};
+}
+
 function checkState(n: Node): CheckState {
 	if (n.__typename === 'StatusContext') {
 		const s = String(n.state);

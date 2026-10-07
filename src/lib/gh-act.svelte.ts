@@ -1,9 +1,10 @@
 import { toast } from 'svelte-sonner';
 import { api } from '$lib/api';
 import { keys, queryClient } from '$lib/queries';
+import { holdPeekOn } from '$lib/peek.svelte';
 import { reportResolved } from '$lib/recheck';
 import { GH_ACTIONS, type GhActionId } from '$lib/shared/actions';
-import type { MergeMethod, PeekDTO } from '$lib/shared/types';
+import type { MergeMethod, PeekDTO, PeekEntry } from '$lib/shared/types';
 
 /**
  * Sending actions on GitHub, for the peek's bottom bar and its comment box (one copy of the
@@ -17,6 +18,7 @@ export async function sendAction(
 	opts: { body?: string; method?: MergeMethod } = {}
 ): Promise<boolean> {
 	acting.id = id;
+	holdPeekOn(p.repo, p.number);
 	try {
 		const res = await api.ghAction({
 			repo: p.repo,
@@ -29,6 +31,7 @@ export async function sendAction(
 			id: p.can.id
 		});
 		reportResolved(res.resolved);
+		if (res.entry) appendToPeekTimeline(p.repo, p.number, res.entry);
 		for (const queryKey of [keys.peek(p.repo, p.number), keys.threadsAll, keys.dashAll])
 			queryClient.invalidateQueries({ queryKey });
 		return true;
@@ -38,6 +41,16 @@ export async function sendAction(
 	} finally {
 		acting.id = null;
 	}
+}
+
+function appendToPeekTimeline(repo: string, number: number, entry: PeekEntry) {
+	queryClient.setQueryData<PeekDTO>(keys.peek(repo, number), (old) => {
+		if (!old || old.timeline.items.some((e) => e.url === entry.url)) return old;
+		return {
+			...old,
+			timeline: { total: old.timeline.total + 1, items: [...old.timeline.items, entry] }
+		};
+	});
 }
 
 /** Send it, then say so; actions that can be reversed get Undo in the toast. */

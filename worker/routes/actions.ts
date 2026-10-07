@@ -1,7 +1,7 @@
 import { GH_ACTIONS, type GhActionId } from '../../src/lib/shared/actions';
-import type { MergeMethod } from '../../src/lib/shared/types';
+import type { MergeMethod, PeekEntry } from '../../src/lib/shared/types';
 import { userToken } from '../db';
-import { gh } from '../github';
+import { gh, peekEntryFromRest, type RestFullMediaTimelineEntry } from '../github';
 import { linkStack, mergeStackThrough, readPrRefs, readStack } from '../stacks';
 import { stackMergePlan } from '../../src/lib/shared/stack-merge';
 import { REACTION_CONTENTS } from '../../src/lib/shared/reactions';
@@ -15,6 +15,7 @@ const METHODS = new Set<MergeMethod>(['MERGE', 'SQUASH', 'REBASE']);
 const MAX_BODY = 65_536;
 /** A GraphQL node ID ("IC_kwDO…"). */
 const NODE_ID = /^[A-Za-z0-9_=-]{1,120}$/;
+const FULL_MEDIA = 'application/vnd.github.full+json';
 
 type ActionBody = {
 	repo: string;
@@ -68,11 +69,16 @@ const app = routes()
 
 		const token = await userToken(c.env, u);
 		const repo = `${owner}/${name}`;
-		const call = (path: string, method: string, payload?: unknown) =>
+		const call = (path: string, method: string, payload?: unknown, accept?: string) =>
 			gh(token, path, {
 				method,
-				body: payload === undefined ? undefined : JSON.stringify(payload)
+				body: payload === undefined ? undefined : JSON.stringify(payload),
+				headers: accept ? { Accept: accept } : undefined
 			});
+		const writtenEntry = async (type: PeekEntry['type'], res: Response) => {
+			const j = (await res.json().catch(() => null)) as RestFullMediaTimelineEntry | null;
+			return j?.html_url && j.node_id ? peekEntryFromRest(type, j) : null;
+		};
 		const graphql = async (query: string, variables: Record<string, unknown>) => {
 			const res = await call('/graphql', 'POST', { query, variables });
 			const j = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] };
@@ -84,19 +90,32 @@ const app = routes()
 		};
 
 		let error: string | null = null;
+		let entry: PeekEntry | null = null;
 		switch (action) {
 			case 'approve':
 			case 'request_changes': {
-				const res = await call(`/repos/${repo}/pulls/${number}/reviews`, 'POST', {
-					event: action === 'approve' ? 'APPROVE' : 'REQUEST_CHANGES',
-					...(text ? { body: text } : {})
-				});
+				const res = await call(
+					`/repos/${repo}/pulls/${number}/reviews`,
+					'POST',
+					{
+						event: action === 'approve' ? 'APPROVE' : 'REQUEST_CHANGES',
+						...(text ? { body: text } : {})
+					},
+					FULL_MEDIA
+				);
 				if (!res.ok) error = await refusal(res);
+				else entry = await writtenEntry('review', res);
 				break;
 			}
 			case 'comment': {
-				const res = await call(`/repos/${repo}/issues/${number}/comments`, 'POST', { body: text });
+				const res = await call(
+					`/repos/${repo}/issues/${number}/comments`,
+					'POST',
+					{ body: text },
+					FULL_MEDIA
+				);
 				if (!res.ok) error = await refusal(res);
+				else entry = await writtenEntry('comment', res);
 				break;
 			}
 			case 'rerun': {
@@ -172,12 +191,12 @@ const app = routes()
 			}
 		}
 		if (error) return c.json({ error }, 422);
-		if (noSubject) return c.json({ ok: true as const, resolved: [] });
+		if (noSubject) return c.json({ ok: true as const, resolved: [], entry });
 		// Read it again now: the thread, the dashboards, and the peek show the new state at once.
 		const { resolved } = await poller(c.env, u.id)
 			.recheck(repo, number)
 			.catch(() => ({ resolved: [] }));
-		return c.json({ ok: true as const, resolved });
+		return c.json({ ok: true as const, resolved, entry });
 	})
 	// Add or remove your reaction on a comment, a review, or a description.
 	.post('/api/reactions', json<{ id: string; content: string; add: boolean }>(), async (c) => {
