@@ -68,11 +68,15 @@ More options are only in [settings.json](/docs/settings): hide others' drafts ([
 
 ## Categories and tags
 
-Every item has exactly one **category** and any number of **tags**. They show on each row. After the source chips come a chip for each category and each tag, with its count: click one to see only its items, and click it again to see all. The turn groups stay the same.
+Every item has exactly one **category** and any number of **tags**. Their icons show on each row; to show their names too, turn on **Category and tag names** in **Settings → General → Row contents**. After the source chips come a chip for each category and each tag, with its count: click one to see only its items, and click it again to see all. The turn groups stay the same.
 
 To change an item's category, right-click it and choose **Category**, then a category, or **Hush decides** to remove your choice. **Tags** turns a tag on or off for the item. Both work on a selection too.
 
 Set up categories and tags, and how Hush places items, in **Settings → Categories & tags**. See [Categories and tags](/docs/categories).
+
+## External contributors
+
+An item opened by someone who is not a member or collaborator of the repository has an **External** badge. It shows **First-time** when it is their first pull request or issue there. Bots get no badge. To turn the badge off, go to **Settings → General → Row contents** and turn off **External contributor**; the [peek](/docs/peek) follows the same setting.
 
 ## Filter
 

@@ -4,8 +4,10 @@
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { followWhileGrowing, revealEntry } from '$lib/reveal';
-	import { peekQuery } from '$lib/queries';
+	import { meQuery, peekQuery } from '$lib/queries';
 	import { keys, refetchUnlessLive } from '$lib/queries';
+	import { externalContributor } from '$lib/shared/contributors';
+	import { rowShows } from '$lib/shared/row-parts';
 	import { reportResolved } from '$lib/recheck';
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
@@ -14,6 +16,7 @@
 	import CommentBox from './comment-box.svelte';
 	import PeekSlack from './peek-slack.svelte';
 	import ReactionBar from './reaction-bar.svelte';
+	import ExternalBadge from './external-badge.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import GitPullRequestDraft from '@lucide/svelte/icons/git-pull-request-draft';
@@ -33,6 +36,12 @@
 	let { repo, number }: { repo: string; number: number } = $props();
 
 	const q = createQuery(() => peekQuery(repo, number));
+	const me = createQuery(meQuery);
+	const external = $derived(
+		q.data && rowShows(me.data?.settings.rows, q.data.kind, 'external')
+			? externalContributor(q.data.authorAssociation, q.data.author.bot)
+			: null
+	);
 	// The server stored what this peek read. If that changed the inbox or dashboards, refetch
 	// them now (once per fetch), so every view agrees with the peek.
 	let synced = 0;
@@ -148,6 +157,7 @@
 						>{p.author.login}</span
 					></span
 				>
+				{#if external}<ExternalBadge contributor={external} class="py-0 text-[0.7rem]" />{/if}
 				<span>opened {ago(p.createdAt)}</span>
 				{#if p.pr}
 					<span class="opacity-50">·</span>

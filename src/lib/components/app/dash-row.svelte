@@ -29,7 +29,9 @@
 	import SelectMark from './select-mark.svelte';
 	import AppMenu from './app-menu.svelte';
 	import type { MenuEntry } from '$lib/menu';
-	import MarkIcon from './marks/mark-icon.svelte';
+	import MarkList from './marks/mark-list.svelte';
+	import ExternalBadge from './external-badge.svelte';
+	import { externalContributor } from '$lib/shared/contributors';
 	import { MAX_ROW_LABELS } from '$lib/shared/row-parts';
 	import type { RowMark } from '$lib/marks';
 
@@ -121,6 +123,9 @@
 	const [owner, repoName] = $derived(i.repo.split('/'));
 	const shownMarks = $derived(
 		marks.filter((m) => show(m.kind === 'category' ? 'category' : 'tags'))
+	);
+	const external = $derived(
+		show('external') ? externalContributor(i.authorAssociation, i.authorIsBot) : null
 	);
 	/** CI changed since you last looked: a dot on the CI badge (or on the reason, if it is about CI). */
 	const ciNew = $derived(!!i.changes?.some((c) => c.kind === 'ci'));
@@ -240,23 +245,9 @@
 					><MessageSquare class="size-3" />{i.comments}</span
 				>
 			{/if}
-			{#if shownMarks.length}
+			{#if shownMarks.length && !show('markNames')}
 				<span class="opacity-50">·</span>
-				<span class="flex shrink-0 items-center gap-1" aria-label="Category and tags">
-					{#each shownMarks as m (m.key)}
-						<Tooltip.Root>
-							<Tooltip.Trigger
-								class="flex size-4 items-center justify-center"
-								aria-label={m.kind === 'category' ? `Category: ${m.name}` : `Tag: ${m.name}`}
-							>
-								<MarkIcon kind={m.kind} color={m.color} icon={m.icon} class="size-3.5" />
-							</Tooltip.Trigger>
-							<Tooltip.Content
-								>{m.kind === 'category' ? 'Category' : 'Tag'}: {m.name}</Tooltip.Content
-							>
-						</Tooltip.Root>
-					{/each}
-				</span>
+				<MarkList marks={shownMarks} />
 			{/if}
 		</div>
 
@@ -268,6 +259,7 @@
 				title={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
 				>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
 			>
+			{#if external}<ExternalBadge contributor={external} />{/if}
 			{#if stack && show('stack')}
 				<Tooltip.Root>
 					<Tooltip.Trigger>
@@ -326,6 +318,7 @@
 			{#if i.draft && !said.has('draft') && show('draft')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">Draft</span>
 			{/if}
+			{#if show('markNames')}<MarkList marks={shownMarks} showNames />{/if}
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
 			{#each show('labels') ? i.labels.slice(0, MAX_ROW_LABELS) : [] as l (l.name)}
 				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}

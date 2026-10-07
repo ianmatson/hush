@@ -325,6 +325,7 @@ export interface DashItem {
 	author: string;
 	authorAvatar: string | null;
 	authorIsBot: boolean;
+	authorAssociation?: string | null;
 	createdAt: string;
 	updatedAt: string;
 	state: 'open' | 'closed' | 'merged';
@@ -575,6 +576,7 @@ export interface PeekDTO {
 	state: 'open' | 'closed' | 'merged';
 	draft: boolean;
 	author: PeekPerson;
+	authorAssociation?: string | null;
 	createdAt: string;
 	html: string;
 	/** The description's reactions. */
