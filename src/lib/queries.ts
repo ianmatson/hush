@@ -62,6 +62,7 @@ export const keys = {
 	feeds: ['feeds'] as const,
 	sessions: ['sessions'] as const,
 	pushDevices: ['push-devices'] as const,
+	slack: ['slack'] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
 	alerts: ['alerts'] as const
@@ -148,6 +149,7 @@ export const feedsQuery = () =>
 export const sessionsQuery = () => queryOptions({ queryKey: keys.sessions, queryFn: api.sessions });
 export const pushDevicesQuery = () =>
 	queryOptions({ queryKey: keys.pushDevices, queryFn: api.subscriptions });
+export const slackQuery = () => queryOptions({ queryKey: keys.slack, queryFn: api.slack });
 export const teamsQuery = () =>
 	queryOptions({ queryKey: keys.teams, queryFn: () => api.teams(), staleTime: 60 * MIN });
 

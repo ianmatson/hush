@@ -12,6 +12,7 @@ import feeds from './routes/feeds';
 import live from './routes/live';
 import push from './routes/push';
 import settings from './routes/settings';
+import slack from './routes/slack';
 import subjects from './routes/subjects';
 import actions from './routes/actions';
 import suggest from './routes/suggest';
@@ -43,7 +44,13 @@ app.use('/api/*', async (c, next) => {
 });
 
 app.use('/api/*', async (c, next) => {
-	const open = ['/api/auth/github', '/api/auth/callback', '/api/push/vapid-key', '/api/health'];
+	const open = [
+		'/api/auth/github',
+		'/api/auth/callback',
+		'/api/push/vapid-key',
+		'/api/health',
+		'/api/slack/events'
+	];
 	if (open.includes(c.req.path)) return next();
 	const sid = getCookie(c, SESSION_COOKIE);
 	if (!sid) {
@@ -83,6 +90,7 @@ const api = app
 	.route('/', threads)
 	.route('/', settings)
 	.route('/', push)
+	.route('/', slack)
 	.route('/', alerts)
 	.route('/', subjects)
 	.route('/', actions)

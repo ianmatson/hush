@@ -1,0 +1,10 @@
+{
+	"apps": {
+		"TSS5W8YQZ": {
+			"app_id": "A0C72HLTBPH",
+			"team_domain": "posthog",
+			"team_id": "TSS5W8YQZ"
+		}
+	},
+	"default": "posthog"
+}

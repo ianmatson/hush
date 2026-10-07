@@ -1,0 +1,28 @@
+{
+	"display_information": {
+		"name": "Hush",
+		"description": "GitHub notifications that only buzz when it matters."
+	},
+	"features": {
+		"app_home": {
+			"home_tab_enabled": false,
+			"messages_tab_enabled": true,
+			"messages_tab_read_only_enabled": true
+		},
+		"bot_user": {
+			"display_name": "Hush",
+			"always_online": false
+		}
+	},
+	"oauth_config": {
+		"redirect_urls": ["https://app.hush-gh.com/api/slack/callback"],
+		"scopes": {
+			"bot": ["chat:write", "im:write"]
+		}
+	},
+	"settings": {
+		"socket_mode_enabled": false,
+		"org_deploy_enabled": false,
+		"token_rotation_enabled": false
+	}
+}

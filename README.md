@@ -69,6 +69,26 @@ pnpm test         # classifier, Web Push encryption (checked against http_ece), 
 pnpm check        # svelte-check + Worker tsc
 ```
 
+### Slack (optional)
+
+Slack alerts use the **Hush** Slack app (`A0C7BMZE291`, public distribution). Peek mentions will use **Hush Mentions** (`A0C72HLTBPH`, internal to the PostHog workspace). Without `SLACK_CLIENT_ID`, Settings shows no Slack section.
+
+Each app's manifest is in `slack/<app>/manifest.json`. Change the manifest there, then push it with the Slack CLI:
+
+```sh
+cd slack/hush && slack manifest sync --app A0C7BMZE291
+```
+
+The client ID, client secret, and signing secret are on the app's Basic Information page.
+
+A distributed Slack app accepts only HTTPS redirect URLs, so local development uses **Hush (dev)** (`A0C7HU26W90`, `slack/hush-dev/`), which is not distributed and redirects to `http://localhost:5173/api/slack/callback`. Add its values to `.dev.vars`:
+
+```sh
+SLACK_CLIENT_ID=…
+SLACK_CLIENT_SECRET=…
+SLACK_SIGNING_SECRET=…
+```
+
 ## Deploy (Cloudflare Workers Free plan)
 
 ```sh
@@ -82,6 +102,9 @@ npx wrangler secret put TOKEN_ENC_KEY
 npx wrangler secret put VAPID_PUBLIC_KEY
 npx wrangler secret put VAPID_PRIVATE_KEY
 # optional: npx wrangler secret put VAPID_SUBJECT  (push contact; defaults to the app URL)
+# optional, Slack alerts (SLACK_CLIENT_ID is in wrangler.jsonc):
+#   npx wrangler secret put SLACK_CLIENT_SECRET
+#   npx wrangler secret put SLACK_SIGNING_SECRET
 pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 
