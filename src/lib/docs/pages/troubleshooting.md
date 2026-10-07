@@ -48,6 +48,12 @@ Hush sees your own review, reply, or push within 15 minutes, because GitHub send
 
 Pushes can come a few minutes after the event: Hush checks GitHub every 5 minutes while push is on.
 
+## Slack alerts do not arrive
+
+1. In **Settings → Notifications → Slack**, check that Slack is connected and that **Alerts in Slack** is on. Choose **Send test**.
+2. If Slack is not connected any more, connect it again. Hush removes the connection when the app is removed from the workspace, when its access is revoked, or when your Slack account is deactivated.
+3. The other steps under [Pushes do not arrive](#pushes-do-not-arrive), from step 3, apply to Slack too.
+
 ## The Pull requests or Issues tab is empty or incomplete
 
 - The sources are GitHub searches. Choose the link button next to a source in **Settings → Sources** to try its search on GitHub.
@@ -78,4 +84,4 @@ An installed app can stay in the background for days. Each time Hush comes back 
 
 ## Still stuck
 
-Open an issue on [GitHub](https://github.com/ianmatson/hush/issues), with what you did, what you expected, and what Hush showed.
+Open an issue on [GitHub](https://github.com/ianmatson/hush/issues), or email [support@hush-gh.com](mailto:support@hush-gh.com), with what you did, what you expected, and what Hush showed.

@@ -36,6 +36,8 @@ export const queryClient = new QueryClient({
 	}
 });
 
+const MEMORY_ONLY_KEYS = new Set(['peek', 'slack-mentions']);
+
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
 export const persistOptions = {
 	persister: createSyncStoragePersister({
@@ -47,7 +49,7 @@ export const persistOptions = {
 	// Peeks are large and cheap to fetch again: keep them in memory only.
 	dehydrateOptions: {
 		shouldDehydrateQuery: (q: { state: { status: string }; queryKey: readonly unknown[] }) =>
-			q.state.status === 'success' && q.queryKey[0] !== 'peek'
+			q.state.status === 'success' && !MEMORY_ONLY_KEYS.has(String(q.queryKey[0]))
 	},
 	// Change this when a cached shape changes, to drop old caches.
 	buster: 'v2'
@@ -63,6 +65,8 @@ export const keys = {
 	sessions: ['sessions'] as const,
 	pushDevices: ['push-devices'] as const,
 	slack: ['slack'] as const,
+	slackMentions: (repo: string, number: number, kind: 'pr' | 'issue') =>
+		['slack-mentions', repo, number, kind] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
 	alerts: ['alerts'] as const
@@ -150,6 +154,15 @@ export const sessionsQuery = () => queryOptions({ queryKey: keys.sessions, query
 export const pushDevicesQuery = () =>
 	queryOptions({ queryKey: keys.pushDevices, queryFn: api.subscriptions });
 export const slackQuery = () => queryOptions({ queryKey: keys.slack, queryFn: api.slack });
+export const slackMentionsQuery = (repo: string, number: number, kind: 'pr' | 'issue') =>
+	queryOptions({
+		queryKey: keys.slackMentions(repo, number, kind),
+		queryFn: () => api.slackMentions(repo, number, kind),
+		staleTime: 5 * MIN,
+		gcTime: 5 * MIN,
+		refetchOnWindowFocus: false,
+		retry: false
+	});
 export const teamsQuery = () =>
 	queryOptions({ queryKey: keys.teams, queryFn: () => api.teams(), staleTime: 60 * MIN });
 

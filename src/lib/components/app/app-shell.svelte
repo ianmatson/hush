@@ -16,8 +16,7 @@
 	import { openOrgNote } from '$lib/org-note.svelte';
 	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
-	import Peek from './peek.svelte';
-	import { closePeek, peek } from '$lib/peek.svelte';
+	import { peek } from '$lib/peek.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -112,13 +111,6 @@
 			<TabStatus />
 			<CommandPalette />
 			<AlertsPanel />
-			<!-- One peek for the app: it stays open when you change tabs (lib/peek.svelte.ts). -->
-			<Peek
-				target={peek.target}
-				onclose={closePeek}
-				header={peek.header ?? undefined}
-				footer={peek.footer ?? undefined}
-			/>
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
 			<p class="mx-auto max-w-4xl px-3 pt-6 text-sm text-destructive sm:px-4">

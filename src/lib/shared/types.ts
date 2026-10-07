@@ -212,6 +212,11 @@ export interface QuietHours {
 	timeZone: string;
 }
 
+export interface AlertChannels {
+	push: boolean;
+	slack: boolean;
+}
+
 export interface Settings {
 	/** Send Web Push for Action items. */
 	pushAction: boolean;
@@ -226,6 +231,7 @@ export interface Settings {
 	pushLimit: import('./push-policy').PushLimit | null;
 	pushWhileOpen: boolean;
 	pushUrgentNow: boolean;
+	alertChannels: AlertChannels;
 	smartDecisions: boolean;
 	clearNotifications: import('./push-policy').ClearNotifications;
 	/** A thread open in the peek for a moment is marked as read. */
@@ -487,6 +493,15 @@ export interface MeDTO {
 export interface SlackStatusDTO {
 	available: boolean;
 	connection: { teamName: string; connectedAt: number } | null;
+	mentions: { available: boolean; connected: boolean };
+}
+
+export interface SlackMentionDTO {
+	channelName: string;
+	authorName: string;
+	at: number;
+	extract: string;
+	permalink: string;
 }
 
 export type OrgAccess =

@@ -153,6 +153,18 @@ A snooze that ends always pushes.
 		type: 'boolean',
 		body: `Off (default): while you use Hush on any device, new items show in Hush and do not push. Hush counts as in use when its tab or app has focus and you used it in the last ${APP_FOCUS_LASTS_MS / MIN} minutes. On: pushes go at all times.`
 	},
+	'alertChannels.push': {
+		type: 'boolean',
+		body: `On (default): alerts go as push notifications to your devices. Turn it off to get alerts only in Slack.
+
+\`\`\`json settings
+{ "alertChannels": { "push": false } }
+\`\`\``
+	},
+	'alertChannels.slack': {
+		type: 'boolean',
+		body: `On (default): when Slack is connected (**Settings → Notifications → Slack**), each alert also goes as a direct message from the Hush app. A digest is one message with a list. Quiet hours, digests, and the limit apply to Slack as they do to push.`
+	},
 	clearNotifications: {
 		type: '"open", "item", or "never"',
 		body: `Remove Hush notifications from a device when you use Hush there.

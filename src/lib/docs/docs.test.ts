@@ -22,7 +22,7 @@ describe('docs', () => {
 	it('describe every setting, and only real ones', () => {
 		const keys = SETTINGS_DOCS.map((d) => d.key);
 		expect(Object.keys(SETTING_DETAILS).sort()).toEqual([...keys].sort());
-		const groups = ['dash', 'menus', 'swipe', 'rows'];
+		const groups = ['dash', 'menus', 'swipe', 'rows', 'alertChannels'];
 		for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
 			if (!groups.includes(k)) expect(keys).toContain(k);
 			else
@@ -79,7 +79,7 @@ describe('docs', () => {
 		]);
 		for (const p of pages)
 			for (const [, href] of renderMarkdown(p.markdown).html.matchAll(/ href="([^"]+)"/g)) {
-				if (/^https?:/.test(href)) continue;
+				if (/^(https?|mailto):/.test(href)) continue;
 				const [path, hash] = href.split('#');
 				const target = path || p.path;
 				if (files.has(target)) continue;

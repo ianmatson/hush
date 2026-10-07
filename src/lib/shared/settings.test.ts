@@ -66,7 +66,7 @@ describe('settings schema', () => {
 	it('documents every setting', () => {
 		const keys = SETTINGS_DOCS.map((d) => d.key);
 		for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
-			if (k === 'dash' || k === 'menus' || k === 'swipe' || k === 'rows')
+			if (['dash', 'menus', 'swipe', 'rows', 'alertChannels'].includes(k))
 				for (const sub of Object.keys(v)) expect(keys).toContain(`${k}.${sub}`);
 			else expect(keys).toContain(k);
 		}

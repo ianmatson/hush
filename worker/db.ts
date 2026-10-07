@@ -32,6 +32,10 @@ export interface Env {
 	SLACK_CLIENT_ID?: string;
 	SLACK_CLIENT_SECRET?: string;
 	SLACK_SIGNING_SECRET?: string;
+	SLACK_MENTIONS_CLIENT_ID?: string;
+	SLACK_MENTIONS_CLIENT_SECRET?: string;
+	SLACK_MENTIONS_TEAM_ID?: string;
+	SLACK_MENTIONS_GITHUB_ORG?: string;
 }
 
 export interface UserRow {

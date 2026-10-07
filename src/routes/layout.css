@@ -195,7 +195,7 @@
 /* --- Peek panel ---------------------------------------------------------------------- */
 
 :root {
-	--peek-w: min(34rem, 44vw);
+	--peek-w: clamp(28rem, 46vw, 56rem);
 }
 /* Docked on the right: center the page (its outer [data-page] box) in the space left over. */
 @media (min-width: 1024px) {

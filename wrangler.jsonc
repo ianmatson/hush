@@ -43,7 +43,9 @@
 		"GITHUB_CLIENT_ID": "Ov23li2B14AtWbZe1Uz1",
 		"APP_URL": "https://app.hush-gh.com",
 		"DECISION_MODEL": "typesafe/jev",
-		"SLACK_CLIENT_ID": "910200304849.12249747478307"
+		"SLACK_CLIENT_ID": "910200304849.12249747478307",
+		"SLACK_MENTIONS_TEAM_ID": "TSS5W8YQZ",
+		"SLACK_MENTIONS_GITHUB_ORG": "PostHog"
 	},
 	// Approximate, per-location limits against floods (period must be 10 or 60 seconds).
 	"ai": { "binding": "AI" },

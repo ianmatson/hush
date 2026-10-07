@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PeekHost from '$lib/components/app/peek-host.svelte';
 	import { closeRowMenus } from '$lib/row-menus.svelte';
 	import { untrack } from 'svelte';
 	import {
@@ -1348,3 +1349,5 @@
 	bind:open={helpOpen}
 	shortcuts={shortcutsFor(['global', 'list', 'dash', 'peek'], DASH_MOUSE)}
 />
+
+<PeekHost />

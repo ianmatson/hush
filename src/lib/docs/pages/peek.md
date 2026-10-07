@@ -5,14 +5,18 @@ description: Read a pull request or issue without leaving Hush, and approve, com
 
 ## Open the peek
 
-The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. On a wide screen, the list stays visible and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
+The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. On a wide screen, the peek is a panel on the right that grows with the screen, the list stays visible, and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
 
 - {{key:list.peek}} or {{key:list.escape}} closes it.
-- The peek stays open when you go to another tab, and shows the same item until you move the cursor there.
+- The peek stays open when you go to the Inbox, Pull requests, or Issues tab, and shows the same item until you move the cursor there. Settings does not show the peek.
 - The alert history (the bell) opens in the same place; the one that you opened last stays.
 - For a pull request in a [stack](/docs/pull-requests-and-issues#stacked-pull-requests), the peek lists the stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack.
 
 Every inbox thread is about a pull request or an issue, so every thread has a peek.
+
+### Open the peek from a link
+
+Add `?peek=` and a pull request or issue to the address of the Inbox, Pull requests, or Issues tab, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue.
 
 ## What it shows
 
@@ -24,6 +28,7 @@ Every inbox thread is about a pull request or an issue, so every thread has a pe
 - The labels and the assignees.
 - The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted, not shown.
 - The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
+- **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The part starts closed: its title shows the number of messages, or a spinner while Hush searches. Click the title to show the messages. With no messages, this part is not shown.
 - A comment box at the end.
 
 A thread that stays open in the peek for a moment is marked as read, also on GitHub. Turn this off with [`peekMarksRead`](/docs/settings#peekmarksread).

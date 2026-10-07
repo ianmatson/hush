@@ -71,7 +71,9 @@ pnpm check        # svelte-check + Worker tsc
 
 ### Slack (optional)
 
-Slack alerts use the **Hush** Slack app (`A0C7BMZE291`, public distribution). Peek mentions will use **Hush Mentions** (`A0C72HLTBPH`, internal to the PostHog workspace). Without `SLACK_CLIENT_ID`, Settings shows no Slack section.
+Slack alerts use the **Hush** Slack app (`A0C7BMZE291`, public distribution). Users connect Slack in **Settings → Notifications** ([docs](https://hush-gh.com/docs/notifications#slack)). Peek mentions use **Hush Mentions** (`A0C72HLTBPH`, internal to the PostHog workspace). Without `SLACK_CLIENT_ID`, Settings shows no Slack alerts.
+
+Peek mentions are on only with `SLACK_MENTIONS_CLIENT_ID`, `SLACK_MENTIONS_CLIENT_SECRET`, `SLACK_MENTIONS_TEAM_ID`, and `SLACK_MENTIONS_GITHUB_ORG`. Hush shows them only to active members of that GitHub org (checked at most once a day with the sign-in token, or with your own token when the org hides the membership from the sign-in token), and the OAuth callback refuses any Slack workspace other than `SLACK_MENTIONS_TEAM_ID`. The PostHog GitHub org must approve the Hush OAuth app, or GitHub hides the membership. Search results are never stored: each peek searches Slack again.
 
 Each app's manifest is in `slack/<app>/manifest.json`. Change the manifest there, then push it with the Slack CLI:
 
@@ -87,7 +89,11 @@ A distributed Slack app accepts only HTTPS redirect URLs, so local development u
 SLACK_CLIENT_ID=…
 SLACK_CLIENT_SECRET=…
 SLACK_SIGNING_SECRET=…
+SLACK_MENTIONS_CLIENT_ID=…
+SLACK_MENTIONS_CLIENT_SECRET=…
 ```
+
+**Hush Mentions** is internal, so it also redirects to `http://localhost:5173/api/slack/mentions/callback`.
 
 ## Deploy (Cloudflare Workers Free plan)
 
@@ -105,6 +111,9 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 # optional, Slack alerts (SLACK_CLIENT_ID is in wrangler.jsonc):
 #   npx wrangler secret put SLACK_CLIENT_SECRET
 #   npx wrangler secret put SLACK_SIGNING_SECRET
+# optional, peek mentions (SLACK_MENTIONS_TEAM_ID and SLACK_MENTIONS_GITHUB_ORG are in wrangler.jsonc;
+# add SLACK_MENTIONS_CLIENT_ID there):
+#   npx wrangler secret put SLACK_MENTIONS_CLIENT_SECRET
 pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 

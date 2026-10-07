@@ -1,6 +1,6 @@
 ---
 title: Notifications
-description: Push alerts on your devices, what gets pushed, quiet hours, the alert history, and counts on the tab.
+description: Push alerts on your devices, alerts in Slack, what gets pushed, quiet hours, the alert history, and counts on the tab.
 ---
 
 ## Turn on push
@@ -14,6 +14,24 @@ Hush sends native push notifications, also when Hush is closed. Push is per devi
 The list under **Devices** has every device that gets push, with “(this device)” next to this one. The trash button removes a device. Up to 10 devices can get push.
 
 **iPhone and iPad:** push works only in an installed web app (iOS 16.4 or later). Open Hush in Safari, choose Share → **Add to Home Screen**, open Hush from the Home Screen, and turn on push there.
+
+## Slack
+
+Hush can send your alerts as Slack direct messages from the **Hush** app, as well as push or in place of push. Each message has the alert and an **Open in Hush** button. A digest is one message with a list.
+
+1. Go to **Settings → Notifications**.
+2. Under **Slack**, choose **Connect Slack**.
+3. Slack asks you to choose a workspace and to allow Hush to send you messages. Your workspace admin may need to approve the app first.
+4. Choose **Send test** to check it.
+
+When Slack is connected, two switches control where alerts go:
+
+- **Alerts in Slack** ([`alertChannels.slack`](/docs/settings#alertchannels-slack)): on by default.
+- **Push to devices too** ([`alertChannels.push`](/docs/settings#alertchannels-push)): on by default. Turn it off to get alerts only in Slack.
+
+Everything on this page applies to Slack as it does to push: what gets pushed, quiet hours, digests, limits, and **Push while Hush is open**. The Hush app can only send you direct messages. It cannot read your messages or channels.
+
+**Disconnect** stops Slack alerts for you. To remove Hush from the whole workspace, a workspace admin removes the app in Slack; Hush then deletes what it stored for that workspace. See [Privacy](/privacy#slack) for what Hush stores.
 
 ## What gets pushed
 
