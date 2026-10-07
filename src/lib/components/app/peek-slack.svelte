@@ -8,12 +8,12 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
-	let { repo, number }: { repo: string; number: number } = $props();
+	let { repo, number, kind }: { repo: string; number: number; kind: 'pr' | 'issue' } = $props();
 
 	const slack = createQuery(slackQuery);
 	const mentionsConnected = $derived(slack.data?.mentions.connected ?? false);
 	const mentions = createQuery(() => ({
-		...slackMentionsQuery(repo, number),
+		...slackMentionsQuery(repo, number, kind),
 		enabled: mentionsConnected
 	}));
 	const found = $derived(mentions.data?.mentions ?? []);

@@ -79,28 +79,47 @@ export async function exchangeMentionsCode(
 	);
 }
 
+export type GitHubKind = 'pr' | 'issue';
+
 export interface GitHubRef {
 	owner: string;
 	repo: string;
 	number: number;
+	kind: GitHubKind;
 }
+
+const URL_SEGMENT: Record<GitHubKind, string> = { pr: 'pull', issue: 'issues' };
+
+export const isGitHubKind = (value: unknown): value is GitHubKind =>
+	value === 'pr' || value === 'issue';
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function mentionQuery({ owner, repo, number }: GitHubRef): string {
-	const path = `${owner}/${repo}`;
-	return [`"${path}/pull/${number}"`, `"${path}/issues/${number}"`, `"${path}#${number}"`].join(
-		' OR '
-	);
+export function mentionQuery({ owner, repo, number, kind }: GitHubRef): string {
+	return `"https://github.com/${owner}/${repo}/${URL_SEGMENT[kind]}/${number}"`;
 }
 
-export function mentionPattern({ owner, repo, number }: GitHubRef): RegExp {
+export function mentionPattern({ owner, repo, number }: Omit<GitHubRef, 'kind'>): RegExp {
 	const path = `${escapeRegExp(owner)}/${escapeRegExp(repo)}`;
 	return new RegExp(`${path}(?:/(?:pull|issues)/|#)${number}(?![0-9])`, 'i');
 }
 
+const SLACK_ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&amp;': '&' };
+
+export function plainSlackText(content: string): string {
+	return content
+		.replace(/<(?:https?|mailto):[^|>]*\|([^>]+)>/g, '$1')
+		.replace(/<((?:https?|mailto):[^>]+)>/g, '$1')
+		.replace(/<#[A-Z0-9]+\|([^>]*)>/g, '#$1')
+		.replace(/<@[A-Z0-9]+\|([^>]+)>/g, '@$1')
+		.replace(/<@[A-Z0-9]+>/g, '@someone')
+		.replace(/<!(here|channel|everyone)(?:\|[^>]*)?>/g, '@$1')
+		.replace(/<!subteam\^[A-Z0-9]+\|([^>]+)>/g, '$1')
+		.replace(/&(?:lt|gt|amp);/g, (entity) => SLACK_ENTITIES[entity]);
+}
+
 export function extractAround(content: string, pattern: RegExp): string {
-	const text = content.replace(/\s+/g, ' ').trim();
+	const text = plainSlackText(content).replace(/\s+/g, ' ').trim();
 	if (text.length <= EXTRACT_RADIUS * 2) return text;
 	const at = pattern.exec(text)?.index ?? 0;
 	const start = Math.max(0, at - EXTRACT_RADIUS);

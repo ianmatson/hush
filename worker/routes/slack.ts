@@ -2,7 +2,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
 import type { SlackMentionDTO, SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
-import { poller, routes, type AppEnv } from '../app';
+import { poller, query, routes, type AppEnv } from '../app';
 import {
 	SLACK_AUTHORIZE_URL,
 	SLACK_BOT_SCOPES,
@@ -16,6 +16,7 @@ import {
 import {
 	SLACK_MENTIONS_USER_SCOPES,
 	exchangeMentionsCode,
+	isGitHubKind,
 	refreshSlackMentionsAccess,
 	searchMentions,
 	slackMentionsCallbackUrl,
@@ -164,18 +165,24 @@ const app = routes()
 		await removeSlackMentions(c.env, c.get('user').id);
 		return c.json({ ok: true });
 	})
-	.get('/api/slack/mentions/:owner/:repo/:number', async (c) => {
+	.get('/api/slack/mentions/:owner/:repo/:number', query<{ kind: string }>(), async (c) => {
 		const noStore = { 'Cache-Control': 'private, no-store' };
 		const { owner, repo } = c.req.param();
 		const number = Number(c.req.param('number'));
-		if (!GITHUB_NAME.test(owner) || !GITHUB_NAME.test(repo) || !Number.isSafeInteger(number))
+		const { kind } = c.req.valid('query');
+		if (
+			!GITHUB_NAME.test(owner) ||
+			!GITHUB_NAME.test(repo) ||
+			!Number.isSafeInteger(number) ||
+			!isGitHubKind(kind)
+		)
 			return c.json({ error: 'Bad PR or issue.' }, 400, noStore);
 		const userId = c.get('user').id;
 		if (!slackMentionsConfigured(c.env) || !(await slackMentionsAllowed(c.env, userId)))
 			return c.json({ error: 'Slack mentions are not available for you.' }, 404, noStore);
 		const token = await slackMentionsToken(c.env, userId);
 		if (!token) return c.json({ error: 'Connect Slack mentions first.' }, 409, noStore);
-		const found = await searchMentions(token, { owner, repo, number });
+		const found = await searchMentions(token, { owner, repo, number, kind });
 		if (found.ok)
 			return c.json({ mentions: found.mentions satisfies SlackMentionDTO[] }, 200, noStore);
 		if (tokenWasRevoked(found.error)) {

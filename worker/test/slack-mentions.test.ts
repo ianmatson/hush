@@ -7,11 +7,12 @@ import {
 	mentionsInstallFrom,
 	membershipByAnyToken,
 	mentionsOf,
+	plainSlackText,
 	searchMentions
 } from '../slack-mentions';
 
 const POSTHOG_TEAM = 'TSS5W8YQZ';
-const REF = { owner: 'PostHog', repo: 'posthog', number: 123 };
+const REF = { owner: 'PostHog', repo: 'posthog', number: 123, kind: 'pr' as const };
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -72,9 +73,22 @@ describe('mentionPattern', () => {
 });
 
 describe('mentionQuery', () => {
-	it('asks for the link forms of the PR or issue', () => {
-		expect(mentionQuery(REF)).toBe(
-			'"PostHog/posthog/pull/123" OR "PostHog/posthog/issues/123" OR "PostHog/posthog#123"'
+	it('asks for the quoted GitHub URL, because Slack search returns nothing for OR', () => {
+		expect(mentionQuery(REF)).toBe('"https://github.com/PostHog/posthog/pull/123"');
+		expect(mentionQuery({ ...REF, kind: 'issue' })).toBe(
+			'"https://github.com/PostHog/posthog/issues/123"'
+		);
+	});
+});
+
+describe('plainSlackText', () => {
+	it('shows links, mentions, and channels as Slack shows them', () => {
+		expect(
+			plainSlackText(
+				'<@U1|ana> shipped <https://github.com/PostHog/posthog/pull/123|Cross-project insights> in <#C1|team-replay>, see <https://posthog.com> cc <!here> &lt;3 &amp; <@U2>'
+			)
+		).toBe(
+			'@ana shipped Cross-project insights in #team-replay, see https://posthog.com cc @here <3 & @someone'
 		);
 	});
 });

@@ -252,7 +252,9 @@
 			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
 
-		<PeekSlack {repo} {number} />
+		{#if p.kind === 'pr' || p.kind === 'issue'}
+			<PeekSlack {repo} {number} kind={p.kind} />
+		{/if}
 
 		<section class="grid gap-3">
 			<h3 class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
