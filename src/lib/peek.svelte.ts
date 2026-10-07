@@ -41,6 +41,10 @@ export function holdPeekOn(repo: string, number: number) {
 	if (target && target.repo === repo && target.number === number) peek.heldId = target.id;
 }
 
+export function releasePeekHold() {
+	peek.heldId = null;
+}
+
 export function releasePeekHoldUnlessOn(id: string | null) {
 	if (peek.heldId !== null && peek.heldId !== id) peek.heldId = null;
 }

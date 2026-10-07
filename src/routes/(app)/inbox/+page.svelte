@@ -195,8 +195,13 @@
 	const byId = (id: string) => visible.find((t) => t.id === id);
 
 	// Keep a valid cursor and selection when the list changes.
+	let lastCursorIndex = 0;
 	$effect(() => {
-		if (!visible.some((t) => t.id === selectedId)) selectedId = visible[0]?.id ?? null;
+		if (selectedIndex >= 0) lastCursorIndex = selectedIndex;
+	});
+	$effect(() => {
+		if (!visible.some((t) => t.id === selectedId))
+			selectedId = visible[Math.min(lastCursorIndex, visible.length - 1)]?.id ?? null;
 		untrack(() => sel.prune(order));
 	});
 	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this view

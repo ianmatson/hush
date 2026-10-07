@@ -534,11 +534,16 @@
 	}
 
 	// --- Everything else --------------------------------------------------------------
+	let lastCursorIndex = 0;
+	$effect(() => {
+		if (selectedIndex >= 0) lastCursorIndex = selectedIndex;
+	});
 	$effect(() => {
 		if (!navigable.some((i) => i.id === selectedId) && !heldOutOfKeyboardOrder(selectedId)) {
 			const stack = selectedId ? stackOf.get(selectedId) : undefined;
 			const standIn = stack && navigable.find((i) => stackOf.get(i.id) === stack);
-			selectedId = standIn?.id ?? navigable[0]?.id ?? null;
+			const rowThatTookItsPlace = navigable[Math.min(lastCursorIndex, navigable.length - 1)];
+			selectedId = standIn?.id ?? rowThatTookItsPlace?.id ?? null;
 		}
 		untrack(() => sel.prune(order));
 	});
