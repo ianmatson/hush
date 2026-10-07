@@ -5,10 +5,10 @@ description: Read a pull request or issue without leaving Hush, and approve, com
 
 ## Open the peek
 
-The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. On a wide screen, the list stays visible and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
+The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. On a wide screen, the peek is a panel on the right that grows with the screen, the list stays visible, and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
 
 - {{key:list.peek}} or {{key:list.escape}} closes it.
-- The peek stays open when you go to another tab, and shows the same item until you move the cursor there.
+- The peek stays open when you go to the Inbox, Pull requests, or Issues tab, and shows the same item until you move the cursor there. Settings does not show the peek.
 - The alert history (the bell) opens in the same place; the one that you opened last stays.
 - For a pull request in a [stack](/docs/pull-requests-and-issues#stacked-pull-requests), the peek lists the stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack.
 
@@ -16,7 +16,7 @@ Every inbox thread is about a pull request or an issue, so every thread has a pe
 
 ### Open the peek from a link
 
-Add `?peek=` and a pull request or issue to a Hush address, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue.
+Add `?peek=` and a pull request or issue to the address of the Inbox, Pull requests, or Issues tab, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue.
 
 ## What it shows
 

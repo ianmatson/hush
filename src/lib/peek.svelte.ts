@@ -2,8 +2,8 @@ import type { Snippet } from 'svelte';
 import type { PeekTarget } from '$lib/components/app/peek.svelte';
 
 /**
- * The peek is one panel for the whole app (rendered by the app shell), so it stays open when
- * you change tabs. The page that opened it "owns" it (for example "inbox:action" or "pulls"):
+ * The peek is one panel for the list pages (each renders PeekHost), so it stays open when you
+ * change between them. The page that opened it "owns" it (for example "inbox:action" or "pulls"):
  * only the owner moves it with its cursor and adds its actions (Done, Snooze…). Another page
  * takes it over when you peek something there (a click, Space, J/K while it is open).
  */

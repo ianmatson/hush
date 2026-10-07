@@ -16,10 +16,7 @@
 	import { openOrgNote } from '$lib/org-note.svelte';
 	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
-	import Peek from './peek.svelte';
-	import { claimPeek, closePeek, peek } from '$lib/peek.svelte';
-	import { PEEK_PARAM, parsePeekLink, peekLinkUrl } from '$lib/shared/peek-link';
-	import { untrack } from 'svelte';
+	import { peek } from '$lib/peek.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -45,29 +42,6 @@
 		if (!justSignedIn || !me.data) return;
 		justSignedIn = false;
 		if (me.data.tokenSource === 'app') openOrgNote().catch(() => {});
-	});
-
-	const LINK_PEEK_OWNER = 'link';
-	$effect(() => {
-		const url = page.url;
-		if (!ready || !me.data || !url.searchParams.has(PEEK_PARAM)) return;
-		const link = parsePeekLink(url.searchParams.get(PEEK_PARAM));
-		url.searchParams.delete(PEEK_PARAM);
-		goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true });
-		if (!link) return;
-		untrack(() => {
-			claimPeek(LINK_PEEK_OWNER);
-			peek.header = null;
-			peek.footer = null;
-			peek.target = {
-				id: `${LINK_PEEK_OWNER}:${link.repo}#${link.number}`,
-				repo: link.repo,
-				number: link.number,
-				title: `${link.repo}#${link.number}`,
-				url: peekLinkUrl(link),
-				need: null
-			};
-		});
 	});
 
 	const isRestoring = useIsRestoring();
@@ -137,13 +111,6 @@
 			<TabStatus />
 			<CommandPalette />
 			<AlertsPanel />
-			<!-- One peek for the app: it stays open when you change tabs (lib/peek.svelte.ts). -->
-			<Peek
-				target={peek.target}
-				onclose={closePeek}
-				header={peek.header ?? undefined}
-				footer={peek.footer ?? undefined}
-			/>
 		{/if}
 		{#if me.isError && !signedOut && !onLogin}
 			<p class="mx-auto max-w-4xl px-3 pt-6 text-sm text-destructive sm:px-4">
