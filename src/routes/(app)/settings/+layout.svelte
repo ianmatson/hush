@@ -50,7 +50,10 @@
 			{/each}
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
-	<nav class="hidden w-44 shrink-0 flex-col gap-1 md:flex" aria-label="Settings">
+	<nav
+		class="hidden w-44 shrink-0 flex-col gap-1 md:sticky md:top-18 md:flex md:self-start"
+		aria-label="Settings"
+	>
 		{#each sections as s (s.href)}
 			<a
 				href={s.href}
