@@ -1,10 +1,10 @@
 {
-  "apps": {
-    "TSS5W8YQZ": {
-      "app_id": "A0C7HU26W90",
-      "team_domain": "posthog",
-      "team_id": "TSS5W8YQZ"
-    }
-  },
-  "default": "posthog"
+	"apps": {
+		"TSS5W8YQZ": {
+			"app_id": "A0C7HU26W90",
+			"team_domain": "posthog",
+			"team_id": "TSS5W8YQZ"
+		}
+	},
+	"default": "posthog"
 }
