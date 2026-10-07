@@ -4,7 +4,10 @@
 		"description": "Shows Slack messages about a PR or issue in Hush."
 	},
 	"oauth_config": {
-		"redirect_urls": ["https://app.hush-gh.com/api/slack/mentions/callback"],
+		"redirect_urls": [
+			"https://app.hush-gh.com/api/slack/mentions/callback",
+			"http://localhost:5173/api/slack/mentions/callback"
+		],
 		"scopes": {
 			"user": ["search:read.public", "search:read.private", "search:read.im", "search:read.mpim"]
 		}

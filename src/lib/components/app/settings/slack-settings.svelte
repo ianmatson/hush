@@ -26,9 +26,12 @@
 		if (!channels) return Promise.resolve(false);
 		return saveSettings({ alertChannels: { ...channels, [channel]: on } });
 	}
-	let busy = $state<'test' | 'disconnect' | null>(null);
+	const mentions = $derived(slack.data?.mentions);
 
-	async function run(action: 'test' | 'disconnect', request: () => Promise<unknown>, done: string) {
+	type Action = 'test' | 'disconnect' | 'disconnect-mentions';
+	let busy = $state<Action | null>(null);
+
+	async function run(action: Action, request: () => Promise<unknown>, done: string) {
 		busy = action;
 		try {
 			await request();
@@ -43,14 +46,21 @@
 
 	const sendTest = () => run('test', api.testSlack, 'Sent a test message to Slack.');
 	const disconnect = () => run('disconnect', api.disconnectSlack, 'Slack is disconnected.');
+	const disconnectMentions = () =>
+		run('disconnect-mentions', api.disconnectSlackMentions, 'Slack mentions are off.');
+
+	const CONNECTED_TOASTS: Record<string, string> = {
+		connected: 'Slack is connected.',
+		'mentions-connected': 'Slack mentions are on.'
+	};
 
 	onMount(() => {
 		const url = new URL(location.href);
-		const connected = url.searchParams.get(CONNECTED_PARAM) === 'connected';
+		const connected = CONNECTED_TOASTS[url.searchParams.get(CONNECTED_PARAM) ?? ''];
 		const error = url.searchParams.get(ERROR_PARAM);
 		if (!connected && !error) return;
 		queryClient.invalidateQueries({ queryKey: keys.slack });
-		if (connected) toast.success('Slack is connected.');
+		if (connected) toast.success(connected);
 		if (error) toast.error(error);
 		url.searchParams.delete(CONNECTED_PARAM);
 		url.searchParams.delete(ERROR_PARAM);
@@ -62,7 +72,7 @@
 	});
 </script>
 
-{#if slack.data?.available}
+{#if slack.data?.available || mentions?.available}
 	<Card.Root id="slack">
 		<Card.Header>
 			<Card.Title>Slack</Card.Title>
@@ -72,56 +82,87 @@
 			>
 		</Card.Header>
 		<Card.Content class="grid gap-4">
-			<div class="flex items-center justify-between gap-4">
-				<div>
-					<p class="text-sm font-medium">
-						{connection ? connection.teamName : 'Not connected'}
-					</p>
-					<p class="text-xs text-muted-foreground">
-						{connection
-							? `Connected ${ago(connection.connectedAt)}.`
-							: 'Connect to send alerts to Slack.'}
-					</p>
+			{#if slack.data?.available}
+				<div class="flex items-center justify-between gap-4">
+					<div>
+						<p class="text-sm font-medium">
+							{connection ? connection.teamName : 'Not connected'}
+						</p>
+						<p class="text-xs text-muted-foreground">
+							{connection
+								? `Connected ${ago(connection.connectedAt)}.`
+								: 'Connect to send alerts to Slack.'}
+						</p>
+					</div>
+					<div class="flex gap-2">
+						{#if connection}
+							<Button variant="outline" size="sm" onclick={sendTest} disabled={busy !== null}>
+								{#if busy === 'test'}<LoaderCircle class="animate-spin" />{/if}
+								Send test
+							</Button>
+							<Button variant="outline" size="sm" onclick={disconnect} disabled={busy !== null}>
+								{#if busy === 'disconnect'}<LoaderCircle class="animate-spin" />{/if}
+								Disconnect
+							</Button>
+						{:else}
+							<Button size="sm" href="/api/slack/connect" data-sveltekit-reload
+								>Connect Slack</Button
+							>
+						{/if}
+					</div>
 				</div>
-				<div class="flex gap-2">
-					{#if connection}
-						<Button variant="outline" size="sm" onclick={sendTest} disabled={busy !== null}>
-							{#if busy === 'test'}<LoaderCircle class="animate-spin" />{/if}
-							Send test
-						</Button>
-						<Button variant="outline" size="sm" onclick={disconnect} disabled={busy !== null}>
-							{#if busy === 'disconnect'}<LoaderCircle class="animate-spin" />{/if}
-							Disconnect
+				{#if connection && channels}
+					<div class="divide-y border-t pt-4">
+						<SettingRow
+							id="alerts-slack"
+							label="Alerts in Slack"
+							description="Send each alert as a direct message."
+						>
+							<SavedSwitch
+								id="alerts-slack"
+								checked={channels.slack}
+								onsave={(v) => saveChannel('slack', v)}
+							/>
+						</SettingRow>
+						<SettingRow
+							id="alerts-push"
+							label="Push to devices too"
+							description="Off: alerts go only to Slack."
+						>
+							<SavedSwitch
+								id="alerts-push"
+								checked={channels.push}
+								onsave={(v) => saveChannel('push', v)}
+							/>
+						</SettingRow>
+					</div>
+				{/if}
+			{/if}
+			{#if mentions?.available}
+				<div class="flex items-center justify-between gap-4 border-t pt-4">
+					<div>
+						<p class="text-sm font-medium">Mentions in the peek</p>
+						<p class="text-xs text-muted-foreground">
+							{mentions.connected
+								? 'The peek shows Slack messages that link to the PR or issue.'
+								: 'Search the PostHog Slack for messages that link to a PR or issue.'}
+						</p>
+					</div>
+					{#if mentions.connected}
+						<Button
+							variant="outline"
+							size="sm"
+							onclick={disconnectMentions}
+							disabled={busy !== null}
+						>
+							{#if busy === 'disconnect-mentions'}<LoaderCircle class="animate-spin" />{/if}
+							Turn off
 						</Button>
 					{:else}
-						<Button size="sm" href="/api/slack/connect" data-sveltekit-reload>Connect Slack</Button>
+						<Button size="sm" href="/api/slack/mentions/connect" data-sveltekit-reload
+							>Turn on</Button
+						>
 					{/if}
-				</div>
-			</div>
-			{#if connection && channels}
-				<div class="divide-y border-t pt-4">
-					<SettingRow
-						id="alerts-slack"
-						label="Alerts in Slack"
-						description="Send each alert as a direct message."
-					>
-						<SavedSwitch
-							id="alerts-slack"
-							checked={channels.slack}
-							onsave={(v) => saveChannel('slack', v)}
-						/>
-					</SettingRow>
-					<SettingRow
-						id="alerts-push"
-						label="Push to devices too"
-						description="Off: alerts go only to Slack."
-					>
-						<SavedSwitch
-							id="alerts-push"
-							checked={channels.push}
-							onsave={(v) => saveChannel('push', v)}
-						/>
-					</SettingRow>
 				</div>
 			{/if}
 		</Card.Content>

@@ -4,6 +4,7 @@ import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
 import { appToken, getUser, tokenContext, userToken, type Env } from '../db';
 import { getViewer, gh, type GhUser } from '../github';
+import { refreshSlackMentionsAccess } from '../slack-mentions';
 import { routes, SESSION_COOKIE, poller, json, type AppEnv } from '../app';
 import { SESSION_DAYS, SESSION_IDLE_DAYS, deviceLabel } from '../../src/lib/shared/session';
 import type { SessionDTO } from '../../src/lib/shared/types';
@@ -187,6 +188,11 @@ const app = routes()
 		);
 		await startSession(c, viewer.user.id);
 		await poller(c.env, viewer.user.id).start(viewer.user.id, c.env.APP_URL);
+		c.executionCtx.waitUntil(
+			refreshSlackMentionsAccess(c.env, viewer.user.id, token).catch((err) =>
+				console.error('slack mentions access check failed', (err as Error).message)
+			)
+		);
 		// The app then runs the org access check once, unless this browser said "Don't show again".
 		return c.redirect(
 			use === 'app'

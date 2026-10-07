@@ -493,6 +493,15 @@ export interface MeDTO {
 export interface SlackStatusDTO {
 	available: boolean;
 	connection: { teamName: string; connectedAt: number } | null;
+	mentions: { available: boolean; connected: boolean };
+}
+
+export interface SlackMentionDTO {
+	channelName: string;
+	authorName: string;
+	at: number;
+	extract: string;
+	permalink: string;
 }
 
 export type OrgAccess =

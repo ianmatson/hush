@@ -1,6 +1,7 @@
 import { decryptSecret, encryptSecret } from './crypto';
 import type { Env } from './db';
 import type { SlackInstall } from './slack';
+import type { SlackMentionsInstall } from './slack-mentions';
 
 const botTokenContext = (teamId: string) => `slack:${teamId}:bot_token`;
 
@@ -106,4 +107,74 @@ export async function removeSlackWorkspace(env: Env, teamId: string): Promise<nu
 		env.DB.prepare('DELETE FROM slack_workspaces WHERE team_id = ?').bind(teamId)
 	]);
 	return connected.results.map((r) => r.user_id);
+}
+
+const mentionsTokenContext = (userId: number) => `slack-mentions:${userId}:user_token`;
+
+export async function saveSlackMentionsInstall(
+	env: Env,
+	userId: number,
+	install: SlackMentionsInstall
+) {
+	const { ct, iv } = await encryptSecret(
+		install.userToken,
+		env.TOKEN_ENC_KEY,
+		mentionsTokenContext(userId)
+	);
+	await env.DB.prepare(
+		`INSERT INTO slack_mentions_connections (user_id, slack_user_id, user_token_ct, user_token_iv, connected_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT (user_id) DO UPDATE SET slack_user_id = excluded.slack_user_id, user_token_ct = excluded.user_token_ct,
+       user_token_iv = excluded.user_token_iv, connected_at = excluded.connected_at`
+	)
+		.bind(userId, install.slackUserId, ct, iv, Date.now())
+		.run();
+}
+
+export async function slackMentionsToken(env: Env, userId: number): Promise<string | null> {
+	const row = await env.DB.prepare(
+		'SELECT user_token_ct, user_token_iv FROM slack_mentions_connections WHERE user_id = ?'
+	)
+		.bind(userId)
+		.first<{ user_token_ct: string; user_token_iv: string }>();
+	if (!row) return null;
+	return decryptSecret(
+		row.user_token_ct,
+		row.user_token_iv,
+		env.TOKEN_ENC_KEY,
+		mentionsTokenContext(userId)
+	);
+}
+
+export async function removeSlackMentions(env: Env, userId: number) {
+	await env.DB.prepare('DELETE FROM slack_mentions_connections WHERE user_id = ?')
+		.bind(userId)
+		.run();
+}
+
+export async function slackMentionsAllowed(env: Env, userId: number): Promise<boolean> {
+	const row = await env.DB.prepare('SELECT slack_mentions_allowed FROM users WHERE id = ?')
+		.bind(userId)
+		.first<{ slack_mentions_allowed: number }>();
+	return row?.slack_mentions_allowed === 1;
+}
+
+export async function slackMentionsCheckedAt(env: Env, userId: number): Promise<number | null> {
+	const row = await env.DB.prepare('SELECT slack_mentions_checked_at FROM users WHERE id = ?')
+		.bind(userId)
+		.first<{ slack_mentions_checked_at: number | null }>();
+	return row?.slack_mentions_checked_at ?? null;
+}
+
+export async function saveSlackMentionsAccess(env: Env, userId: number, allowed: boolean) {
+	const writes = [
+		env.DB.prepare(
+			'UPDATE users SET slack_mentions_allowed = ?, slack_mentions_checked_at = ? WHERE id = ?'
+		).bind(allowed ? 1 : 0, Date.now(), userId)
+	];
+	if (!allowed)
+		writes.push(
+			env.DB.prepare('DELETE FROM slack_mentions_connections WHERE user_id = ?').bind(userId)
+		);
+	await env.DB.batch(writes);
 }

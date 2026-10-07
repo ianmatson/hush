@@ -130,6 +130,15 @@ export const api = {
 	slack: () => ok(client.api.slack.$get()),
 	disconnectSlack: () => ok(client.api.slack.$delete()),
 	testSlack: () => ok(client.api.slack.test.$post()),
+	disconnectSlackMentions: () => ok(client.api.slack.mentions.$delete()),
+	slackMentions: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.slack.mentions[':owner'][':repo'][':number'].$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
 	countSource: (q: string, scope: string) =>
 		ok(client.api.sources.count.$get({ query: { q, scope } })),
 	dashboard: (kind: DashKind, refresh = false) =>

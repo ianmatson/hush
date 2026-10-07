@@ -8,6 +8,7 @@
 	import { cn } from '$lib/utils';
 	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
 	import CommentBox from './comment-box.svelte';
+	import PeekSlack from './peek-slack.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
@@ -250,6 +251,8 @@
 			{/if}
 			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
+
+		<PeekSlack {repo} {number} />
 
 		<section class="grid gap-3">
 			<h3 class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

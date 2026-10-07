@@ -62,7 +62,7 @@ Both apps are in the PostHog workspace (`TSS5W8YQZ`). Their manifests are in `sl
 - Phase 0 test first: does `assistant.search.context` find GitHub URLs and `owner/repo#n`? Does `OR` work? What is the rate limit? Stop if URL search is bad.
 - GitHub flag (UI only): `GET /user/memberships/orgs/PostHog` with the sign-in token, at sign-in, at most once a day. Based on `checkAccess` from commit `5b3691c`. Ask a PostHog GitHub org owner to approve the Hush OAuth app first.
 - Security: the internal app OAuth callback refuses any `team.id` that is not `SLACK_MENTIONS_TEAM_ID`.
-- Store the encrypted user token on `slack_connections` (`mentions_token`).
+- Store the encrypted user token in its own table, `slack_mentions_connections` (migration `0017`). A PostHog member can use mentions without Slack alerts, and `slack_connections` needs a **Hush** workspace install.
 - `GET /api/slack/mentions/:owner/:repo/:number`: search each time, `Cache-Control: private, no-store`, never stored.
 - `peek-slack.svelte` in `peek-body.svelte`: "Mentioned in Slack (n)", channel, author, time, extract, permalink. Hidden with 0 results.
 

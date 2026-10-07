@@ -1,6 +1,6 @@
 import type { Env } from './db';
 
-const SLACK_API = 'https://slack.com/api';
+export const SLACK_API = 'https://slack.com/api';
 export const SLACK_AUTHORIZE_URL = 'https://slack.com/oauth/v2/authorize';
 export const SLACK_BOT_SCOPES = ['chat:write', 'im:write'];
 const SIGNATURE_VERSION = 'v0';
@@ -18,7 +18,7 @@ export const tokenWasRevoked = (error: string) => REVOKED_ERRORS.has(error);
 
 export const userIsGone = (error: string) => USER_GONE_ERRORS.has(error);
 
-async function slackAnswer<T>(res: Response): Promise<SlackAnswer<T>> {
+export async function slackAnswer<T>(res: Response): Promise<SlackAnswer<T>> {
 	if (!res.ok) return { ok: false, error: `http_${res.status}` };
 	return (await res
 		.json()
