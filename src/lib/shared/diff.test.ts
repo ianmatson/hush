@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildFileTree,
+	commentTarget,
 	fileAnchor,
 	hunkSides,
 	languageForPath,
@@ -11,8 +12,11 @@ import {
 	placeThreads,
 	pullFilePageCount,
 	rangeSinceReview,
+	selectedNewText,
 	splitPath,
 	splitRows,
+	suggestionBlock,
+	suggestionIn,
 	threadsByPath,
 	type FileTreeNode,
 	type PullCommit,
@@ -278,5 +282,48 @@ describe('placeThreads', () => {
 	it('groups threads by file', () => {
 		const byPath = threadsByPath([thread({ id: '1' }), thread({ id: '2', path: 'b.ts' })]);
 		expect([...byPath.keys()]).toEqual(['a.ts', 'b.ts']);
+	});
+});
+
+describe('commentTarget', () => {
+	const [hunk] = parsePatch(
+		['@@ -10,4 +10,4 @@', ' a', '-b', '+B', ' c', '\\ No newline at end of file'].join('\n')
+	);
+
+	it('targets one line on the side that it is on', () => {
+		expect(commentTarget('f.ts', hunk, 0, 0)).toEqual({
+			path: 'f.ts',
+			side: 'RIGHT',
+			line: 10,
+			startSide: null,
+			startLine: null
+		});
+		expect(commentTarget('f.ts', hunk, 1, 1)).toMatchObject({ side: 'LEFT', line: 11 });
+	});
+
+	it('targets a range in either drag direction, also across sides', () => {
+		const range = { path: 'f.ts', side: 'RIGHT', line: 12, startSide: 'LEFT', startLine: 11 };
+		expect(commentTarget('f.ts', hunk, 1, 3)).toEqual(range);
+		expect(commentTarget('f.ts', hunk, 3, 1)).toEqual(range);
+	});
+
+	it('refuses the no-newline note', () => {
+		expect(commentTarget('f.ts', hunk, 4, 4)).toBe(null);
+	});
+});
+
+describe('suggestions', () => {
+	const [hunk] = parsePatch(['@@ -1,3 +1,3 @@', ' a', '-b', '+B', ' c'].join('\n'));
+
+	it('takes the new text of a range without deleted lines', () => {
+		expect(selectedNewText(hunk, 2, 3)).toBe('B\nc');
+		expect(selectedNewText(hunk, 1, 2)).toBe(null);
+	});
+
+	it('builds and reads a suggestion block', () => {
+		const body = `Try this:\n\n${suggestionBlock('B\nc')}\n`;
+		expect(suggestionIn(body)).toBe('B\nc');
+		expect(suggestionIn('No block')).toBe(null);
+		expect(suggestionIn(suggestionBlock(''))).toBe('');
 	});
 });

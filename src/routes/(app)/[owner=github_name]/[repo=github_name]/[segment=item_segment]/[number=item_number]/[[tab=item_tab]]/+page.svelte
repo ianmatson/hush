@@ -160,6 +160,8 @@
 			pullRequestId={q.data?.can.id ?? ''}
 			head={q.data?.can.pr?.headOid ?? ''}
 			lastReview={pr.lastReview ?? null}
+			canComment={!!q.data?.can.comment}
+			isAuthor={!!q.data?.can.author}
 			changedFiles={pr.files}
 			additions={pr.additions}
 			deletions={pr.deletions}

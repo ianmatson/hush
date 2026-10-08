@@ -16,7 +16,7 @@
 		type PullFileStatus,
 		type ReviewThread as ReviewThreadData
 	} from '$lib/shared/diff';
-	import { untrack } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -38,7 +38,11 @@
 		threads,
 		ontoggle,
 		onviewed,
-		onthreadschanged
+		onthreadschanged,
+		selection,
+		canComment,
+		onselect,
+		composer
 	}: {
 		file: PullFile;
 		folded: boolean;
@@ -50,7 +54,29 @@
 		ontoggle: () => void;
 		onviewed: () => void;
 		onthreadschanged: () => Promise<unknown>;
+		selection: { hunk: number; from: number; to: number } | null;
+		canComment: boolean;
+		onselect: (hunk: number, at: number, extend: boolean) => void;
+		composer: Snippet;
 	} = $props();
+
+	let dragging = $state<number | null>(null);
+	const isSelected = (h: number, at: number) =>
+		!!selection &&
+		selection.hunk === h &&
+		at >= Math.min(selection.from, selection.to) &&
+		at <= Math.max(selection.from, selection.to);
+	const composerAfter = (h: number, ats: (number | undefined)[]) =>
+		!!selection && selection.hunk === h && ats.includes(Math.max(selection.from, selection.to));
+	function startSelect(e: PointerEvent, h: number, at: number) {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		dragging = h;
+		onselect(h, at, e.shiftKey);
+	}
+	function dragSelect(h: number, at: number) {
+		if (dragging === h) onselect(h, at, true);
+	}
 
 	const FOLD_MS = 220;
 	const hunks = $derived(file.patch ? parsePatch(file.patch) : []);
@@ -143,14 +169,50 @@
 	{/if}
 {/snippet}
 
+{#snippet lineNumber(value: number | null, h: number, at: number, kind: DiffLineKind)}
+	{#if canComment && value !== null && kind !== 'note'}<button
+			type="button"
+			class="w-full cursor-pointer text-right tabular-nums hover:text-foreground"
+			aria-label="Comment on line {value}"
+			onpointerdown={(e) => startSelect(e, h, at)}
+			onpointerenter={() => dragSelect(h, at)}
+			onclick={(e) => {
+				if (e.detail === 0) onselect(h, at, e.shiftKey);
+			}}>{value}</button
+		>{:else}{value ?? ''}{/if}
+{/snippet}
+
+{#snippet composerRow(columns: number)}
+	<tr>
+		<td colspan={columns} class="px-2">
+			<div
+				class="sticky left-2"
+				style:max-width="{Math.min(THREAD_MAX_WIDTH_PX, visibleWidth - THREAD_INSET_PX)}px"
+			>
+				{@render composer()}
+			</div>
+		</td>
+	</tr>
+{/snippet}
+
 {#snippet splitHalf(cell: { line: DiffLine; at: number } | null, h: number, side: 'old' | 'new')}
 	{#if cell}
 		{@const tone = cell.line.kind === 'context' ? '' : ROW_TONE[cell.line.kind]}
 		<td
 			class={cn(
 				'px-2 text-right align-top text-muted-foreground tabular-nums select-none',
-				cell.line.kind === 'context' ? '' : NUMBER_TONE[cell.line.kind]
-			)}>{(side === 'old' ? cell.line.oldLine : cell.line.newLine) ?? ''}</td
+				isSelected(h, cell.at)
+					? 'bg-signal-review/25 text-foreground'
+					: cell.line.kind === 'context'
+						? ''
+						: NUMBER_TONE[cell.line.kind]
+			)}
+			>{@render lineNumber(
+				side === 'old' ? cell.line.oldLine : cell.line.newLine,
+				h,
+				cell.at,
+				cell.line.kind
+			)}</td
 		>
 		<td class={cn('pr-3 align-top break-all whitespace-pre-wrap', tone)}
 			>{@render code(cell.line, h, cell.at)}</td
@@ -160,6 +222,8 @@
 		<td class="bg-muted/40"></td>
 	{/if}
 {/snippet}
+
+<svelte:window onpointerup={() => (dragging = null)} />
 
 <section
 	id={fileAnchor(file.filename)}
@@ -277,6 +341,9 @@
 										{@render splitHalf(row.right, h, 'new')}
 									</tr>
 									{@render threadRow(threadsAt([row.left?.line, row.right?.line]), 4)}
+									{#if composerAfter(h, [row.left?.at, row.right?.at])}
+										{@render composerRow(4)}
+									{/if}
 								{/each}
 							</tbody>
 						{/each}
@@ -294,14 +361,24 @@
 											<td
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													NUMBER_TONE[line.kind]
-												)}>{line.oldLine ?? ''}</td
+													isSelected(h, l)
+														? 'bg-signal-review/25 text-foreground'
+														: NUMBER_TONE[line.kind]
+												)}
+												>{@render lineNumber(
+													line.kind === 'del' ? line.oldLine : null,
+													h,
+													l,
+													line.kind
+												)}{#if line.kind !== 'del'}{line.oldLine ?? ''}{/if}</td
 											>
 											<td
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													NUMBER_TONE[line.kind]
-												)}>{line.newLine ?? ''}</td
+													isSelected(h, l)
+														? 'bg-signal-review/25 text-foreground'
+														: NUMBER_TONE[line.kind]
+												)}>{@render lineNumber(line.newLine, h, l, line.kind)}</td
 											>
 											<td class="pr-4 whitespace-pre"
 												><span
@@ -311,6 +388,9 @@
 											>
 										</tr>
 										{@render threadRow(threadsAt([line]), 3)}
+										{#if composerAfter(h, [l])}
+											{@render composerRow(3)}
+										{/if}
 									{/each}
 								</tbody>
 							{/each}

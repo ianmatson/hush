@@ -3,6 +3,8 @@ import {
 	PULL_FILES_PER_PAGE,
 	isCommitOid,
 	type PullCommit,
+	type PendingReview,
+	type ReviewEvent,
 	type ReviewThread,
 	type FileViewedState,
 	type ViewedFiles
@@ -41,6 +43,7 @@ const PULL_COMMITS_QUERY = `query($o: String!, $r: String!, $n: Int!) {
 
 const REVIEW_THREADS_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: String) {
   repository(owner: $o, name: $r) { pullRequest(number: $n) {
+    reviews(states: [PENDING], first: 1) { nodes { id viewerDidAuthor comments { totalCount } } }
     reviewThreads(first: ${THREADS_PER_PAGE}, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
@@ -48,7 +51,7 @@ const REVIEW_THREADS_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: 
         viewerCanReply viewerCanResolve viewerCanUnresolve
         comments(first: ${COMMENTS_PER_THREAD}) {
           totalCount
-          nodes { id author { login avatarUrl } bodyHTML createdAt url }
+          nodes { id author { login avatarUrl } bodyHTML body createdAt url state viewerCanUpdate viewerCanDelete }
         }
       }
     }
@@ -79,8 +82,12 @@ type ThreadNode = {
 			id: string;
 			author: { login: string; avatarUrl: string } | null;
 			bodyHTML: string;
+			body: string;
 			createdAt: string;
 			url: string;
+			state: string;
+			viewerCanUpdate: boolean;
+			viewerCanDelete: boolean;
 		}[];
 	};
 };
@@ -89,6 +96,9 @@ type ReviewThreadsPage = {
 	data?: {
 		repository?: {
 			pullRequest?: {
+				reviews?: {
+					nodes: { id: string; viewerDidAuthor: boolean; comments: { totalCount: number } }[];
+				};
 				reviewThreads?: {
 					pageInfo: { hasNextPage: boolean; endCursor: string | null };
 					nodes: ThreadNode[];
@@ -117,8 +127,12 @@ function toReviewThread(node: ThreadNode): ReviewThread {
 			id: c.id,
 			author: { login: c.author?.login ?? 'ghost', avatar: c.author?.avatarUrl ?? null },
 			html: c.bodyHTML,
+			body: c.body,
 			at: c.createdAt,
-			url: c.url
+			url: c.url,
+			pending: c.state === 'PENDING',
+			canEdit: c.viewerCanUpdate,
+			canDelete: c.viewerCanDelete
 		}))
 	};
 }
@@ -132,6 +146,88 @@ async function graphqlWrite(token: string, query: string, variables: Record<stri
 	if (!res.ok || result.errors?.length)
 		return result.errors?.[0]?.message ?? `GitHub returned ${res.status}.`;
 	return null;
+}
+
+const ADD_REVIEW_THREAD = `mutation($pr: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
+  addPullRequestReviewThread(input: { pullRequestId: $pr, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide }) { thread { id } }
+}`;
+const SUBMIT_REVIEW = `mutation($id: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  submitPullRequestReview(input: { pullRequestReviewId: $id, event: $event, body: $body }) { pullRequestReview { id } }
+}`;
+const DISCARD_REVIEW = `mutation($id: ID!) { deletePullRequestReview(input: { pullRequestReviewId: $id }) { pullRequestReview { id } } }`;
+const EDIT_COMMENT = `mutation($id: ID!, $body: String!) {
+  updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) { pullRequestReviewComment { id } }
+}`;
+const DELETE_COMMENT = `mutation($id: ID!) { deletePullRequestReviewComment(input: { id: $id }) { clientMutationId } }`;
+
+const REVIEW_EVENTS = new Set<ReviewEvent>(['COMMENT', 'APPROVE', 'REQUEST_CHANGES']);
+const SIDES = new Set(['LEFT', 'RIGHT']);
+const isLineNumber = (value: unknown): value is number =>
+	typeof value === 'number' && Number.isInteger(value) && value > 0;
+const isNodeId = (value: unknown): value is string =>
+	typeof value === 'string' && NODE_ID.test(value);
+const isBody = (value: unknown): value is string =>
+	typeof value === 'string' && !!value.trim() && value.length <= MAX_REPLY_LENGTH;
+
+type CommentInput = {
+	repo: string;
+	number: number;
+	pullRequestId: string;
+	commitOid: string;
+	path: string;
+	body: string;
+	line: number;
+	side: 'LEFT' | 'RIGHT';
+	startLine: number | null;
+	startSide: 'LEFT' | 'RIGHT' | null;
+	single: boolean;
+};
+
+function validComment(b: Partial<CommentInput>): b is CommentInput {
+	const [owner, name, extra] = typeof b.repo === 'string' ? b.repo.split('/') : [];
+	const range = b.startLine === null || b.startLine === undefined;
+	return (
+		isGitHubName(owner ?? '') &&
+		isGitHubName(name ?? '') &&
+		extra === undefined &&
+		isLineNumber(b.number) &&
+		isNodeId(b.pullRequestId) &&
+		isCommitOid(b.commitOid) &&
+		typeof b.path === 'string' &&
+		!!b.path &&
+		b.path.length <= MAX_PATH_LENGTH &&
+		isBody(b.body) &&
+		isLineNumber(b.line) &&
+		SIDES.has(b.side ?? '') &&
+		(range
+			? b.startSide === null || b.startSide === undefined
+			: isLineNumber(b.startLine) && SIDES.has(b.startSide ?? '')) &&
+		typeof b.single === 'boolean'
+	);
+}
+
+async function postSingleComment(token: string, b: CommentInput): Promise<string | null> {
+	const res = await gh(token, `/repos/${b.repo}/pulls/${b.number}/comments`, {
+		method: 'POST',
+		body: JSON.stringify({
+			body: b.body,
+			commit_id: b.commitOid,
+			path: b.path,
+			line: b.line,
+			side: b.side,
+			...(b.startLine ? { start_line: b.startLine, start_side: b.startSide } : {})
+		})
+	});
+	if (res.ok) return null;
+	const result = (await res.json().catch(() => ({}))) as {
+		message?: string;
+		errors?: (string | { message?: string })[];
+	};
+	const detail = result.errors?.map((e) => (typeof e === 'string' ? e : e.message)).filter(Boolean);
+	return (
+		[result.message, ...(detail ?? [])].filter(Boolean).join(': ') ||
+		`GitHub returned ${res.status}.`
+	);
 }
 
 const MARK_VIEWED = `mutation($id: ID!, $path: String!) {
@@ -281,6 +377,7 @@ const app = routes()
 		if (!validPull(owner, repo, number)) return c.json({ error: 'Not a pull request.' }, 400);
 		const token = await userToken(c.env, c.get('user'));
 		const threads: ReviewThread[] = [];
+		let pendingReview: PendingReview | null = null;
 		let after: string | null = null;
 		for (let page = 0; page < THREAD_PAGES_LIMIT; page++) {
 			const res = await gh(token, '/graphql', {
@@ -302,11 +399,15 @@ const app = routes()
 					{ error: result.errors?.[0]?.message ?? 'GitHub found no pull request.' },
 					404
 				);
-			threads.push(...found.nodes.map(toReviewThread));
+			const pending = result.data?.repository?.pullRequest?.reviews?.nodes.find(
+				(r) => r.viewerDidAuthor
+			);
+			if (pending) pendingReview = { id: pending.id, comments: pending.comments.totalCount };
+			threads.push(...found.nodes.filter((n) => n.comments.totalCount > 0).map(toReviewThread));
 			if (!found.pageInfo.hasNextPage) break;
 			after = found.pageInfo.endCursor;
 		}
-		return c.json({ threads }, 200, { 'Cache-Control': 'private, no-store' });
+		return c.json({ threads, pendingReview }, 200, { 'Cache-Control': 'private, no-store' });
 	})
 	.post('/api/diff/threads/reply', json<{ threadId: string; body: string }>(), async (c) => {
 		const b = c.req.valid('json');
@@ -341,6 +442,71 @@ const app = routes()
 		const failure = await graphqlWrite(token, b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD, {
 			id: b.threadId
 		});
+		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+	})
+	.post('/api/diff/comment', json<CommentInput>(), async (c) => {
+		const b = c.req.valid('json');
+		if (!validComment(b)) return c.json({ error: 'Not a comment on a line of the diff.' }, 400);
+		const token = await userToken(c.env, c.get('user'));
+		const blocked = await writeBlockForNode(c.env, token, b.pullRequestId);
+		if (blocked) return c.json({ error: blocked }, 403);
+		const failure = b.single
+			? await postSingleComment(token, b)
+			: await graphqlWrite(token, ADD_REVIEW_THREAD, {
+					pr: b.pullRequestId,
+					path: b.path,
+					body: b.body,
+					line: b.line,
+					side: b.side,
+					startLine: b.startLine,
+					startSide: b.startSide
+				});
+		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+	})
+	.post(
+		'/api/diff/review/submit',
+		json<{ reviewId: string; event: ReviewEvent; body: string }>(),
+		async (c) => {
+			const b = c.req.valid('json');
+			if (
+				!isNodeId(b.reviewId) ||
+				!REVIEW_EVENTS.has(b.event as ReviewEvent) ||
+				typeof b.body !== 'string' ||
+				b.body.length > MAX_REPLY_LENGTH ||
+				(b.event === 'REQUEST_CHANGES' && !b.body.trim())
+			)
+				return c.json({ error: 'Not a review to submit.' }, 400);
+			const token = await userToken(c.env, c.get('user'));
+			const blocked = await writeBlockForNode(c.env, token, b.reviewId);
+			if (blocked) return c.json({ error: blocked }, 403);
+			const failure = await graphqlWrite(token, SUBMIT_REVIEW, {
+				id: b.reviewId,
+				event: b.event,
+				body: b.body.trim() || null
+			});
+			return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+		}
+	)
+	.post('/api/diff/review/discard', json<{ reviewId: string }>(), async (c) => {
+		const b = c.req.valid('json');
+		if (!isNodeId(b.reviewId)) return c.json({ error: 'Not a review.' }, 400);
+		const token = await userToken(c.env, c.get('user'));
+		const blocked = await writeBlockForNode(c.env, token, b.reviewId);
+		if (blocked) return c.json({ error: blocked }, 403);
+		const failure = await graphqlWrite(token, DISCARD_REVIEW, { id: b.reviewId });
+		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+	})
+	.post('/api/diff/comment/edit', json<{ commentId: string; body: string | null }>(), async (c) => {
+		const b = c.req.valid('json');
+		const deleting = b.body === null;
+		if (!isNodeId(b.commentId) || (!deleting && !isBody(b.body)))
+			return c.json({ error: 'Not a review comment.' }, 400);
+		const token = await userToken(c.env, c.get('user'));
+		const blocked = await writeBlockForNode(c.env, token, b.commentId);
+		if (blocked) return c.json({ error: blocked }, 403);
+		const failure = deleting
+			? await graphqlWrite(token, DELETE_COMMENT, { id: b.commentId })
+			: await graphqlWrite(token, EDIT_COMMENT, { id: b.commentId, body: b.body });
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.get('/api/diff/:owner/:repo/:number/viewed', async (c) => {

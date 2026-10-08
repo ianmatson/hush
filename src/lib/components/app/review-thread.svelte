@@ -21,20 +21,40 @@
 
 	let open = $state(untrack(() => !thread.resolved));
 	let reply = $state('');
-	let sending = $state<'reply' | 'resolve' | null>(null);
+	let sending = $state<'reply' | 'resolve' | 'edit' | 'delete' | null>(null);
+	let editingId = $state<string | null>(null);
+	let editText = $state('');
+	let deletingId = $state<string | null>(null);
+	const isPending = $derived(thread.comments.some((c) => c.pending));
 
 	const hiddenComments = $derived(thread.totalComments - thread.comments.length);
 	const firstAuthor = $derived(thread.comments[0]?.author.login ?? 'someone');
 
-	async function run(kind: 'reply' | 'resolve', action: () => Promise<unknown>) {
-		if (sending) return;
+	async function saveEdit(id: string) {
+		if (!editText.trim()) return;
+		if (await run('edit', () => api.editReviewComment(id, editText.trim()))) editingId = null;
+	}
+
+	async function deleteComment(id: string) {
+		if (deletingId !== id) return void (deletingId = id);
+		await run('delete', () => api.editReviewComment(id, null));
+		deletingId = null;
+	}
+
+	async function run(
+		kind: 'reply' | 'resolve' | 'edit' | 'delete',
+		action: () => Promise<unknown>
+	): Promise<boolean> {
+		if (sending) return false;
 		sending = kind;
 		try {
 			await action();
 			await onchanged();
 			if (kind === 'reply') reply = '';
+			return true;
 		} catch (err) {
 			toast.error((err as Error).message);
+			return false;
 		} finally {
 			sending = null;
 		}
@@ -66,6 +86,10 @@
 		>
 		{#if thread.outdated}<span class="rounded-full border px-1.5 py-px">Outdated</span>{/if}
 		{#if thread.fileLevel}<span class="rounded-full border px-1.5 py-px">On the file</span>{/if}
+		{#if isPending}<span
+				class="rounded-full border border-signal-review/50 px-1.5 py-px text-signal-review"
+				>Pending</span
+			>{/if}
 		{#if thread.resolved}<span class="rounded-full border px-1.5 py-px text-signal-merge"
 				>Resolved</span
 			>{/if}
@@ -85,8 +109,64 @@
 						rel="noreferrer"
 						class="text-muted-foreground tabular-nums hover:text-foreground">{ago(comment.at)}</a
 					>
+					{#if editingId !== comment.id && (comment.canEdit || comment.canDelete)}
+						<span class="ml-auto flex gap-2 text-muted-foreground">
+							{#if comment.canEdit}
+								<button
+									type="button"
+									class="hover:text-foreground"
+									onclick={() => {
+										editingId = comment.id;
+										editText = comment.body;
+									}}>Edit</button
+								>
+							{/if}
+							{#if comment.canDelete}
+								<button
+									type="button"
+									class={cn(
+										'hover:text-foreground',
+										deletingId === comment.id && 'text-destructive'
+									)}
+									disabled={!!sending}
+									onclick={() => void deleteComment(comment.id)}
+									>{deletingId === comment.id ? 'Confirm: delete' : 'Delete'}</button
+								>
+							{/if}
+						</span>
+					{/if}
 				</div>
-				<div class="gh-html ml-7">{@html sanitize(comment.html)}</div>
+				{#if editingId === comment.id}
+					<div class="ml-7 grid gap-2">
+						<textarea
+							bind:value={editText}
+							rows="3"
+							aria-label="Edit the comment"
+							class="w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+							onkeydown={(e) => {
+								if (commandFor(e, ['editor']) === 'editor.send') {
+									e.preventDefault();
+									void saveEdit(comment.id);
+								} else if (e.key === 'Escape') {
+									e.preventDefault();
+									editingId = null;
+								}
+							}}></textarea>
+						<span class="flex justify-end gap-2">
+							<Button size="sm" variant="ghost" onclick={() => (editingId = null)}>Cancel</Button>
+							<Button
+								size="sm"
+								disabled={!editText.trim() || !!sending}
+								onclick={() => void saveEdit(comment.id)}
+							>
+								{#if sending === 'edit'}<LoaderCircle class="animate-spin" />{/if}
+								Save
+							</Button>
+						</span>
+					</div>
+				{:else}
+					<div class="gh-html ml-7">{@html sanitize(comment.html)}</div>
+				{/if}
 			</div>
 		{/each}
 		{#if hiddenComments > 0}

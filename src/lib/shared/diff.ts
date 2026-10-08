@@ -390,9 +390,20 @@ export interface ThreadComment {
 	id: string;
 	author: { login: string; avatar: string | null };
 	html: string;
+	body: string;
 	at: string;
 	url: string;
+	pending: boolean;
+	canEdit: boolean;
+	canDelete: boolean;
 }
+
+export interface PendingReview {
+	id: string;
+	comments: number;
+}
+
+export type ReviewEvent = 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
 
 export interface ReviewThread {
 	id: string;
@@ -444,4 +455,57 @@ export function threadsByPath(threads: ReviewThread[]): Map<string, ReviewThread
 	for (const thread of threads)
 		byPath.set(thread.path, [...(byPath.get(thread.path) ?? []), thread]);
 	return byPath;
+}
+
+export type DiffSide = 'LEFT' | 'RIGHT';
+
+export interface CommentTarget {
+	path: string;
+	side: DiffSide;
+	line: number;
+	startSide: DiffSide | null;
+	startLine: number | null;
+}
+
+function lineSide(line: DiffLine): { side: DiffSide; line: number } | null {
+	if (line.kind === 'del' && line.oldLine !== null) return { side: 'LEFT', line: line.oldLine };
+	if (line.kind !== 'note' && line.newLine !== null) return { side: 'RIGHT', line: line.newLine };
+	return null;
+}
+
+export function commentTarget(
+	path: string,
+	hunk: DiffHunk,
+	fromIndex: number,
+	toIndex: number
+): CommentTarget | null {
+	const first = Math.min(fromIndex, toIndex);
+	const last = Math.max(fromIndex, toIndex);
+	const start = hunk.lines[first] && lineSide(hunk.lines[first]);
+	const end = hunk.lines[last] && lineSide(hunk.lines[last]);
+	if (!start || !end) return null;
+	const single = first === last;
+	return {
+		path,
+		side: end.side,
+		line: end.line,
+		startSide: single ? null : start.side,
+		startLine: single ? null : start.line
+	};
+}
+
+export function selectedNewText(hunk: DiffHunk, fromIndex: number, toIndex: number): string | null {
+	const lines = hunk.lines.slice(Math.min(fromIndex, toIndex), Math.max(fromIndex, toIndex) + 1);
+	if (lines.some((l) => l.kind === 'del' || l.kind === 'note')) return null;
+	return lines.map((l) => l.text).join('\n');
+}
+
+const SUGGESTION_FENCE = '```suggestion';
+const SUGGESTION = /```suggestion\r?\n([\s\S]*?)\r?\n?```/;
+
+export const suggestionBlock = (text: string) => `${SUGGESTION_FENCE}\n${text}\n\`\`\``;
+
+export function suggestionIn(body: string): string | null {
+	const match = SUGGESTION.exec(body);
+	return match ? match[1] : null;
 }

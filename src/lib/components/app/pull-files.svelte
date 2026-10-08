@@ -23,6 +23,11 @@
 		PULL_FILES_MAX_PAGES,
 		PULL_FILES_PER_PAGE,
 		buildFileTree,
+		commentTarget,
+		parsePatch,
+		selectedNewText,
+		type CommentTarget,
+		type ReviewEvent,
 		comparesOnlyNewCommits,
 		fileAnchor,
 		filesInTreeOrder,
@@ -39,6 +44,9 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import DiffFile from './diff-file.svelte';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import LineCommentBox from './line-comment-box.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import Folder from '@lucide/svelte/icons/folder';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import FileIcon from '@lucide/svelte/icons/file';
@@ -52,6 +60,8 @@
 		pullRequestId,
 		head,
 		lastReview,
+		canComment,
+		isAuthor,
 		changedFiles,
 		additions,
 		deletions
@@ -61,6 +71,8 @@
 		pullRequestId: string;
 		head: string;
 		lastReview: { oid: string; at: string } | null;
+		canComment: boolean;
+		isAuthor: boolean;
 		changedFiles: number;
 		additions: number;
 		deletions: number;
@@ -172,6 +184,106 @@
 	const openThreadsOf = (file: PullFile) => fileThreads(file).filter((t) => !t.resolved).length;
 	const refreshThreads = () =>
 		queryClient.refetchQueries({ queryKey: keys.reviewThreads(repo, number) });
+
+	const pendingReview = $derived(threadsQ.data?.pendingReview ?? null);
+	const commentingAllowed = $derived(canComment && !showingSinceReview && !!head);
+
+	type Selection = { file: string; hunk: number; from: number; to: number };
+	let selection = $state<Selection | null>(null);
+	function selectLine(file: PullFile, hunk: number, at: number, extend: boolean) {
+		selection =
+			extend && selection?.file === file.filename && selection.hunk === hunk
+				? { ...selection, to: at }
+				: { file: file.filename, hunk, from: at, to: at };
+	}
+
+	function selectionDetails(file: PullFile, chosen: Selection) {
+		const hunk = parsePatch(file.patch ?? '')[chosen.hunk];
+		if (!hunk) return null;
+		const target = commentTarget(file.filename, hunk, chosen.from, chosen.to);
+		if (!target) return null;
+		const lines = target.startLine
+			? `lines ${target.startLine}–${target.line}`
+			: `line ${target.line}`;
+		const side = target.side === 'LEFT' ? ' (old)' : '';
+		return {
+			target,
+			label: `${file.filename}, ${lines}${side}`,
+			selectedText: selectedNewText(hunk, chosen.from, chosen.to),
+			draftKey: `${repo}#${number}:${file.filename}:${target.side}:${target.startLine ?? target.line}-${target.line}`
+		};
+	}
+
+	async function addComment(target: CommentTarget, body: string, single: boolean) {
+		try {
+			await api.addLineComment(
+				{ repo, number, pullRequestId, commitOid: head },
+				target,
+				body,
+				single
+			);
+			selection = null;
+			await refreshThreads();
+			toast.success(single ? 'Comment posted' : 'Added to your pending review');
+			return true;
+		} catch (err) {
+			toast.error((err as Error).message);
+			return false;
+		}
+	}
+
+	type ReviewChoice = { event: ReviewEvent; label: string };
+	const REVIEW_CHOICES: ReviewChoice[] = [
+		{ event: 'COMMENT', label: 'Comment' },
+		{ event: 'APPROVE', label: 'Approve' },
+		{ event: 'REQUEST_CHANGES', label: 'Request changes' }
+	];
+	const reviewChoices = $derived(
+		isAuthor ? REVIEW_CHOICES.filter((c) => c.event === 'COMMENT') : REVIEW_CHOICES
+	);
+	let submitting = $state(false);
+	let reviewEvent = $state<ReviewEvent>('COMMENT');
+	let reviewSummary = $state('');
+	let reviewBusy = $state<'submit' | 'discard' | null>(null);
+	let confirmDiscard = $state(false);
+
+	async function submitReview() {
+		if (!pendingReview || reviewBusy) return;
+		if (reviewEvent === 'REQUEST_CHANGES' && !reviewSummary.trim())
+			return void toast.error('Say what to change in the summary.');
+		reviewBusy = 'submit';
+		try {
+			await api.submitReview(pendingReview.id, reviewEvent, reviewSummary);
+			submitting = false;
+			reviewSummary = '';
+			await Promise.all([
+				refreshThreads(),
+				queryClient.refetchQueries({ queryKey: keys.peek(repo, number) })
+			]);
+			toast.success('Review submitted');
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			reviewBusy = null;
+		}
+	}
+
+	async function discardReview() {
+		if (!pendingReview || reviewBusy) return;
+		if (!confirmDiscard) return void (confirmDiscard = true);
+		reviewBusy = 'discard';
+		try {
+			await api.discardReview(pendingReview.id);
+			confirmDiscard = false;
+			submitting = false;
+			await refreshThreads();
+			toast.success('Pending review discarded');
+		} catch (err) {
+			toast.error((err as Error).message);
+		} finally {
+			reviewBusy = null;
+		}
+	}
 
 	const viewedQ = createQuery(() => pullViewedQuery(repo, number));
 	const viewed = $derived<ViewedFiles>(viewedQ.data?.viewed ?? {});
@@ -447,6 +559,69 @@
 				</span>
 			{/if}
 		</div>
+		{#if pendingReview}
+			<div
+				class="sticky top-[6.25rem] z-10 grid gap-2 rounded-lg border border-signal-review/40 bg-background p-2 text-xs shadow-sm"
+			>
+				<div class="flex flex-wrap items-center gap-2">
+					<span class="font-medium text-foreground"
+						>Your review: {pendingReview.comments} pending {pendingReview.comments === 1
+							? 'comment'
+							: 'comments'}</span
+					>
+					<span class="text-muted-foreground">Only you can see them until you submit.</span>
+					<span class="ml-auto flex gap-2">
+						<Button
+							size="sm"
+							variant="ghost"
+							disabled={!!reviewBusy}
+							class={cn(confirmDiscard && 'text-destructive')}
+							onclick={() => void discardReview()}
+							>{confirmDiscard ? 'Confirm: discard' : 'Discard'}</Button
+						>
+						<Button size="sm" disabled={!!reviewBusy} onclick={() => (submitting = !submitting)}
+							>Submit review</Button
+						>
+					</span>
+				</div>
+				{#if submitting}
+					<div class="grid gap-2 border-t pt-2">
+						<textarea
+							bind:value={reviewSummary}
+							rows="2"
+							placeholder="Summary (optional, except for Request changes)"
+							aria-label="Review summary"
+							class="w-full resize-y rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+						></textarea>
+						<div class="flex flex-wrap items-center gap-3">
+							{#each reviewChoices as choice (choice.event)}
+								<label class="flex items-center gap-1.5 text-sm">
+									<input
+										type="radio"
+										name="review-event"
+										value={choice.event}
+										bind:group={reviewEvent}
+									/>
+									{choice.label}
+								</label>
+							{/each}
+							<Button
+								size="sm"
+								class="ml-auto"
+								disabled={!!reviewBusy}
+								onclick={() => void submitReview()}
+							>
+								{#if reviewBusy === 'submit'}<LoaderCircle class="animate-spin" />{/if}
+								Submit
+							</Button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
+		{#if canComment && showingSinceReview}
+			<p class="text-xs text-muted-foreground">To comment on lines, switch to All changes.</p>
+		{/if}
 		{#if historyRewritten}
 			<p class="rounded-md border border-signal-warn/40 bg-signal-warn/10 px-3 py-2 text-xs">
 				Hush cannot find the commit that you reviewed in the branch any more (for example, after a
@@ -510,6 +685,9 @@
 					{split}
 					threads={fileThreads(file)}
 					onthreadschanged={refreshThreads}
+					selection={selection?.file === file.filename ? selection : null}
+					canComment={commentingAllowed}
+					onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
 					ontoggle={() => {
 						cursor = i;
 						toggle(file);
@@ -518,7 +696,23 @@
 						cursor = i;
 						void toggleViewed(file);
 					}}
-				/>
+				>
+					{#snippet composer()}
+						{@const details = selection && selectionDetails(file, selection)}
+						{#if details}
+							{#key details.draftKey}
+								<LineCommentBox
+									label={details.label}
+									draftKey={details.draftKey}
+									selectedText={details.target.side === 'RIGHT' ? details.selectedText : null}
+									hasPendingReview={!!pendingReview}
+									onsubmit={(body, single) => addComment(details.target, body, single)}
+									oncancel={() => (selection = null)}
+								/>
+							{/key}
+						{/if}
+					{/snippet}
+				</DiffFile>
 			{/each}
 		{/if}
 	</div>

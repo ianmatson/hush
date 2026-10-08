@@ -52,6 +52,23 @@ The review comments on the diff show in the Files tab, under the line that they 
 - A thread shows up to 50 comments. **More on GitHub** links to the rest.
 - The comments show only with **All changes**, not with **Since your review**: their line numbers belong to the whole diff.
 
+#### Write review comments
+
+Comment on the diff in the Files tab, as on GitHub:
+
+1. Click a line number. To comment on several lines, drag over the line numbers, or Shift+click the last line. The lines must be in one hunk.
+2. Write in the box that opens under the lines. {{key:editor.send}} adds the comment to your review, and Escape closes the box. Hush keeps what you wrote in this browser until you send it.
+3. **Suggest a change** (on new lines only) adds a ` ```suggestion ` block with the selected lines. Change the lines in the block, and Hush shows the change under the box. The author can apply it on GitHub with one click.
+
+**Start a review** (or **Add to review**) keeps the comment in your pending review: only you can see it. A bar at the top of the Files tab counts your pending comments:
+
+- **Submit review** sends them all, with an optional summary, as **Comment**, **Approve**, or **Request changes** (which needs a summary). You cannot approve or request changes on your own pull request.
+- **Discard** (press it twice) deletes the pending review and its comments.
+
+A review that you started on GitHub shows here too, and the other way round. **Comment now** posts one comment at once, without a review; it is not available while you have a pending review, as on GitHub. **Edit** and **Delete** (press it twice) work on your own comments, pending or posted.
+
+You can comment only with **All changes**: under **Since your review**, the line numbers are those of a different diff.
+
 #### Viewed files
 
 Check **Viewed** on a file, or press {{key:page.viewFile}}, when you are done with it. The file folds, and its row in the tree gets a check. This is GitHub's own **Viewed** mark, so GitHub shows it too, and the other way round. The count at the top tells how many files you viewed. When a file changes after you viewed it, GitHub takes the mark off, and Hush shows **Changed since you viewed it**.

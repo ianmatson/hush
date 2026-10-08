@@ -12,7 +12,15 @@ import type {
 } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
-import type { CommitDiff, CompareResult, PullFile, ReviewThread } from '$lib/shared/diff';
+import type {
+	CommentTarget,
+	CommitDiff,
+	CompareResult,
+	PendingReview,
+	PullFile,
+	ReviewEvent,
+	ReviewThread
+} from '$lib/shared/diff';
 
 export class ApiError extends Error {
 	constructor(
@@ -230,10 +238,22 @@ export const api = {
 				param: { owner, repo: name, number: String(number) }
 			})
 		);
-		return result as { threads: ReviewThread[] };
+		return result as { threads: ReviewThread[]; pendingReview: PendingReview | null };
 	},
 	replyToThread: (threadId: string, body: string) =>
 		ok(client.api.diff.threads.reply.$post({ json: { threadId, body } })),
+	addLineComment: (
+		pull: { repo: string; number: number; pullRequestId: string; commitOid: string },
+		target: CommentTarget,
+		body: string,
+		single: boolean
+	) => ok(client.api.diff.comment.$post({ json: { ...pull, ...target, body, single } })),
+	submitReview: (reviewId: string, event: ReviewEvent, body: string) =>
+		ok(client.api.diff.review.submit.$post({ json: { reviewId, event, body } })),
+	discardReview: (reviewId: string) =>
+		ok(client.api.diff.review.discard.$post({ json: { reviewId } })),
+	editReviewComment: (commentId: string, body: string | null) =>
+		ok(client.api.diff.comment.edit.$post({ json: { commentId, body } })),
 	setThreadResolved: (threadId: string, resolved: boolean) =>
 		ok(client.api.diff.threads.resolve.$post({ json: { threadId, resolved } })),
 	setFileViewed: (pullRequestId: string, path: string, viewed: boolean) =>
