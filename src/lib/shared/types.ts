@@ -241,6 +241,11 @@ export interface Settings {
 	 * "any_review": also when someone else approves or asks for changes after the last push.
 	 */
 	reviewResolution: 'strict' | 'any_review';
+	/**
+	 * When new commits after your review make it your turn again. "always", "changes_requested":
+	 * only when your last review asked for changes, or "never".
+	 */
+	newCommitsAfterReview: import('./dashboard').NewCommitsAfterReview;
 	/** Treat activity by bots (dependabot, renovate…) as FYI. */
 	botsAreFyi: boolean;
 	/** A review request to one of your teams is "Needs you", not FYI. */

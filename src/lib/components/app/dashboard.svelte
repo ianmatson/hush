@@ -22,7 +22,7 @@
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
-	import { arrangeGroup, orderAfterDrop } from '$lib/shared/dashboard';
+	import { arrangeGroup, NEW_COMMITS_REASON, orderAfterDrop } from '$lib/shared/dashboard';
 	import {
 		findStacks,
 		rotateToFront,
@@ -917,6 +917,7 @@
 			title: i.title,
 			repo: i.repo,
 			review: i.requestedMe,
+			newCommits: i.turnReason === NEW_COMMITS_REASON,
 			team: false,
 			bot: i.authorIsBot,
 			elsewhere: 'Other'

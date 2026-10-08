@@ -56,7 +56,7 @@ export type ThreadsResponse = ThreadsBody & {
 };
 
 /** Why a thread does not need you (worker/poller/data.ts: notNeeded). */
-export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'once';
+export type NotNeededAnswer = 'others-reviewed' | 'new-commits' | 'team' | 'bots' | 'once';
 export type ThreadAction =
 	'done' | 'undone' | 'read' | 'unread' | 'snooze' | 'unsnooze' | 'mute' | 'unmute';
 /** The body of a thread action: snooze takes a time or a condition. */

@@ -6,6 +6,8 @@
 		repo: string;
 		/** It asks for your review. */
 		review: boolean;
+		/** It needs you because of new commits since your review. */
+		newCommits: boolean;
 		/** It needs you because of a review request to one of your teams. */
 		team: boolean;
 		/** A bot opened it. */
@@ -42,6 +44,13 @@
 				id: 'others-reviewed',
 				label: 'Someone else already reviewed it',
 				effect: 'A review by someone else settles a review request (for every PR).'
+			});
+		if (t.newCommits && settings.newCommitsAfterReview !== 'never')
+			out.push({
+				id: 'new-commits',
+				label: 'New commits after my review don’t need me',
+				effect:
+					'New commits on a PR that you reviewed no longer make it your turn (for every PR). For a choice in between, see Settings → Inbox.'
 			});
 		if (t.team && settings.teamReviewsAreAction)
 			out.push({

@@ -45,7 +45,7 @@ Hush reads each notification and the pull request or issue behind it (CI, review
 
 - Your review is requested from you by name (or again, after your review).
 - It is assigned to you.
-- New commits arrived since your review.
+- New commits arrived since your review. To change this, set **New commits after my review need me** in Settings → Inbox ([`newCommitsAfterReview`](/docs/settings#newcommitsafterreview)).
 - A review is requested from one of your teams, only with [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction) on.
 
 **Issues:** it is assigned to you; or someone replied on an issue that is assigned to you or that you opened.
@@ -114,12 +114,13 @@ After each action, a message with **Undo** shows for a few seconds.
 
 When Hush puts a thread in Needs you and it does not need you, press {{key:inbox.notNeeded}}, or choose **Doesn't need me** at the top of the [peek](/docs/peek) or in the right-click menu. Hush asks **Why doesn't this need you?**, and each answer fixes what would have been right:
 
-| Answer                                 | What changes                                                                                                                                   |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Someone else already reviewed it**   | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.               |
-| **Team review requests don't need me** | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                       |
-| **A bot opened it**                    | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                            |
-| **Only this one**                      | Moves only this thread to FYI, until it changes (a new notification). Its PR or issue also goes to Other on the Pull requests and Issues tabs. |
+| Answer                                        | What changes                                                                                                                                   |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Someone else already reviewed it**          | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.               |
+| **New commits after my review don't need me** | Sets [`newCommitsAfterReview`](/docs/settings#newcommitsafterreview) to `"never"`: new commits on a PR that you reviewed are not your turn.    |
+| **Team review requests don't need me**        | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                       |
+| **A bot opened it**                           | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                            |
+| **Only this one**                             | Moves only this thread to FYI, until it changes (a new notification). Its PR or issue also goes to Other on the Pull requests and Issues tabs. |
 
 Hush shows only the answers that would change something for this thread. After each one, **Undo** in the message puts everything back. A thread that you moved says “You said: doesn't need me”.
 

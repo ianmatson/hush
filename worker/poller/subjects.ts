@@ -117,7 +117,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		decided: Map<string, SubjectDecisions> = new Map()
 	) {
 		if (!subs.length) return;
-		const { dash, botsAreFyi, reviewResolution } = who.settings;
+		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview } = who.settings;
 		let teamSet: Set<string> | null = null;
 		for (const kind of ['pr', 'issue'] as const) {
 			const key = `dash:${kind}`;
@@ -143,7 +143,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 							who.me,
 							dash.staleDays,
 							Date.now(),
-							{ botsAreFyi, reviewResolution }
+							{ botsAreFyi, reviewResolution, newCommitsAfterReview }
 						)
 					];
 				})
