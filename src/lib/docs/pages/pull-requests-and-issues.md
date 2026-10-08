@@ -74,6 +74,7 @@ A source can read a GitHub project board. Name the project with `project:` and o
 - `acme/12` is the owner of the project and its number, from the project's address (`github.com/orgs/acme/projects/12`).
 - The **Scope** is not added to a board source.
 - Draft items on the board are left out: they are not pull requests or issues.
+- Hidden bots and others' drafts are not hidden here: someone put them on the board.
 - It needs [project access](/docs/github-access#project-boards). Without it, a note above the list says so.
 
 A search with `project:` but no `status:` is a normal GitHub search: it finds every open item in the project, whatever its column.

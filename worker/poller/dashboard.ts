@@ -212,9 +212,11 @@ export abstract class PollerDashboard extends PollerSync {
 			byId.set(k, e);
 		}
 		const enabled = [...sections.filter((s) => s.enabled), TRACKED_SOURCE];
+		const boardSections = new Set(enabled.filter((s) => readsBoard(s.query)).map((s) => s.id));
+		const placedOnBoard = (found: Set<string>) => [...found].some((id) => boardSections.has(id));
 		const items = sortItems(
 			[...byId.values()]
-				.filter(({ facts }) => keepItem(facts, who.me, dash))
+				.filter(({ facts, sections }) => keepItem(facts, who.me, dash) || placedOnBoard(sections))
 				.map(({ facts, sections }) => {
 					const ordered = enabled.filter((s) => sections.has(s.id));
 					return finishItem(
