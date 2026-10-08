@@ -7,6 +7,7 @@
 		placeThreads,
 		splitPath,
 		splitRows,
+		type DiffHunk,
 		type DiffLine,
 		type DiffLineKind,
 		type FileViewedState,
@@ -15,6 +16,10 @@
 		type PullFileStatus,
 		type ReviewThread as ReviewThreadData
 	} from '$lib/shared/diff';
+	import { untrack } from 'svelte';
+	import { slide } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import { cn } from '$lib/utils';
 	import { highlightHunks, type HighlightedToken } from '$lib/highlight';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -47,7 +52,12 @@
 		onthreadschanged: () => Promise<unknown>;
 	} = $props();
 
-	const hunks = $derived(folded || !file.patch ? [] : parsePatch(file.patch));
+	const FOLD_MS = 220;
+	const hunks = $derived(file.patch ? parsePatch(file.patch) : []);
+	const foldMotion = $derived({
+		duration: prefersReducedMotion.current ? 0 : FOLD_MS,
+		easing: cubicOut
+	});
 	const path = $derived(splitPath(file.filename));
 	const placed = $derived(placeThreads(threads, hunks));
 	const THREAD_MAX_WIDTH_PX = 768;
@@ -60,16 +70,19 @@
 	}
 	const language = $derived(languageForPath(file.filename));
 
-	let tokens = $state<HighlightedToken[][][] | null>(null);
+	let highlighted = $state<{ hunks: DiffHunk[]; tokens: HighlightedToken[][][] | null } | null>(
+		null
+	);
+	const tokens = $derived(highlighted?.hunks === hunks ? highlighted.tokens : null);
 	$effect(() => {
 		const forHunks = hunks;
 		const forLanguage = language;
-		tokens = null;
-		if (!forLanguage || !forHunks.length) return;
+		if (folded || !forLanguage || !forHunks.length) return;
+		if (untrack(() => highlighted?.hunks === forHunks)) return;
 		let current = true;
 		void highlightHunks(forHunks, forLanguage)
-			.then((highlighted) => {
-				if (current) tokens = highlighted;
+			.then((result) => {
+				if (current) highlighted = { hunks: forHunks, tokens: result };
 			})
 			.catch(() => {});
 		return () => {
@@ -217,88 +230,94 @@
 
 	{#if folded}
 		{#if foldReason}
-			<p class="px-3 py-2 text-xs text-muted-foreground">
+			<p class="px-3 py-2 text-xs text-muted-foreground" transition:slide={foldMotion}>
 				{FOLD_NOTE[foldReason]}
 				<button type="button" class="underline underline-offset-2" onclick={ontoggle}
 					>Show the diff</button
 				>
 			</p>
 		{/if}
-	{:else if !file.patch}
-		<p class="px-3 py-2 text-xs text-muted-foreground">
-			GitHub shows no diff for this file: it is binary, too large, or only renamed.
-			{#if file.blob_url}<a
-					class="underline underline-offset-2"
-					href={file.blob_url}
-					target="_blank"
-					rel="noreferrer">Open it on GitHub</a
-				>{/if}
-		</p>
 	{:else}
-		{#if placed.atTop.length}
-			<div class="border-b px-2">
-				{#each placed.atTop as thread (thread.id)}
-					<ReviewThread {thread} onchanged={onthreadschanged} />
-				{/each}
-			</div>
-		{/if}
-		{#if split}
-			<table class="w-full table-fixed border-collapse font-mono text-xs leading-5">
-				<colgroup>
-					<col class="w-14" />
-					<col />
-					<col class="w-14" />
-					<col />
-				</colgroup>
-				{#each hunks as hunk, h (h)}
-					<tbody>
-						<tr class="bg-signal-reply/8 text-muted-foreground">
-							<td colspan="4" class="truncate px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
-						</tr>
-						{#each splitRows(hunk) as row, r (r)}
-							<tr>
-								{@render splitHalf(row.left, h, 'old')}
-								{@render splitHalf(row.right, h, 'new')}
-							</tr>
-							{@render threadRow(threadsAt([row.left?.line, row.right?.line]), 4)}
+		<div transition:slide={foldMotion}>
+			{#if !file.patch}
+				<p class="px-3 py-2 text-xs text-muted-foreground">
+					GitHub shows no diff for this file: it is binary, too large, or only renamed.
+					{#if file.blob_url}<a
+							class="underline underline-offset-2"
+							href={file.blob_url}
+							target="_blank"
+							rel="noreferrer">Open it on GitHub</a
+						>{/if}
+				</p>
+			{:else}
+				{#if placed.atTop.length}
+					<div class="border-b px-2">
+						{#each placed.atTop as thread (thread.id)}
+							<ReviewThread {thread} onchanged={onthreadschanged} />
 						{/each}
-					</tbody>
-				{/each}
-			</table>
-		{:else}
-			<div class="overflow-x-auto" bind:clientWidth={visibleWidth}>
-				<table class="w-full border-collapse font-mono text-xs leading-5">
-					{#each hunks as hunk, h (h)}
-						<tbody>
-							<tr class="bg-signal-reply/8 text-muted-foreground">
-								<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
-							</tr>
-							{#each hunk.lines as line, l (l)}
-								<tr class={ROW_TONE[line.kind]}>
-									<td
-										class={cn(
-											'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-											NUMBER_TONE[line.kind]
-										)}>{line.oldLine ?? ''}</td
-									>
-									<td
-										class={cn(
-											'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-											NUMBER_TONE[line.kind]
-										)}>{line.newLine ?? ''}</td
-									>
-									<td class="pr-4 whitespace-pre"
-										><span class="inline-block w-4 text-center text-muted-foreground select-none"
-											>{PREFIX[line.kind]}</span
-										>{@render code(line, h, l)}</td
+					</div>
+				{/if}
+				{#if split}
+					<table class="w-full table-fixed border-collapse font-mono text-xs leading-5">
+						<colgroup>
+							<col class="w-14" />
+							<col />
+							<col class="w-14" />
+							<col />
+						</colgroup>
+						{#each hunks as hunk, h (h)}
+							<tbody>
+								<tr class="bg-signal-reply/8 text-muted-foreground">
+									<td colspan="4" class="truncate px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td
 									>
 								</tr>
-								{@render threadRow(threadsAt([line]), 3)}
+								{#each splitRows(hunk) as row, r (r)}
+									<tr>
+										{@render splitHalf(row.left, h, 'old')}
+										{@render splitHalf(row.right, h, 'new')}
+									</tr>
+									{@render threadRow(threadsAt([row.left?.line, row.right?.line]), 4)}
+								{/each}
+							</tbody>
+						{/each}
+					</table>
+				{:else}
+					<div class="overflow-x-auto" bind:clientWidth={visibleWidth}>
+						<table class="w-full border-collapse font-mono text-xs leading-5">
+							{#each hunks as hunk, h (h)}
+								<tbody>
+									<tr class="bg-signal-reply/8 text-muted-foreground">
+										<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
+									</tr>
+									{#each hunk.lines as line, l (l)}
+										<tr class={ROW_TONE[line.kind]}>
+											<td
+												class={cn(
+													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
+													NUMBER_TONE[line.kind]
+												)}>{line.oldLine ?? ''}</td
+											>
+											<td
+												class={cn(
+													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
+													NUMBER_TONE[line.kind]
+												)}>{line.newLine ?? ''}</td
+											>
+											<td class="pr-4 whitespace-pre"
+												><span
+													class="inline-block w-4 text-center text-muted-foreground select-none"
+													>{PREFIX[line.kind]}</span
+												>{@render code(line, h, l)}</td
+											>
+										</tr>
+										{@render threadRow(threadsAt([line]), 3)}
+									{/each}
+								</tbody>
 							{/each}
-						</tbody>
-					{/each}
-				</table>
-			</div>
-		{/if}
+						</table>
+					</div>
+				{/if}
+			{/if}
+		</div>
 	{/if}
 </section>

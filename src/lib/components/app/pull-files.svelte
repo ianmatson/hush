@@ -218,13 +218,20 @@
 
 	let cursor = $state(-1);
 
-	function reveal(index: number) {
+	const SETTLE_MS = 300;
+
+	function reveal(index: number, behavior: ScrollBehavior = 'smooth') {
 		const file = files[index];
 		if (!file) return;
 		cursor = index;
 		document
 			.getElementById(fileAnchor(file.filename))
-			?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+			?.scrollIntoView({ block: 'start', behavior });
+	}
+
+	function jumpTo(index: number) {
+		reveal(index, 'instant');
+		setTimeout(() => reveal(index, 'instant'), SETTLE_MS);
 	}
 
 	let revealedHash = '';
@@ -235,7 +242,7 @@
 		if (index < 0) return;
 		revealedHash = hash;
 		foldChoices.set(files[index].filename, false);
-		void tick().then(() => reveal(index));
+		void tick().then(() => jumpTo(index));
 	});
 
 	function onKey(e: KeyboardEvent) {
