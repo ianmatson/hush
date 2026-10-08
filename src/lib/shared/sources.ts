@@ -5,7 +5,7 @@ export type Source = DashSection;
 
 export const MAX_SOURCES = 20;
 export const MAX_SOURCE_COUNT_SEARCHES = 10;
-export const SOURCE_RESULTS_MAX = 50;
+export const SOURCE_RESULTS_MAX = 100;
 const SORTS = /(?:^|\s)sort:/i;
 export const newestFirst = (query: string) =>
 	SORTS.test(query) ? query : `${query} sort:updated-desc`;
