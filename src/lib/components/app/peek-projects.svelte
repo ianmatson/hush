@@ -172,7 +172,7 @@
 				>
 			{:else}
 				<p class="text-xs text-muted-foreground">
-					Hush can read this project but cannot change it. Give Hush project access in
+					Your token can read this project but cannot change it. See
 					<a class="underline underline-offset-2" href="/settings/general#token">GitHub access</a>.
 				</p>
 			{/if}

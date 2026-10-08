@@ -7,17 +7,14 @@ import { getViewer, gh, type GhUser } from '../github';
 import { refreshSlackMentionsAccess } from '../slack-mentions';
 import { routes, SESSION_COOKIE, poller, json, type AppEnv } from '../app';
 import { SESSION_DAYS, SESSION_IDLE_DAYS, deviceLabel } from '../../src/lib/shared/session';
-import { PROJECT_SCOPE } from '../../src/lib/shared/projects';
 import type { SessionDTO } from '../../src/lib/shared/types';
 
 // --- Auth: Sign in with GitHub (an OAuth app), and your own token as an option ------------
 
-/** The scopes Hush asks for: read notifications, private repos, and your teams. */
-const SCOPES = 'notifications repo read:org';
+/** The scopes Hush asks for: read notifications, private repos, your teams, and project boards. */
+const SCOPES = 'notifications repo read:org project';
 /** The OAuth `state`, and whether the sign-in replaces your own token with the app's. */
 const STATE_COOKIE = 'hush_oauth';
-const PROJECT_ACCESS_COOKIE = 'hush_project_access';
-const PROJECT_ACCESS_KEEP_SECONDS = 400 * 86_400;
 
 /** The user of a token, and its scopes; or why Hush cannot use it. */
 async function inspect(
@@ -119,33 +116,18 @@ const app = routes()
 	/** Start Sign in with GitHub. `?use=app` also replaces your own token with the app's. */
 	.get('/api/auth/github', (c) => {
 		const state = randomToken(16);
-		const addsProjects = c.req.query('add') === PROJECT_SCOPE;
-		const keepsProjects = addsProjects || getCookie(c, PROJECT_ACCESS_COOKIE) === PROJECT_SCOPE;
-		setCookie(
-			c,
-			STATE_COOKIE,
-			`${state}.${c.req.query('use') === 'app' ? 'app' : ''}.${addsProjects ? PROJECT_SCOPE : ''}`,
-			{
-				httpOnly: true,
-				secure: true,
-				sameSite: 'Lax',
-				path: '/api/auth',
-				maxAge: 600
-			}
-		);
-		if (addsProjects)
-			setCookie(c, PROJECT_ACCESS_COOKIE, PROJECT_SCOPE, {
-				httpOnly: true,
-				secure: true,
-				sameSite: 'Lax',
-				path: '/api/auth',
-				maxAge: PROJECT_ACCESS_KEEP_SECONDS
-			});
+		setCookie(c, STATE_COOKIE, `${state}.${c.req.query('use') === 'app' ? 'app' : ''}`, {
+			httpOnly: true,
+			secure: true,
+			sameSite: 'Lax',
+			path: '/api/auth',
+			maxAge: 600
+		});
 		const url = new URL('https://github.com/login/oauth/authorize');
 		url.search = new URLSearchParams({
 			client_id: c.env.GITHUB_CLIENT_ID,
 			redirect_uri: callbackUrl(c.env),
-			scope: keepsProjects ? `${SCOPES} ${PROJECT_SCOPE}` : SCOPES,
+			scope: SCOPES,
 			state,
 			allow_signup: 'false'
 		}).toString();
@@ -153,13 +135,12 @@ const app = routes()
 	})
 	/** GitHub sends you back here: check the state, get the token, and start the session. */
 	.get('/api/auth/callback', async (c) => {
-		const [state, use, added] = (getCookie(c, STATE_COOKIE) ?? '').split('.');
-		const fromSettings = use === 'app' || added === PROJECT_SCOPE;
+		const [state, use] = (getCookie(c, STATE_COOKIE) ?? '').split('.');
 		// A switch back from a custom token starts in Settings, while you are signed in: its errors
 		// go there (the sign-in page would send a signed-in user on to the inbox).
 		const fail = (message: string) =>
 			c.redirect(
-				fromSettings
+				use === 'app'
 					? `${c.env.APP_URL}/settings/general?token_error=${encodeURIComponent(message)}#token`
 					: `${c.env.APP_URL}/login?error=${encodeURIComponent(message)}`
 			);
@@ -214,7 +195,7 @@ const app = routes()
 		);
 		// The app then runs the org access check once, unless this browser said "Don't show again".
 		return c.redirect(
-			fromSettings
+			use === 'app'
 				? `${c.env.APP_URL}/settings/general?signed_in=1#token`
 				: `${c.env.APP_URL}/inbox?signed_in=1`
 		);

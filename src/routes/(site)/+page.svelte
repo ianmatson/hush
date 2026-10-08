@@ -59,7 +59,7 @@
 		},
 		{
 			question: 'What access does it need?',
-			answerHtml: `You sign in with GitHub. Hush asks for the <code>notifications</code>, <code>repo</code>, and <code>read:org</code> scopes, because GitHub’s Notifications API accepts only these classic scopes. Hush stores the token encrypted, and it acts on GitHub only when you do. See <a href="/docs/github-access">GitHub access</a> and <a href="/security">security</a>.`
+			answerHtml: `You sign in with GitHub. Hush asks for the <code>notifications</code>, <code>repo</code>, <code>read:org</code>, and <code>project</code> scopes, because GitHub’s Notifications API accepts only classic scopes. Hush stores the token encrypted, and it acts on GitHub only when you do. See <a href="/docs/github-access">GitHub access</a> and <a href="/security">security</a>.`
 		},
 		{
 			question: 'Does my org need to approve it?',

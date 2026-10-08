@@ -75,7 +75,7 @@ A source can read a GitHub project board. Name the project with `project:` and o
 - The **Scope** is not added to a board source.
 - Draft items on the board are left out: they are not pull requests or issues.
 - Hidden bots and others' drafts are not hidden here: someone put them on the board.
-- It needs [project access](/docs/github-access#project-boards). Without it, a note above the list says so.
+- It needs the `project` scope. A token from before Hush read boards does not have it: then a note above the list says so. See [project boards](/docs/github-access#project-boards).
 
 A search with `project:` but no `status:` is a normal GitHub search: it finds every open item in the project, whatever its column.
 

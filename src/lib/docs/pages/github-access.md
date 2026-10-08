@@ -5,28 +5,22 @@ description: What Hush can read and do on GitHub, why an org can be missing, and
 
 ## What Hush asks for
 
-You sign in with GitHub. Hush asks for three scopes:
+You sign in with GitHub. Hush asks for four scopes:
 
-| Scope           | Why Hush needs it                                                                                                                    |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `notifications` | Read your notifications, and mark them read, done, or muted.                                                                         |
-| `repo`          | Read the pull requests and issues behind them (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close. |
-| `read:org`      | Find your teams, for team review requests and `@team` sources.                                                                       |
+| Scope           | Why Hush needs it                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `notifications` | Read your notifications, and mark them read, done, or muted.                                                                               |
+| `repo`          | Read the pull requests and issues behind them (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close.       |
+| `read:org`      | Find your teams, for team review requests and `@team` sources.                                                                             |
+| `project`       | Read project boards for [board sources](/docs/pull-requests-and-issues#project-boards), and change an item's project status from the peek. |
 
-GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
+GitHub's Notifications API accepts only classic scopes, and classic scopes cannot be narrower than these.
 
 ### Project boards
 
-Hush can also ask for one optional scope, `project`. Only give it if you use GitHub project boards. With it:
-
-- A [source](/docs/pull-requests-and-issues#project-boards) can find the items in some columns of a board, such as “This week”.
-- The [peek](/docs/peek#what-it-shows) shows the item's project status. You can change the status, move the item to another project, or remove it from the project.
-
-To give it, go to **Settings → General → GitHub access** and choose **Give project access**. GitHub asks you to approve the new scope. This browser remembers the choice, and signing in again asks for the scope again.
+Tokens from a sign-in before Hush read project boards do not have the `project` scope. Then a board source shows a note, and the peek shows no project status. Sign in with GitHub again: **Settings → General → GitHub access** has a link.
 
 For a [custom token](#custom-token) from the GitHub CLI, run `gh auth refresh -s project`, and then replace the token with the output of `gh auth token`.
-
-Hush stores the token encrypted. It acts on GitHub **only when you do**: when you choose Done, Mute, Read, or an action or a reaction in the [peek](/docs/peek). The Done and Snooze buttons on a push alert act the same way as in Hush. It never writes by itself. The one exception is reading: a thread that you read in the peek is marked as read on GitHub (you can turn this off with [`peekMarksRead`](/docs/settings#peekmarksread)).
 
 ## What Hush does on GitHub
 
@@ -62,7 +56,7 @@ A custom token is a token that you give Hush in place of your GitHub sign-in. Us
 
 1. Get a token for **your own account** that can read notifications:
    - The GitHub CLI's token: run `gh auth token`. Many orgs already approved the GitHub CLI.
-   - Or a classic personal access token with the `notifications`, `repo`, and `read:org` scopes, if the org allows classic tokens.
+   - Or a classic personal access token with the `notifications`, `repo`, `read:org`, and `project` scopes, if the org allows classic tokens.
 2. Go to **Settings → General → GitHub access** and choose **Use a custom token…**.
 3. Paste the token and choose **Save**. Hush checks that it belongs to the account you signed in with, and syncs again at once.
 

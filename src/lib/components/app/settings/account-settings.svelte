@@ -250,8 +250,9 @@
 						<p class="text-xs leading-relaxed text-muted-foreground">
 							Paste a token for <b class="font-medium text-foreground">@{me.data.login}</b> that can
 							read notifications. For example, run <code>gh auth token</code> (GitHub CLI), or make
-							a classic token with <code>notifications</code>, <code>repo</code>, and
-							<code>read:org</code>. Hush stores it encrypted, and signing in again keeps it.
+							a classic token with <code>notifications</code>, <code>repo</code>,
+							<code>read:org</code>, and <code>project</code>. Hush stores it encrypted, and signing
+							in again keeps it.
 						</p>
 						<div class="flex flex-wrap gap-2">
 							<Input
@@ -277,34 +278,22 @@
 						</div>
 					</form>
 				{/if}
-				<div class="grid gap-2 border-t pt-4">
-					<span class="text-xs font-medium">Project boards</span>
-					{#if projectAccess === 'edit'}
-						<p class="text-xs leading-relaxed text-muted-foreground">
-							Hush can read and change your GitHub projects: sources that use <code>status:</code>,
-							and the status of an item in the peek.
-						</p>
-					{:else if custom}
-						<p class="text-xs leading-relaxed text-muted-foreground">
-							Your custom token has no <code>project</code> scope. Run
+				{#if projectAccess !== 'edit'}
+					<p class="border-t pt-4 text-xs leading-relaxed text-muted-foreground">
+						{#if custom}
+							Your custom token cannot change project boards. Run
 							<code>gh auth refresh -s project</code>, then replace the token with the one from
 							<code>gh auth token</code>.
-						</p>
-					{:else}
-						<p class="text-xs leading-relaxed text-muted-foreground">
-							Optional. With project access, a source can find the items in a column of a project
-							board, and the peek shows the item's status, which you can change.
-						</p>
-						<div>
-							<Button
-								variant="outline"
-								size="sm"
-								href="/api/auth/github?add=project"
-								data-sveltekit-reload>Give project access</Button
-							>
-						</div>
-					{/if}
-				</div>
+						{:else}
+							Your token is older than project boards in Hush.
+							<a
+								class="underline underline-offset-2 hover:text-foreground"
+								href="/api/auth/github?use=app"
+								data-sveltekit-reload>Sign in with GitHub again</a
+							> to use them.
+						{/if}
+					</p>
+				{/if}
 				<div class="grid gap-2 border-t pt-4">
 					<span class="text-xs font-medium">Orgs your GitHub sign-in can see</span>
 					{#if !access && orgNote.off && !loading}
