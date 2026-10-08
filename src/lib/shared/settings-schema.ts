@@ -183,13 +183,14 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	},
 	{
 		key: 'dash.hideOthersDrafts',
-		page: null,
+		page: 'dashboards',
 		description: 'Hide draft PRs that you did not open.'
 	},
 	{
 		key: 'dash.hideBots',
-		page: null,
-		description: 'Hide PRs and issues that bots opened, unless your review is requested.'
+		page: 'dashboards',
+		description:
+			'Hide PRs and issues that bots opened, unless your review is requested or you are assigned.'
 	},
 	{
 		key: 'menus.inbox',

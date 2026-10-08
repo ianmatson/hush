@@ -16,6 +16,7 @@ import slack from './routes/slack';
 import subjects from './routes/subjects';
 import actions from './routes/actions';
 import projects from './routes/projects';
+import diff from './routes/diff';
 import suggest from './routes/suggest';
 import threads from './routes/threads';
 
@@ -96,6 +97,7 @@ const api = app
 	.route('/', subjects)
 	.route('/', actions)
 	.route('/', projects)
+	.route('/', diff)
 	.route('/', suggest)
 	.route('/', dashboard)
 	.route('/', feeds)

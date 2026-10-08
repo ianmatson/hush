@@ -1,12 +1,17 @@
 <script lang="ts">
 	import PeekBody from './peek-body.svelte';
 
-	let { repo, number, title }: { repo: string; number: number | null; title: string } = $props();
+	let {
+		repo,
+		number,
+		title,
+		showFiles = true
+	}: { repo: string; number: number | null; title: string; showFiles?: boolean } = $props();
 </script>
 
 {#if number}
 	{#key `${repo}#${number}`}
-		<PeekBody {repo} {number} />
+		<PeekBody {repo} {number} {showFiles} />
 	{/key}
 {:else}
 	<div class="grid gap-2 p-4 text-sm">

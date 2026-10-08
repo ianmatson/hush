@@ -5,6 +5,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import type { ProxyOptions } from 'vite';
 
 const WORKER = 'http://localhost:8787';
+const DEV_SERVER_HOST = '127.0.0.1';
+const DEV_SERVER_PORT = 5173;
 // The Worker rejects writes whose Origin is not its own, so the proxy sends its address.
 const toWorker: ProxyOptions = {
 	target: WORKER,
@@ -28,6 +30,9 @@ export default defineConfig({
 		})
 	],
 	server: {
+		host: DEV_SERVER_HOST,
+		port: DEV_SERVER_PORT,
+		strictPort: true,
 		// `pnpm dev` runs the Worker on :8787 (wrangler dev) next to Vite.
 		proxy: { '/api': toWorker, '/feeds': toWorker }
 	},

@@ -20,16 +20,80 @@ Add `?peek=` and a pull request or issue to the address of the Inbox, Pull reque
 
 The address follows the peek: when you open the peek or move it to another item, the address changes to its `?peek=` link. Reload the page, or copy the address, and the peek opens on the same item. When you close the peek, the address loses its `?peek=`.
 
+### Full page
+
+The full page shows the same pull request or issue as the peek, in a wider column, with the actions on GitHub in a bar at the bottom.
+
+- Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
+- {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
+- The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
+
+A pull request has two tabs: **Conversation** ({{key:page.conversation}}) and **Files** ({{key:page.files}}). The Files tab has the address of GitHub's Files tab: `…/pull/123/files`.
+
+### The Files tab
+
+The Files tab shows the changes of the pull request, file by file, as on GitHub.
+
+- On a wide screen, the files are in a tree on the left, with their folders. Click a folder to fold it, and click a file to go to its changes.
+- Each file shows its changed lines, with the old and the new line numbers. Added lines are green, deleted lines are red.
+- The code has syntax colors for the common languages, in the colors of your theme.
+- On a wide screen, **Unified** and **Split** (or {{key:page.splitView}}) choose the layout. **Split** shows the old file on the left and the new file on the right. Hush remembers your choice. Narrow screens always show **Unified**.
+- {{key:page.nextFile}} and {{key:page.prevFile}} go to the next and the previous file. {{key:page.foldFile}} folds or unfolds the file. **Fold all** and **Unfold all** do this for every file.
+- Lock files, minified files, deleted files, and files with more than 400 changed lines start folded. Choose **Show the diff** to see them.
+- GitHub shows no diff for binary files and very large files. Open them on GitHub with the link in their header.
+- GitHub lists up to 3,000 files of a pull request.
+
+#### Review comments
+
+The review comments on the diff show in the Files tab, under the line that they are about, as on GitHub. Comments on a whole file, outdated comments (on lines that changed since), and comments on lines that are not in the diff show at the top of their file. A file's header and its row in the tree show how many of its threads are open.
+
+- Resolved threads start closed. Click a thread's title to open or close it.
+- **Reply** answers in the thread ({{key:editor.send}} sends). **Resolve** and **Unresolve** change the thread on GitHub.
+- A thread shows up to 50 comments. **More on GitHub** links to the rest.
+- The comments show only with **All changes**, not with **Since your review**: their line numbers belong to the whole diff.
+
+#### Write review comments
+
+Comment on the diff in the Files tab, as on GitHub:
+
+1. Click a line number. To comment on several lines, drag over the line numbers, or Shift+click the last line. The lines must be in one hunk.
+2. Write in the box that opens under the lines. {{key:editor.send}} adds the comment to your review, and Escape closes the box. Hush keeps what you wrote in this browser until you send it.
+3. **Suggest a change** (on new lines only) adds a ` ```suggestion ` block with the selected lines. Change the lines in the block, and Hush shows the change under the box. The author can apply it on GitHub with one click.
+
+**Start a review** (or **Add to review**) keeps the comment in your pending review: only you can see it. A bar at the top of the Files tab counts your pending comments:
+
+- **Submit review** sends them all, with an optional summary, as **Comment**, **Approve**, or **Request changes** (which needs a summary). You cannot approve or request changes on your own pull request.
+- **Discard** (press it twice) deletes the pending review and its comments.
+
+A review that you started on GitHub shows here too, and the other way round. **Comment now** posts one comment at once, without a review; it is not available while you have a pending review, as on GitHub. **Edit** and **Delete** (press it twice) work on your own comments, pending or posted.
+
+You can comment only with **All changes**: under **Since your review**, the line numbers are those of a different diff.
+
+#### Viewed files
+
+Check **Viewed** on a file, or press {{key:page.viewFile}}, when you are done with it. The file folds, and its row in the tree gets a check. This is GitHub's own **Viewed** mark, so GitHub shows it too, and the other way round. The count at the top tells how many files you viewed. When a file changes after you viewed it, GitHub takes the mark off, and Hush shows **Changed since you viewed it**.
+
+#### Since your review
+
+After you review a pull request, **Since your review** at the top of the Files tab shows only what changed after your review:
+
+- When the new commits have no merge, Hush shows all their changes together.
+- When the branch merged its base branch after your review, the combined changes would also show other people's work from the base branch. So Hush shows the new commits one at a time, with a **Commit** list, and leaves out the merge commits. When the only new commits are merges, Hush says so: there is nothing new to review.
+- When the commit that you reviewed is not in the branch any more (for example, after a force push), Hush says so and shows all the changes.
+
+The address of this view ends in `?since=review`.
+
 ## What it shows
 
 - **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this. Category: Bugs.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened. An **External** badge shows when the author is not a member or collaborator of the repository, and **First-time** when it is their first PR or issue there. The **External contributor** part in **Settings → General → Row contents** turns the badge on or off, for rows and the peek.
 - For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
+- For a PR: **Files**, the changed files with their added and deleted lines. The part starts closed. Click a file to see its changes in the Files tab of the full page.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - **Project status**: a chip for each GitHub project that has the item, with its Status (“This week”). Click the chip to see the project. There you can change the status, move the item to another project of the same owner, or remove it from the project. A move or a removal loses the item's other fields on that project. The chips need the `project` scope (see [project boards](/docs/github-access#project-boards)).
-- The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted, not shown.
+- The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted here, and show in the Files tab of the [full page](#the-files-tab).
 - The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
 - **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The part starts closed: its title shows the number of messages, or a spinner while Hush searches. Click the title to show the messages. With no messages, this part is not shown.
 - A comment box at the end.

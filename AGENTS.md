@@ -12,6 +12,9 @@ Read [README.md](README.md) for the architecture and for local development.
 ### Taking screenshots
 
 1. Start the app with `pnpm dev` and open http://localhost:5173. To keep GitHub unchanged while you test, set `GITHUB_WRITES=off` in `.dev.vars`.
+   - In Paseo, start the `dev` service, not a `pnpm dev` of your own: the service proxy and the port belong to it.
+   - Paseo opens a new browser tab on the desktop app that connected to the daemon last, which can be on another machine. Check `navigator.userAgent` in `browser_evaluate`. If the tab is not on this machine, its `localhost` is not this machine: ask the user to reload the Paseo app window on this machine (⌘R), then open a new tab.
+   - Sign in at http://localhost:5173/api/auth/github. Never click Authorize on GitHub for the user.
 2. Capture the before state first. Set your work aside with a temporary WIP commit, not a bare `git stash` (other agents share the stash stack).
 3. Use a narrow width of about 400px and a wide width of about 1440px. Set light or dark mode in Settings → General → Appearance.
 4. Name the files so that each pair is clear: `before-<area>-<mode>-<width>.png`.

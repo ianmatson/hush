@@ -8,6 +8,7 @@ import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS, MENU_ITEMS } from '$lib/shared/menus';
 import { alreadyTrue, eventsFor, subjectKind } from '$lib/shared/snooze';
 import { formatQuery } from '$lib/shared/query';
+import { threadPagePath } from '$lib/shared/item-page';
 import type { ThreadDTO } from '$lib/shared/types';
 import { snoozeOptions } from '$lib/time';
 import Check from '@lucide/svelte/icons/check';
@@ -20,6 +21,7 @@ import MailOpen from '@lucide/svelte/icons/mail-open';
 import Mail from '@lucide/svelte/icons/mail';
 import SquareCheck from '@lucide/svelte/icons/square-check';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
+import Maximize2 from '@lucide/svelte/icons/maximize-2';
 import Zap from '@lucide/svelte/icons/zap';
 import ListFilter from '@lucide/svelte/icons/list-filter';
 import CircleSlash from '@lucide/svelte/icons/circle-slash';
@@ -99,6 +101,12 @@ export function inboxMenu(ctx: InboxActionContext, ids: string[]): MenuEntry[] {
 		switch (id) {
 			case 'peek':
 				return one ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek')) : null;
+			case 'page': {
+				const path = one && threadPagePath(one);
+				return path
+					? item(id, 'Open full page', Maximize2, () => goto(path), key('list.fullPage'))
+					: null;
+			}
 			case 'main':
 				return one
 					? item(
@@ -232,6 +240,15 @@ export function inboxCommands(ctx: InboxActionContext, ids: string[]): PaletteCo
 			icon: PanelRightOpen,
 			shortcut: key('list.peek'),
 			run: () => ctx.peek(one)
+		});
+	const onePath = one && threadPagePath(one);
+	if (onePath)
+		add({
+			id: 'act:page',
+			label: 'Open full page',
+			icon: Maximize2,
+			shortcut: key('list.fullPage'),
+			run: () => goto(onePath)
 		});
 	if (one)
 		add({

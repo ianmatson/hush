@@ -6,6 +6,7 @@
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { goto } from '$app/navigation';
+	import { threadPagePath } from '$lib/shared/item-page';
 	import { page } from '$app/state';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import { flip } from 'svelte/animate';
@@ -484,6 +485,10 @@
 			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
 			'list.open': () => t && open(t, t.actionUrl),
 			'list.openGitHub': () => t && open(t, t.htmlUrl),
+			'list.fullPage': () => {
+				const path = t && threadPagePath(t);
+				if (path) goto(path);
+			},
 			'list.copy': () => copyLinks(targets()),
 			'list.refresh': () => sync(),
 			'list.search': () => searchEl?.focus(),

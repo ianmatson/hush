@@ -3,6 +3,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import { browser } from '$app/environment';
 import { live } from '$lib/live-state.svelte';
 import { DRAFTS_KEY } from '$lib/drafts';
+import { pullFilePageCount } from '$lib/shared/diff';
 import { api, ApiError, type ThreadsResponse } from '$lib/api';
 import type {
 	Counts,
@@ -36,7 +37,16 @@ export const queryClient = new QueryClient({
 	}
 });
 
-const MEMORY_ONLY_KEYS = new Set(['peek', 'slack-mentions']);
+const MEMORY_ONLY_KEYS = new Set([
+	'peek',
+	'slack-mentions',
+	'pull-files',
+	'pull-compare',
+	'pull-viewed',
+	'pull-commits',
+	'commit-diff',
+	'review-threads'
+]);
 
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
 export const persistOptions = {
@@ -69,6 +79,15 @@ export const keys = {
 		['slack-mentions', repo, number, kind] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
+	pullFiles: (repo: string, number: number, head: string) =>
+		['pull-files', repo, number, head] as const,
+	pullCompare: (repo: string, number: number, base: string, head: string) =>
+		['pull-compare', repo, number, base, head] as const,
+	pullViewed: (repo: string, number: number) => ['pull-viewed', repo, number] as const,
+	pullCommits: (repo: string, number: number, head: string) =>
+		['pull-commits', repo, number, head] as const,
+	commitDiff: (repo: string, sha: string) => ['commit-diff', repo, sha] as const,
+	reviewThreads: (repo: string, number: number) => ['review-threads', repo, number] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
 	alerts: ['alerts'] as const
 };
@@ -218,6 +237,64 @@ export const projectsQuery = (repo: string, number: number) =>
 		staleTime: 2 * MIN,
 		gcTime: 10 * MIN,
 		refetchOnWindowFocus: false
+	});
+
+export const pullFilesQuery = (repo: string, number: number, head: string, changedFiles: number) =>
+	queryOptions({
+		queryKey: keys.pullFiles(repo, number, head),
+		queryFn: async () => {
+			const pages = Array.from({ length: pullFilePageCount(changedFiles) }, (_, i) => i + 1);
+			const results = await Promise.all(
+				pages.map((page) => api.pullFilesPage(repo, number, head, page))
+			);
+			return results.flat();
+		},
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const pullCompareQuery = (repo: string, number: number, base: string, head: string) =>
+	queryOptions({
+		queryKey: keys.pullCompare(repo, number, base, head),
+		queryFn: () => api.compareCommits(repo, number, base, head),
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const pullCommitsQuery = (repo: string, number: number, head: string) =>
+	queryOptions({
+		queryKey: keys.pullCommits(repo, number, head),
+		queryFn: () => api.pullCommits(repo, number),
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const commitDiffQuery = (repo: string, number: number, sha: string) =>
+	queryOptions({
+		queryKey: keys.commitDiff(repo, sha),
+		queryFn: () => api.commitDiff(repo, number, sha),
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const reviewThreadsQuery = (repo: string, number: number) =>
+	queryOptions({
+		queryKey: keys.reviewThreads(repo, number),
+		queryFn: () => api.reviewThreads(repo, number),
+		staleTime: MIN,
+		gcTime: 10 * MIN
+	});
+
+export const pullViewedQuery = (repo: string, number: number) =>
+	queryOptions({
+		queryKey: keys.pullViewed(repo, number),
+		queryFn: () => api.viewedFiles(repo, number),
+		staleTime: MIN,
+		gcTime: 10 * MIN
 	});
 
 export const peekQuery = (repo: string, number: number) =>

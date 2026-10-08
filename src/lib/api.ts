@@ -12,6 +12,15 @@ import type {
 } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
+import type {
+	CommentTarget,
+	CommitDiff,
+	CompareResult,
+	PendingReview,
+	PullFile,
+	ReviewEvent,
+	ReviewThread
+} from '$lib/shared/diff';
 
 export class ApiError extends Error {
 	constructor(
@@ -177,6 +186,78 @@ export const api = {
 			})
 		);
 	},
+	pullFilesPage: async (repo: string, number: number, head: string, page: number) => {
+		const [owner, name] = repo.split('/');
+		const files: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].$get({
+				param: { owner, repo: name, number: String(number) },
+				query: { page: String(page), head }
+			})
+		);
+		return files as PullFile[];
+	},
+	compareCommits: async (repo: string, number: number, base: string, head: string) => {
+		const [owner, name] = repo.split('/');
+		const result: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].compare.$get({
+				param: { owner, repo: name, number: String(number) },
+				query: { base, head }
+			})
+		);
+		return result as CompareResult;
+	},
+	pullCommits: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.diff[':owner'][':repo'][':number'].commits.$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
+	commitDiff: async (repo: string, number: number, sha: string) => {
+		const [owner, name] = repo.split('/');
+		const result: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].commit[':sha'].$get({
+				param: { owner, repo: name, number: String(number), sha }
+			})
+		);
+		return result as CommitDiff;
+	},
+	viewedFiles: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.diff[':owner'][':repo'][':number'].viewed.$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
+	reviewThreads: async (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		const result: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].threads.$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+		return result as { threads: ReviewThread[]; pendingReview: PendingReview | null };
+	},
+	replyToThread: (threadId: string, body: string) =>
+		ok(client.api.diff.threads.reply.$post({ json: { threadId, body } })),
+	addLineComment: (
+		pull: { repo: string; number: number; pullRequestId: string; commitOid: string },
+		target: CommentTarget,
+		body: string,
+		single: boolean
+	) => ok(client.api.diff.comment.$post({ json: { ...pull, ...target, body, single } })),
+	submitReview: (reviewId: string, event: ReviewEvent, body: string) =>
+		ok(client.api.diff.review.submit.$post({ json: { reviewId, event, body } })),
+	discardReview: (reviewId: string) =>
+		ok(client.api.diff.review.discard.$post({ json: { reviewId } })),
+	editReviewComment: (commentId: string, body: string | null) =>
+		ok(client.api.diff.comment.edit.$post({ json: { commentId, body } })),
+	setThreadResolved: (threadId: string, resolved: boolean) =>
+		ok(client.api.diff.threads.resolve.$post({ json: { threadId, resolved } })),
+	setFileViewed: (pullRequestId: string, path: string, viewed: boolean) =>
+		ok(client.api.diff.viewed.$post({ json: { pullRequestId, path, viewed } })),
 	projects: (repo: string, number: number) => {
 		const [owner, name] = repo.split('/');
 		return ok(

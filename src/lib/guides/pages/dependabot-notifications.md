@@ -67,7 +67,7 @@ Hush treats bots differently by default, with [`botsAreFyi`](/docs/settings#bots
 
 - Pull requests that bots open are **FYI**, unless they ask for your review by name.
 - Comments and mentions by bots do not count as replies to you.
-- On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name. Hush then does not track them, so their notifications do not come in to the inbox either. Turn off `dash.hideBots` to get them.
+- On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name or the pull request is assigned to you. Hush then does not track them, so their notifications do not come in to the inbox either. Turn off **Hide PRs and issues that bots opened** in **Settings → Sources** to get them.
 
 A bot is a login that ends in `[bot]`, or that starts with dependabot, renovate, github-actions, or codecov.
 

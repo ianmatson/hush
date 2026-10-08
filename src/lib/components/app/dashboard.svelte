@@ -11,6 +11,8 @@
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { DASH_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
+	import { itemPagePath } from '$lib/shared/item-page';
+	import { goto } from '$app/navigation';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -281,6 +283,18 @@
 		if (!i || (i.seenAt && !i.changes?.length)) return;
 		const timer = setTimeout(() => api.seen([i.id]).catch(() => {}), 1500);
 		return () => clearTimeout(timer);
+	});
+	$effect(() => {
+		const k = kind;
+		untrack(() => {
+			section = null;
+			categoryFilter = null;
+			tagFilter = null;
+			selectedId = null;
+			sel.clear();
+			groupMotion = false;
+			collapsed = readCollapsed(k);
+		});
 	});
 	// Back on the page that owns the peek (after another tab): the cursor goes to the item it
 	// shows. Not when this page just took the peek over: then the cursor is where you chose.
@@ -564,18 +578,6 @@
 		}
 	}
 
-	$effect(() => {
-		const k = kind;
-		untrack(() => {
-			section = null;
-			categoryFilter = null;
-			tagFilter = null;
-			selectedId = null;
-			sel.clear();
-			groupMotion = false;
-			collapsed = readCollapsed(k);
-		});
-	});
 	// (After the effect above, which resets the cursor when the page opens.)
 	// The command palette chose an item on this dashboard: show it (clear filters, open its
 	// group) and peek it.
@@ -843,6 +845,7 @@
 			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
 			'list.open': () => i && open(i, i.actionUrl),
 			'list.openGitHub': () => i && open(i, i.url),
+			'list.fullPage': () => i && goto(itemPagePath(i.repo, i.number, i.kind)),
 			'list.copy': () => copyLinks(targets()),
 			'list.refresh': () => refresh(),
 			'list.search': () => searchEl?.focus(),
@@ -1109,7 +1112,7 @@
 				{#snippet child({ props })}
 					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
 						{#each groups as g (g.turn)}
-							{@const count = baseGroups.find((b) => b.turn === g.turn)?.items.length ?? 0}
+							{@const count = baseGroups.find((b) => b.turn === g.turn)?.units.length ?? 0}
 							{@const target = drag.active && drag.zone === g.turn}
 							{@const headerDrop = target && (collapsed[g.turn] || !count)}
 							<!-- The whole group (header and rows) is one drop zone. Always in the layout, so

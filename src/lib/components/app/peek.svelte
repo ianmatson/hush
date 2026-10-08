@@ -20,7 +20,9 @@
 	import PeekContent from './peek-content.svelte';
 	import GhActions from './gh-actions.svelte';
 	import { noteOpened } from '$lib/recheck';
+	import { itemPagePathFromGitHubUrl } from '$lib/shared/item-page';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Maximize2 from '@lucide/svelte/icons/maximize-2';
 
 	/**
 	 * Read a PR or issue without leaving Hush (in the side panel). On wide screens the list stays
@@ -47,6 +49,8 @@
 	$effect(() => {
 		if (ui.alertsOpen && untrack(() => target)) onclose();
 	});
+
+	const fullPagePath = $derived(target?.number ? itemPagePathFromGitHubUrl(target.url) : null);
 </script>
 
 <!-- The bottom bar: the page's own buttons (Done, Snooze…), then the actions on GitHub. -->
@@ -75,6 +79,15 @@
 		{/if}
 	{/snippet}
 	{#snippet actions(size)}
+		{#if fullPagePath}
+			<Button
+				variant="ghost"
+				{size}
+				href={fullPagePath}
+				title="Open full page ({keysOf('list.fullPage')[0] ?? ''})"
+				aria-label="Open full page"><Maximize2 /></Button
+			>
+		{/if}
 		{#if target}
 			<Button
 				variant="ghost"

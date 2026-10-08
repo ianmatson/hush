@@ -22,6 +22,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
 	import SectionEditor from '$lib/components/app/section-editor.svelte';
+	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -266,10 +267,32 @@
 					/>
 					<p class="text-xs text-muted-foreground">
 						Added to every search. For example <code>org:acme</code>, or
-						<code class="whitespace-nowrap">-repo:acme/website</code>. Drafts, bots, and “stale
-						after” are in settings.json (General).
+						<code class="whitespace-nowrap">-repo:acme/website</code>. “Stale after” is in
+						settings.json (General).
 					</p>
 				</div>
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Filters</Card.Title>
+			</Card.Header>
+			<Card.Content class="divide-y">
+				<SettingRow
+					id="hide-bots"
+					label="Hide PRs and issues that bots opened"
+					description="For example dependabot, renovate, and GitHub Apps. Hush does not track them, so their notifications do not come in to the inbox either. An item that requests your review by name, or that is assigned to you, always shows."
+				>
+					<Switch id="hide-bots" bind:checked={draft.dash.hideBots} />
+				</SettingRow>
+				<SettingRow
+					id="hide-others-drafts"
+					label="Hide drafts that others opened"
+					description="Draft PRs show only when you opened them."
+				>
+					<Switch id="hide-others-drafts" bind:checked={draft.dash.hideOthersDrafts} />
+				</SettingRow>
 			</Card.Content>
 		</Card.Root>
 

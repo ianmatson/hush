@@ -476,9 +476,12 @@ export function keepItem(
 	me: string,
 	dash: Pick<DashSettings, 'hideOthersDrafts' | 'hideBots'>
 ): boolean {
-	const mine = i.author.toLowerCase() === me.toLowerCase();
+	const meL = me.toLowerCase();
+	const mine = i.author.toLowerCase() === meL;
+	const assignedToMe = i.assignees.some((a) => a.toLowerCase() === meL);
 	if (dash.hideOthersDrafts && i.draft && !mine) return false;
-	if (dash.hideBots && (i.authorIsBot || isBot(i.author)) && !i.requestedMe) return false;
+	if (dash.hideBots && (i.authorIsBot || isBot(i.author)) && !i.requestedMe && !assignedToMe)
+		return false;
 	return true;
 }
 
