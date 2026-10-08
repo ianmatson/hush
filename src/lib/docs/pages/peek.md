@@ -20,6 +20,14 @@ Add `?peek=` and a pull request or issue to the address of the Inbox, Pull reque
 
 The address follows the peek: when you open the peek or move it to another item, the address changes to its `?peek=` link. Reload the page, or copy the address, and the peek opens on the same item. When you close the peek, the address loses its `?peek=`.
 
+### Full page
+
+The full page shows the same pull request or issue as the peek, in a wider column, with the actions on GitHub in a bar at the bottom.
+
+- Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
+- {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
+- The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
+
 ## What it shows
 
 - **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this. Category: Bugs.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).

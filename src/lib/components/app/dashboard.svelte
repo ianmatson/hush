@@ -11,6 +11,8 @@
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { DASH_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
+	import { itemPagePath } from '$lib/shared/item-page';
+	import { goto } from '$app/navigation';
 	import { flip } from 'svelte/animate';
 	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -843,6 +845,7 @@
 			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
 			'list.open': () => i && open(i, i.actionUrl),
 			'list.openGitHub': () => i && open(i, i.url),
+			'list.fullPage': () => i && goto(itemPagePath(i.repo, i.number, i.kind)),
 			'list.copy': () => copyLinks(targets()),
 			'list.refresh': () => refresh(),
 			'list.search': () => searchEl?.focus(),

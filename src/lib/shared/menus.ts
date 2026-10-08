@@ -27,6 +27,7 @@ const SNOOZE_TIMES = [
 export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 	inbox: [
 		{ id: 'peek', label: 'Peek', group: 'main' },
+		{ id: 'page', label: 'Open full page', note: 'Pull requests and issues', group: 'main' },
 		{ id: 'main', label: 'Main action', note: 'Review, Reply, Fix CI…', group: 'main' },
 		{
 			id: 'github',
@@ -68,6 +69,7 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 	],
 	dash: [
 		{ id: 'peek', label: 'Peek', group: 'main' },
+		{ id: 'page', label: 'Open full page', note: 'Pull requests and issues', group: 'main' },
 		{ id: 'main', label: 'Main action', note: 'Review, Reply, Fix CI…', group: 'main' },
 		{
 			id: 'github',
@@ -100,6 +102,7 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 	inbox: [
 		'peek',
+		'page',
 		'main',
 		'github',
 		SEP,
@@ -117,6 +120,7 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 	],
 	dash: [
 		'peek',
+		'page',
 		'main',
 		'github',
 		SEP,
@@ -138,14 +142,16 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
  * Items added after a menu may have been saved. A saved menu older than an item's version gets
  * that item once (after `after`, or at the end); later choices are yours.
  */
-export const MENUS_VERSION = 5;
+export const MENUS_VERSION = 6;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
 	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
 	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
 	{ kind: 'dash', id: 'not-needed', after: 'hide', version: 3 },
 	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 },
 	{ kind: 'dash', id: 'category', after: 'move', version: 5 },
-	{ kind: 'dash', id: 'tags', after: 'category', version: 5 }
+	{ kind: 'dash', id: 'tags', after: 'category', version: 5 },
+	{ kind: 'inbox', id: 'page', after: 'peek', version: 6 },
+	{ kind: 'dash', id: 'page', after: 'peek', version: 6 }
 ];
 
 /** Saved menus, upgraded to the current version. */

@@ -1,9 +1,11 @@
 import { keysOf } from '$lib/keys.svelte';
+import { goto } from '$app/navigation';
 import type { Component } from 'svelte';
 import { buildMenu, type MenuEntry } from '$lib/menu';
 import type { PaletteCommand } from '$lib/palette.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS } from '$lib/shared/menus';
+import { itemPagePath } from '$lib/shared/item-page';
 import type { DashItem, ItemCategory, ItemTag, Turn } from '$lib/shared/types';
 import FolderInput from '@lucide/svelte/icons/folder-input';
 import TagIcon from '@lucide/svelte/icons/tag';
@@ -16,6 +18,7 @@ import Undo from '@lucide/svelte/icons/undo-2';
 import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 import ExternalLink from '@lucide/svelte/icons/external-link';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
+import Maximize2 from '@lucide/svelte/icons/maximize-2';
 import SquareCheck from '@lucide/svelte/icons/square-check';
 import CircleSlash from '@lucide/svelte/icons/circle-slash';
 import BellOff from '@lucide/svelte/icons/bell-off';
@@ -142,6 +145,13 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 			shortcut: key('list.peek'),
 			run: () => ctx.peek(one)
 		});
+		add({
+			id: 'act:page',
+			label: 'Open full page',
+			icon: Maximize2,
+			shortcut: key('list.fullPage'),
+			run: () => goto(itemPagePath(one.repo, one.number, one.kind))
+		});
 	}
 	return cmds;
 }
@@ -172,6 +182,16 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 		switch (id) {
 			case 'peek':
 				return one ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek')) : null;
+			case 'page':
+				return one
+					? item(
+							id,
+							'Open full page',
+							Maximize2,
+							() => goto(itemPagePath(one.repo, one.number, one.kind)),
+							key('list.fullPage')
+						)
+					: null;
 			case 'main':
 				return one
 					? item(

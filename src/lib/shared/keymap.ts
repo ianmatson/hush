@@ -51,6 +51,7 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'list.select', label: 'Select or deselect', scope: 'list', keys: ['x'] },
 	{ id: 'list.selectAll', label: 'Select all', scope: 'list', keys: ['Mod+a'] },
 	{ id: 'list.peek', label: 'Peek (open or close)', scope: 'list', keys: ['Space'] },
+	{ id: 'list.fullPage', label: 'Full page (open or close)', scope: 'list', keys: ['f'] },
 	{
 		id: 'list.escape',
 		label: 'Close the peek, or clear the selection',
