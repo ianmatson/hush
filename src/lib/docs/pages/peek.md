@@ -41,6 +41,20 @@ The Files tab shows the changes of the pull request, file by file, as on GitHub.
 - GitHub shows no diff for binary files and very large files. Open them on GitHub with the link in their header.
 - GitHub lists up to 3,000 files of a pull request.
 
+#### Viewed files
+
+Check **Viewed** on a file, or press {{key:page.viewFile}}, when you are done with it. The file folds, and its row in the tree gets a check. This is GitHub's own **Viewed** mark, so GitHub shows it too, and the other way round. The count at the top tells how many files you viewed. When a file changes after you viewed it, GitHub takes the mark off, and Hush shows **Changed since you viewed it**.
+
+#### Since your review
+
+After you review a pull request, **Since your review** at the top of the Files tab shows only what changed after your review:
+
+- When the new commits have no merge, Hush shows all their changes together.
+- When the branch merged its base branch after your review, the combined changes would also show other people's work from the base branch. So Hush shows the new commits one at a time, with a **Commit** list, and leaves out the merge commits. When the only new commits are merges, Hush says so: there is nothing new to review.
+- When the commit that you reviewed is not in the branch any more (for example, after a force push), Hush says so and shows all the changes.
+
+The address of this view ends in `?since=review`.
+
 ## What it shows
 
 - **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this. Category: Bugs.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).

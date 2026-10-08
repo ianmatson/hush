@@ -157,7 +157,9 @@
 		<PullFiles
 			{repo}
 			{number}
+			pullRequestId={q.data?.can.id ?? ''}
 			head={q.data?.can.pr?.headOid ?? ''}
+			lastReview={pr.lastReview ?? null}
 			changedFiles={pr.files}
 			additions={pr.additions}
 			deletions={pr.deletions}

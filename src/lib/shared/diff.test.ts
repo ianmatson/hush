@@ -7,8 +7,10 @@ import {
 	isGeneratedFile,
 	parsePatch,
 	pullFilePageCount,
+	rangeSinceReview,
 	splitPath,
 	type FileTreeNode,
+	type PullCommit,
 	type PullFile
 } from './diff';
 
@@ -151,5 +153,33 @@ describe('buildFileTree', () => {
 			'm.ts',
 			'z.ts'
 		]);
+	});
+});
+
+describe('rangeSinceReview', () => {
+	const commit = (oid: string, merge = false): PullCommit => ({
+		oid,
+		headline: oid,
+		merge,
+		at: '2026-10-08T00:00:00Z'
+	});
+
+	it('combines the new commits when none of them is a merge', () => {
+		expect(rangeSinceReview([commit('a'), commit('b'), commit('c')], 'a')).toEqual({
+			kind: 'combined',
+			commits: [commit('b'), commit('c')]
+		});
+	});
+
+	it('shows the new commits one at a time, without merges, after a merge of the base', () => {
+		expect(rangeSinceReview([commit('a'), commit('m', true), commit('c')], 'a')).toEqual({
+			kind: 'by-commit',
+			commits: [commit('c')]
+		});
+	});
+
+	it('says when the reviewed commit is gone, and when nothing is new', () => {
+		expect(rangeSinceReview([commit('b')], 'a')).toEqual({ kind: 'reviewed-commit-missing' });
+		expect(rangeSinceReview([commit('a')], 'a')).toEqual({ kind: 'all' });
 	});
 });

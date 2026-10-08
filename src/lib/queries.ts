@@ -37,7 +37,15 @@ export const queryClient = new QueryClient({
 	}
 });
 
-const MEMORY_ONLY_KEYS = new Set(['peek', 'slack-mentions', 'pull-files']);
+const MEMORY_ONLY_KEYS = new Set([
+	'peek',
+	'slack-mentions',
+	'pull-files',
+	'pull-compare',
+	'pull-viewed',
+	'pull-commits',
+	'commit-diff'
+]);
 
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
 export const persistOptions = {
@@ -72,6 +80,12 @@ export const keys = {
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
 	pullFiles: (repo: string, number: number, head: string) =>
 		['pull-files', repo, number, head] as const,
+	pullCompare: (repo: string, number: number, base: string, head: string) =>
+		['pull-compare', repo, number, base, head] as const,
+	pullViewed: (repo: string, number: number) => ['pull-viewed', repo, number] as const,
+	pullCommits: (repo: string, number: number, head: string) =>
+		['pull-commits', repo, number, head] as const,
+	commitDiff: (repo: string, sha: string) => ['commit-diff', repo, sha] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
 	alerts: ['alerts'] as const
 };
@@ -236,6 +250,41 @@ export const pullFilesQuery = (repo: string, number: number, head: string, chang
 		staleTime: Infinity,
 		gcTime: 10 * MIN,
 		refetchOnWindowFocus: false
+	});
+
+export const pullCompareQuery = (repo: string, number: number, base: string, head: string) =>
+	queryOptions({
+		queryKey: keys.pullCompare(repo, number, base, head),
+		queryFn: () => api.compareCommits(repo, number, base, head),
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const pullCommitsQuery = (repo: string, number: number, head: string) =>
+	queryOptions({
+		queryKey: keys.pullCommits(repo, number, head),
+		queryFn: () => api.pullCommits(repo, number),
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const commitDiffQuery = (repo: string, number: number, sha: string) =>
+	queryOptions({
+		queryKey: keys.commitDiff(repo, sha),
+		queryFn: () => api.commitDiff(repo, number, sha),
+		staleTime: Infinity,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const pullViewedQuery = (repo: string, number: number) =>
+	queryOptions({
+		queryKey: keys.pullViewed(repo, number),
+		queryFn: () => api.viewedFiles(repo, number),
+		staleTime: MIN,
+		gcTime: 10 * MIN
 	});
 
 export const peekQuery = (repo: string, number: number) =>

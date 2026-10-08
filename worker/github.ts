@@ -603,6 +603,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       labels(first: 10) { nodes { name color } }
       assignees(first: 10) { nodes { login } }
       latestOpinionatedReviews(first: 20) { nodes { state author { ${PERSON} } } }
+      viewerLatestReview { submittedAt commit { oid } }
       reviewThreads(first: 50) { nodes { isResolved } }
       reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
@@ -853,7 +854,10 @@ export async function fetchPeek(
 				.map((r: Node) => ({ name: r.login ?? r.name, team: r.__typename === 'Team' })),
 			ci: (rollup?.state as CiState | undefined) ?? null,
 			checks,
-			checksTotal: rollup?.contexts?.totalCount ?? checks.length
+			checksTotal: rollup?.contexts?.totalCount ?? checks.length,
+			lastReview: n.viewerLatestReview?.commit?.oid
+				? { oid: n.viewerLatestReview.commit.oid, at: n.viewerLatestReview.submittedAt }
+				: null
 		}
 	};
 	return { peek, subject };

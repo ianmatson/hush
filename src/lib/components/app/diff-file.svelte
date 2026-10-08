@@ -4,11 +4,13 @@
 		parsePatch,
 		splitPath,
 		type DiffLineKind,
+		type FileViewedState,
 		type FoldReason,
 		type PullFile,
 		type PullFileStatus
 	} from '$lib/shared/diff';
 	import { cn } from '$lib/utils';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 
@@ -17,13 +19,17 @@
 		folded,
 		foldReason,
 		current,
-		ontoggle
+		viewedState,
+		ontoggle,
+		onviewed
 	}: {
 		file: PullFile;
 		folded: boolean;
 		foldReason: FoldReason;
 		current: boolean;
+		viewedState: FileViewedState | undefined;
 		ontoggle: () => void;
+		onviewed: () => void;
 	} = $props();
 
 	const hunks = $derived(folded || !file.patch ? [] : parsePatch(file.patch));
@@ -38,7 +44,8 @@
 	const FOLD_NOTE: Record<Exclude<FoldReason, null>, string> = {
 		generated: 'A lock file or generated file.',
 		large: 'A large diff.',
-		deleted: 'A deleted file.'
+		deleted: 'A deleted file.',
+		viewed: 'You viewed this file.'
 	};
 	const ROW_TONE: Record<DiffLineKind, string> = {
 		add: 'bg-signal-merge/10',
@@ -87,6 +94,21 @@
 		{#if status}<span class={cn('shrink-0', status.tone)}>{status.label}</span>{/if}
 		<span class="shrink-0 text-signal-merge tabular-nums">+{file.additions}</span>
 		<span class="shrink-0 text-signal-fail tabular-nums">−{file.deletions}</span>
+		{#if viewedState === 'DISMISSED'}
+			<span class="shrink-0 text-signal-warn"
+				><span class="hidden sm:inline">Changed since you viewed it</span><span class="sm:hidden"
+					>Changed</span
+				></span
+			>
+		{/if}
+		<label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-muted-foreground">
+			<Checkbox
+				checked={viewedState === 'VIEWED'}
+				onCheckedChange={onviewed}
+				aria-label="Viewed: {file.filename}"
+			/>
+			<span class="hidden sm:inline">Viewed</span>
+		</label>
 		{#if file.blob_url}
 			<a
 				href={file.blob_url}

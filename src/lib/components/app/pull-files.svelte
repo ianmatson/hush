@@ -3,17 +3,33 @@
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
+	import { api } from '$lib/api';
 	import { commandFor } from '$lib/keys.svelte';
-	import { pullFilesQuery } from '$lib/queries';
+	import {
+		commitDiffQuery,
+		keys,
+		pullCommitsQuery,
+		pullCompareQuery,
+		pullFilesQuery,
+		pullViewedQuery,
+		queryClient
+	} from '$lib/queries';
+	import { ago } from '$lib/time';
+	import { goto } from '$app/navigation';
 	import {
 		PULL_FILES_MAX_PAGES,
 		PULL_FILES_PER_PAGE,
 		buildFileTree,
+		comparesOnlyNewCommits,
 		fileAnchor,
 		filesInTreeOrder,
 		foldedByDefault,
+		rangeSinceReview,
+		type ReviewRange,
 		type FileTreeNode,
-		type PullFile
+		type PullFile,
+		type ViewedFiles
 	} from '$lib/shared/diff';
 	import { cn } from '$lib/utils';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -22,27 +38,137 @@
 	import Folder from '@lucide/svelte/icons/folder';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import FileIcon from '@lucide/svelte/icons/file';
+	import FileCheck from '@lucide/svelte/icons/file-check';
+	import FileDiff from '@lucide/svelte/icons/file-diff';
 
 	let {
 		repo,
 		number,
+		pullRequestId,
 		head,
+		lastReview,
 		changedFiles,
 		additions,
 		deletions
 	}: {
 		repo: string;
 		number: number;
+		pullRequestId: string;
 		head: string;
+		lastReview: { oid: string; at: string } | null;
 		changedFiles: number;
 		additions: number;
 		deletions: number;
 	} = $props();
 
 	const MAX_LISTED_FILES = PULL_FILES_PER_PAGE * PULL_FILES_MAX_PAGES;
+	const SINCE_PARAM = 'since';
+	const SINCE_REVIEW = 'review';
 
-	const q = createQuery(() => pullFilesQuery(repo, number, head, changedFiles));
-	const tree = $derived(buildFileTree(q.data ?? []));
+	const reviewBase = $derived(lastReview && lastReview.oid !== head ? lastReview : null);
+	const sinceReview = $derived(
+		!!reviewBase && page.url.searchParams.get(SINCE_PARAM) === SINCE_REVIEW
+	);
+	function rangeHref(onlySinceReview: boolean) {
+		const url = new URL(page.url);
+		if (onlySinceReview) url.searchParams.set(SINCE_PARAM, SINCE_REVIEW);
+		else url.searchParams.delete(SINCE_PARAM);
+		url.hash = '';
+		return url.pathname + url.search;
+	}
+
+	const COMMIT_PARAM = 'commit';
+
+	const allQ = createQuery(() => pullFilesQuery(repo, number, head, changedFiles));
+	const commitsQ = createQuery(() => ({
+		...pullCommitsQuery(repo, number, head),
+		enabled: sinceReview
+	}));
+	const range = $derived<ReviewRange | null>(
+		sinceReview && reviewBase && commitsQ.data
+			? rangeSinceReview(commitsQ.data.commits, reviewBase.oid)
+			: null
+	);
+	const compareQ = createQuery(() => ({
+		...pullCompareQuery(repo, number, reviewBase?.oid ?? '', head),
+		enabled: range?.kind === 'combined'
+	}));
+	const pickedCommit = $derived.by(() => {
+		if (range?.kind !== 'by-commit') return null;
+		const wanted = page.url.searchParams.get(COMMIT_PARAM);
+		return range.commits.find((c) => c.oid === wanted) ?? range.commits[0] ?? null;
+	});
+	const commitQ = createQuery(() => ({
+		...commitDiffQuery(repo, number, pickedCommit?.oid ?? ''),
+		enabled: !!pickedCommit
+	}));
+
+	const historyRewritten = $derived(
+		sinceReview &&
+			(commitsQ.isError ||
+				range?.kind === 'reviewed-commit-missing' ||
+				compareQ.isError ||
+				(!!compareQ.data && !comparesOnlyNewCommits(compareQ.data.status)))
+	);
+	const showingCombined = $derived(
+		range?.kind === 'combined' && !historyRewritten && !!compareQ.data
+	);
+	const showingCommit = $derived(range?.kind === 'by-commit' && !historyRewritten);
+	const showingSinceReview = $derived(showingCombined || showingCommit);
+	const q = $derived(
+		!sinceReview || historyRewritten || range?.kind === 'all'
+			? allQ
+			: range?.kind === 'by-commit'
+				? range.commits.length
+					? commitQ
+					: allQ
+				: range?.kind === 'combined'
+					? compareQ
+					: commitsQ
+	);
+	const shownFiles = $derived<PullFile[]>(
+		showingCombined
+			? (compareQ.data?.files ?? [])
+			: showingCommit
+				? (commitQ.data?.files ?? [])
+				: (allQ.data ?? [])
+	);
+	const sumOf = (pick: (f: PullFile) => number) => shownFiles.reduce((sum, f) => sum + pick(f), 0);
+	const shownAdditions = $derived(showingSinceReview ? sumOf((f) => f.additions) : additions);
+	const shownDeletions = $derived(showingSinceReview ? sumOf((f) => f.deletions) : deletions);
+	const shownFileCount = $derived(showingSinceReview ? shownFiles.length : changedFiles);
+
+	function commitHref(oid: string) {
+		const url = new URL(page.url);
+		url.searchParams.set(COMMIT_PARAM, oid);
+		url.hash = '';
+		return url.pathname + url.search;
+	}
+
+	const viewedQ = createQuery(() => pullViewedQuery(repo, number));
+	const viewed = $derived<ViewedFiles>(viewedQ.data?.viewed ?? {});
+	const isViewed = (file: PullFile) => viewed[file.filename] === 'VIEWED';
+	const viewedCount = $derived(shownFiles.filter(isViewed).length);
+
+	async function toggleViewed(file: PullFile) {
+		const key = keys.pullViewed(repo, number);
+		const before = viewed;
+		const nowViewed = !isViewed(file);
+		const next = { ...before };
+		if (nowViewed) next[file.filename] = 'VIEWED';
+		else delete next[file.filename];
+		queryClient.setQueryData(key, { viewed: next });
+		foldChoices.set(file.filename, nowViewed);
+		try {
+			await api.setFileViewed(pullRequestId, file.filename, nowViewed);
+		} catch (err) {
+			queryClient.setQueryData(key, { viewed: before });
+			foldChoices.delete(file.filename);
+			toast.error((err as Error).message, { description: file.filename });
+		}
+	}
+
+	const tree = $derived(buildFileTree(shownFiles));
 	const files = $derived(filesInTreeOrder(tree));
 	const indexByFilename = $derived(new Map(files.map((f, i) => [f.filename, i])));
 
@@ -55,7 +181,8 @@
 	}
 
 	const foldChoices = new SvelteMap<string, boolean>();
-	const isFolded = (file: PullFile) => foldChoices.get(file.filename) ?? !!foldedByDefault(file);
+	const foldReason = (file: PullFile) => (isViewed(file) ? 'viewed' : foldedByDefault(file));
+	const isFolded = (file: PullFile) => foldChoices.get(file.filename) ?? !!foldReason(file);
 	const toggle = (file: PullFile) => foldChoices.set(file.filename, !isFolded(file));
 	function setAllFolded(folded: boolean) {
 		for (const file of files) foldChoices.set(file.filename, folded);
@@ -97,6 +224,10 @@
 			'page.foldFile': () => {
 				const file = files[Math.max(cursor, 0)];
 				if (file) toggle(file);
+			},
+			'page.viewFile': () => {
+				const file = files[Math.max(cursor, 0)];
+				if (file) void toggleViewed(file);
 			}
 		};
 		const fn = cmd ? run[cmd] : undefined;
@@ -157,8 +288,22 @@
 					style:padding-left="{depth * TREE_INDENT_PX + 20}px"
 					title={node.file.filename}
 				>
-					<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
-					<span class="min-w-0 flex-1 truncate font-mono">{node.name}</span>
+					{#if viewed[node.file.filename] === 'VIEWED'}
+						<FileCheck class="size-3.5 shrink-0 text-signal-merge" aria-label="Viewed" />
+					{:else if viewed[node.file.filename] === 'DISMISSED'}
+						<FileDiff
+							class="size-3.5 shrink-0 text-signal-warn"
+							aria-label="Changed since you viewed it"
+						/>
+					{:else}
+						<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
+					{/if}
+					<span
+						class={cn(
+							'min-w-0 flex-1 truncate font-mono',
+							viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground'
+						)}>{node.name}</span
+					>
 					<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
 					<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
 				</a>
@@ -179,12 +324,45 @@
 
 	<div class="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-3">
 		<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+			{#if reviewBase}
+				<nav aria-label="Changes to show" class="flex items-center rounded-md border p-0.5">
+					<a
+						href={rangeHref(false)}
+						data-sveltekit-replacestate
+						data-sveltekit-noscroll
+						aria-current={sinceReview ? undefined : 'page'}
+						class={cn(
+							'rounded px-2 py-0.5 hover:text-foreground',
+							!sinceReview && 'bg-muted text-foreground'
+						)}>All changes</a
+					>
+					<a
+						href={rangeHref(true)}
+						data-sveltekit-replacestate
+						data-sveltekit-noscroll
+						aria-current={sinceReview ? 'page' : undefined}
+						title="Since your review {ago(reviewBase.at)}"
+						class={cn(
+							'rounded px-2 py-0.5 hover:text-foreground',
+							sinceReview && 'bg-muted text-foreground'
+						)}>Since your review</a
+					>
+				</nav>
+			{/if}
 			<span
-				>{changedFiles}
-				{changedFiles === 1 ? 'file' : 'files'} changed
-				<span class="text-signal-merge tabular-nums">+{additions}</span>
-				<span class="text-signal-fail tabular-nums">−{deletions}</span></span
+				>{shownFileCount}
+				{shownFileCount === 1 ? 'file' : 'files'}
+				{showingCombined && range?.kind === 'combined'
+					? `changed in ${range.commits.length} new ${range.commits.length === 1 ? 'commit' : 'commits'}`
+					: showingCommit
+						? 'changed in this commit'
+						: 'changed'}
+				<span class="text-signal-merge tabular-nums">+{shownAdditions}</span>
+				<span class="text-signal-fail tabular-nums">−{shownDeletions}</span></span
 			>
+			{#if shownFiles.length}
+				<span class="tabular-nums">{viewedCount} of {shownFiles.length} viewed</span>
+			{/if}
 			{#if files.length}
 				<span class="ml-auto flex gap-3">
 					<button
@@ -200,7 +378,45 @@
 				</span>
 			{/if}
 		</div>
-		{#if changedFiles > MAX_LISTED_FILES}
+		{#if historyRewritten}
+			<p class="rounded-md border border-signal-warn/40 bg-signal-warn/10 px-3 py-2 text-xs">
+				Hush cannot find the commit that you reviewed in the branch any more (for example, after a
+				force push). These are all the changes.
+			</p>
+		{:else if showingCommit && range?.kind === 'by-commit'}
+			<div
+				class="grid gap-2 rounded-md border border-signal-reply/30 bg-signal-reply/8 px-3 py-2 text-xs"
+			>
+				<p>
+					The branch merged its base branch after your review, so Hush shows the new commits one at
+					a time. Merge commits are left out.
+				</p>
+				{#if range.commits.length}
+					<label class="flex min-w-0 items-center gap-2">
+						<span class="shrink-0 text-muted-foreground">Commit</span>
+						<select
+							class="min-w-0 flex-1 truncate rounded-md border bg-background px-2 py-1"
+							value={pickedCommit?.oid}
+							onchange={(e) =>
+								goto(commitHref(e.currentTarget.value), {
+									replaceState: true,
+									noScroll: true,
+									keepFocus: true
+								})}
+						>
+							{#each range.commits as c, i (c.oid)}
+								<option value={c.oid}
+									>{i + 1} of {range.commits.length}: {c.headline} ({c.oid.slice(0, 7)})</option
+								>
+							{/each}
+						</select>
+					</label>
+				{:else}
+					<p class="text-muted-foreground">There are no new commits other than merges.</p>
+				{/if}
+			</div>
+		{/if}
+		{#if !showingSinceReview && changedFiles > MAX_LISTED_FILES}
 			<p class="text-xs text-muted-foreground">
 				GitHub lists only the first {MAX_LISTED_FILES.toLocaleString()} files.
 			</p>
@@ -219,11 +435,16 @@
 				<DiffFile
 					{file}
 					folded={isFolded(file)}
-					foldReason={foldedByDefault(file)}
+					foldReason={foldReason(file)}
 					current={i === cursor}
+					viewedState={viewed[file.filename]}
 					ontoggle={() => {
 						cursor = i;
 						toggle(file);
+					}}
+					onviewed={() => {
+						cursor = i;
+						void toggleViewed(file);
 					}}
 				/>
 			{/each}

@@ -604,6 +604,7 @@ export interface PeekDTO {
 		ci: CiState | null;
 		checks: { name: string; state: CheckState; url: string | null }[];
 		checksTotal: number;
+		lastReview: { oid: string; at: string } | null;
 	};
 	timeline: { total: number; items: PeekEntry[] };
 	/** What you may do here: the action buttons read it (shared/actions.ts). */

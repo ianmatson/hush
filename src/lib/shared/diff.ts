@@ -103,7 +103,7 @@ export function isGeneratedFile(path: string): boolean {
 	return GENERATED_FILE_NAMES.has(name) || GENERATED_FILE_SUFFIXES.some((s) => name.endsWith(s));
 }
 
-export type FoldReason = 'generated' | 'large' | 'deleted' | null;
+export type FoldReason = 'generated' | 'large' | 'deleted' | 'viewed' | null;
 
 export function foldedByDefault(file: PullFile): FoldReason {
 	if (isGeneratedFile(file.filename)) return 'generated';
@@ -188,4 +188,52 @@ export function filesInTreeOrder(tree: FileTreeNode[]): PullFile[] {
 	return tree.flatMap((node) =>
 		node.kind === 'file' ? [node.file] : filesInTreeOrder(node.children)
 	);
+}
+
+const COMMIT_OID = /^[0-9a-f]{7,40}$/;
+
+export const isCommitOid = (value: unknown): value is string =>
+	typeof value === 'string' && COMMIT_OID.test(value);
+
+export type FileViewedState = 'VIEWED' | 'DISMISSED';
+
+export type ViewedFiles = Record<string, FileViewedState>;
+
+export type CompareStatus = 'ahead' | 'behind' | 'diverged' | 'identical';
+
+export interface CompareResult {
+	status: CompareStatus;
+	total_commits: number;
+	files?: PullFile[];
+}
+
+export const comparesOnlyNewCommits = (status: CompareStatus) =>
+	status === 'ahead' || status === 'identical';
+
+export interface PullCommit {
+	oid: string;
+	headline: string;
+	merge: boolean;
+	at: string;
+}
+
+export interface CommitDiff {
+	sha: string;
+	files?: PullFile[];
+}
+
+export type ReviewRange =
+	| { kind: 'all' }
+	| { kind: 'reviewed-commit-missing' }
+	| { kind: 'combined'; commits: PullCommit[] }
+	| { kind: 'by-commit'; commits: PullCommit[] };
+
+export function rangeSinceReview(commits: PullCommit[], reviewedOid: string): ReviewRange {
+	const reviewedAt = commits.findIndex((c) => c.oid === reviewedOid);
+	if (reviewedAt < 0) return { kind: 'reviewed-commit-missing' };
+	const newCommits = commits.slice(reviewedAt + 1);
+	if (!newCommits.length) return { kind: 'all' };
+	return newCommits.some((c) => c.merge)
+		? { kind: 'by-commit', commits: newCommits.filter((c) => !c.merge) }
+		: { kind: 'combined', commits: newCommits };
 }

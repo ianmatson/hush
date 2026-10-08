@@ -12,7 +12,7 @@ import type {
 } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
-import type { PullFile } from '$lib/shared/diff';
+import type { CommitDiff, CompareResult, PullFile } from '$lib/shared/diff';
 
 export class ApiError extends Error {
 	constructor(
@@ -188,6 +188,43 @@ export const api = {
 		);
 		return files as PullFile[];
 	},
+	compareCommits: async (repo: string, number: number, base: string, head: string) => {
+		const [owner, name] = repo.split('/');
+		const result: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].compare.$get({
+				param: { owner, repo: name, number: String(number) },
+				query: { base, head }
+			})
+		);
+		return result as CompareResult;
+	},
+	pullCommits: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.diff[':owner'][':repo'][':number'].commits.$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
+	commitDiff: async (repo: string, number: number, sha: string) => {
+		const [owner, name] = repo.split('/');
+		const result: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].commit[':sha'].$get({
+				param: { owner, repo: name, number: String(number), sha }
+			})
+		);
+		return result as CommitDiff;
+	},
+	viewedFiles: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.diff[':owner'][':repo'][':number'].viewed.$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
+	setFileViewed: (pullRequestId: string, path: string, viewed: boolean) =>
+		ok(client.api.diff.viewed.$post({ json: { pullRequestId, path, viewed } })),
 	projects: (repo: string, number: number) => {
 		const [owner, name] = repo.split('/');
 		return ok(

@@ -110,6 +110,12 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'page.nextFile', label: 'Files: next file', scope: 'page', keys: ['n'] },
 	{ id: 'page.prevFile', label: 'Files: previous file', scope: 'page', keys: ['p'] },
 	{ id: 'page.foldFile', label: 'Files: fold or unfold the file', scope: 'page', keys: ['z'] },
+	{
+		id: 'page.viewFile',
+		label: 'Files: mark the file as viewed (or not)',
+		scope: 'page',
+		keys: ['v']
+	},
 
 	{ id: 'editor.send', label: 'Send the comment', scope: 'editor', keys: ['Mod+Enter'] },
 	{ id: 'editor.suggestNext', label: 'Suggestions: next', scope: 'editor', keys: ['ArrowDown'] },
