@@ -28,12 +28,26 @@ The full page shows the same pull request or issue as the peek, in a wider colum
 - {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
 - The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
 
+A pull request has two tabs: **Conversation** ({{key:page.conversation}}) and **Files** ({{key:page.files}}). The Files tab has the address of GitHub's Files tab: `…/pull/123/files`.
+
+### The Files tab
+
+The Files tab shows the changes of the pull request, file by file, as on GitHub.
+
+- On a wide screen, the files are in a tree on the left, with their folders. Click a folder to fold it, and click a file to go to its changes.
+- Each file shows its changed lines, with the old and the new line numbers. Added lines are green, deleted lines are red.
+- {{key:page.nextFile}} and {{key:page.prevFile}} go to the next and the previous file. {{key:page.foldFile}} folds or unfolds the file. **Fold all** and **Unfold all** do this for every file.
+- Lock files, minified files, deleted files, and files with more than 400 changed lines start folded. Choose **Show the diff** to see them.
+- GitHub shows no diff for binary files and very large files. Open them on GitHub with the link in their header.
+- GitHub lists up to 3,000 files of a pull request.
+
 ## What it shows
 
 - **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this. Category: Bugs.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened. An **External** badge shows when the author is not a member or collaborator of the repository, and **First-time** when it is their first PR or issue there. The **External contributor** part in **Settings → General → Row contents** turns the badge on or off, for rows and the peek.
 - For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
+- For a PR: **Files**, the changed files with their added and deleted lines. The part starts closed. Click a file to see its changes in the Files tab of the full page.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - **Project status**: a chip for each GitHub project that has the item, with its Status (“This week”). Click the chip to see the project. There you can change the status, move the item to another project of the same owner, or remove it from the project. A move or a removal loses the item's other fields on that project. The chips need the `project` scope (see [project boards](/docs/github-access#project-boards)).

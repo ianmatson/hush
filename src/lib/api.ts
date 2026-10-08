@@ -12,6 +12,7 @@ import type {
 } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
+import type { PullFile } from '$lib/shared/diff';
 
 export class ApiError extends Error {
 	constructor(
@@ -176,6 +177,16 @@ export const api = {
 				param: { owner, repo: name, number: String(number) }
 			})
 		);
+	},
+	pullFilesPage: async (repo: string, number: number, head: string, page: number) => {
+		const [owner, name] = repo.split('/');
+		const files: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].$get({
+				param: { owner, repo: name, number: String(number) },
+				query: { page: String(page), head }
+			})
+		);
+		return files as PullFile[];
 	},
 	projects: (repo: string, number: number) => {
 		const [owner, name] = repo.split('/');

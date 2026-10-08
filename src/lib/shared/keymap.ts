@@ -10,7 +10,7 @@
  */
 
 /** Where a command works. Scopes that are active together must not share a key. */
-export type KeyScope = 'global' | 'list' | 'inbox' | 'dash' | 'peek' | 'editor';
+export type KeyScope = 'global' | 'list' | 'inbox' | 'dash' | 'peek' | 'page' | 'editor';
 
 export interface KeyCommand {
 	id: string;
@@ -25,16 +25,18 @@ export const SCOPE_LABEL: Record<KeyScope, string> = {
 	inbox: 'Inbox',
 	dash: 'Pull requests and issues',
 	peek: 'Peek: actions on GitHub',
+	page: 'Full page',
 	editor: 'Text boxes'
 };
 
 /** The scopes that are active at the same time as each scope (a key must be unique there). */
 const TOGETHER: Record<KeyScope, KeyScope[]> = {
-	global: ['global', 'list', 'inbox', 'dash', 'peek'],
-	list: ['global', 'list', 'inbox', 'dash', 'peek'],
+	global: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
+	list: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
 	inbox: ['global', 'list', 'inbox', 'peek'],
 	dash: ['global', 'list', 'dash', 'peek'],
-	peek: ['global', 'list', 'inbox', 'dash', 'peek'],
+	peek: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
+	page: ['global', 'list', 'peek', 'page'],
 	editor: ['editor']
 };
 
@@ -102,6 +104,12 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'peek.merge', label: 'Merge (press twice)', scope: 'peek', keys: ['Shift+m'] },
 	{ id: 'peek.closeReopen', label: 'Close or reopen', scope: 'peek', keys: ['Shift+x'] },
 	{ id: 'peek.draftReady', label: 'Ready for review or draft', scope: 'peek', keys: ['Shift+d'] },
+
+	{ id: 'page.conversation', label: 'Conversation tab', scope: 'page', keys: ['1'] },
+	{ id: 'page.files', label: 'Files tab', scope: 'page', keys: ['2'] },
+	{ id: 'page.nextFile', label: 'Files: next file', scope: 'page', keys: ['n'] },
+	{ id: 'page.prevFile', label: 'Files: previous file', scope: 'page', keys: ['p'] },
+	{ id: 'page.foldFile', label: 'Files: fold or unfold the file', scope: 'page', keys: ['z'] },
 
 	{ id: 'editor.send', label: 'Send the comment', scope: 'editor', keys: ['Mod+Enter'] },
 	{ id: 'editor.suggestNext', label: 'Suggestions: next', scope: 'editor', keys: ['ArrowDown'] },

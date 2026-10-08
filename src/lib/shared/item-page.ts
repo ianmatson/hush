@@ -20,6 +20,10 @@ export const isItemPathSegment = (value: string): value is ItemPathSegment =>
 
 export const isItemNumber = (value: string) => POSITIVE_INTEGER.test(value);
 
+export const FILES_TAB = 'files';
+
+export const isItemTab = (value: string) => value === FILES_TAB;
+
 export function itemPagePath(repo: string, number: number, kind: DashKind): string {
 	return `/${repo}/${ITEM_PATH_SEGMENTS[kind]}/${number}`;
 }

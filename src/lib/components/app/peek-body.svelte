@@ -16,6 +16,7 @@
 	import CommentBox from './comment-box.svelte';
 	import PeekSlack from './peek-slack.svelte';
 	import PeekProjects from './peek-projects.svelte';
+	import PeekFiles from './peek-files.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import ExternalBadge from './external-badge.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -34,7 +35,11 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	/** The contents of the peek panel: one PR or issue, fetched when shown. */
-	let { repo, number }: { repo: string; number: number } = $props();
+	let {
+		repo,
+		number,
+		showFiles = true
+	}: { repo: string; number: number; showFiles?: boolean } = $props();
 
 	const q = createQuery(() => peekQuery(repo, number));
 	const me = createQuery(meQuery);
@@ -262,6 +267,14 @@
 							</button>
 						{/if}
 					</div>
+				{/if}
+				{#if showFiles && pr.files}
+					<PeekFiles
+						repo={p.repo}
+						number={p.number}
+						head={p.can.pr?.headOid ?? ''}
+						changedFiles={pr.files}
+					/>
 				{/if}
 			</section>
 		{/if}

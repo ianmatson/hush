@@ -7,12 +7,14 @@
 	import { meQuery, peekQuery } from '$lib/queries';
 	import { noteOpened } from '$lib/recheck';
 	import { clearNotificationsFor } from '$lib/notification-clear';
-	import { ITEM_PATH_SEGMENTS, itemPagePath } from '$lib/shared/item-page';
+	import { FILES_TAB, ITEM_PATH_SEGMENTS, itemPagePath } from '$lib/shared/item-page';
 	import { PEEK_PARAM, peekLinkParam } from '$lib/shared/peek-link';
 	import { subjectKey } from '$lib/shared/subject';
 	import { Button } from '$lib/components/ui/button';
 	import PeekContent from '$lib/components/app/peek-content.svelte';
 	import GhActions from '$lib/components/app/gh-actions.svelte';
+	import PullFiles from '$lib/components/app/pull-files.svelte';
+	import { cn } from '$lib/utils';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 
@@ -25,10 +27,28 @@
 	const q = createQuery(() => peekQuery(repo, number));
 	const me = createQuery(meQuery);
 
-	const title = $derived(q.data?.title ?? `${repo}#${number}`);
-	const githubUrl = $derived(
+	const pr = $derived(q.data?.kind === 'pr' ? q.data.pr : undefined);
+	const onFilesTab = $derived(page.params.tab === FILES_TAB && q.data?.kind !== 'issue');
+	const itemTitle = $derived(q.data?.title ?? `${repo}#${number}`);
+	const title = $derived(onFilesTab ? `Files · ${itemTitle}` : itemTitle);
+	const itemUrl = $derived(
 		q.data?.url ?? `https://github.com/${repo}/${page.params.segment}/${number}`
 	);
+	const githubUrl = $derived(onFilesTab ? `${itemUrl}/${FILES_TAB}` : itemUrl);
+	const kind = $derived(
+		q.data?.kind ?? (page.params.segment === ITEM_PATH_SEGMENTS.pr ? 'pr' : 'issue')
+	);
+	const conversationPath = $derived(itemPagePath(repo, number, kind));
+	const filesPath = $derived(`${conversationPath}/${FILES_TAB}`);
+
+	function showTab(files: boolean) {
+		if (kind !== 'pr' || files === onFilesTab) return;
+		goto(files ? filesPath : conversationPath, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	}
 
 	let cameFromApp = false;
 	afterNavigate(({ from }) => {
@@ -41,9 +61,13 @@
 	}
 
 	$effect(() => {
-		const kind = q.data?.kind;
-		if (!kind || ITEM_PATH_SEGMENTS[kind] === page.params.segment) return;
-		replaceState(itemPagePath(repo, number, kind), page.state);
+		const loadedKind = q.data?.kind;
+		if (!loadedKind) return;
+		const wrongSegment = ITEM_PATH_SEGMENTS[loadedKind] !== page.params.segment;
+		const filesOnIssue = loadedKind === 'issue' && page.params.tab === FILES_TAB;
+		if (!wrongSegment && !filesOnIssue) return;
+		const path = itemPagePath(repo, number, loadedKind);
+		replaceState(onFilesTab ? `${path}/${FILES_TAB}${page.url.hash}` : path, page.state);
 	});
 
 	$effect(() => {
@@ -63,8 +87,10 @@
 			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
 		)
 			return;
-		const cmd = commandFor(e, ['list']);
+		const cmd = commandFor(e, ['list', 'page']);
 		const run: Record<string, () => void> = {
+			'page.conversation': () => showTab(false),
+			'page.files': () => showTab(true),
 			'list.escape': back,
 			'list.fullPage': back,
 			'list.openGitHub': () => {
@@ -82,12 +108,38 @@
 <svelte:head><title>{title} · Hush</title></svelte:head>
 <svelte:window onkeydown={onKey} />
 
-<div class="mx-auto max-w-4xl pb-20">
+<div class={cn('mx-auto pb-20', onFilesTab ? 'max-w-[100rem]' : 'max-w-4xl')}>
 	<div
 		class="sticky top-12 z-10 flex h-11 items-center gap-1 border-b bg-background/85 px-2 backdrop-blur"
 	>
 		<Button variant="ghost" size="sm" onclick={back}><ArrowLeft />Back</Button>
-		<span class="hidden px-2 text-xs text-muted-foreground sm:inline"
+		{#if kind === 'pr'}
+			<nav aria-label="Pull request" class="flex items-center gap-1 text-sm">
+				<a
+					href={conversationPath}
+					data-sveltekit-replacestate
+					data-sveltekit-noscroll
+					aria-current={onFilesTab ? undefined : 'page'}
+					class={cn(
+						'rounded-md px-2 py-1 text-muted-foreground hover:text-foreground',
+						!onFilesTab && 'bg-muted text-foreground'
+					)}>Conversation</a
+				>
+				<a
+					href={filesPath}
+					data-sveltekit-replacestate
+					data-sveltekit-noscroll
+					aria-current={onFilesTab ? 'page' : undefined}
+					class={cn(
+						'flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground hover:text-foreground',
+						onFilesTab && 'bg-muted text-foreground'
+					)}
+					>Files{#if pr}<span class="text-xs text-muted-foreground tabular-nums">{pr.files}</span
+						>{/if}</a
+				>
+			</nav>
+		{/if}
+		<span class="hidden px-2 text-xs text-muted-foreground lg:inline"
 			><kbd class="font-sans">{keysOf('list.escape')[0] ?? ''}</kbd> to go back</span
 		>
 		<Button
@@ -101,11 +153,27 @@
 			aria-label="Open on GitHub"><ExternalLink /></Button
 		>
 	</div>
-	<PeekContent {repo} {number} {title} />
+	{#if onFilesTab && pr}
+		<PullFiles
+			{repo}
+			{number}
+			head={q.data?.can.pr?.headOid ?? ''}
+			changedFiles={pr.files}
+			additions={pr.additions}
+			deletions={pr.deletions}
+		/>
+	{:else if !onFilesTab}
+		<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
+	{/if}
 </div>
 
 <div class="fixed inset-x-0 bottom-0 z-20 border-t bg-background pb-[env(safe-area-inset-bottom)]">
-	<div class="mx-auto flex max-w-4xl flex-wrap items-center gap-1 p-2">
+	<div
+		class={cn(
+			'mx-auto flex flex-wrap items-center gap-1 p-2',
+			onFilesTab ? 'max-w-[100rem]' : 'max-w-4xl'
+		)}
+	>
 		<GhActions {repo} {number} need={null} />
 	</div>
 </div>

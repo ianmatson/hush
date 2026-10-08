@@ -3,6 +3,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import { browser } from '$app/environment';
 import { live } from '$lib/live-state.svelte';
 import { DRAFTS_KEY } from '$lib/drafts';
+import { pullFilePageCount } from '$lib/shared/diff';
 import { api, ApiError, type ThreadsResponse } from '$lib/api';
 import type {
 	Counts,
@@ -36,7 +37,7 @@ export const queryClient = new QueryClient({
 	}
 });
 
-const MEMORY_ONLY_KEYS = new Set(['peek', 'slack-mentions']);
+const MEMORY_ONLY_KEYS = new Set(['peek', 'slack-mentions', 'pull-files']);
 
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
 export const persistOptions = {
@@ -69,6 +70,8 @@ export const keys = {
 		['slack-mentions', repo, number, kind] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
+	pullFiles: (repo: string, number: number, head: string) =>
+		['pull-files', repo, number, head] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
 	alerts: ['alerts'] as const
 };
@@ -216,6 +219,21 @@ export const projectsQuery = (repo: string, number: number) =>
 		queryKey: keys.projects(repo, number),
 		queryFn: () => api.projects(repo, number),
 		staleTime: 2 * MIN,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
+export const pullFilesQuery = (repo: string, number: number, head: string, changedFiles: number) =>
+	queryOptions({
+		queryKey: keys.pullFiles(repo, number, head),
+		queryFn: async () => {
+			const pages = Array.from({ length: pullFilePageCount(changedFiles) }, (_, i) => i + 1);
+			const results = await Promise.all(
+				pages.map((page) => api.pullFilesPage(repo, number, head, page))
+			);
+			return results.flat();
+		},
+		staleTime: Infinity,
 		gcTime: 10 * MIN,
 		refetchOnWindowFocus: false
 	});
