@@ -11,8 +11,8 @@ import type { SessionDTO } from '../../src/lib/shared/types';
 
 // --- Auth: Sign in with GitHub (an OAuth app), and your own token as an option ------------
 
-/** The scopes Hush asks for: read notifications, private repos, and your teams. */
-const SCOPES = 'notifications repo read:org';
+/** The scopes Hush asks for: read notifications, private repos, your teams, and project boards. */
+const SCOPES = 'notifications repo read:org project';
 /** The OAuth `state`, and whether the sign-in replaces your own token with the app's. */
 const STATE_COOKIE = 'hush_oauth';
 

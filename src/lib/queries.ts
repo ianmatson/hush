@@ -69,6 +69,7 @@ export const keys = {
 		['slack-mentions', repo, number, kind] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
+	projects: (repo: string, number: number) => ['projects', repo, number] as const,
 	alerts: ['alerts'] as const
 };
 
@@ -210,6 +211,15 @@ export function leaveTo(path: '/login' | '/inbox') {
 }
 
 /** One PR or issue for the peek panel. Fetched when opened (about 1 GraphQL point), never polled. */
+export const projectsQuery = (repo: string, number: number) =>
+	queryOptions({
+		queryKey: keys.projects(repo, number),
+		queryFn: () => api.projects(repo, number),
+		staleTime: 2 * MIN,
+		gcTime: 10 * MIN,
+		refetchOnWindowFocus: false
+	});
+
 export const peekQuery = (repo: string, number: number) =>
 	queryOptions({
 		queryKey: keys.peek(repo, number),

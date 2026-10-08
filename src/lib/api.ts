@@ -11,6 +11,7 @@ import type {
 	View
 } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
+import type { ProjectEdit } from '$lib/shared/projects';
 
 export class ApiError extends Error {
 	constructor(
@@ -176,6 +177,15 @@ export const api = {
 			})
 		);
 	},
+	projects: (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		return ok(
+			client.api.projects[':owner'][':repo'][':number'].$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+	},
+	editProject: (edit: ProjectEdit) => ok(client.api.projects.item.$post({ json: edit })),
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),
 	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<notification view id>'. */

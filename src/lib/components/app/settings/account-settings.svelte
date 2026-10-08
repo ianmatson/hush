@@ -13,6 +13,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import { projectAccessOf } from '$lib/shared/projects';
 
 	const me = createQuery(meQuery);
 	const sessions = createQuery(sessionsQuery);
@@ -77,6 +78,7 @@
 
 	// A custom token, in place of the one from your GitHub sign-in.
 	const custom = $derived(me.data?.tokenSource === 'own');
+	const projectAccess = $derived(projectAccessOf(me.data?.scopes ?? []));
 	let editing = $state(false);
 	let token = $state('');
 	let saving = $state(false);
@@ -248,8 +250,9 @@
 						<p class="text-xs leading-relaxed text-muted-foreground">
 							Paste a token for <b class="font-medium text-foreground">@{me.data.login}</b> that can
 							read notifications. For example, run <code>gh auth token</code> (GitHub CLI), or make
-							a classic token with <code>notifications</code>, <code>repo</code>, and
-							<code>read:org</code>. Hush stores it encrypted, and signing in again keeps it.
+							a classic token with <code>notifications</code>, <code>repo</code>,
+							<code>read:org</code>, and <code>project</code>. Hush stores it encrypted, and signing
+							in again keeps it.
 						</p>
 						<div class="flex flex-wrap gap-2">
 							<Input
@@ -274,6 +277,22 @@
 							>
 						</div>
 					</form>
+				{/if}
+				{#if projectAccess !== 'edit'}
+					<p class="border-t pt-4 text-xs leading-relaxed text-muted-foreground">
+						{#if custom}
+							Your custom token cannot change project boards. Run
+							<code>gh auth refresh -s project</code>, then replace the token with the one from
+							<code>gh auth token</code>.
+						{:else}
+							Your token is older than project boards in Hush.
+							<a
+								class="underline underline-offset-2 hover:text-foreground"
+								href="/api/auth/github?use=app"
+								data-sveltekit-reload>Sign in with GitHub again</a
+							> to use them.
+						{/if}
+					</p>
 				{/if}
 				<div class="grid gap-2 border-t pt-4">
 					<span class="text-xs font-medium">Orgs your GitHub sign-in can see</span>

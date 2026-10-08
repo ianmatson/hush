@@ -15,6 +15,7 @@
 	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
 	import CommentBox from './comment-box.svelte';
 	import PeekSlack from './peek-slack.svelte';
+	import PeekProjects from './peek-projects.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import ExternalBadge from './external-badge.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -147,6 +148,7 @@
 					target="_blank"
 					rel="noreferrer">{p.repo}#{p.number}</a
 				>
+				<PeekProjects repo={p.repo} number={p.number} />
 			</div>
 			<h2 class="text-base leading-snug font-semibold text-balance">
 				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>

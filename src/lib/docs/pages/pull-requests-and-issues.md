@@ -64,6 +64,21 @@ Change them in **Settings → Sources**:
 - **Teams** lists your teams. Turn off big teams (such as “everyone”) to cut noise. **Look up teams again** finds new teams at once; otherwise Hush looks every 6 hours.
 - **Defaults** puts back the default sources. Nothing changes until you choose **Save**.
 
+### Project boards
+
+A source can read a GitHub project board. Name the project with `project:` and one or more columns with `status:`:
+
+`project:acme/12 status:"This week","In progress" no:assignee`
+
+- Hush reads this source from the board, not with GitHub search. The rest of the search uses the [board's filter words](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/filtering-projects), such as `assignee:@me`, `no:assignee`, `label:bug`, and `-status:Done`.
+- `acme/12` is the owner of the project and its number, from the project's address (`github.com/orgs/acme/projects/12`).
+- The **Scope** is not added to a board source.
+- Draft items on the board are left out: they are not pull requests or issues.
+- Hidden bots and others' drafts are not hidden here: someone put them on the board.
+- It needs the `project` scope. A token from before Hush read boards does not have it: then a note above the list says so. See [project boards](/docs/github-access#project-boards).
+
+A search with `project:` but no `status:` is a normal GitHub search: it finds every open item in the project, whatever its column.
+
 More options are only in [settings.json](/docs/settings): hide others' drafts ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)), hide bots' PRs ([`dash.hideBots`](/docs/settings#dash-hidebots)), and the stale days.
 
 ## Categories and tags
