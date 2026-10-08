@@ -60,7 +60,7 @@ APP_URL=http://localhost:5173
 
 Then open http://localhost:5173 and choose Sign in with GitHub.
 
-To test with your real account without changing anything on GitHub, add `GITHUB_WRITES=off` to `.dev.vars`: Done, Read, and Mute then do not mirror to GitHub, and the peek's GitHub actions answer 403. Test GitHub actions only in a private sandbox repository.
+To test with your real account without changing anything on GitHub, add `GITHUB_WRITES=off` to `.dev.vars`: Done, Read, and Mute then do not mirror to GitHub, and the peek's GitHub actions answer 403. Test GitHub actions only in a private sandbox repository: with `GITHUB_WRITES=off`, add `GITHUB_WRITES_ALLOW=owner/sandbox` (a comma-separated list) to allow the peek's actions, reactions, Viewed marks, and review comments there and nowhere else. The background mirror of Done, Read, and Mute, and project board changes, stay off.
 
 To test the production build (service worker, push): `pnpm preview` → http://localhost:8787.
 

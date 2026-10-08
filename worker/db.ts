@@ -21,6 +21,7 @@ export interface Env {
 	VAPID_SUBJECT?: string;
 	/** "off" in a local test copy: Hush writes nothing to GitHub (no read, done, mute, or actions). */
 	GITHUB_WRITES?: string;
+	GITHUB_WRITES_ALLOW?: string;
 	// Rate limiters (optional, so tests and old configs still work).
 	AUTH_LIMIT?: RateLimit;
 	FEED_LIMIT?: RateLimit;

@@ -11,6 +11,7 @@ import { isGitHubName, isItemNumber } from '../../src/lib/shared/item-page';
 import { userToken } from '../db';
 import { gh } from '../github';
 import { json, query, routes } from '../app';
+import { writeBlockForNode } from '../write-gate';
 
 const PASSED_THROUGH_STATUSES = new Set([401, 403, 404]);
 const NODE_ID = /^[A-Za-z0-9_=-]{1,120}$/;
@@ -20,7 +21,6 @@ const THREADS_PER_PAGE = 100;
 const THREAD_PAGES_LIMIT = 10;
 const COMMENTS_PER_THREAD = 50;
 const MAX_REPLY_LENGTH = 65_536;
-const WRITES_OFF = 'GitHub writes are off in this copy (GITHUB_WRITES=off).';
 
 const VIEWED_FILES_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: String) {
   repository(owner: $o, name: $r) { pullRequest(number: $n) {
@@ -309,7 +309,6 @@ const app = routes()
 		return c.json({ threads }, 200, { 'Cache-Control': 'private, no-store' });
 	})
 	.post('/api/diff/threads/reply', json<{ threadId: string; body: string }>(), async (c) => {
-		if (c.env.GITHUB_WRITES === 'off') return c.json({ error: WRITES_OFF }, 403);
 		const b = c.req.valid('json');
 		if (
 			typeof b.threadId !== 'string' ||
@@ -319,14 +318,16 @@ const app = routes()
 			b.body.length > MAX_REPLY_LENGTH
 		)
 			return c.json({ error: 'Not a reply to a review thread.' }, 400);
-		const failure = await graphqlWrite(await userToken(c.env, c.get('user')), REPLY_TO_THREAD, {
+		const token = await userToken(c.env, c.get('user'));
+		const blocked = await writeBlockForNode(c.env, token, b.threadId);
+		if (blocked) return c.json({ error: blocked }, 403);
+		const failure = await graphqlWrite(token, REPLY_TO_THREAD, {
 			id: b.threadId,
 			body: b.body
 		});
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.post('/api/diff/threads/resolve', json<{ threadId: string; resolved: boolean }>(), async (c) => {
-		if (c.env.GITHUB_WRITES === 'off') return c.json({ error: WRITES_OFF }, 403);
 		const b = c.req.valid('json');
 		if (
 			typeof b.threadId !== 'string' ||
@@ -334,11 +335,12 @@ const app = routes()
 			typeof b.resolved !== 'boolean'
 		)
 			return c.json({ error: 'Not a review thread.' }, 400);
-		const failure = await graphqlWrite(
-			await userToken(c.env, c.get('user')),
-			b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD,
-			{ id: b.threadId }
-		);
+		const token = await userToken(c.env, c.get('user'));
+		const blocked = await writeBlockForNode(c.env, token, b.threadId);
+		if (blocked) return c.json({ error: blocked }, 403);
+		const failure = await graphqlWrite(token, b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD, {
+			id: b.threadId
+		});
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.get('/api/diff/:owner/:repo/:number/viewed', async (c) => {
@@ -376,7 +378,6 @@ const app = routes()
 		'/api/diff/viewed',
 		json<{ pullRequestId: string; path: string; viewed: boolean }>(),
 		async (c) => {
-			if (c.env.GITHUB_WRITES === 'off') return c.json({ error: WRITES_OFF }, 403);
 			const b = c.req.valid('json');
 			if (
 				typeof b.pullRequestId !== 'string' ||
@@ -387,7 +388,10 @@ const app = routes()
 				typeof b.viewed !== 'boolean'
 			)
 				return c.json({ error: 'Not a file of a pull request.' }, 400);
-			const res = await gh(await userToken(c.env, c.get('user')), '/graphql', {
+			const token = await userToken(c.env, c.get('user'));
+			const blocked = await writeBlockForNode(c.env, token, b.pullRequestId);
+			if (blocked) return c.json({ error: blocked }, 403);
+			const res = await gh(token, '/graphql', {
 				method: 'POST',
 				body: JSON.stringify({
 					query: b.viewed ? MARK_VIEWED : UNMARK_VIEWED,

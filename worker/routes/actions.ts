@@ -6,6 +6,7 @@ import { linkStack, mergeStackThrough, readPrRefs, readStack } from '../stacks';
 import { stackMergePlan } from '../../src/lib/shared/stack-merge';
 import { REACTION_CONTENTS } from '../../src/lib/shared/reactions';
 import { routes, poller, json } from '../app';
+import { writeBlockForNode, writeBlockForRepo } from '../write-gate';
 
 // --- Actions on GitHub (approve, comment, merge…), with the token Hush reads with ----------
 
@@ -46,15 +47,14 @@ async function refusal(res: Response): Promise<string> {
 
 const app = routes()
 	.post('/api/actions', json<ActionBody>(), async (c) => {
-		// A local test copy writes nothing to GitHub.
-		if (c.env.GITHUB_WRITES === 'off')
-			return c.json({ error: 'GitHub writes are off in this copy (GITHUB_WRITES=off).' }, 403);
 		const u = c.get('user');
 		const b = c.req.valid('json');
 		const [owner, name, extra] = typeof b.repo === 'string' ? b.repo.split('/') : [];
 		const number = Number(b.number);
 		if (!NAME.test(owner ?? '') || !NAME.test(name ?? '') || extra !== undefined)
 			return c.json({ error: 'Not a repository.' }, 400);
+		const blocked = writeBlockForRepo(c.env, `${owner}/${name}`);
+		if (blocked) return c.json({ error: blocked }, 403);
 		if (typeof b.action !== 'string' || !Object.hasOwn(GH_ACTIONS, b.action))
 			return c.json({ error: 'Unknown action.' }, 400);
 		const action: GhActionId = b.action;
@@ -200,14 +200,14 @@ const app = routes()
 	})
 	// Add or remove your reaction on a comment, a review, or a description.
 	.post('/api/reactions', json<{ id: string; content: string; add: boolean }>(), async (c) => {
-		if (c.env.GITHUB_WRITES === 'off')
-			return c.json({ error: 'GitHub writes are off in this copy (GITHUB_WRITES=off).' }, 403);
 		const b = c.req.valid('json');
 		if (typeof b.id !== 'string' || !NODE_ID.test(b.id))
 			return c.json({ error: 'Not a comment.' }, 400);
 		if (typeof b.content !== 'string' || !REACTION_CONTENTS.has(b.content))
 			return c.json({ error: 'Unknown reaction.' }, 400);
 		const token = await userToken(c.env, c.get('user'));
+		const blocked = await writeBlockForNode(c.env, token, b.id);
+		if (blocked) return c.json({ error: blocked }, 403);
 		const verb = b.add ? 'addReaction' : 'removeReaction';
 		const res = await gh(token, '/graphql', {
 			method: 'POST',
