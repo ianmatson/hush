@@ -14,7 +14,7 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
 - **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also `rules`: inbox rules are now [categories](/docs/categories).
 - **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categories` or `sources`, is always replaced as a whole.
-- **Changes apply at once**, on every device. A change to `categories`, `tags`, `botsAreFyi`, `teamReviewsAreAction`, or `reviewResolution` sorts your stored threads and items again.
+- **Changes apply at once**, on every device. A change to `categories`, `tags`, `botsAreFyi`, `teamReviewsAreAction`, `reviewResolution`, or `newCommitsAfterReview` sorts your stored threads and items again.
 
 A complete example:
 

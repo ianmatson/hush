@@ -135,11 +135,12 @@ export abstract class PollerDashboard extends PollerSync {
 	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
-		const { dash, botsAreFyi, reviewResolution, tracked } = who.settings;
+		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview, tracked } = who.settings;
 		const sections = sectionsFor(kind, who.settings.sources);
 		const sig = JSON.stringify([
 			botsAreFyi,
 			reviewResolution,
+			newCommitsAfterReview,
 			sections,
 			tracked,
 			dash.scope,
@@ -226,7 +227,7 @@ export abstract class PollerDashboard extends PollerSync {
 						who.me,
 						dash.staleDays,
 						Date.now(),
-						{ botsAreFyi, reviewResolution }
+						{ botsAreFyi, reviewResolution, newCommitsAfterReview }
 					);
 				})
 		);

@@ -39,7 +39,7 @@ export { isBot };
 export function classifyDefault(
 	t: ThreadFacts,
 	settings: Pick<Settings, 'botsAreFyi' | 'teamReviewsAreAction'> &
-		Partial<Pick<Settings, 'reviewResolution'>>
+		Partial<Pick<Settings, 'reviewResolution' | 'newCommitsAfterReview'>>
 ): Classification {
 	const e = t.enrichment;
 	const me = t.me.toLowerCase();
@@ -103,7 +103,8 @@ export function classifyDefault(
 		// Whose turn: the same rules as the PR and issue dashboards.
 		const turn = computeTurn(turnFactsFromEnrichment(e, t.repo, t.me, t.myTeams), t.me, [], {
 			botsAreFyi: settings.botsAreFyi,
-			reviewResolution: settings.reviewResolution
+			reviewResolution: settings.reviewResolution,
+			newCommitsAfterReview: settings.newCommitsAfterReview
 		});
 		if (turn.turn === 'you') return act(turn.kind, turn.summary, turn.actionLabel, turn.actionUrl);
 		if (turn.turn === 'team' && settings.teamReviewsAreAction)

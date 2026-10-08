@@ -87,8 +87,14 @@ const BULK_MAX = 20;
 const MUTED_AT = '9999-12-31T23:59:59Z';
 
 /** Why a thread or item does not need you ("Doesn't need me…"): what each answer changes. */
-export type NotNeededAnswer = 'others-reviewed' | 'team' | 'bots' | 'once';
-const NOT_NEEDED = new Set<NotNeededAnswer>(['others-reviewed', 'team', 'bots', 'once']);
+export type NotNeededAnswer = 'others-reviewed' | 'new-commits' | 'team' | 'bots' | 'once';
+const NOT_NEEDED = new Set<NotNeededAnswer>([
+	'others-reviewed',
+	'new-commits',
+	'team',
+	'bots',
+	'once'
+]);
 const MAX_DEVICES = 10;
 const FEED_ENTRIES = 50;
 const VIEWS = new Set<View>(['action', 'fyi', 'snoozed', 'done', 'muted', 'all', 'inbox']);
@@ -824,9 +830,11 @@ export abstract class PollerData extends PollerDashboard {
 		const patch: Partial<Settings> =
 			answer === 'others-reviewed'
 				? { reviewResolution: 'any_review' }
-				: answer === 'team'
-					? { teamReviewsAreAction: false }
-					: { botsAreFyi: true };
+				: answer === 'new-commits'
+					? { newCommitsAfterReview: 'never' }
+					: answer === 'team'
+						? { teamReviewsAreAction: false }
+						: { botsAreFyi: true };
 		const undo = Object.fromEntries(
 			Object.keys(patch).map((k) => [k, old[k as keyof Settings]])
 		) as Partial<Settings>;

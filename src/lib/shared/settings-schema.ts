@@ -1,4 +1,4 @@
-import { validateDash } from './dashboard';
+import { NEW_COMMITS_AFTER_REVIEW_OPTIONS, validateDash } from './dashboard';
 import { validateSources, validateTracked } from './sources';
 import {
 	categoriesWithLegacyRules,
@@ -115,6 +115,12 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		page: null,
 		description:
 			'When a review request stops being your turn. "strict": when GitHub no longer asks you. "any_review": also when someone else approves or asks for changes.'
+	},
+	{
+		key: 'newCommitsAfterReview',
+		page: null,
+		description:
+			'When new commits after your review make it your turn again. "always", "changes_requested": only when your last review asked for changes, or "never".'
 	},
 	{
 		key: 'botsAreFyi',
@@ -236,6 +242,7 @@ export const RECLASSIFY_KEYS: (keyof Settings)[] = [
 	'categories',
 	'botsAreFyi',
 	'reviewResolution',
+	'newCommitsAfterReview',
 	'teamReviewsAreAction',
 	'smartDecisions'
 ];
@@ -306,6 +313,10 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 		v === 'strict' || v === 'any_review'
 			? null
 			: '"reviewResolution" must be "strict" or "any_review".',
+	newCommitsAfterReview: (v) =>
+		NEW_COMMITS_AFTER_REVIEW_OPTIONS.some((o) => o.id === v)
+			? null
+			: '"newCommitsAfterReview" must be "always", "changes_requested", or "never".',
 	views: validateViews,
 	dash: validateDash,
 	sources: validateSources,

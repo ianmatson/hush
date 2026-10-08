@@ -150,6 +150,27 @@ export interface TurnOptions {
 	botsAreFyi?: boolean;
 	/** "any_review": someone else's verdict after the last push settles a review request. */
 	reviewResolution?: 'strict' | 'any_review';
+	/** When new commits after your review make it your turn again. */
+	newCommitsAfterReview?: NewCommitsAfterReview;
+}
+
+export type NewCommitsAfterReview = 'always' | 'changes_requested' | 'never';
+
+export const NEW_COMMITS_AFTER_REVIEW_OPTIONS: { id: NewCommitsAfterReview; label: string }[] = [
+	{ id: 'always', label: 'After any review' },
+	{ id: 'changes_requested', label: 'Only after I request changes' },
+	{ id: 'never', label: 'Never' }
+];
+
+export const NEW_COMMITS_REASON = 'New commits since your review';
+
+function newCommitsNeedMe(
+	rule: NewCommitsAfterReview = 'always',
+	myLastReviewState: string | null
+): boolean {
+	if (rule === 'never') return false;
+	if (rule === 'changes_requested') return myLastReviewState === 'CHANGES_REQUESTED';
+	return true;
 }
 
 const after = (a: string | null, b: string | null) => !!a && (!b || Date.parse(a) > Date.parse(b));
@@ -346,14 +367,18 @@ export function computeTurn(
 				);
 	if (assigned)
 		return you('Assigned to you', 1, i.updatedAt, 'Open', 'triage', 'A PR was assigned to you');
-	if (i.myLastReviewAt && after(i.lastCommitAt, i.myLastReviewAt))
+	if (
+		i.myLastReviewAt &&
+		after(i.lastCommitAt, i.myLastReviewAt) &&
+		newCommitsNeedMe(opts.newCommitsAfterReview, i.myLastReviewState)
+	)
 		return you(
-			'New commits since your review',
+			NEW_COMMITS_REASON,
 			2,
 			i.lastCommitAt,
 			'Re-review',
 			'review',
-			'New commits since your review',
+			NEW_COMMITS_REASON,
 			`${i.url}/files`
 		);
 	if (i.requestedTeams.length)

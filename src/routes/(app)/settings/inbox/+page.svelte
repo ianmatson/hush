@@ -4,6 +4,11 @@
 	import { saveSettings } from '$lib/save-settings';
 	import type { SavedView } from '$lib/shared/types';
 	import { FEED_TABS, VIEW_BASES } from '$lib/shared/views';
+	import {
+		NEW_COMMITS_AFTER_REVIEW_OPTIONS,
+		type NewCommitsAfterReview
+	} from '$lib/shared/dashboard';
+	import * as Select from '$lib/components/ui/select';
 	import SortableList from '$lib/components/app/sortable-list.svelte';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Trash from '@lucide/svelte/icons/trash-2';
@@ -23,6 +28,10 @@
 			: me.data?.smartDecisionsChecking
 				? 'Checking your open threads… Their lists update when this ends.'
 				: ''
+	);
+
+	const newCommitsLabel = $derived(
+		NEW_COMMITS_AFTER_REVIEW_OPTIONS.find((o) => o.id === settings?.newCommitsAfterReview)?.label
 	);
 
 	// Notification views, for reordering here (they are made and edited on the inbox).
@@ -70,6 +79,26 @@
 						checked={settings.teamReviewsAreAction}
 						onsave={(v) => saveSettings({ teamReviewsAreAction: v })}
 					/>
+				</SettingRow>
+				<SettingRow
+					label="New commits after my review need me"
+					description="New commits on a PR that you reviewed make it your turn again (and push). “Only after I request changes”: after an approval or a comment, the PR waits on others."
+				>
+					<Select.Root
+						type="single"
+						value={settings.newCommitsAfterReview}
+						onValueChange={(v) =>
+							saveSettings({ newCommitsAfterReview: v as NewCommitsAfterReview })}
+					>
+						<Select.Trigger class="w-64" aria-label="New commits after my review need me"
+							>{newCommitsLabel}</Select.Trigger
+						>
+						<Select.Content>
+							{#each NEW_COMMITS_AFTER_REVIEW_OPTIONS as o (o.id)}
+								<Select.Item value={o.id} label={o.label} />
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</SettingRow>
 				<SettingRow
 					id="smart-decisions"

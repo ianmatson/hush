@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	clearNotifications: 'open',
 	peekMarksRead: true,
 	reviewResolution: 'strict',
+	newCommitsAfterReview: 'always',
 	botsAreFyi: true,
 	teamReviewsAreAction: false,
 	dash: DEFAULT_DASH,

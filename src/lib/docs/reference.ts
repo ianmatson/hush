@@ -188,6 +188,14 @@ iPhone and iPad can ignore this: Safari on iOS does not always remove a notifica
 
 This also applies to team review requests.`
 	},
+	newCommitsAfterReview: {
+		type: '"always", "changes_requested", or "never"',
+		body: `When new commits on a PR that you reviewed make it your turn again (“New commits since your review”). Settings → Inbox → **New commits after my review need me**.
+
+- \`"always"\` (default): after any review.
+- \`"changes_requested"\`: only when your last review requested changes. After an approval or a comment, the PR stays in Waiting on others.
+- \`"never"\`: new commits never make it your turn. A new review request still does.`
+	},
 	botsAreFyi: {
 		type: 'boolean',
 		body: `PRs that bots open (dependabot, renovate…) are FYI, and they show in Other on the Pull requests tab, unless they ask for your review by name. Comments and mentions by bots do not count as replies. A bot is a login that ends in \`[bot]\`, or starts with dependabot, renovate, github-actions, or codecov.`

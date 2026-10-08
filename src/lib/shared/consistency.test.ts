@@ -112,7 +112,8 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 	);
 	const dash = computeTurn(d, ME, [], {
 		botsAreFyi: all.botsAreFyi,
-		reviewResolution: all.reviewResolution
+		reviewResolution: all.reviewResolution,
+		newCommitsAfterReview: all.newCommitsAfterReview
 	});
 	return { inbox, dash };
 }
@@ -188,6 +189,63 @@ describe('inbox and dashboards agree (open threads, any review)', () => {
 		expect(any.dash.turn).toBe('you');
 		expect(any.inbox.category).toBe('action');
 	});
+});
+
+describe('inbox and dashboards agree (new commits after your review)', () => {
+	const afterReview = (state: string): Subject => ({
+		myReview: { at: T0, state },
+		lastCommitAt: T1
+	});
+
+	it('new commits after any review are your turn by default', () => {
+		const r = both(afterReview('APPROVED'));
+		expect(r.dash).toMatchObject({ turn: 'you', turnReason: 'New commits since your review' });
+		expect(r.inbox).toMatchObject({ category: 'action', kind: 'review' });
+	});
+
+	it('"changes_requested": new commits after an approval wait on others', () => {
+		const r = both(afterReview('APPROVED'), 'subscribed', {
+			newCommitsAfterReview: 'changes_requested'
+		});
+		expect(r.dash).toMatchObject({ turn: 'them', turnReason: 'You approved' });
+		expect(r.inbox.category).toBe('fyi');
+	});
+
+	it('"changes_requested": new commits after a comment wait on the author', () => {
+		const r = both(afterReview('COMMENTED'), 'subscribed', {
+			newCommitsAfterReview: 'changes_requested'
+		});
+		expect(r.dash).toMatchObject({ turn: 'them', turnReason: 'Waiting on author' });
+		expect(r.inbox.category).toBe('fyi');
+	});
+
+	it('"changes_requested": new commits after you requested changes are your turn', () => {
+		const r = both(afterReview('CHANGES_REQUESTED'), 'subscribed', {
+			newCommitsAfterReview: 'changes_requested'
+		});
+		expect(r.dash.turn).toBe('you');
+		expect(r.inbox.category).toBe('action');
+	});
+
+	it('"never": new commits are not your turn, but a new review request is', () => {
+		const never = { newCommitsAfterReview: 'never' } as const;
+		const pushed = both(afterReview('CHANGES_REQUESTED'), 'subscribed', never);
+		expect(pushed.dash.turn).toBe('them');
+		expect(pushed.inbox.category).toBe('fyi');
+		const asked = both(
+			{ ...afterReview('APPROVED'), requestedMe: true },
+			'review_requested',
+			never
+		);
+		expect(asked.dash).toMatchObject({ turn: 'you', turnReason: 'Re-review requested' });
+		expect(asked.inbox.category).toBe('action');
+	});
+
+	for (const newCommitsAfterReview of ['always', 'changes_requested', 'never'] as const)
+		for (const state of ['APPROVED', 'COMMENTED', 'CHANGES_REQUESTED'])
+			for (const reason of ['subscribed', 'review_requested', 'state_change'] as const)
+				it(`${newCommitsAfterReview} after ${state} (${reason})`, () =>
+					agree(both(afterReview(state), reason, { newCommitsAfterReview })));
 });
 
 describe('inbox and dashboards agree (every state)', () => {

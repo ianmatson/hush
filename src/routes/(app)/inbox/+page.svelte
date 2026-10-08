@@ -26,6 +26,7 @@
 	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
 	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
 	import { leavesOf, parseExpr } from '$lib/shared/query';
+	import { NEW_COMMITS_REASON } from '$lib/shared/dashboard';
 	import { conditionId, smartConditions } from '$lib/shared/decisions';
 	import { markQueries } from '$lib/shared/categories';
 	import { saveSettings } from '$lib/save-settings';
@@ -588,6 +589,7 @@
 			title: t.title,
 			repo: t.repo,
 			review: t.kind === 'review',
+			newCommits: t.summary === NEW_COMMITS_REASON,
 			// A team's request reads "@alice requests review from acme/web" (shared/dashboard.ts).
 			team: t.kind === 'review' && / requests review from /.test(t.summary),
 			bot: t.authorIsBot,

@@ -93,6 +93,8 @@ describe('settings schema', () => {
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);
 		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
+		expect(check({ newCommitsAfterReview: 'changes_requested' })).toBeNull();
+		expect(check({ newCommitsAfterReview: 'x' })).toMatch(/changes_requested/);
 		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
 			/"A"/
 		);
