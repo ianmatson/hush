@@ -1112,7 +1112,7 @@
 				{#snippet child({ props })}
 					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
 						{#each groups as g (g.turn)}
-							{@const count = baseGroups.find((b) => b.turn === g.turn)?.items.length ?? 0}
+							{@const count = baseGroups.find((b) => b.turn === g.turn)?.units.length ?? 0}
 							{@const target = drag.active && drag.zone === g.turn}
 							{@const headerDrop = target && (collapsed[g.turn] || !count)}
 							<!-- The whole group (header and rows) is one drop zone. Always in the layout, so
