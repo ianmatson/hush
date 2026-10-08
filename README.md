@@ -64,7 +64,9 @@ To test with your real account without changing anything on GitHub, add `GITHUB_
 
 To test the production build (service worker, push): `pnpm preview` → http://localhost:8787.
 
-[Paseo](https://paseo.sh) worktrees set themselves up from `paseo.json`: `scripts/setup-worktree.sh` installs packages, copies `.dev.vars` and the local Wrangler state (D1, Durable Objects) from the main checkout, and applies the local migrations. The `dev` service runs `pnpm dev` on :5173, the port that the development OAuth callbacks use, so one worktree at a time can run it.
+[Paseo](https://paseo.sh) worktrees set themselves up from `paseo.json`: `scripts/setup-worktree.sh` installs packages, copies `.dev.vars` and the local Wrangler state (D1, Durable Objects) from the main checkout, and applies the local migrations. The `dev` service runs `pnpm dev` on :5173, the port that the development OAuth callbacks use, so one worktree at a time can run it. Vite listens on `127.0.0.1` only, which the Paseo service proxy needs.
+
+To test from a browser on another machine, such as a Paseo desktop app that connects through the relay, run `pnpm dev:tailnet` (Paseo script `tailnet`). It makes the dev server available at this machine's Tailscale address, on the same port. GitHub sign-in needs `localhost:5173`, so on another address, `pnpm dev:session [login]` makes a 24-hour session in the local database for a user who signed in before, and prints the line that sets its cookie.
 
 ```sh
 pnpm test         # classifier, Web Push encryption (checked against http_ece), crypto

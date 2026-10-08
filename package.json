@@ -6,6 +6,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "mkdir -p dist/app && pnpm types:api && concurrently -k -n worker,web -c yellow,cyan \"wrangler dev --port 8787\" \"vite dev\"",
+		"dev:session": "node scripts/dev-session.mjs",
+		"dev:tailnet": "node scripts/dev-tailnet.mjs",
 		"build": "vite build && node scripts/split-build.mjs",
 		"preview": "pnpm build && wrangler dev --port 8787",
 		"prepare": "svelte-kit sync || echo ''",

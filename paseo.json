@@ -8,6 +8,7 @@
 			"command": "pnpm dev",
 			"port": 5173
 		},
+		"tailnet": { "command": "pnpm dev:tailnet" },
 		"check": { "command": "pnpm check" },
 		"test": { "command": "pnpm test" },
 		"lint": { "command": "pnpm lint" }
