@@ -43,6 +43,15 @@ The Files tab shows the changes of the pull request, file by file, as on GitHub.
 - GitHub shows no diff for binary files and very large files. Open them on GitHub with the link in their header.
 - GitHub lists up to 3,000 files of a pull request.
 
+#### Review comments
+
+The review comments on the diff show in the Files tab, under the line that they are about, as on GitHub. Comments on a whole file, outdated comments (on lines that changed since), and comments on lines that are not in the diff show at the top of their file. A file's header and its row in the tree show how many of its threads are open.
+
+- Resolved threads start closed. Click a thread's title to open or close it.
+- **Reply** answers in the thread ({{key:editor.send}} sends). **Resolve** and **Unresolve** change the thread on GitHub.
+- A thread shows up to 50 comments. **More on GitHub** links to the rest.
+- The comments show only with **All changes**, not with **Since your review**: their line numbers belong to the whole diff.
+
 #### Viewed files
 
 Check **Viewed** on a file, or press {{key:page.viewFile}}, when you are done with it. The file folds, and its row in the tree gets a check. This is GitHub's own **Viewed** mark, so GitHub shows it too, and the other way round. The count at the top tells how many files you viewed. When a file changes after you viewed it, GitHub takes the mark off, and Hush shows **Changed since you viewed it**.
@@ -67,7 +76,7 @@ The address of this view ends in `?since=review`.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - **Project status**: a chip for each GitHub project that has the item, with its Status (“This week”). Click the chip to see the project. There you can change the status, move the item to another project of the same owner, or remove it from the project. A move or a removal loses the item's other fields on that project. The chips need the `project` scope (see [project boards](/docs/github-access#project-boards)).
-- The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted, not shown.
+- The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted here, and show in the Files tab of the [full page](#the-files-tab).
 - The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
 - **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The part starts closed: its title shows the number of messages, or a spinner while Hush searches. Click the title to show the messages. With no messages, this part is not shown.
 - A comment box at the end.

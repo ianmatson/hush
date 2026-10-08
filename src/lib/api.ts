@@ -12,7 +12,7 @@ import type {
 } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
-import type { CommitDiff, CompareResult, PullFile } from '$lib/shared/diff';
+import type { CommitDiff, CompareResult, PullFile, ReviewThread } from '$lib/shared/diff';
 
 export class ApiError extends Error {
 	constructor(
@@ -223,6 +223,19 @@ export const api = {
 			})
 		);
 	},
+	reviewThreads: async (repo: string, number: number) => {
+		const [owner, name] = repo.split('/');
+		const result: unknown = await ok(
+			client.api.diff[':owner'][':repo'][':number'].threads.$get({
+				param: { owner, repo: name, number: String(number) }
+			})
+		);
+		return result as { threads: ReviewThread[] };
+	},
+	replyToThread: (threadId: string, body: string) =>
+		ok(client.api.diff.threads.reply.$post({ json: { threadId, body } })),
+	setThreadResolved: (threadId: string, resolved: boolean) =>
+		ok(client.api.diff.threads.resolve.$post({ json: { threadId, resolved } })),
 	setFileViewed: (pullRequestId: string, path: string, viewed: boolean) =>
 		ok(client.api.diff.viewed.$post({ json: { pullRequestId, path, viewed } })),
 	projects: (repo: string, number: number) => {

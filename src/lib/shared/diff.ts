@@ -385,3 +385,63 @@ export function splitRows(hunk: DiffHunk): SplitRow[] {
 	flush();
 	return rows;
 }
+
+export interface ThreadComment {
+	id: string;
+	author: { login: string; avatar: string | null };
+	html: string;
+	at: string;
+	url: string;
+}
+
+export interface ReviewThread {
+	id: string;
+	path: string;
+	line: number | null;
+	startLine: number | null;
+	side: 'LEFT' | 'RIGHT';
+	outdated: boolean;
+	resolved: boolean;
+	fileLevel: boolean;
+	canReply: boolean;
+	canResolve: boolean;
+	canUnresolve: boolean;
+	comments: ThreadComment[];
+	totalComments: number;
+}
+
+export const threadAnchor = (side: 'LEFT' | 'RIGHT', line: number) => `${side}:${line}`;
+
+export function lineAnchors(line: DiffLine): string[] {
+	const anchors: string[] = [];
+	if (line.newLine !== null) anchors.push(threadAnchor('RIGHT', line.newLine));
+	if (line.oldLine !== null) anchors.push(threadAnchor('LEFT', line.oldLine));
+	return anchors;
+}
+
+export interface PlacedThreads {
+	atLine: Map<string, ReviewThread[]>;
+	atTop: ReviewThread[];
+}
+
+export function placeThreads(threads: ReviewThread[], hunks: DiffHunk[]): PlacedThreads {
+	const shown = new Set(hunks.flatMap((h) => h.lines.flatMap(lineAnchors)));
+	const atLine = new Map<string, ReviewThread[]>();
+	const atTop: ReviewThread[] = [];
+	for (const thread of threads) {
+		const anchor =
+			thread.line !== null && !thread.outdated && !thread.fileLevel
+				? threadAnchor(thread.side, thread.line)
+				: null;
+		if (anchor && shown.has(anchor)) atLine.set(anchor, [...(atLine.get(anchor) ?? []), thread]);
+		else atTop.push(thread);
+	}
+	return { atLine, atTop };
+}
+
+export function threadsByPath(threads: ReviewThread[]): Map<string, ReviewThread[]> {
+	const byPath = new Map<string, ReviewThread[]>();
+	for (const thread of threads)
+		byPath.set(thread.path, [...(byPath.get(thread.path) ?? []), thread]);
+	return byPath;
+}

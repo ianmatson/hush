@@ -8,13 +8,16 @@ import {
 	foldedByDefault,
 	isGeneratedFile,
 	parsePatch,
+	placeThreads,
 	pullFilePageCount,
 	rangeSinceReview,
 	splitPath,
 	splitRows,
+	threadsByPath,
 	type FileTreeNode,
 	type PullCommit,
-	type PullFile
+	type PullFile,
+	type ReviewThread
 } from './diff';
 
 const file = (overrides: Partial<PullFile>): PullFile => ({
@@ -227,5 +230,53 @@ describe('splitRows', () => {
 			[4, 4],
 			[null, 5]
 		]);
+	});
+});
+
+describe('placeThreads', () => {
+	const thread = (overrides: Partial<ReviewThread>): ReviewThread => ({
+		id: overrides.id ?? 't',
+		path: 'a.ts',
+		line: 2,
+		startLine: null,
+		side: 'RIGHT',
+		outdated: false,
+		resolved: false,
+		fileLevel: false,
+		canReply: true,
+		canResolve: true,
+		canUnresolve: false,
+		comments: [],
+		totalComments: 0,
+		...overrides
+	});
+	const hunks = parsePatch(['@@ -1,3 +1,3 @@', ' a', '-b', '+B', ' c'].join('\n'));
+
+	it('puts a thread under its line, on the new or the old side', () => {
+		const placed = placeThreads(
+			[thread({ id: 'new', line: 2 }), thread({ id: 'old', side: 'LEFT', line: 2 })],
+			hunks
+		);
+		expect(placed.atLine.get('RIGHT:2')?.map((t) => t.id)).toEqual(['new']);
+		expect(placed.atLine.get('LEFT:2')?.map((t) => t.id)).toEqual(['old']);
+		expect(placed.atTop).toEqual([]);
+	});
+
+	it('puts outdated, file-level, and out-of-diff threads at the top of the file', () => {
+		const placed = placeThreads(
+			[
+				thread({ id: 'outdated', outdated: true, line: null }),
+				thread({ id: 'file', fileLevel: true, line: null }),
+				thread({ id: 'far', line: 90 })
+			],
+			hunks
+		);
+		expect(placed.atTop.map((t) => t.id)).toEqual(['outdated', 'file', 'far']);
+		expect(placed.atLine.size).toBe(0);
+	});
+
+	it('groups threads by file', () => {
+		const byPath = threadsByPath([thread({ id: '1' }), thread({ id: '2', path: 'b.ts' })]);
+		expect([...byPath.keys()]).toEqual(['a.ts', 'b.ts']);
 	});
 });

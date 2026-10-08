@@ -44,7 +44,8 @@ const MEMORY_ONLY_KEYS = new Set([
 	'pull-compare',
 	'pull-viewed',
 	'pull-commits',
-	'commit-diff'
+	'commit-diff',
+	'review-threads'
 ]);
 
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
@@ -86,6 +87,7 @@ export const keys = {
 	pullCommits: (repo: string, number: number, head: string) =>
 		['pull-commits', repo, number, head] as const,
 	commitDiff: (repo: string, sha: string) => ['commit-diff', repo, sha] as const,
+	reviewThreads: (repo: string, number: number) => ['review-threads', repo, number] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
 	alerts: ['alerts'] as const
 };
@@ -277,6 +279,14 @@ export const commitDiffQuery = (repo: string, number: number, sha: string) =>
 		staleTime: Infinity,
 		gcTime: 10 * MIN,
 		refetchOnWindowFocus: false
+	});
+
+export const reviewThreadsQuery = (repo: string, number: number) =>
+	queryOptions({
+		queryKey: keys.reviewThreads(repo, number),
+		queryFn: () => api.reviewThreads(repo, number),
+		staleTime: MIN,
+		gcTime: 10 * MIN
 	});
 
 export const pullViewedQuery = (repo: string, number: number) =>

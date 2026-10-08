@@ -14,7 +14,8 @@
 		pullCompareQuery,
 		pullFilesQuery,
 		pullViewedQuery,
-		queryClient
+		queryClient,
+		reviewThreadsQuery
 	} from '$lib/queries';
 	import { ago } from '$lib/time';
 	import { goto } from '$app/navigation';
@@ -27,9 +28,11 @@
 		filesInTreeOrder,
 		foldedByDefault,
 		rangeSinceReview,
+		threadsByPath,
 		type ReviewRange,
 		type FileTreeNode,
 		type PullFile,
+		type ReviewThread,
 		type ViewedFiles
 	} from '$lib/shared/diff';
 	import { cn } from '$lib/utils';
@@ -39,6 +42,7 @@
 	import Folder from '@lucide/svelte/icons/folder';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import FileIcon from '@lucide/svelte/icons/file';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import FileCheck from '@lucide/svelte/icons/file-check';
 	import FileDiff from '@lucide/svelte/icons/file-diff';
 
@@ -156,6 +160,18 @@
 		url.hash = '';
 		return url.pathname + url.search;
 	}
+
+	const threadsQ = createQuery(() => reviewThreadsQuery(repo, number));
+	const NO_THREADS: ReviewThread[] = [];
+	const threadsOfFile = $derived(
+		showingSinceReview
+			? new Map<string, ReviewThread[]>()
+			: threadsByPath(threadsQ.data?.threads ?? [])
+	);
+	const fileThreads = (file: PullFile) => threadsOfFile.get(file.filename) ?? NO_THREADS;
+	const openThreadsOf = (file: PullFile) => fileThreads(file).filter((t) => !t.resolved).length;
+	const refreshThreads = () =>
+		queryClient.refetchQueries({ queryKey: keys.reviewThreads(repo, number) });
 
 	const viewedQ = createQuery(() => pullViewedQuery(repo, number));
 	const viewed = $derived<ViewedFiles>(viewedQ.data?.viewed ?? {});
@@ -317,6 +333,13 @@
 							viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground'
 						)}>{node.name}</span
 					>
+					{#if openThreadsOf(node.file)}
+						<span
+							class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
+							title="{openThreadsOf(node.file)} open review threads"
+							><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
+						>
+					{/if}
 					<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
 					<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
 				</a>
@@ -478,6 +501,8 @@
 					current={i === cursor}
 					viewedState={viewed[file.filename]}
 					{split}
+					threads={fileThreads(file)}
+					onthreadschanged={refreshThreads}
 					ontoggle={() => {
 						cursor = i;
 						toggle(file);

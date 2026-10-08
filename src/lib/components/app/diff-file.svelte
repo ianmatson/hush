@@ -2,7 +2,9 @@
 	import {
 		fileAnchor,
 		languageForPath,
+		lineAnchors,
 		parsePatch,
+		placeThreads,
 		splitPath,
 		splitRows,
 		type DiffLine,
@@ -10,13 +12,16 @@
 		type FileViewedState,
 		type FoldReason,
 		type PullFile,
-		type PullFileStatus
+		type PullFileStatus,
+		type ReviewThread as ReviewThreadData
 	} from '$lib/shared/diff';
 	import { cn } from '$lib/utils';
 	import { highlightHunks, type HighlightedToken } from '$lib/highlight';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import ReviewThread from './review-thread.svelte';
 
 	let {
 		file,
@@ -25,8 +30,10 @@
 		current,
 		viewedState,
 		split,
+		threads,
 		ontoggle,
-		onviewed
+		onviewed,
+		onthreadschanged
 	}: {
 		file: PullFile;
 		folded: boolean;
@@ -34,12 +41,23 @@
 		current: boolean;
 		viewedState: FileViewedState | undefined;
 		split: boolean;
+		threads: ReviewThreadData[];
 		ontoggle: () => void;
 		onviewed: () => void;
+		onthreadschanged: () => Promise<unknown>;
 	} = $props();
 
 	const hunks = $derived(folded || !file.patch ? [] : parsePatch(file.patch));
 	const path = $derived(splitPath(file.filename));
+	const placed = $derived(placeThreads(threads, hunks));
+	const THREAD_MAX_WIDTH_PX = 768;
+	const THREAD_INSET_PX = 16;
+	let visibleWidth = $state(THREAD_MAX_WIDTH_PX + THREAD_INSET_PX);
+	const openThreadCount = $derived(threads.filter((t) => !t.resolved).length);
+	function threadsAt(lines: (DiffLine | undefined)[]): ReviewThreadData[] {
+		const anchors = new Set(lines.flatMap((line) => (line ? lineAnchors(line) : [])));
+		return [...anchors].flatMap((anchor) => placed.atLine.get(anchor) ?? []);
+	}
 	const language = $derived(languageForPath(file.filename));
 
 	let tokens = $state<HighlightedToken[][][] | null>(null);
@@ -95,6 +113,23 @@
 				class={token.italic ? 'italic' : undefined}>{token.content}</span
 			>{/each}{:else}{line.text}{/if}{/snippet}
 
+{#snippet threadRow(lineThreads: ReviewThreadData[], columns: number)}
+	{#if lineThreads.length}
+		<tr>
+			<td colspan={columns} class="px-2">
+				<div
+					class="sticky left-2"
+					style:max-width="{Math.min(THREAD_MAX_WIDTH_PX, visibleWidth - THREAD_INSET_PX)}px"
+				>
+					{#each lineThreads as thread (thread.id)}
+						<ReviewThread {thread} onchanged={onthreadschanged} />
+					{/each}
+				</div>
+			</td>
+		</tr>
+	{/if}
+{/snippet}
+
 {#snippet splitHalf(cell: { line: DiffLine; at: number } | null, h: number, side: 'old' | 'new')}
 	{#if cell}
 		{@const tone = cell.line.kind === 'context' ? '' : ROW_TONE[cell.line.kind]}
@@ -141,6 +176,16 @@
 				><span class="max-w-full shrink-0 truncate font-medium text-foreground">{path.name}</span>
 			</span>
 		</button>
+		{#if threads.length}
+			<span
+				class={cn(
+					'flex shrink-0 items-center gap-1 tabular-nums',
+					openThreadCount ? 'text-signal-reply' : 'text-muted-foreground'
+				)}
+				title="{openThreadCount} open of {threads.length} review threads"
+				><MessageSquare class="size-3.5" />{openThreadCount || threads.length}</span
+			>
+		{/if}
 		{#if status}<span class={cn('shrink-0', status.tone)}>{status.label}</span>{/if}
 		<span class="shrink-0 text-signal-merge tabular-nums">+{file.additions}</span>
 		<span class="shrink-0 text-signal-fail tabular-nums">−{file.deletions}</span>
@@ -189,60 +234,71 @@
 					rel="noreferrer">Open it on GitHub</a
 				>{/if}
 		</p>
-	{:else if split}
-		<table class="w-full table-fixed border-collapse font-mono text-xs leading-5">
-			<colgroup>
-				<col class="w-14" />
-				<col />
-				<col class="w-14" />
-				<col />
-			</colgroup>
-			{#each hunks as hunk, h (h)}
-				<tbody>
-					<tr class="bg-signal-reply/8 text-muted-foreground">
-						<td colspan="4" class="truncate px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
-					</tr>
-					{#each splitRows(hunk) as row, r (r)}
-						<tr>
-							{@render splitHalf(row.left, h, 'old')}
-							{@render splitHalf(row.right, h, 'new')}
-						</tr>
-					{/each}
-				</tbody>
-			{/each}
-		</table>
 	{:else}
-		<div class="overflow-x-auto">
-			<table class="w-full border-collapse font-mono text-xs leading-5">
+		{#if placed.atTop.length}
+			<div class="border-b px-2">
+				{#each placed.atTop as thread (thread.id)}
+					<ReviewThread {thread} onchanged={onthreadschanged} />
+				{/each}
+			</div>
+		{/if}
+		{#if split}
+			<table class="w-full table-fixed border-collapse font-mono text-xs leading-5">
+				<colgroup>
+					<col class="w-14" />
+					<col />
+					<col class="w-14" />
+					<col />
+				</colgroup>
 				{#each hunks as hunk, h (h)}
 					<tbody>
 						<tr class="bg-signal-reply/8 text-muted-foreground">
-							<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
+							<td colspan="4" class="truncate px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
 						</tr>
-						{#each hunk.lines as line, l (l)}
-							<tr class={ROW_TONE[line.kind]}>
-								<td
-									class={cn(
-										'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-										NUMBER_TONE[line.kind]
-									)}>{line.oldLine ?? ''}</td
-								>
-								<td
-									class={cn(
-										'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-										NUMBER_TONE[line.kind]
-									)}>{line.newLine ?? ''}</td
-								>
-								<td class="pr-4 whitespace-pre"
-									><span class="inline-block w-4 text-center text-muted-foreground select-none"
-										>{PREFIX[line.kind]}</span
-									>{@render code(line, h, l)}</td
-								>
+						{#each splitRows(hunk) as row, r (r)}
+							<tr>
+								{@render splitHalf(row.left, h, 'old')}
+								{@render splitHalf(row.right, h, 'new')}
 							</tr>
+							{@render threadRow(threadsAt([row.left?.line, row.right?.line]), 4)}
 						{/each}
 					</tbody>
 				{/each}
 			</table>
-		</div>
+		{:else}
+			<div class="overflow-x-auto" bind:clientWidth={visibleWidth}>
+				<table class="w-full border-collapse font-mono text-xs leading-5">
+					{#each hunks as hunk, h (h)}
+						<tbody>
+							<tr class="bg-signal-reply/8 text-muted-foreground">
+								<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
+							</tr>
+							{#each hunk.lines as line, l (l)}
+								<tr class={ROW_TONE[line.kind]}>
+									<td
+										class={cn(
+											'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
+											NUMBER_TONE[line.kind]
+										)}>{line.oldLine ?? ''}</td
+									>
+									<td
+										class={cn(
+											'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
+											NUMBER_TONE[line.kind]
+										)}>{line.newLine ?? ''}</td
+									>
+									<td class="pr-4 whitespace-pre"
+										><span class="inline-block w-4 text-center text-muted-foreground select-none"
+											>{PREFIX[line.kind]}</span
+										>{@render code(line, h, l)}</td
+									>
+								</tr>
+								{@render threadRow(threadsAt([line]), 3)}
+							{/each}
+						</tbody>
+					{/each}
+				</table>
+			</div>
+		{/if}
 	{/if}
 </section>

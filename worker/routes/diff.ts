@@ -3,6 +3,7 @@ import {
 	PULL_FILES_PER_PAGE,
 	isCommitOid,
 	type PullCommit,
+	type ReviewThread,
 	type FileViewedState,
 	type ViewedFiles
 } from '../../src/lib/shared/diff';
@@ -15,6 +16,11 @@ const PASSED_THROUGH_STATUSES = new Set([401, 403, 404]);
 const NODE_ID = /^[A-Za-z0-9_=-]{1,120}$/;
 const MAX_PATH_LENGTH = 1024;
 const PULL_COMMITS_LIMIT = 100;
+const THREADS_PER_PAGE = 100;
+const THREAD_PAGES_LIMIT = 10;
+const COMMENTS_PER_THREAD = 50;
+const MAX_REPLY_LENGTH = 65_536;
+const WRITES_OFF = 'GitHub writes are off in this copy (GITHUB_WRITES=off).';
 
 const VIEWED_FILES_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: String) {
   repository(owner: $o, name: $r) { pullRequest(number: $n) {
@@ -32,6 +38,101 @@ const PULL_COMMITS_QUERY = `query($o: String!, $r: String!, $n: Int!) {
     }
   } }
 }`;
+
+const REVIEW_THREADS_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: String) {
+  repository(owner: $o, name: $r) { pullRequest(number: $n) {
+    reviewThreads(first: ${THREADS_PER_PAGE}, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id isResolved isOutdated path line startLine diffSide subjectType
+        viewerCanReply viewerCanResolve viewerCanUnresolve
+        comments(first: ${COMMENTS_PER_THREAD}) {
+          totalCount
+          nodes { id author { login avatarUrl } bodyHTML createdAt url }
+        }
+      }
+    }
+  } }
+}`;
+
+const REPLY_TO_THREAD = `mutation($id: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $id, body: $body }) { comment { id } }
+}`;
+const RESOLVE_THREAD = `mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { id } } }`;
+const UNRESOLVE_THREAD = `mutation($id: ID!) { unresolveReviewThread(input: { threadId: $id }) { thread { id } } }`;
+
+type ThreadNode = {
+	id: string;
+	isResolved: boolean;
+	isOutdated: boolean;
+	path: string;
+	line: number | null;
+	startLine: number | null;
+	diffSide: 'LEFT' | 'RIGHT';
+	subjectType: 'LINE' | 'FILE';
+	viewerCanReply: boolean;
+	viewerCanResolve: boolean;
+	viewerCanUnresolve: boolean;
+	comments: {
+		totalCount: number;
+		nodes: {
+			id: string;
+			author: { login: string; avatarUrl: string } | null;
+			bodyHTML: string;
+			createdAt: string;
+			url: string;
+		}[];
+	};
+};
+
+type ReviewThreadsPage = {
+	data?: {
+		repository?: {
+			pullRequest?: {
+				reviewThreads?: {
+					pageInfo: { hasNextPage: boolean; endCursor: string | null };
+					nodes: ThreadNode[];
+				};
+			};
+		};
+	};
+	errors?: { message: string }[];
+};
+
+function toReviewThread(node: ThreadNode): ReviewThread {
+	return {
+		id: node.id,
+		path: node.path,
+		line: node.line,
+		startLine: node.startLine,
+		side: node.diffSide,
+		outdated: node.isOutdated,
+		resolved: node.isResolved,
+		fileLevel: node.subjectType === 'FILE',
+		canReply: node.viewerCanReply,
+		canResolve: node.viewerCanResolve,
+		canUnresolve: node.viewerCanUnresolve,
+		totalComments: node.comments.totalCount,
+		comments: node.comments.nodes.map((c) => ({
+			id: c.id,
+			author: { login: c.author?.login ?? 'ghost', avatar: c.author?.avatarUrl ?? null },
+			html: c.bodyHTML,
+			at: c.createdAt,
+			url: c.url
+		}))
+	};
+}
+
+async function graphqlWrite(token: string, query: string, variables: Record<string, unknown>) {
+	const res = await gh(token, '/graphql', {
+		method: 'POST',
+		body: JSON.stringify({ query, variables })
+	});
+	const result = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] };
+	if (!res.ok || result.errors?.length)
+		return result.errors?.[0]?.message ?? `GitHub returned ${res.status}.`;
+	return null;
+}
 
 const MARK_VIEWED = `mutation($id: ID!, $path: String!) {
   markFileAsViewed(input: { pullRequestId: $id, path: $path }) { clientMutationId }
@@ -175,6 +276,71 @@ const app = routes()
 			'Cache-Control': 'private, no-store'
 		});
 	})
+	.get('/api/diff/:owner/:repo/:number/threads', async (c) => {
+		const { owner, repo, number } = c.req.param();
+		if (!validPull(owner, repo, number)) return c.json({ error: 'Not a pull request.' }, 400);
+		const token = await userToken(c.env, c.get('user'));
+		const threads: ReviewThread[] = [];
+		let after: string | null = null;
+		for (let page = 0; page < THREAD_PAGES_LIMIT; page++) {
+			const res = await gh(token, '/graphql', {
+				method: 'POST',
+				body: JSON.stringify({
+					query: REVIEW_THREADS_QUERY,
+					variables: { o: owner, r: repo, n: Number(number), after }
+				})
+			});
+			if (!res.ok)
+				return c.json(
+					{ error: `GitHub did not give the review threads (${res.status}).` },
+					passThroughFailure(res.status)
+				);
+			const result = (await res.json()) as ReviewThreadsPage;
+			const found = result.data?.repository?.pullRequest?.reviewThreads;
+			if (!found)
+				return c.json(
+					{ error: result.errors?.[0]?.message ?? 'GitHub found no pull request.' },
+					404
+				);
+			threads.push(...found.nodes.map(toReviewThread));
+			if (!found.pageInfo.hasNextPage) break;
+			after = found.pageInfo.endCursor;
+		}
+		return c.json({ threads }, 200, { 'Cache-Control': 'private, no-store' });
+	})
+	.post('/api/diff/threads/reply', json<{ threadId: string; body: string }>(), async (c) => {
+		if (c.env.GITHUB_WRITES === 'off') return c.json({ error: WRITES_OFF }, 403);
+		const b = c.req.valid('json');
+		if (
+			typeof b.threadId !== 'string' ||
+			!NODE_ID.test(b.threadId) ||
+			typeof b.body !== 'string' ||
+			!b.body.trim() ||
+			b.body.length > MAX_REPLY_LENGTH
+		)
+			return c.json({ error: 'Not a reply to a review thread.' }, 400);
+		const failure = await graphqlWrite(await userToken(c.env, c.get('user')), REPLY_TO_THREAD, {
+			id: b.threadId,
+			body: b.body
+		});
+		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+	})
+	.post('/api/diff/threads/resolve', json<{ threadId: string; resolved: boolean }>(), async (c) => {
+		if (c.env.GITHUB_WRITES === 'off') return c.json({ error: WRITES_OFF }, 403);
+		const b = c.req.valid('json');
+		if (
+			typeof b.threadId !== 'string' ||
+			!NODE_ID.test(b.threadId) ||
+			typeof b.resolved !== 'boolean'
+		)
+			return c.json({ error: 'Not a review thread.' }, 400);
+		const failure = await graphqlWrite(
+			await userToken(c.env, c.get('user')),
+			b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD,
+			{ id: b.threadId }
+		);
+		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+	})
 	.get('/api/diff/:owner/:repo/:number/viewed', async (c) => {
 		const { owner, repo, number } = c.req.param();
 		if (!validPull(owner, repo, number)) return c.json({ error: 'Not a pull request.' }, 400);
@@ -210,8 +376,7 @@ const app = routes()
 		'/api/diff/viewed',
 		json<{ pullRequestId: string; path: string; viewed: boolean }>(),
 		async (c) => {
-			if (c.env.GITHUB_WRITES === 'off')
-				return c.json({ error: 'GitHub writes are off in this copy (GITHUB_WRITES=off).' }, 403);
+			if (c.env.GITHUB_WRITES === 'off') return c.json({ error: WRITES_OFF }, 403);
 			const b = c.req.valid('json');
 			if (
 				typeof b.pullRequestId !== 'string' ||
