@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { MediaQuery, SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
@@ -62,6 +63,17 @@
 	} = $props();
 
 	const MAX_LISTED_FILES = PULL_FILES_PER_PAGE * PULL_FILES_MAX_PAGES;
+	const LAYOUT_KEY = 'hush:diff-layout';
+	const SPLIT_LAYOUT = 'split';
+
+	const wide = new MediaQuery('min-width: 1024px');
+	let splitChosen = $state(browser && localStorage.getItem(LAYOUT_KEY) === SPLIT_LAYOUT);
+	const split = $derived(splitChosen && wide.current);
+	function setSplit(on: boolean) {
+		splitChosen = on;
+		if (on) localStorage.setItem(LAYOUT_KEY, SPLIT_LAYOUT);
+		else localStorage.removeItem(LAYOUT_KEY);
+	}
 	const SINCE_PARAM = 'since';
 	const SINCE_REVIEW = 'review';
 
@@ -225,6 +237,7 @@
 				const file = files[Math.max(cursor, 0)];
 				if (file) toggle(file);
 			},
+			'page.splitView': () => wide.current && setSplit(!splitChosen),
 			'page.viewFile': () => {
 				const file = files[Math.max(cursor, 0)];
 				if (file) void toggleViewed(file);
@@ -364,7 +377,33 @@
 				<span class="tabular-nums">{viewedCount} of {shownFiles.length} viewed</span>
 			{/if}
 			{#if files.length}
-				<span class="ml-auto flex gap-3">
+				<span class="ml-auto flex items-center gap-3">
+					{#if wide.current}
+						<span
+							class="flex items-center rounded-md border p-0.5"
+							role="group"
+							aria-label="Layout"
+						>
+							<button
+								type="button"
+								aria-pressed={!split}
+								class={cn(
+									'rounded px-2 py-0.5 hover:text-foreground',
+									!split && 'bg-muted text-foreground'
+								)}
+								onclick={() => setSplit(false)}>Unified</button
+							>
+							<button
+								type="button"
+								aria-pressed={split}
+								class={cn(
+									'rounded px-2 py-0.5 hover:text-foreground',
+									split && 'bg-muted text-foreground'
+								)}
+								onclick={() => setSplit(true)}>Split</button
+							>
+						</span>
+					{/if}
 					<button
 						type="button"
 						class="underline-offset-2 hover:text-foreground hover:underline"
@@ -438,6 +477,7 @@
 					foldReason={foldReason(file)}
 					current={i === cursor}
 					viewedState={viewed[file.filename]}
+					{split}
 					ontoggle={() => {
 						cursor = i;
 						toggle(file);

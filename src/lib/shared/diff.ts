@@ -237,3 +237,151 @@ export function rangeSinceReview(commits: PullCommit[], reviewedOid: string): Re
 		? { kind: 'by-commit', commits: newCommits.filter((c) => !c.merge) }
 		: { kind: 'combined', commits: newCommits };
 }
+
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+	ts: 'typescript',
+	mts: 'typescript',
+	cts: 'typescript',
+	tsx: 'tsx',
+	js: 'javascript',
+	mjs: 'javascript',
+	cjs: 'javascript',
+	jsx: 'jsx',
+	json: 'json',
+	jsonc: 'jsonc',
+	md: 'markdown',
+	mdx: 'mdx',
+	svelte: 'svelte',
+	vue: 'vue',
+	astro: 'astro',
+	py: 'python',
+	rb: 'ruby',
+	go: 'go',
+	rs: 'rust',
+	java: 'java',
+	kt: 'kotlin',
+	kts: 'kotlin',
+	swift: 'swift',
+	c: 'c',
+	h: 'c',
+	cc: 'cpp',
+	cpp: 'cpp',
+	hpp: 'cpp',
+	cs: 'csharp',
+	php: 'php',
+	sh: 'shellscript',
+	bash: 'shellscript',
+	zsh: 'shellscript',
+	yml: 'yaml',
+	yaml: 'yaml',
+	toml: 'toml',
+	sql: 'sql',
+	css: 'css',
+	scss: 'scss',
+	sass: 'sass',
+	less: 'less',
+	html: 'html',
+	htm: 'html',
+	xml: 'xml',
+	svg: 'xml',
+	graphql: 'graphql',
+	gql: 'graphql',
+	ex: 'elixir',
+	exs: 'elixir',
+	scala: 'scala',
+	lua: 'lua',
+	dart: 'dart',
+	tf: 'hcl',
+	hcl: 'hcl',
+	ini: 'ini',
+	prisma: 'prisma',
+	proto: 'proto',
+	r: 'r',
+	hs: 'haskell',
+	clj: 'clojure',
+	erl: 'erlang',
+	zig: 'zig',
+	nix: 'nix',
+	hbs: 'handlebars',
+	pl: 'perl',
+	ps1: 'powershell',
+	groovy: 'groovy',
+	ml: 'ocaml',
+	fs: 'fsharp',
+	jl: 'julia',
+	sol: 'solidity',
+	tex: 'latex'
+};
+
+const LANGUAGE_BY_FILE_NAME: Record<string, string> = {
+	Dockerfile: 'dockerfile',
+	Makefile: 'make',
+	Gemfile: 'ruby',
+	Rakefile: 'ruby',
+	'.bashrc': 'shellscript',
+	'.zshrc': 'shellscript'
+};
+
+export function languageForPath(path: string): string | null {
+	const { name } = splitPath(path);
+	if (LANGUAGE_BY_FILE_NAME[name]) return LANGUAGE_BY_FILE_NAME[name];
+	if (name.startsWith('Dockerfile.')) return 'dockerfile';
+	const dot = name.lastIndexOf('.');
+	if (dot <= 0) return null;
+	return LANGUAGE_BY_EXTENSION[name.slice(dot + 1).toLowerCase()] ?? null;
+}
+
+export interface HunkSides {
+	oldText: string;
+	newText: string;
+	sideLine: { side: 'old' | 'new'; index: number }[];
+}
+
+export function hunkSides(hunk: DiffHunk): HunkSides {
+	const oldLines: string[] = [];
+	const newLines: string[] = [];
+	const sideLine: HunkSides['sideLine'] = [];
+	for (const line of hunk.lines) {
+		if (line.kind === 'del') {
+			sideLine.push({ side: 'old', index: oldLines.length });
+			oldLines.push(line.text);
+		} else if (line.kind === 'note') {
+			sideLine.push({ side: 'new', index: -1 });
+		} else {
+			if (line.kind === 'context') oldLines.push(line.text);
+			sideLine.push({ side: 'new', index: newLines.length });
+			newLines.push(line.text);
+		}
+	}
+	return { oldText: oldLines.join('\n'), newText: newLines.join('\n'), sideLine };
+}
+
+export interface SplitRow {
+	left: { line: DiffLine; at: number } | null;
+	right: { line: DiffLine; at: number } | null;
+}
+
+export function splitRows(hunk: DiffHunk): SplitRow[] {
+	const rows: SplitRow[] = [];
+	let dels: { line: DiffLine; at: number }[] = [];
+	let adds: { line: DiffLine; at: number }[] = [];
+	const flush = () => {
+		for (let i = 0; i < Math.max(dels.length, adds.length); i++)
+			rows.push({ left: dels[i] ?? null, right: adds[i] ?? null });
+		dels = [];
+		adds = [];
+	};
+	hunk.lines.forEach((line, at) => {
+		if (line.kind === 'del') {
+			if (adds.length) flush();
+			dels.push({ line, at });
+		} else if (line.kind === 'add') {
+			adds.push({ line, at });
+		} else {
+			flush();
+			rows.push({ left: { line, at }, right: { line, at } });
+		}
+	});
+	flush();
+	return rows;
+}

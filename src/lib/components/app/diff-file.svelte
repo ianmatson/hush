@@ -1,8 +1,11 @@
 <script lang="ts">
 	import {
 		fileAnchor,
+		languageForPath,
 		parsePatch,
 		splitPath,
+		splitRows,
+		type DiffLine,
 		type DiffLineKind,
 		type FileViewedState,
 		type FoldReason,
@@ -10,6 +13,7 @@
 		type PullFileStatus
 	} from '$lib/shared/diff';
 	import { cn } from '$lib/utils';
+	import { highlightHunks, type HighlightedToken } from '$lib/highlight';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -20,6 +24,7 @@
 		foldReason,
 		current,
 		viewedState,
+		split,
 		ontoggle,
 		onviewed
 	}: {
@@ -28,12 +33,31 @@
 		foldReason: FoldReason;
 		current: boolean;
 		viewedState: FileViewedState | undefined;
+		split: boolean;
 		ontoggle: () => void;
 		onviewed: () => void;
 	} = $props();
 
 	const hunks = $derived(folded || !file.patch ? [] : parsePatch(file.patch));
 	const path = $derived(splitPath(file.filename));
+	const language = $derived(languageForPath(file.filename));
+
+	let tokens = $state<HighlightedToken[][][] | null>(null);
+	$effect(() => {
+		const forHunks = hunks;
+		const forLanguage = language;
+		tokens = null;
+		if (!forLanguage || !forHunks.length) return;
+		let current = true;
+		void highlightHunks(forHunks, forLanguage)
+			.then((highlighted) => {
+				if (current) tokens = highlighted;
+			})
+			.catch(() => {});
+		return () => {
+			current = false;
+		};
+	});
 
 	const STATUS_LABEL: Partial<Record<PullFileStatus, { label: string; tone: string }>> = {
 		added: { label: 'Added', tone: 'text-signal-merge' },
@@ -61,7 +85,33 @@
 	};
 	const PREFIX: Record<DiffLineKind, string> = { add: '+', del: '−', context: ' ', note: ' ' };
 	const status = $derived(STATUS_LABEL[file.status]);
+	const hunkHeader = (hunk: (typeof hunks)[number]) =>
+		`@@ −${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@ ${hunk.section}`;
 </script>
+
+{#snippet code(line: DiffLine, h: number, l: number)}{@const lineTokens =
+		tokens?.[h]?.[l]}{#if lineTokens?.length}{#each lineTokens as token, k (k)}<span
+				style:color={token.color}
+				class={token.italic ? 'italic' : undefined}>{token.content}</span
+			>{/each}{:else}{line.text}{/if}{/snippet}
+
+{#snippet splitHalf(cell: { line: DiffLine; at: number } | null, h: number, side: 'old' | 'new')}
+	{#if cell}
+		{@const tone = cell.line.kind === 'context' ? '' : ROW_TONE[cell.line.kind]}
+		<td
+			class={cn(
+				'px-2 text-right align-top text-muted-foreground tabular-nums select-none',
+				cell.line.kind === 'context' ? '' : NUMBER_TONE[cell.line.kind]
+			)}>{(side === 'old' ? cell.line.oldLine : cell.line.newLine) ?? ''}</td
+		>
+		<td class={cn('pr-3 align-top break-all whitespace-pre-wrap', tone)}
+			>{@render code(cell.line, h, cell.at)}</td
+		>
+	{:else}
+		<td class="bg-muted/40"></td>
+		<td class="bg-muted/40"></td>
+	{/if}
+{/snippet}
 
 <section
 	id={fileAnchor(file.filename)}
@@ -139,15 +189,35 @@
 					rel="noreferrer">Open it on GitHub</a
 				>{/if}
 		</p>
+	{:else if split}
+		<table class="w-full table-fixed border-collapse font-mono text-xs leading-5">
+			<colgroup>
+				<col class="w-14" />
+				<col />
+				<col class="w-14" />
+				<col />
+			</colgroup>
+			{#each hunks as hunk, h (h)}
+				<tbody>
+					<tr class="bg-signal-reply/8 text-muted-foreground">
+						<td colspan="4" class="truncate px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
+					</tr>
+					{#each splitRows(hunk) as row, r (r)}
+						<tr>
+							{@render splitHalf(row.left, h, 'old')}
+							{@render splitHalf(row.right, h, 'new')}
+						</tr>
+					{/each}
+				</tbody>
+			{/each}
+		</table>
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse font-mono text-xs leading-5">
 				{#each hunks as hunk, h (h)}
 					<tbody>
 						<tr class="bg-signal-reply/8 text-muted-foreground">
-							<td colspan="3" class="px-2 py-0.5 whitespace-pre"
-								>@@ −{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@ {hunk.section}</td
-							>
+							<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
 						</tr>
 						{#each hunk.lines as line, l (l)}
 							<tr class={ROW_TONE[line.kind]}>
@@ -166,7 +236,7 @@
 								<td class="pr-4 whitespace-pre"
 									><span class="inline-block w-4 text-center text-muted-foreground select-none"
 										>{PREFIX[line.kind]}</span
-									>{line.text}</td
+									>{@render code(line, h, l)}</td
 								>
 							</tr>
 						{/each}

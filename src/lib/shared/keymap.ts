@@ -116,6 +116,7 @@ export const COMMANDS: KeyCommand[] = [
 		scope: 'page',
 		keys: ['v']
 	},
+	{ id: 'page.splitView', label: 'Files: split or unified view', scope: 'page', keys: ['s'] },
 
 	{ id: 'editor.send', label: 'Send the comment', scope: 'editor', keys: ['Mod+Enter'] },
 	{ id: 'editor.suggestNext', label: 'Suggestions: next', scope: 'editor', keys: ['ArrowDown'] },

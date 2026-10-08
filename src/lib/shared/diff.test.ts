@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildFileTree,
 	fileAnchor,
+	hunkSides,
+	languageForPath,
 	filesInTreeOrder,
 	foldedByDefault,
 	isGeneratedFile,
@@ -9,6 +11,7 @@ import {
 	pullFilePageCount,
 	rangeSinceReview,
 	splitPath,
+	splitRows,
 	type FileTreeNode,
 	type PullCommit,
 	type PullFile
@@ -181,5 +184,48 @@ describe('rangeSinceReview', () => {
 	it('says when the reviewed commit is gone, and when nothing is new', () => {
 		expect(rangeSinceReview([commit('b')], 'a')).toEqual({ kind: 'reviewed-commit-missing' });
 		expect(rangeSinceReview([commit('a')], 'a')).toEqual({ kind: 'all' });
+	});
+});
+
+describe('languageForPath', () => {
+	it('finds the language by extension or file name, and gives null otherwise', () => {
+		expect(languageForPath('src/app.ts')).toBe('typescript');
+		expect(languageForPath('src/App.TSX')).toBe('tsx');
+		expect(languageForPath('docs/page.mdx')).toBe('mdx');
+		expect(languageForPath('Dockerfile')).toBe('dockerfile');
+		expect(languageForPath('deploy/Dockerfile.prod')).toBe('dockerfile');
+		expect(languageForPath('.env')).toBe(null);
+		expect(languageForPath('LICENSE')).toBe(null);
+		expect(languageForPath('data.unknown')).toBe(null);
+	});
+});
+
+describe('hunkSides', () => {
+	it('puts context on both sides, deletions on the old side, and additions on the new side', () => {
+		const [hunk] = parsePatch(['@@ -1,3 +1,3 @@', ' a', '-b', '+B', ' c'].join('\n'));
+		expect(hunkSides(hunk)).toEqual({
+			oldText: 'a\nb\nc',
+			newText: 'a\nB\nc',
+			sideLine: [
+				{ side: 'new', index: 0 },
+				{ side: 'old', index: 1 },
+				{ side: 'new', index: 1 },
+				{ side: 'new', index: 2 }
+			]
+		});
+	});
+});
+
+describe('splitRows', () => {
+	it('pairs deletions with the additions after them, and keeps context on both sides', () => {
+		const [hunk] = parsePatch(['@@ -1,4 +1,4 @@', ' a', '-b', '-c', '+B', ' d', '+e'].join('\n'));
+		const at = (side: { at: number } | null) => side?.at ?? null;
+		expect(splitRows(hunk).map((r) => [at(r.left), at(r.right)])).toEqual([
+			[0, 0],
+			[1, 3],
+			[2, null],
+			[4, 4],
+			[null, 5]
+		]);
 	});
 });

@@ -36,6 +36,8 @@ The Files tab shows the changes of the pull request, file by file, as on GitHub.
 
 - On a wide screen, the files are in a tree on the left, with their folders. Click a folder to fold it, and click a file to go to its changes.
 - Each file shows its changed lines, with the old and the new line numbers. Added lines are green, deleted lines are red.
+- The code has syntax colors for the common languages, in the colors of your theme.
+- On a wide screen, **Unified** and **Split** (or {{key:page.splitView}}) choose the layout. **Split** shows the old file on the left and the new file on the right. Hush remembers your choice. Narrow screens always show **Unified**.
 - {{key:page.nextFile}} and {{key:page.prevFile}} go to the next and the previous file. {{key:page.foldFile}} folds or unfolds the file. **Fold all** and **Unfold all** do this for every file.
 - Lock files, minified files, deleted files, and files with more than 400 changed lines start folded. Choose **Show the diff** to see them.
 - GitHub shows no diff for binary files and very large files. Open them on GitHub with the link in their header.
