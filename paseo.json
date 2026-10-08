@@ -1,0 +1,15 @@
+{
+	"worktree": {
+		"setup": "sh scripts/setup-worktree.sh"
+	},
+	"scripts": {
+		"dev": {
+			"type": "service",
+			"command": "pnpm dev",
+			"port": 5173
+		},
+		"check": { "command": "pnpm check" },
+		"test": { "command": "pnpm test" },
+		"lint": { "command": "pnpm lint" }
+	}
+}

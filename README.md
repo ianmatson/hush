@@ -64,6 +64,8 @@ To test with your real account without changing anything on GitHub, add `GITHUB_
 
 To test the production build (service worker, push): `pnpm preview` → http://localhost:8787.
 
+[Paseo](https://paseo.sh) worktrees set themselves up from `paseo.json`: `scripts/setup-worktree.sh` installs packages, copies `.dev.vars` and the local Wrangler state (D1, Durable Objects) from the main checkout, and applies the local migrations. The `dev` service runs `pnpm dev` on :5173, the port that the development OAuth callbacks use, so one worktree at a time can run it.
+
 ```sh
 pnpm test         # classifier, Web Push encryption (checked against http_ece), crypto
 pnpm check        # svelte-check + Worker tsc
