@@ -16,7 +16,7 @@ export interface SourceCount {
 }
 
 const SCOPING =
-	/(?:^|\s)(?:author|assignee|mentions|commenter|involves|reviewed-by|review-requested|user-review-requested|team-review-requested|team|repo|org|user):\S/i;
+	/(?:^|\s)(?:author|assignee|mentions|commenter|involves|reviewed-by|review-requested|user-review-requested|team-review-requested|team|repo|org|user|project):\S/i;
 
 export const searchIsUnscoped = (query: string, scope = '') => !SCOPING.test(`${query} ${scope}`);
 export const MAX_TRACKED = 50;

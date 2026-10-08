@@ -15,6 +15,17 @@ You sign in with GitHub. Hush asks for three scopes:
 
 GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
 
+### Project boards
+
+Hush can also ask for one optional scope, `project`. Only give it if you use GitHub project boards. With it:
+
+- A [source](/docs/pull-requests-and-issues#project-boards) can find the items in some columns of a board, such as “This week”.
+- The [peek](/docs/peek#what-it-shows) shows the item's project status. You can change the status, move the item to another project, or remove it from the project.
+
+To give it, go to **Settings → General → GitHub access** and choose **Give project access**. GitHub asks you to approve the new scope. This browser remembers the choice, and signing in again asks for the scope again.
+
+For a [custom token](#custom-token) from the GitHub CLI, run `gh auth refresh -s project`, and then replace the token with the output of `gh auth token`.
+
 Hush stores the token encrypted. It acts on GitHub **only when you do**: when you choose Done, Mute, Read, or an action or a reaction in the [peek](/docs/peek). The Done and Snooze buttons on a push alert act the same way as in Hush. It never writes by itself. The one exception is reading: a thread that you read in the peek is marked as read on GitHub (you can turn this off with [`peekMarksRead`](/docs/settings#peekmarksread)).
 
 ## What Hush does on GitHub
@@ -27,6 +38,7 @@ Hush stores the token encrypted. It acts on GitHub **only when you do**: when yo
 | Unread                              | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
 | Snooze, Move to inbox, Unmute, Hide | Nothing. These stay in Hush.                                                        |
 | Actions in the peek                 | The action itself: a review, a comment, a merge, a re-run, a close.                 |
+| Project status in the peek          | Changes the item's status, moves it to another project, or removes it.              |
 | A reaction in the peek              | Adds your reaction, or removes it.                                                  |
 
 ## When an org is missing

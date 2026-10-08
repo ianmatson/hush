@@ -1,4 +1,5 @@
 import { isBot } from './bots';
+import { readsBoard } from './projects';
 import type {
 	ActionKind,
 	DashItem,
@@ -49,7 +50,8 @@ export function expandSections(
 	const skipped: Record<string, string> = {};
 	for (const s of sections) {
 		if (!s.enabled) continue;
-		const q = [s.query.trim(), dash.scope.trim()].filter(Boolean).join(' ');
+		const scope = readsBoard(s.query) ? '' : dash.scope.trim();
+		const q = [s.query.trim(), scope].filter(Boolean).join(' ');
 		if (REVIEW_REQUESTED_ME.test(q) && dash.excludedTeams.length && !q.includes('@team')) {
 			queries.push({ section: s.id, q, teams: tracked.map((t) => t.slug), orDirect: true });
 			continue;

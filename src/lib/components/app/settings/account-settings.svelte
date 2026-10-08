@@ -13,6 +13,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import { projectAccessOf } from '$lib/shared/projects';
 
 	const me = createQuery(meQuery);
 	const sessions = createQuery(sessionsQuery);
@@ -77,6 +78,7 @@
 
 	// A custom token, in place of the one from your GitHub sign-in.
 	const custom = $derived(me.data?.tokenSource === 'own');
+	const projectAccess = $derived(projectAccessOf(me.data?.scopes ?? []));
 	let editing = $state(false);
 	let token = $state('');
 	let saving = $state(false);
@@ -275,6 +277,34 @@
 						</div>
 					</form>
 				{/if}
+				<div class="grid gap-2 border-t pt-4">
+					<span class="text-xs font-medium">Project boards</span>
+					{#if projectAccess === 'edit'}
+						<p class="text-xs leading-relaxed text-muted-foreground">
+							Hush can read and change your GitHub projects: sources that use <code>status:</code>,
+							and the status of an item in the peek.
+						</p>
+					{:else if custom}
+						<p class="text-xs leading-relaxed text-muted-foreground">
+							Your custom token has no <code>project</code> scope. Run
+							<code>gh auth refresh -s project</code>, then replace the token with the one from
+							<code>gh auth token</code>.
+						</p>
+					{:else}
+						<p class="text-xs leading-relaxed text-muted-foreground">
+							Optional. With project access, a source can find the items in a column of a project
+							board, and the peek shows the item's status, which you can change.
+						</p>
+						<div>
+							<Button
+								variant="outline"
+								size="sm"
+								href="/api/auth/github?add=project"
+								data-sveltekit-reload>Give project access</Button
+							>
+						</div>
+					{/if}
+				</div>
 				<div class="grid gap-2 border-t pt-4">
 					<span class="text-xs font-medium">Orgs your GitHub sign-in can see</span>
 					{#if !access && orgNote.off && !loading}

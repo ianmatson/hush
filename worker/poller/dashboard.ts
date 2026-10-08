@@ -22,10 +22,27 @@ import {
 	TRACKED_SOURCE,
 	type SourceCount
 } from '../../src/lib/shared/sources';
+import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
+import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
+import { boardCount, boardShort } from '../projects';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
 
 const RETRY_AFTER = 60_000;
+const DASH_KINDS: DashKind[] = ['pr', 'issue'];
+
+async function findItems(token: string, queries: ExpandedQuery[]) {
+	const onBoards = queries.filter((q) => readsBoard(q.q));
+	const searched = queries.filter((q) => !readsBoard(q.q));
+	const [boards, searches] = await Promise.all([
+		boardShort(token, onBoards),
+		searchShort(token, searched)
+	]);
+	return {
+		hits: [...searches.hits, ...boards.hits],
+		errors: [...new Set([...searches.errors, ...boards.errors])].slice(0, 3)
+	};
+}
 const marks = (n: number) => Array(n).fill('?').join(',');
 
 /** The PR and issue dashboards, from saved searches, cached for 15 minutes. */
@@ -77,9 +94,16 @@ export abstract class PollerDashboard extends PollerSync {
 			}))
 		);
 		const asked = searches.slice(0, MAX_SOURCE_COUNT_SEARCHES);
-		const counts = await searchCounts(
+		const onBoards = asked.filter((s) => boardQueryOf(s.q));
+		const boardCounts = new Map(
+			await Promise.all(onBoards.map(async (s) => [s, await boardCount(who.token, s.q)] as const))
+		);
+		const searchedCounts = await searchCounts(
 			who.token,
-			asked.map((s) => s.q)
+			asked.filter((s) => !boardCounts.has(s)).map((s) => s.q)
+		);
+		const counts = asked.map((s) =>
+			boardCounts.has(s) ? boardCounts.get(s)! : (searchedCounts.shift() ?? null)
 		);
 		const out: SourceCount = { pr: null, issue: null };
 		asked.forEach((s, k) => (out[s.kind] = (out[s.kind] ?? 0) + (counts[k] ?? 0)));
@@ -89,6 +113,15 @@ export abstract class PollerDashboard extends PollerSync {
 	protected async rebuildTracked(kind: DashKind): Promise<void> {
 		await this.buildDashboard(kind, true, false);
 		this.broadcast({ type: 'dash', kind });
+	}
+
+	async rebuildBoards(): Promise<void> {
+		const who = await this.who();
+		if (!who) return;
+		const kinds = DASH_KINDS.filter((kind) =>
+			sectionsFor(kind, who.settings.sources).some((s) => s.enabled && readsBoard(s.query))
+		);
+		await Promise.all(kinds.map((kind) => this.rebuildTracked(kind)));
 	}
 
 	/**
@@ -125,7 +158,7 @@ export abstract class PollerDashboard extends PollerSync {
 
 		const { teams, error: teamError } = await this.teams();
 		const { queries, skipped } = expandSections(sections, dash, teams);
-		const { hits, errors: searchErrors } = await searchShort(who.token, queries);
+		const { hits, errors: searchErrors } = await findItems(who.token, queries);
 
 		// Details: what Hush has, and only what needs a new read from GitHub.
 		const latest = new Map(hits.map((h) => [h.key, h]));
