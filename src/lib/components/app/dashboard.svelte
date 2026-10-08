@@ -284,6 +284,18 @@
 		const timer = setTimeout(() => api.seen([i.id]).catch(() => {}), 1500);
 		return () => clearTimeout(timer);
 	});
+	$effect(() => {
+		const k = kind;
+		untrack(() => {
+			section = null;
+			categoryFilter = null;
+			tagFilter = null;
+			selectedId = null;
+			sel.clear();
+			groupMotion = false;
+			collapsed = readCollapsed(k);
+		});
+	});
 	// Back on the page that owns the peek (after another tab): the cursor goes to the item it
 	// shows. Not when this page just took the peek over: then the cursor is where you chose.
 	let restoredFor: string | null = null;
@@ -566,18 +578,6 @@
 		}
 	}
 
-	$effect(() => {
-		const k = kind;
-		untrack(() => {
-			section = null;
-			categoryFilter = null;
-			tagFilter = null;
-			selectedId = null;
-			sel.clear();
-			groupMotion = false;
-			collapsed = readCollapsed(k);
-		});
-	});
 	// (After the effect above, which resets the cursor when the page opens.)
 	// The command palette chose an item on this dashboard: show it (clear filters, open its
 	// group) and peek it.
