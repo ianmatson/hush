@@ -182,12 +182,19 @@ describe('expandSections', () => {
 });
 
 describe('filters, sorting, validation', () => {
-	it('hides drafts and bot PRs by others unless my review is requested', () => {
+	it('hides drafts and bot PRs by others unless my review is requested or I am assigned', () => {
 		expect(keepItem(base({ draft: true }), 'ian', DEFAULT_DASH)).toBe(false);
 		expect(keepItem(base({ draft: true, author: 'ian' }), 'ian', DEFAULT_DASH)).toBe(true);
 		expect(keepItem(base({ author: 'dependabot[bot]' }), 'ian', DEFAULT_DASH)).toBe(false);
 		expect(
 			keepItem(base({ author: 'dependabot[bot]', requestedMe: true }), 'ian', DEFAULT_DASH)
+		).toBe(true);
+		expect(
+			keepItem(
+				base({ author: 'posthog', authorIsBot: true, assignees: ['Ian'] }),
+				'ian',
+				DEFAULT_DASH
+			)
 		).toBe(true);
 	});
 	it('sorts your turn first, then priority, then the longest wait', () => {

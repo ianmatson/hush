@@ -14,7 +14,7 @@ If the org uses SAML single sign-on and the inbox says “GitHub hides notificat
 Hush keeps only the notifications about the PRs and issues that it tracks. See [What comes in](/docs/inbox#what-comes-in).
 
 - Check that one of your [sources](/docs/pull-requests-and-issues#sources) finds the PR or issue: look for it on the Pull requests or Issues tab. If no source finds it, change a source, or add the item to **Tracked items** in **Settings → Sources**.
-- Items that the tabs hide by default are not tracked: drafts that others opened, and PRs that bots opened. See [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
+- Items that the tabs hide by default are not tracked: drafts that others opened, and PRs and issues that bots or GitHub Apps opened. Turn them on in **Settings → Sources → Filters**. See [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 - Notifications that are not about a PR or issue do not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Read them on GitHub.
 - A notification can come before a source finds its item. Hush runs the sources again and gets unread notifications again at the next sync, so it comes in within about 15 minutes.
 - A notification about a PR or issue that your sources stopped finding comes in for 14 days more. After you change your sources, it stops at once.
@@ -60,7 +60,7 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 - Check the **Scope**: it is added to every search.
 - `@team` sources need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
 - Hidden items: press {{key:dash.showHidden}} to show them.
-- Drafts that others opened and PRs that bots opened are hidden by default: see [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
+- Drafts that others opened and PRs and issues that bots opened are hidden by default (**Settings → Sources → Filters**): see [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 
 ## An item is in the wrong category
 

@@ -79,7 +79,7 @@ A source can read a GitHub project board. Name the project with `project:` and o
 
 A search with `project:` but no `status:` is a normal GitHub search: it finds every open item in the project, whatever its column.
 
-More options are only in [settings.json](/docs/settings): hide others' drafts ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)), hide bots' PRs ([`dash.hideBots`](/docs/settings#dash-hidebots)), and the stale days.
+**Filters** in **Settings → Sources** hide drafts that others opened ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)) and PRs and issues that bots opened ([`dash.hideBots`](/docs/settings#dash-hidebots)), such as dependabot or a GitHub App. Both are on by default. The stale days are only in [settings.json](/docs/settings).
 
 ## Categories and tags
 

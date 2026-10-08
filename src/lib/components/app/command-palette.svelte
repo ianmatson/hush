@@ -37,6 +37,10 @@
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import History from '@lucide/svelte/icons/history';
 	import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
+	import ToggleLeft from '@lucide/svelte/icons/toggle-left';
+	import ToggleRight from '@lucide/svelte/icons/toggle-right';
+	import { saveSettings } from '$lib/save-settings';
+	import { SETTING_TOGGLES } from '$lib/setting-toggles';
 
 	/**
 	 * ⌘K / Ctrl+K: find a thread, PR, or issue (Enter peeks, ⌘Enter opens GitHub), run an action on
@@ -237,12 +241,29 @@
 		}
 	]);
 
+	const settingEntries = $derived.by((): Entry[] => {
+		const settings = me.data?.settings;
+		if (!settings) return [];
+		return SETTING_TOGGLES.map((t) => {
+			const on = t.isOn(settings);
+			return {
+				id: `setting:${t.key}`,
+				label: `${on ? 'Turn off' : 'Turn on'}: ${t.label}`,
+				icon: on ? ToggleRight : ToggleLeft,
+				keywords: ['setting', 'toggle', 'enable', 'disable', t.key, ...t.keywords],
+				where: on ? 'On' : 'Off',
+				run: () => saveSettings(t.patch(settings, !on), `${t.label}: ${on ? 'off' : 'on'}`)
+			};
+		});
+	});
+
 	const pageCommands = $derived<Entry[]>(palette.open ? palette.pageCommands : []);
 	const all = $derived([
 		...pageCommands,
 		...threadEntries,
 		...dashEntries,
 		...goEntries,
+		...settingEntries,
 		...globalCommands
 	]);
 	const byId = $derived(new Map(all.map((e) => [e.id, e])));
@@ -321,6 +342,7 @@
 		{ heading: 'Inbox', items: search.trim() ? threadEntries : [] },
 		{ heading: 'Pull requests and issues', items: search.trim() ? dashEntries : [] },
 		{ heading: 'Go to', items: goEntries.filter((e) => !e.id.startsWith('go:view:')) },
+		{ heading: 'Settings', items: search.trim() ? settingEntries : [] },
 		{
 			heading: 'Commands',
 			// Themes only once you type ("theme", "gruvbox"…): 15 rows are noise otherwise.
