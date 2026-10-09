@@ -470,7 +470,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 px-3 pt-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
 	<nav
 		aria-label="Changed files"
-		class="hidden self-start lg:sticky lg:top-[6.5rem] lg:block lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto"
+		class="hidden self-start lg:sticky lg:top-[calc(6.75rem+1px)] lg:block lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto"
 	>
 		<ul class="grid grid-cols-[minmax(0,1fr)] text-xs">
 			{@render treeNodes(tree, 0)}
