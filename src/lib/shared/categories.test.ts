@@ -215,14 +215,21 @@ describe('defaults', () => {
 	it('are valid', () => {
 		expect(validateCategoryGroups(DEFAULT_CATEGORY_GROUPS)).toBeNull();
 	});
-	it('are one effort group that Jev places', () => {
-		expect(DEFAULT_CATEGORY_GROUPS).toHaveLength(1);
-		const [effort] = DEFAULT_CATEGORY_GROUPS;
-		expect(effort.multiple).toBe(false);
-		expect(effort.categories.map((c) => c.name)).toEqual(['Low', 'Medium', 'High']);
-		expect(Object.keys(groupChoice(effort)!.options)).toHaveLength(3);
-		const t = thread(jevChose(effort, 'high-effort'));
-		expect(place(t, DEFAULT_CATEGORY_GROUPS).categories).toEqual(['high-effort']);
+	it('are an effort group and an impact group that Jev places', () => {
+		expect(DEFAULT_CATEGORY_GROUPS.map((g) => g.id)).toEqual(['effort', 'impact']);
+		for (const g of DEFAULT_CATEGORY_GROUPS) {
+			expect(g.multiple).toBe(false);
+			expect(g.categories.map((c) => c.name)).toEqual(['Low', 'Medium', 'High']);
+			expect(Object.keys(groupChoice(g)!.options)).toHaveLength(3);
+		}
+		const [effort, impact] = DEFAULT_CATEGORY_GROUPS;
+		const t = thread({
+			jevChoices: {
+				...jevChose(effort, 'high-effort').jevChoices,
+				...jevChose(impact, 'low-impact').jevChoices
+			}
+		});
+		expect(place(t, DEFAULT_CATEGORY_GROUPS).categories).toEqual(['high-effort', 'low-impact']);
 	});
 });
 

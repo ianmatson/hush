@@ -25,7 +25,7 @@ Hush checks the JSON and shows an error if something is wrong; nothing is saved 
 ## Write settings.json
 
 - Write only what differs from the defaults. Leave out every setting that you do not change.
-- **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their `categoryGroups` puts back the default Effort group.
+- **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their `categoryGroups` puts back the default Effort and Impact groups.
 - `categoryGroups`, `views`, `sources`, `tracked`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
 - Every key, type, default, and limit is in [settings.json](/docs/settings). The rules of categories, and the conditions of views, are queries (text): every word is in the [query language](/docs/query-language#words).
@@ -55,7 +55,7 @@ Check these, or Hush refuses the file:
 
 ## Recipes
 
-**“Mark what is about security, wherever it is.”** Add a group with any number per item, next to the default Effort group:
+**“Mark what is about security, wherever it is.”** Add a group with any number per item, next to the default Effort and Impact groups:
 
 ```json settings
 {
@@ -69,7 +69,7 @@ Check these, or Hush refuses the file:
 					"id": "low-effort",
 					"name": "Low",
 					"color": "green",
-					"icon": "lucide:signal-low",
+					"icon": "lucide:timer",
 					"rule": "",
 					"description": "A pull request that takes minutes to review, or an issue that takes an hour or less to do"
 				},
@@ -77,7 +77,7 @@ Check these, or Hush refuses the file:
 					"id": "medium-effort",
 					"name": "Medium",
 					"color": "amber",
-					"icon": "lucide:signal-medium",
+					"icon": "lucide:clock",
 					"rule": "",
 					"description": "A pull request that takes up to an hour to review, or an issue that takes up to a day to do"
 				},
@@ -85,9 +85,40 @@ Check these, or Hush refuses the file:
 					"id": "high-effort",
 					"name": "High",
 					"color": "red",
-					"icon": "lucide:signal-high",
+					"icon": "lucide:calendar-clock",
 					"rule": "",
 					"description": "A pull request that takes more than an hour to review, or an issue that takes more than a day to do"
+				}
+			]
+		},
+		{
+			"id": "impact",
+			"name": "Impact",
+			"multiple": false,
+			"categories": [
+				{
+					"id": "low-impact",
+					"name": "Low",
+					"color": "gray",
+					"icon": "lucide:minus",
+					"rule": "",
+					"description": "A fix or feature that few people notice, such as a small edge case, internal cleanup, or a minor tweak"
+				},
+				{
+					"id": "medium-impact",
+					"name": "Medium",
+					"color": "blue",
+					"icon": "lucide:chevron-up",
+					"rule": "",
+					"description": "A fix or feature that some users or teams notice, such as a bug in one workflow or an improvement to one part of the product"
+				},
+				{
+					"id": "high-impact",
+					"name": "High",
+					"color": "violet",
+					"icon": "lucide:chevrons-up",
+					"rule": "",
+					"description": "A fix or feature that many users notice, such as an outage, data loss, a security hole, a broken core flow, or a major new capability"
 				}
 			]
 		},
@@ -110,7 +141,7 @@ Check these, or Hush refuses the file:
 }
 ```
 
-An item with the `security` label is in Security. Jev also puts an item there when its text fits the description. A list without the Effort group removes it.
+An item with the `security` label is in Security. Jev also puts an item there when its text fits the description. A list without the Effort or Impact group removes that group.
 
 **“A tab for my repositories.”** A notification view adds a tab and hides nothing:
 
