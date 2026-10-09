@@ -108,7 +108,7 @@
 <svelte:head><title>{title} · Hush</title></svelte:head>
 <svelte:window onkeydown={onKey} />
 
-<div class={cn('mx-auto pb-20', onFilesTab ? 'max-w-[100rem]' : 'max-w-4xl')}>
+<div class="mx-auto max-w-[100rem] pb-20">
 	<div
 		class="sticky top-12 z-10 flex h-11 items-center gap-1 border-b bg-background/85 px-2 backdrop-blur"
 	>
@@ -167,17 +167,14 @@
 			deletions={pr.deletions}
 		/>
 	{:else if !onFilesTab}
-		<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
+		<div class="mx-auto max-w-4xl">
+			<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
+		</div>
 	{/if}
 </div>
 
 <div class="fixed inset-x-0 bottom-0 z-20 border-t bg-background pb-[env(safe-area-inset-bottom)]">
-	<div
-		class={cn(
-			'mx-auto flex flex-wrap items-center gap-1 p-2',
-			onFilesTab ? 'max-w-[100rem]' : 'max-w-4xl'
-		)}
-	>
+	<div class="mx-auto flex max-w-[100rem] flex-wrap items-center gap-1 p-2">
 		<GhActions {repo} {number} need={null} />
 	</div>
 </div>
