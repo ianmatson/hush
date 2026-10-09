@@ -1,19 +1,8 @@
-import {
-	classify,
-	classifyDefault,
-	globToRegExp,
-	categoryTriage,
-	withOverride
-} from '../../src/lib/shared/classify';
+import { classify, globToRegExp, withOverride } from '../../src/lib/shared/classify';
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
-import {
-	FEED_TABS,
-	parseMarkFeed,
-	threadMatches,
-	type MarkFeedSubject
-} from '../../src/lib/shared/views';
+import { FEED_TABS, parseCategoryFeed, threadMatches } from '../../src/lib/shared/views';
 import { itemFeedEntry, threadFeedEntry, type FeedEntry } from '../feed-entries';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import {
@@ -55,15 +44,16 @@ import {
 } from './schema';
 import { FILL_DONE_WITHIN_MS, FILL_MAX, MIN, MUTED_BY_USER, type PollStatus } from './shared';
 import { DECISION_FILL_KEY } from './decisions';
+import {
+	allCategories,
+	NO_PINS,
+	pinsAfter,
+	type ItemPins,
+	type PinChange
+} from '../../src/lib/shared/categories';
 
 const DECISION_FILL_DELAY_MS = 2_000;
-const PLACEMENT_KEYS = ['categories', 'tags', 'sources'] as const;
-
-export interface PinChange {
-	category?: string | null;
-	tag?: string;
-	tagState?: 'on' | 'off' | 'auto';
-}
+const PLACEMENT_KEYS = ['categoryGroups', 'sources'] as const;
 
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
@@ -128,23 +118,13 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/**
-	 * What Hush found, for the first-run card: the counts, what it finished by itself, and the
-	 * repos with the most threads that do not need you (the noise).
+	 * What Hush found, for the first-run card: the counts, and what it finished by itself.
 	 */
-	async summary(): Promise<{
-		counts: Counts;
-		notifications: number;
-		done: number;
-		noisyRepos: { repo: string; count: number }[];
-	}> {
+	async summary(): Promise<{ counts: Counts; notifications: number; done: number }> {
 		const notifications = this.one<{ n: number }>('SELECT COUNT(*) AS n FROM threads')?.n ?? 0;
 		const done =
 			this.one<{ n: number }>(`SELECT COUNT(*) AS n FROM threads WHERE triage = 'done'`)?.n ?? 0;
-		const noisyRepos = this.all<{ repo: string; count: number }>(
-			`SELECT repo, COUNT(*) AS count FROM threads WHERE category != 'action'
-       GROUP BY repo ORDER BY count DESC LIMIT 6`
-		);
-		return { counts: this.counts(), notifications, done, noisyRepos };
+		return { counts: this.counts(), notifications, done };
 	}
 
 	/** The first-run questions were answered or skipped: the card does not show again. */
@@ -393,8 +373,8 @@ export abstract class PollerData extends PollerDashboard {
 	 * Null when the tab is gone (a deleted notification view).
 	 */
 	async feedEntries(view: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
-		const mark = parseMarkFeed(view);
-		if (mark) return this.markFeed(mark);
+		const categoryId = parseCategoryFeed(view);
+		if (categoryId) return this.categoryFeed(categoryId);
 		const tab = FEED_TABS.find((t) => t.id === view);
 		const saved = tab ? null : (await this.settings()).views.find((v) => `v:${v.id}` === view);
 		if (!tab && !saved) return null;
@@ -411,25 +391,19 @@ export abstract class PollerData extends PollerDashboard {
 		};
 	}
 
-	private async markFeed(target: {
-		subject: MarkFeedSubject;
-		id: string;
-	}): Promise<{ name: string; entries: FeedEntry[] } | null> {
+	private async categoryFeed(id: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
 		const settings = await this.settings();
-		const marks = target.subject === 'category' ? settings.categories : settings.tags;
-		const mark = marks.find((m) => m.id === target.id);
-		if (!mark) return null;
+		const category = allCategories(settings.categoryGroups).find((c) => c.id === id);
+		if (!category) return null;
 		const items: DashItem[] = [];
 		for (const kind of ['pr', 'issue'] as const) {
 			const cached = await this.ctx.storage.get<{ data: DashResponse }>(`dash:${kind}`);
 			items.push(...(cached?.data.items ?? []));
 		}
-		const inFeed = (i: DashItem) =>
-			target.subject === 'category' ? i.category === target.id : !!i.tags?.includes(target.id);
 		return {
-			name: mark.name,
+			name: category.name,
 			entries: items
-				.filter((i) => !i.dismissed && inFeed(i))
+				.filter((i) => !i.dismissed && !!i.categories?.includes(id))
 				.sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))
 				.slice(0, FEED_ENTRIES)
 				.map(itemFeedEntry)
@@ -473,6 +447,9 @@ export abstract class PollerData extends PollerDashboard {
 			const who = await this.who();
 			if (who) await this.rePlaceCachedItems(who);
 		}
+		const groupsChanged =
+			JSON.stringify(old.categoryGroups) !== JSON.stringify(next.categoryGroups);
+		if (groupsChanged && this.decisionsOn(next)) await this.startDecisionFill();
 		const affects =
 			placementChanged ||
 			RECLASSIFY_KEYS.some((k) => JSON.stringify(old[k]) !== JSON.stringify(next[k]));
@@ -480,39 +457,32 @@ export abstract class PollerData extends PollerDashboard {
 		return { settings: next, reclassified };
 	}
 
-	async pinItems(ids: string[], change: PinChange): Promise<{ ok: true }> {
+	async pinItems(ids: string[], change: PinChange): Promise<Refusal | { ok: true }> {
+		const groups = (await this.settings()).categoryGroups;
 		const pins = this.itemPins(ids);
+		const next = new Map<string, ItemPins>();
+		for (const id of ids) {
+			const pin = pinsAfter(pins.get(id) ?? NO_PINS, change, groups);
+			if (!pin) return { error: 'Unknown category', status: 400 };
+			next.set(id, pin);
+		}
 		this.transaction(() => {
-			for (const id of ids) {
-				const pin = pins.get(id) ?? {};
-				const tagsOn = new Set(pin.tagsOn ?? []);
-				const tagsOff = new Set(pin.tagsOff ?? []);
-				if (change.tag) {
-					tagsOn.delete(change.tag);
-					tagsOff.delete(change.tag);
-					if (change.tagState === 'on') tagsOn.add(change.tag);
-					if (change.tagState === 'off') tagsOff.add(change.tag);
-				}
-				const category = change.category === undefined ? (pin.category ?? null) : change.category;
-				if (!category && !tagsOn.size && !tagsOff.size) {
+			for (const [id, pin] of next) {
+				if (!pin.on.length && !pin.off.length) {
 					this.run('DELETE FROM item_pins WHERE key = ?', id);
 					continue;
 				}
 				this.run(
-					`INSERT INTO item_pins (key, category, tags_on, tags_off) VALUES (?, ?, ?, ?)
-           ON CONFLICT (key) DO UPDATE SET category = excluded.category, tags_on = excluded.tags_on,
-             tags_off = excluded.tags_off`,
+					`INSERT INTO item_pins (key, pinned_on, pinned_off) VALUES (?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET pinned_on = excluded.pinned_on, pinned_off = excluded.pinned_off`,
 					id,
-					category,
-					JSON.stringify([...tagsOn]),
-					JSON.stringify([...tagsOff])
+					JSON.stringify(pin.on),
+					JSON.stringify(pin.off)
 				);
 			}
 		});
 		const who = await this.who();
-		if (!who) return { ok: true };
-		await this.rePlaceCachedItems(who);
-		if (change.category !== undefined) await this.reclassify(who.settings);
+		if (who) await this.rePlaceCachedItems(who);
 		return { ok: true };
 	}
 
@@ -562,34 +532,26 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/**
-	 * Re-run the classifier on stored threads after the settings change. A rule that moves threads
-	 * acts on the inbox threads it starts to match.
+	 * Re-run the classifier on stored threads after the settings change.
 	 */
 	private async reclassify(settings: Settings): Promise<number> {
 		const me = await this.login();
 		const myTeams = await this.inboxTeamsFor(settings);
-		const now = Date.now();
 		const changes: (() => void)[] = [];
-		const done: { id: string; note: string }[] = [];
 		for (const r of this.threads('1')) {
 			if (r.rule === MUTED_BY_USER) continue;
 			const c = withOverride(classify(factsFromRow(r, me, myTeams), settings), r, r.gh_updated_at);
-			const moved =
-				r.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? categoryTriage(c, now) : null;
 			const same =
-				!moved &&
 				c.category === r.category &&
 				c.kind === r.kind &&
 				c.summary === r.summary &&
 				(c.rule ?? null) === r.rule &&
 				c.actionUrl === r.action_url;
 			if (same) continue;
-			if (moved?.triage === 'done') done.push({ id: r.id, note: moved.note });
 			changes.push(() =>
 				this.run(
 					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
-             rule = ?, triage = ?, resolved_at = ?, resolved_note = ?, snoozed_until = ?, snoozed_at = ?
-           WHERE id = ?`,
+             rule = ? WHERE id = ?`,
 					c.category,
 					c.kind,
 					c.summary,
@@ -597,11 +559,6 @@ export abstract class PollerData extends PollerDashboard {
 					c.actionLabel,
 					c.actionUrl,
 					c.rule ?? null,
-					moved?.triage ?? r.triage,
-					moved ? null : r.resolved_at,
-					moved?.triage === 'done' ? moved.note : r.resolved_note,
-					moved?.triage === 'snoozed' ? moved.until : r.snoozed_until,
-					moved?.triage === 'snoozed' ? now : r.snoozed_at,
 					r.id
 				)
 			);

@@ -1,16 +1,10 @@
 import { DEFAULT_DASH } from './dashboard';
 import { DEFAULT_SOURCES, upgradeSources } from './sources';
-import {
-	categoriesWithLegacyRules,
-	DEFAULT_CATEGORIES,
-	DEFAULT_TAGS,
-	upgradeDefaultCategories,
-	upgradeDefaultTags
-} from './categories';
+import { DEFAULT_CATEGORY_GROUPS } from './categories';
 import { DEFAULT_MENUS, upgradeMenus } from './menus';
 import { DEFAULT_SWIPE } from './swipe';
-import { DEFAULT_ROWS } from './row-parts';
-import type { LegacyInboxRule, Settings } from './types';
+import { DEFAULT_ROWS, knownRowParts } from './row-parts';
+import type { Settings } from './types';
 
 const RETIRED_DASH_KEYS = ['pr', 'issue'];
 const withoutRetiredDashKeys = (dash: object | undefined) =>
@@ -37,8 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	dash: DEFAULT_DASH,
 	sources: DEFAULT_SOURCES,
 	tracked: [],
-	categories: DEFAULT_CATEGORIES,
-	tags: DEFAULT_TAGS,
+	categoryGroups: DEFAULT_CATEGORY_GROUPS,
 	views: [],
 	menus: DEFAULT_MENUS,
 	keys: {},
@@ -56,15 +49,9 @@ export function parseSettings(json: string | null | undefined): Settings {
 		const raw = Object.fromEntries(
 			Object.entries(stored).filter(([k]) => k in DEFAULT_SETTINGS)
 		) as Partial<Settings>;
-		const legacyRules = Array.isArray(stored.rules) ? (stored.rules as LegacyInboxRule[]) : [];
 		return {
 			...DEFAULT_SETTINGS,
 			...raw,
-			categories: categoriesWithLegacyRules(
-				upgradeDefaultCategories(raw.categories ?? DEFAULT_CATEGORIES),
-				legacyRules
-			),
-			tags: upgradeDefaultTags(raw.tags ?? DEFAULT_TAGS),
 			sources: upgradeSources(raw.sources ?? DEFAULT_SOURCES),
 			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
@@ -72,7 +59,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 				inbox: { ...DEFAULT_SWIPE.inbox, ...(raw.swipe?.inbox ?? {}) },
 				dash: { ...DEFAULT_SWIPE.dash, ...(raw.swipe?.dash ?? {}) }
 			},
-			rows: { ...DEFAULT_ROWS, ...(raw.rows ?? {}) },
+			rows: knownRowParts(raw.rows ?? {}),
 			alertChannels: { ...DEFAULT_SETTINGS.alertChannels, ...(raw.alertChannels ?? {}) }
 		};
 	} catch {

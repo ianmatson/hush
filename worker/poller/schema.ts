@@ -15,10 +15,10 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
-const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, category TEXT, tags_on TEXT NOT NULL DEFAULT '[]', tags_off TEXT NOT NULL DEFAULT '[]');`;
-const TRACKED_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, category TEXT, tags TEXT NOT NULL DEFAULT '[]');`;
+const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, pinned_on TEXT NOT NULL DEFAULT '[]', pinned_off TEXT NOT NULL DEFAULT '[]');`;
+const TRACKED_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, categories TEXT NOT NULL DEFAULT '[]');`;
 export const SCHEMA = `
 CREATE TABLE threads (
   id TEXT PRIMARY KEY,               -- GitHub notification thread id
@@ -141,8 +141,19 @@ CREATE INDEX IF NOT EXISTS threads_triage ON threads (triage, resolved_at);`
 	11: { to: 12, sql: ITEM_PINS_TABLE },
 	12: {
 		to: 13,
-		sql: TRACKED_ITEMS_TABLE,
+		sql: `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, category TEXT, tags TEXT NOT NULL DEFAULT '[]');`,
 		resetKeys: ['dash:pr', 'dash:issue', 'lastWatch', 'lastCleanup']
+	},
+	13: {
+		to: 14,
+		sql: `
+DROP TABLE IF EXISTS item_pins;
+${ITEM_PINS_TABLE}
+${TRACKED_ITEMS_TABLE.replace('tracked_items', 'tracked_items_next')}
+INSERT INTO tracked_items_next (key, kind, seen_at) SELECT key, kind, seen_at FROM tracked_items;
+DROP TABLE tracked_items;
+ALTER TABLE tracked_items_next RENAME TO tracked_items;`,
+		resetKeys: ['dash:pr', 'dash:issue']
 	}
 };
 
@@ -181,19 +192,18 @@ export interface ThreadRow {
 export interface ThreadWithFacts extends ThreadRow {
 	facts: string | null;
 	decisions?: string | null;
-	item_category?: string | null;
-	item_tags?: string | null;
+	item_categories?: string | null;
 }
 
 /** Threads with their subject's facts; add a WHERE on thread columns. */
 export const THREADS = `SELECT threads.*, subjects.facts, decisions.answers AS decisions,
-    items.item_category, items.item_tags FROM threads
+    items.item_categories FROM threads
   LEFT JOIN subjects ON subjects.key = threads.subject_key
   LEFT JOIN decisions ON decisions.key = threads.subject_key
-  LEFT JOIN (SELECT key AS item_key, category AS item_category, tags AS item_tags FROM tracked_items)
+  LEFT JOIN (SELECT key AS item_key, categories AS item_categories FROM tracked_items)
     AS items ON items.item_key = threads.subject_key`;
 
-const tagsOf = (json: string | null | undefined): string[] =>
+const idsOf = (json: string | null | undefined): string[] =>
 	json ? (JSON.parse(json) as string[]) : [];
 
 export const factsOf = (r: ThreadWithFacts): SubjectFacts | null =>
@@ -220,8 +230,7 @@ export function factsFromRow(r: ThreadWithFacts, me: string, myTeams: string[] =
 		reason: r.reason,
 		htmlUrl: r.html_url,
 		enrichment: enrichmentFor(r, me),
-		me,
-		itemCategoryId: r.item_category ?? null
+		me
 	};
 }
 
@@ -261,8 +270,7 @@ export function toDTO(r: ThreadWithFacts): ThreadDTO {
 		authorIsBot: !!f?.authorIsBot,
 		labels: f?.labels.map((l) => l.name) ?? [],
 		rule: r.rule,
-		itemCategory: r.item_category ?? null,
-		tags: tagsOf(r.item_tags),
+		categories: idsOf(r.item_categories),
 		activity: latestActivity(f),
 		override: r.override === 'fyi' && r.override_updated_at === r.gh_updated_at,
 		smart: decisionsFor(r).smart

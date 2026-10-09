@@ -7,15 +7,13 @@
 	import { enablePush, pushSupport } from '$lib/push';
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
-	import { Checkbox } from '$lib/components/ui/checkbox';
-	import type { ItemCategory, MeDTO } from '$lib/shared/types';
+	import type { MeDTO } from '$lib/shared/types';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
 	/**
 	 * The first run: what Hush found (the "noise report"), and three one-tap questions. Answered or
 	 * skipped once per account.
 	 */
-	const READ_ONLY_CATEGORY_ID = 'read-only';
 	const me = createQuery(meQuery);
 	const syncing = $derived(!!me.data?.firstSync);
 	// While the first sync runs, the counts grow: ask again every few seconds.
@@ -36,7 +34,6 @@
 	// Your answer, or the setting until you answer (the settings refresh while the sync runs).
 	let teamsChoice = $state<boolean | null>(null);
 	const teams = $derived(teamsChoice ?? me.data?.settings.teamReviewsAreAction ?? false);
-	let quiet = $state<string[]>([]);
 	let pushing = $state(false);
 	let pushOn = $state(false);
 	const canPush = $derived(pushSupport() === 'supported');
@@ -56,22 +53,7 @@
 	async function finish(save: boolean) {
 		const settings = me.data?.settings;
 		if (save && settings) {
-			const readOnly: ItemCategory = {
-				id: READ_ONLY_CATEGORY_ID,
-				name: 'Read only',
-				color: 'gray',
-				rule: quiet.map((repo) => `repo:${repo}`).join(' OR '),
-				description: '',
-				inbox: 'fyi'
-			};
-			const categories = [
-				readOnly,
-				...settings.categories.filter((c) => c.id !== READ_ONLY_CATEGORY_ID)
-			];
-			const saved = await saveSettings(
-				{ teamReviewsAreAction: teams, ...(quiet.length ? { categories } : {}) },
-				'Saved'
-			);
+			const saved = await saveSettings({ teamReviewsAreAction: teams }, 'Saved');
 			if (!saved) return;
 		}
 		try {
@@ -116,28 +98,6 @@
 				>
 			</span>
 		</label>
-
-		{#if !syncing && s?.noisyRepos.length}
-			<div>
-				<p class="font-medium">Repositories you only want to read about</p>
-				<p class="text-xs text-muted-foreground">
-					Everything from the ones you check goes to FYI, even when it asks for you.
-				</p>
-				<div class="mt-2 grid gap-1.5 sm:grid-cols-2">
-					{#each s.noisyRepos as r (r.repo)}
-						<label class="flex items-center gap-2 text-[0.8rem]">
-							<Checkbox
-								checked={quiet.includes(r.repo)}
-								onCheckedChange={(v) =>
-									(quiet = v ? [...quiet, r.repo] : quiet.filter((x) => x !== r.repo))}
-							/>
-							<span class="truncate font-mono">{r.repo}</span>
-							<span class="text-muted-foreground tabular-nums">{r.count}</span>
-						</label>
-					{/each}
-				</div>
-			</div>
-		{/if}
 
 		{#if canPush}
 			<div class="flex items-center gap-3">

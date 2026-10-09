@@ -3,16 +3,16 @@
 	import { DEMO_GH } from './demo-data';
 
 	const SETTINGS_JSON = `{
-  "pushRepeat": "reason",
   "pushDigestMinutes": 30,
-  "categories": [
-    { "id": "deps", "name": "Dependencies", "color": "teal",
-      "rule": "repo:PostHog/* author:dependabot*",
-      "inbox": "muted" },
-    { "id": "joe", "name": "Joe", "color": "blue",
-      "rule": "from:joethreepwood", "push": "on" },
-    { "id": "other", "name": "Other", "color": "gray" }
-  ],
+  "categoryGroups": [{
+    "id": "area", "name": "Area", "multiple": false,
+    "categories": [
+      { "id": "deps", "name": "Dependencies", "color": "teal",
+        "rule": "repo:PostHog/* author:dependabot*" },
+      { "id": "docs", "name": "Docs", "color": "blue",
+        "description": "Changes to the docs or the website" }
+    ]
+  }],
   "views": [
     { "id": "docs", "name": "Docs reviews",
       "base": "action", "query": "label:docs" }
@@ -95,7 +95,7 @@
 
 	<div class="rule">
 		<div class="rule-head">
-			<b>Mute dependabot</b>
+			<b>Dependencies</b>
 			<span class="switch"></span>
 		</div>
 		<div class="field">
@@ -108,11 +108,10 @@
 			>
 		</div>
 		<div class="field">
-			<span class="lbl">Then</span>
+			<span class="lbl">Group</span>
 			<span class="choices">
-				<span>Needs you</span>
-				<span>FYI</span>
-				<span class="pick">Muted</span>
+				<span>Effort</span>
+				<span class="pick">Area</span>
 			</span>
 		</div>
 		<ul class="threads">
@@ -120,12 +119,12 @@
 				<li class:caught={thread.caught} style:--i={i}>
 					<MockAvatar person={thread.person} size={1.25} />
 					<span class="t">{thread.title}</span>
-					{#if thread.caught}<span class="to">→ Muted</span>{/if}
+					{#if thread.caught}<span class="to">→ Dependencies</span>{/if}
 				</li>
 			{/each}
 		</ul>
 		<div class="rule-foot">
-			<span>Dependencies: <b>3 to Muted</b></span>
+			<span>Dependencies: <b>3 items</b></span>
 			<span class="save">Save categories</span>
 		</div>
 	</div>

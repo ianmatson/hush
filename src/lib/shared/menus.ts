@@ -79,12 +79,11 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 		},
 		{ id: 'move', label: 'Move to', note: 'Every group', group: 'main' },
 		{
-			id: 'category',
-			label: 'Category',
-			note: 'Choose one, or go back to automatic',
+			id: 'categories',
+			label: 'Categories',
+			note: 'One submenu for each category group',
 			group: 'main'
 		},
-		{ id: 'tags', label: 'Tags', note: 'Add or remove', group: 'main' },
 		{ id: 'undoMove', label: 'Undo move', note: 'Items you moved', group: 'main' },
 		{ id: 'hide', label: 'Hide until it changes / Show again', group: 'main' },
 		{ id: 'mute', label: 'Mute / Unmute', note: 'Hidden until you unmute it', group: 'main' },
@@ -125,8 +124,7 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'github',
 		SEP,
 		'move',
-		'category',
-		'tags',
+		'categories',
 		'undoMove',
 		'hide',
 		'mute',
@@ -142,25 +140,26 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
  * Items added after a menu may have been saved. A saved menu older than an item's version gets
  * that item once (after `after`, or at the end); later choices are yours.
  */
-export const MENUS_VERSION = 6;
+export const MENUS_VERSION = 7;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
 	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
 	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
 	{ kind: 'dash', id: 'not-needed', after: 'hide', version: 3 },
 	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 },
-	{ kind: 'dash', id: 'category', after: 'move', version: 5 },
-	{ kind: 'dash', id: 'tags', after: 'category', version: 5 },
 	{ kind: 'inbox', id: 'page', after: 'peek', version: 6 },
-	{ kind: 'dash', id: 'page', after: 'peek', version: 6 }
+	{ kind: 'dash', id: 'page', after: 'peek', version: 6 },
+	{ kind: 'dash', id: 'categories', after: 'move', version: 7 }
 ];
 
 /** Saved menus, upgraded to the current version. */
 export function upgradeMenus(
 	saved: Partial<Record<MenuKind, string[]>> & { v?: number }
 ): Record<MenuKind, string[]> & { v: number } {
+	const known = (kind: MenuKind) => (id: string) =>
+		id === SEP || MENU_ITEMS[kind].some((i) => i.id === id);
 	const out = {
-		inbox: [...(saved.inbox ?? DEFAULT_MENUS.inbox)],
-		dash: [...(saved.dash ?? DEFAULT_MENUS.dash)],
+		inbox: (saved.inbox ?? DEFAULT_MENUS.inbox).filter(known('inbox')),
+		dash: (saved.dash ?? DEFAULT_MENUS.dash).filter(known('dash')),
 		v: MENUS_VERSION
 	};
 	for (const a of ADDED) {

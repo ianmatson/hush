@@ -44,8 +44,7 @@ const PREVIEW_ITEM: DashItem = {
 	lastVerdictAt: null,
 	myLastReviewState: null,
 	lastCommitAt: hoursAgo(3),
-	category: 'preview-category',
-	tags: ['preview-tag'],
+	categories: ['preview-low', 'preview-security'],
 	sections: ['preview-source'],
 	turn: 'you',
 	turnReason: 'Review requested',
@@ -82,8 +81,20 @@ export function previewItem(kind: 'pr' | 'issue'): DashItem {
 }
 
 export const PREVIEW_MARKS: RowMark[] = [
-	{ key: 'c:preview', name: 'Features', color: 'blue', kind: 'category', icon: 'lucide:sparkles' },
-	{ key: 't:preview', name: 'Needs decision', color: 'violet', kind: 'tag' }
+	{
+		key: 'preview-low',
+		name: 'Low',
+		group: 'Effort',
+		color: 'green',
+		icon: 'lucide:signal-low'
+	},
+	{
+		key: 'preview-security',
+		name: 'Security',
+		group: 'Topics',
+		color: 'red',
+		icon: 'lucide:shield'
+	}
 ];
 
 export const PREVIEW_SOURCE_NAMES: Record<string, string> = { 'preview-source': 'Web team' };
@@ -115,8 +126,7 @@ export const PREVIEW_THREAD: ThreadDTO = {
 	authorIsBot: false,
 	labels: ['api'],
 	rule: 'Web team',
-	itemCategory: 'preview-category',
-	tags: ['preview-tag'],
+	categories: ['preview-low', 'preview-security'],
 	override: true,
 	changes: [{ kind: 'commits', text: '2 new commits', tone: null }],
 	activity: null

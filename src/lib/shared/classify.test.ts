@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-	classify,
-	globToRegExp,
-	categoryTriage,
-	queryMatches,
-	shouldPush,
-	withOverride
-} from './classify';
-import { DEFAULT_CATEGORIES } from './categories';
+import { classify, globToRegExp, queryMatches, withOverride } from './classify';
 import { DEFAULT_SETTINGS } from './settings';
-import type { Classification, Enrichment, ItemCategory, Settings, ThreadFacts } from './types';
+import type { Classification, Enrichment, Settings, ThreadFacts } from './types';
 
 const pr = (e: Partial<Enrichment> = {}): Enrichment => ({
 	kind: 'pr',
@@ -33,18 +25,6 @@ const facts = (over: Partial<ThreadFacts> = {}): ThreadFacts => ({
 
 const run = (f: ThreadFacts, s: Partial<Settings> = {}) =>
 	classify(f, { ...DEFAULT_SETTINGS, ...s });
-
-const category = (name: string, rule: string, inbox: Partial<ItemCategory> = {}): ItemCategory => ({
-	id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-	name,
-	color: 'gray',
-	rule,
-	description: '',
-	...inbox
-});
-const withCategories = (...first: ItemCategory[]): Partial<Settings> => ({
-	categories: [...first, ...DEFAULT_CATEGORIES]
-});
 
 describe('default classification', () => {
 	it('flags a direct review request as action, linking to the diff', () => {
@@ -165,68 +145,7 @@ describe('default classification', () => {
 	});
 });
 
-describe('categories in the inbox', () => {
-	const placed = (f: Partial<ThreadFacts>, id: string) => facts({ ...f, itemCategoryId: id });
-
-	it('a thread takes its PR or issue’s category, which can change push', () => {
-		const c = run(
-			placed(
-				{ reason: 'review_requested', enrichment: pr({ reviewRequestedFromMe: true }) },
-				'quiet-acme'
-			),
-			withCategories(
-				category('Docs', '', { inbox: 'muted' }),
-				category('Quiet acme', '', { push: 'off' })
-			)
-		);
-		expect(c).toMatchObject({ category: 'action', rule: 'Quiet acme', push: false });
-		expect(shouldPush(c, DEFAULT_SETTINGS)).toBe(false);
-	});
-
-	it('does not run category rules on the thread itself', () => {
-		const s = withCategories(category('Muted web', 'repo:acme/web', { inbox: 'muted' }));
-		expect(run(facts(), s).category).toBe('fyi');
-		expect(run(placed({}, 'muted-web'), s).category).toBe('muted');
-	});
-
-	it('leaves Hush’s decision alone for a category with no inbox settings', () => {
-		const c = run(placed({}, 'web'), withCategories(category('Web', 'repo:acme/web')));
-		expect(c.category).toBe('fyi');
-		expect(c.rule).toBeUndefined();
-	});
-
-	it('puts a thread with no item category in Other', () => {
-		const other = DEFAULT_CATEGORIES.map((c) =>
-			c.id === 'other' ? { ...c, inbox: 'muted' as const } : c
-		);
-		expect(run(facts(), { categories: other }).category).toBe('muted');
-		expect(run(placed({}, 'deleted'), { categories: other }).category).toBe('muted');
-	});
-
-	it('categoryTriage moves only for categories that ask', () => {
-		const now = 1_000_000;
-		const done = run(placed({}, 'x'), withCategories(category('X', '', { triage: 'done' })));
-		expect(categoryTriage(done, now)).toEqual({ triage: 'done', note: 'Category: X' });
-		const snooze = run(
-			placed({}, 'later'),
-			withCategories(category('Later', '', { triage: 'snooze', snoozeHours: 4 }))
-		);
-		expect(categoryTriage(snooze, now)).toEqual({
-			triage: 'snoozed',
-			until: now + 4 * 3_600_000,
-			note: 'Category: Later'
-		});
-		const day = run(placed({}, 'day'), withCategories(category('Day', '', { triage: 'snooze' })));
-		expect(categoryTriage(day, now)).toMatchObject({ until: now + 24 * 3_600_000 });
-		expect(
-			categoryTriage(
-				run(placed({}, 'push'), withCategories(category('Push', '', { push: 'on' }))),
-				now
-			)
-		).toBeNull();
-		expect(categoryTriage(run(facts()), now)).toBeNull();
-	});
-
+describe('globs', () => {
 	it('globs match owner/repo case-insensitively', () => {
 		expect(globToRegExp('ACME/*').test('acme/web')).toBe(true);
 		expect(globToRegExp('acme/web').test('acme/website')).toBe(false);

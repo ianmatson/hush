@@ -535,7 +535,7 @@ export const DEMO_THREADS: DemoThread[] = [
 		repo: DEMO_REPO,
 		number: 20631,
 		title: 'chore(deps): bump urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm',
-		rule: 'Mute dependabot',
+		rule: 'Muted by you',
 		unread: false,
 		ago: '2h',
 		actionLabel: 'Open',

@@ -40,7 +40,7 @@
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import type { Classification } from '$lib/shared/types';
-	import { itemQueryFacts } from '$lib/shared/categories';
+	import { groupOf, itemQueryFacts, type PinChange } from '$lib/shared/categories';
 	import { exprMatches, NOTIFICATION_WORDS, parseExpr } from '$lib/shared/query';
 	import { ruleMatches } from '$lib/shared/classify';
 	import { rowMarks, type RowMark } from '$lib/marks';
@@ -99,7 +99,6 @@
 	let refreshing = $state(false);
 	let section = $state<string | null>(null);
 	let categoryFilter = $state<string | null>(null);
-	let tagFilter = $state<string | null>(null);
 	let query = $state('');
 	let showHidden = $state(false);
 	let selectedId = $state<string | null>(null);
@@ -138,14 +137,13 @@
 	);
 	const groupLabel = (t: Turn) => ALL_GROUPS.find((g) => g.turn === t)!.label;
 
-	const categories = $derived(me.data?.settings.categories ?? []);
-	const tags = $derived(me.data?.settings.tags ?? []);
+	const categoryGroups = $derived(me.data?.settings.categoryGroups ?? []);
 
-	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.category, i.tags, me.data?.settings);
+	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.categories, me.data?.settings);
 
 	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
-	const categoryCount = (id: string) => visibleItems.filter((i) => i.category === id).length;
-	const tagCount = (id: string) => visibleItems.filter((i) => i.tags?.includes(id)).length;
+	const categoryCount = (id: string) =>
+		visibleItems.filter((i) => i.categories?.includes(id)).length;
 	const hiddenParts = $derived(me.data?.settings.rows[kind] ?? []);
 
 	const sectionNames = $derived(
@@ -179,8 +177,7 @@
 			(i) =>
 				i.dismissed === showHidden &&
 				(!section || i.sections.includes(section)) &&
-				(!categoryFilter || i.category === categoryFilter) &&
-				(!tagFilter || !!i.tags?.includes(tagFilter)) &&
+				(!categoryFilter || !!i.categories?.includes(categoryFilter)) &&
 				(!q || matchesQuery(i, q))
 		);
 		return keepHeldRow(
@@ -289,7 +286,6 @@
 		untrack(() => {
 			section = null;
 			categoryFilter = null;
-			tagFilter = null;
 			selectedId = null;
 			sel.clear();
 			groupMotion = false;
@@ -591,7 +587,6 @@
 			query = '';
 			section = null;
 			categoryFilter = null;
-			tagFilter = null;
 			showHidden = !!item.dismissed;
 			sel.clear();
 			peekedOutsideKey = null;
@@ -637,7 +632,7 @@
 
 	async function pin(
 		ids: string[],
-		change: { category?: string | null; tag?: string; tagState?: 'on' | 'off' },
+		change: PinChange,
 		patch: (x: DashItem) => DashItem,
 		message: string
 	) {
@@ -659,29 +654,26 @@
 		}
 	}
 
-	function setCategory(ids: string[], category: string | null) {
-		const name = categories.find((c) => c.id === category)?.name;
-		return pin(
-			ids,
-			{ category },
-			(x) => (category ? { ...x, category } : x),
-			name ? `Moved to “${name}”` : 'Hush decides the category again'
+	function pinCategory(ids: string[], change: PinChange) {
+		const groups = categoryGroups;
+		if ('group' in change) return pin(ids, change, (x) => x, 'Hush chooses the category again');
+		const group = groupOf(groups, change.category);
+		const name = group?.categories.find((c) => c.id === change.category)?.name ?? change.category;
+		const replaced = new Set(
+			group && !group.multiple ? group.categories.map((c) => c.id) : [change.category]
 		);
-	}
-
-	function setTag(ids: string[], tag: string, state: 'on' | 'off') {
-		const name = tags.find((t) => t.id === tag)?.name ?? tag;
 		return pin(
 			ids,
-			{ tag, tagState: state },
+			change,
 			(x) => ({
 				...x,
-				tags:
-					state === 'on'
-						? [...new Set([...(x.tags ?? []), tag])]
-						: (x.tags ?? []).filter((t) => t !== tag)
+				categories: [
+					...(x.categories ?? []).filter((c) => !replaced.has(c)),
+					...(change.state === 'on' ? [change.category] : [])
+				],
+				pinnedCategories: [...(x.pinnedCategories ?? []), change.category]
 			}),
-			state === 'on' ? `Tagged “${name}”` : `Removed “${name}”`
+			change.state === 'on' ? `Added “${name}”` : `Removed “${name}”`
 		);
 	}
 
@@ -943,14 +935,10 @@
 		get menu() {
 			return me.data?.settings.menus.dash;
 		},
-		get categories() {
-			return categories;
+		get categoryGroups() {
+			return categoryGroups;
 		},
-		get tags() {
-			return tags;
-		},
-		setCategory,
-		setTag,
+		pinCategory,
 		sel,
 		byId,
 		peek: peekThis,
@@ -1011,13 +999,7 @@
 			>
 				<RefreshCw class={cn(refreshing && 'animate-spin')} />
 			</Button>
-			<MarkFilter
-				kind="category"
-				marks={categories}
-				count={categoryCount}
-				bind:value={categoryFilter}
-			/>
-			<MarkFilter kind="tag" marks={tags} count={tagCount} bind:value={tagFilter} />
+			<MarkFilter groups={categoryGroups} count={categoryCount} bind:value={categoryFilter} />
 		</div>
 	</div>
 

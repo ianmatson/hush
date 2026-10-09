@@ -53,11 +53,6 @@ describe('settings file', () => {
 		expect(patch).toMatchObject({
 			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
 		});
-		expect(typeof patch !== 'string' && patch.categories?.[0]).toMatchObject({
-			name: 'Docs',
-			rule: 'repo:acme/website label:docs',
-			inbox: 'fyi'
-		});
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
@@ -99,74 +94,27 @@ describe('settings schema', () => {
 			/"A"/
 		);
 		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
-		const other = DEFAULT_SETTINGS.categories.map((c) =>
-			c.id === 'other' ? { ...c, triage: 'snooze' as const, snoozeHours: 0 } : c
+		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toMatch(
+			/"multiple"/
 		);
-		expect(check({ categories: other })).toMatch(/snoozeHours/);
 	});
 });
 
-describe('inbox rules from before categories', () => {
-	const rule = (when: string, then: object, more: object = {}) => ({ when, then, ...more });
-
-	it('become categories first, in the same order, with the same names', () => {
+describe('category groups', () => {
+	it('replace the categories and tags of older settings with the defaults', () => {
 		const s = parseSettings(
 			JSON.stringify({
-				rules: [
-					rule('repo:acme/docs', { category: 'muted' }, { name: 'Docs' }),
-					rule('author:renovate*', { push: false, triage: 'snooze', snoozeHours: 6 }),
-					rule('repo:acme/old', { category: 'fyi' }, { enabled: false })
-				]
+				categories: [{ id: 'bugs', name: 'Bugs', color: 'red', rule: '', description: '' }],
+				tags: [{ id: 'quick', name: 'Quick', color: 'green', rule: 'size:<50' }],
+				rules: [{ when: 'repo:acme/docs', then: { category: 'muted' } }]
 			})
 		);
-		expect(s.categories.slice(0, 2)).toEqual([
-			{
-				id: 'rule-1',
-				name: 'Docs',
-				color: 'gray',
-				rule: 'repo:acme/docs',
-				description: '',
-				inbox: 'muted',
-				push: 'inherit'
-			},
-			{
-				id: 'rule-2',
-				name: 'Rule 2',
-				color: 'gray',
-				rule: 'author:renovate*',
-				description: '',
-				inbox: 'auto',
-				push: 'off',
-				triage: 'snooze',
-				snoozeHours: 6
-			}
-		]);
-		expect(s.categories.slice(2).map((c) => c.id)).toEqual(
-			DEFAULT_SETTINGS.categories.map((c) => c.id)
-		);
-		expect('rules' in s).toBe(false);
+		expect(s).toEqual(DEFAULT_SETTINGS);
 	});
 
-	it('drop rules that look at the notification, which category rules cannot do', () => {
-		const s = parseSettings(
-			JSON.stringify({
-				rules: [
-					rule('repo:acme/web needs:review', { push: false }),
-					rule('event:mentioned', { category: 'action' }),
-					rule('type:ci', { category: 'muted' }),
-					rule('repo:acme/docs', { category: 'muted' })
-				]
-			})
-		);
-		expect(s.categories[0]).toMatchObject({ id: 'rule-4', rule: 'repo:acme/docs' });
-		expect(s.categories).toHaveLength(DEFAULT_SETTINGS.categories.length + 1);
-		expect(validateSettings(s, ['categories'])).toBeNull();
-	});
-
-	it('put a rule for every thread on the fallback category', () => {
-		const s = parseSettings(JSON.stringify({ rules: [rule('', { category: 'fyi' })] }));
-		expect(s.categories.find((c) => c.id === 'other')).toMatchObject({ inbox: 'fyi' });
-		expect(s.categories).toHaveLength(DEFAULT_SETTINGS.categories.length);
+	it('drop row parts that are gone', () => {
+		const s = parseSettings(JSON.stringify({ rows: { pr: ['labels', 'markNames', 'tags'] } }));
+		expect(s.rows.pr).toEqual(['labels']);
 	});
 });
 

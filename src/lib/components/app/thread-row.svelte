@@ -81,9 +81,7 @@
 	const said = $derived(saidBy(t.summary));
 	const show = (part: string) => !hidden.includes(part);
 	const showWhy = $derived(whyAddsInfo(t.why, t.summary) && show('why'));
-	const shownMarks = $derived(
-		marks.filter((m) => show(m.kind === 'category' ? 'category' : 'tags'))
-	);
+	const shownMarks = $derived(show('categories') ? marks : []);
 	const changes = $derived(newChanges(t.changes ?? [], said, [t.summary, t.why]));
 	const stop = (fn: () => void) => (e: MouseEvent) => {
 		e.stopPropagation();
@@ -193,12 +191,7 @@
 				>
 			{/if}
 			{#if shownMarks.length}
-				<MarkList
-					marks={shownMarks}
-					showNames={show('markNames')}
-					tooltipSuffix={(m) =>
-						m.kind === 'category' && t.rule === m.name ? ' (it sets where this goes)' : ''}
-				/>
+				<MarkList marks={shownMarks} showNames={show('categoryNames')} />
 			{/if}
 		</div>
 	</div>

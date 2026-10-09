@@ -1,11 +1,11 @@
 import { NEW_COMMITS_AFTER_REVIEW_OPTIONS, validateDash } from './dashboard';
 import { validateSources, validateTracked } from './sources';
 import {
-	categoriesWithLegacyRules,
-	DEFAULT_CATEGORIES,
+	categoryConditionTexts,
 	markQueries,
-	validateCategories,
-	validateTags
+	MAX_CATEGORIES,
+	MAX_CATEGORY_GROUPS,
+	validateCategoryGroups
 } from './categories';
 import { MAX_SMART_CONDITIONS, smartConditions } from './decisions';
 import { MENUS_VERSION, validateMenus } from './menus';
@@ -22,7 +22,7 @@ import {
 	validatePushRepeat
 } from './push-policy';
 import { DEFAULT_SETTINGS } from './settings';
-import type { ItemCategory, LegacyInboxRule, RuleMatch, Settings } from './types';
+import type { RuleMatch, Settings } from './types';
 import { validateViews } from './views';
 
 /**
@@ -46,7 +46,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'pushFyi',
 		page: 'notifications',
-		description: 'Push FYI threads too. Usually noisy; a rule with "push" is often better.'
+		description: 'Push FYI threads too. Usually noisy.'
 	},
 	{
 		key: 'pushTurnChanges',
@@ -135,7 +135,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'smartDecisions',
 		page: 'inbox',
-		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, and checks the about: conditions of your categories, tags, and views (up to ${MAX_SMART_CONDITIONS}).`
+		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, places PRs and issues in the categories that have a description, and checks the about: conditions of your categories and views (up to ${MAX_SMART_CONDITIONS}).`
 	},
 	{
 		key: 'views',
@@ -150,16 +150,9 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'The GitHub searches that decide which PRs and issues Hush tracks: { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue covers both.'
 	},
 	{
-		key: 'categories',
+		key: 'categoryGroups',
 		page: 'categories',
-		description:
-			'Where each PR, issue, and notification lives: exactly one category each. { "id", "name", "color", "rule": a query, "description": for Jev, "inbox": "auto" | "action" | "fyi" | "muted", "push": "inherit" | "on" | "off", "triage": "done" | "snooze", "snoozeHours" }. The first category whose rule matches wins; else Jev picks among categories with a description; else "other". "inbox", "push", and "triage" act on the inbox threads of the category.'
-	},
-	{
-		key: 'tags',
-		page: 'categories',
-		description:
-			'Marks that cut across categories: zero or more each. { "id", "name", "color", "rule": a query }. A rule with about:"…" asks Jev.'
+		description: `Groups of categories for PRs and issues (up to ${MAX_CATEGORY_GROUPS}). Each is { "id", "name", "multiple", "categories" }, with up to ${MAX_CATEGORIES} categories of { "id", "name", "color", "icon", "rule": a query, "description": for Jev }. With "multiple": false, an item gets the first category whose rule matches, else the one Jev picks among the categories with a description, else none. With "multiple": true, an item gets every category whose rule matches or whose description Jev says fits.`
 	},
 	{
 		key: 'tracked',
@@ -214,19 +207,19 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'rows.pr',
 		page: 'general',
 		description:
-			'Parts to hide on pull request rows, such as ["sources", "labels"]. Parts: time, author, external, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, category, tags, markNames, labels, sources.'
+			'Parts to hide on pull request rows, such as ["sources", "labels"]. Parts: time, author, external, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, categories, categoryNames, labels, sources.'
 	},
 	{
 		key: 'rows.issue',
 		page: 'general',
 		description:
-			'Parts to hide on issue rows. Parts: time, author, external, comments, moved, changes, category, tags, markNames, labels, sources.'
+			'Parts to hide on issue rows. Parts: time, author, external, comments, moved, changes, categories, categoryNames, labels, sources.'
 	},
 	{
 		key: 'rows.thread',
 		page: 'general',
 		description:
-			'Parts to hide on inbox notification rows. Parts: time, why, changes, override, category, tags, markNames, resolved, draft, snooze.'
+			'Parts to hide on inbox notification rows. Parts: time, why, changes, override, categories, categoryNames, resolved, draft, snooze.'
 	},
 	{
 		key: 'keys',
@@ -240,7 +233,6 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe', 'rows', 'alertChannels']);
 /** Settings that change how threads are sorted: a change re-sorts the stored threads. */
 export const RECLASSIFY_KEYS: (keyof Settings)[] = [
-	'categories',
 	'botsAreFyi',
 	'reviewResolution',
 	'newCommitsAfterReview',
@@ -321,8 +313,7 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	views: validateViews,
 	dash: validateDash,
 	sources: validateSources,
-	categories: validateCategories,
-	tags: validateTags,
+	categoryGroups: validateCategoryGroups,
 	tracked: validateTracked,
 	menus: validateMenus,
 	keys: validateKeys,
@@ -346,10 +337,11 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 					return `Unknown setting "${k}.${sub}".`;
 	}
 	if (
-		['views', 'categories', 'tags'].some((k) => keys.includes(k)) &&
-		smartConditions(next.views, markQueries(next)).length > MAX_SMART_CONDITIONS
+		['views', 'categoryGroups'].some((k) => keys.includes(k)) &&
+		smartConditions(next.views, markQueries(next), categoryConditionTexts(next.categoryGroups))
+			.length > MAX_SMART_CONDITIONS
 	)
-		return `Views, categories, and tags can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
+		return `Views and categories can have up to ${MAX_SMART_CONDITIONS} different about: conditions and descriptions in groups with more than one category per item.`;
 	return null;
 }
 
@@ -391,11 +383,6 @@ export function settingsFromFile(text: string): Partial<Settings> | string {
 			.filter((k) => raw[k] !== undefined)
 			.map((k) => [k, raw[k]])
 	) as Partial<Settings>;
-	if (Array.isArray(raw.rules) && raw.rules.length)
-		patch.categories = categoriesWithLegacyRules(
-			(patch.categories as ItemCategory[] | undefined) ?? DEFAULT_CATEGORIES,
-			raw.rules as LegacyInboxRule[]
-		);
 	return Object.keys(patch).length ? patch : 'The file has no settings.';
 }
 
@@ -404,10 +391,6 @@ function fromVersion1(settings: unknown): Record<string, unknown> {
 	const s = { ...(settings as Record<string, unknown>) };
 	const asQuery = (when: unknown) =>
 		when && typeof when === 'object' ? formatQuery(when as RuleMatch) : when;
-	if (Array.isArray(s.rules))
-		s.rules = s.rules.map((r) =>
-			r && typeof r === 'object' ? { ...r, when: asQuery(r.when) } : r
-		);
 	if (Array.isArray(s.views))
 		s.views = s.views.map((v) => {
 			if (!v || typeof v !== 'object' || !('when' in v)) return v;

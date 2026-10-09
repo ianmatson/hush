@@ -1,11 +1,10 @@
-import { FALLBACK_CATEGORY_ID } from '$lib/shared/categories';
 import type { MarkColor, Settings } from '$lib/shared/types';
 
 export interface RowMark {
 	key: string;
 	name: string;
+	group: string;
 	color: MarkColor;
-	kind: 'category' | 'tag';
 	icon?: string;
 }
 
@@ -34,27 +33,12 @@ export const MARK_TEXT: Record<MarkColor, string> = {
 };
 
 export function rowMarks(
-	categoryId: string | null | undefined,
-	tagIds: string[] | undefined,
-	settings: Pick<Settings, 'categories' | 'tags'> | undefined
+	categoryIds: string[] | undefined,
+	settings: Pick<Settings, 'categoryGroups'> | undefined
 ): RowMark[] {
-	const category = settings?.categories.find(
-		(c) => c.id === categoryId && c.id !== FALLBACK_CATEGORY_ID
+	return (settings?.categoryGroups ?? []).flatMap((g) =>
+		g.categories
+			.filter((c) => categoryIds?.includes(c.id))
+			.map((c) => ({ key: c.id, name: c.name, group: g.name, color: c.color, icon: c.icon }))
 	);
-	return [
-		...(category
-			? [
-					{
-						key: `c:${category.id}`,
-						name: category.name,
-						color: category.color,
-						kind: 'category' as const,
-						icon: category.icon
-					}
-				]
-			: []),
-		...(settings?.tags ?? [])
-			.filter((t) => tagIds?.includes(t.id))
-			.map((t) => ({ key: `t:${t.id}`, name: t.name, color: t.color, kind: 'tag' as const }))
-	];
 }

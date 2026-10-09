@@ -32,7 +32,7 @@
 		if (typeof patch === 'string') return toast.error(patch);
 		const n = (list: unknown[] | undefined, one: string) =>
 			list ? `${list.length} ${one}${list.length === 1 ? '' : 's'}` : null;
-		const what = [n(patch.categories, 'category'), n(patch.views, 'view')]
+		const what = [n(patch.categoryGroups, 'category group'), n(patch.views, 'view')]
 			.filter(Boolean)
 			.join(', ');
 		if (

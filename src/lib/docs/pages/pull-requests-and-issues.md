@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The dashboards of open work that involves you, grouped by whose turn it is.
 ---
 
-The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Your [sources](#sources), saved GitHub searches, decide what Hush tracks. The inbox gets only the notifications about these items. Hush groups the results by whose turn it is, and gives each item a [category and tags](#categories-and-tags).
+The **Pull requests** and **Issues** tabs show open work that involves you, also when GitHub sent no notification about it. Your [sources](#sources), saved GitHub searches, decide what Hush tracks. The inbox gets only the notifications about these items. Hush groups the results by whose turn it is, and gives each item its [categories](#categories).
 
 ## Groups
 
@@ -81,13 +81,13 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 
 **Filters** in **Settings → Sources** hide drafts that others opened ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)) and PRs and issues that bots opened ([`dash.hideBots`](/docs/settings#dash-hidebots)), such as dependabot or a GitHub App. Both are on by default. The stale days are only in [settings.json](/docs/settings).
 
-## Categories and tags
+## Categories
 
-Every item has exactly one **category** and any number of **tags**. Their icons show on each row; to show their names too, turn on **Category and tag names** in **Settings → General → Row contents**. After the source chips come a chip for each category and each tag, with its count: click one to see only its items, and click it again to see all. The turn groups stay the same.
+An item can have [categories](/docs/categories), from one or more category groups. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, next to **Refresh from GitHub**, lists every group and its categories, with counts: choose one to see only its items, and **Every category** to see all. The turn groups stay the same.
 
-To change an item's category, right-click it and choose **Category**, then a category, or **Hush decides** to remove your choice. **Tags** turns a tag on or off for the item. Both work on a selection too.
+To change an item's categories, right-click it and choose the name of a group, such as **Effort**. In a group with one category per item, choose a category. In a group with any number per item, choose a category to turn it on or off. **Choose automatically** removes your choices for that group. This works on a selection too.
 
-Set up categories and tags, and how Hush places items, in **Settings → Categories & tags**. See [Categories and tags](/docs/categories).
+Set up category groups, and how Hush places items, in **Settings → Categories**. See [Categories](/docs/categories).
 
 ## External contributors
 
@@ -97,7 +97,7 @@ An item opened by someone who is not a member or collaborator of the repository 
 
 The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box.
 
-Text with a `word:` in it is a [query](/docs/query-language): `repo:acme/web label:bug`, `review-requested:@me size:<50`. `category:` and `tag:` work too: `category:bugs tag:quick`.
+Text with a `word:` in it is a [query](/docs/query-language): `repo:acme/web label:bug`, `review-requested:@me size:<50`. `category:` works too: `category:high-effort`.
 
 ## Actions
 

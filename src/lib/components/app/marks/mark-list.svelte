@@ -14,12 +14,10 @@
 		showNames?: boolean;
 		tooltipSuffix?: (m: RowMark) => string;
 	} = $props();
-
-	const kindLabel = (m: RowMark) => (m.kind === 'category' ? 'Category' : 'Tag');
 </script>
 
 {#snippet markTooltip(m: RowMark)}
-	<Tooltip.Content>{kindLabel(m)}: {m.name}{tooltipSuffix(m)}</Tooltip.Content>
+	<Tooltip.Content>{m.group}: {m.name}{tooltipSuffix(m)}</Tooltip.Content>
 {/snippet}
 
 {#if showNames}
@@ -30,23 +28,23 @@
 					'flex max-w-40 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5',
 					MARK_TEXT[m.color]
 				)}
-				aria-label="{kindLabel(m)}: {m.name}"
+				aria-label="{m.group}: {m.name}"
 			>
-				<MarkIcon kind={m.kind} color={m.color} icon={m.icon} class="size-3" />
+				<MarkIcon color={m.color} icon={m.icon} class="size-3" />
 				<span class="truncate">{m.name}</span>
 			</Tooltip.Trigger>
 			{@render markTooltip(m)}
 		</Tooltip.Root>
 	{/each}
 {:else}
-	<span class="flex shrink-0 items-center gap-1" aria-label="Category and tags">
+	<span class="flex shrink-0 items-center gap-1" aria-label="Categories">
 		{#each marks as m (m.key)}
 			<Tooltip.Root>
 				<Tooltip.Trigger
 					class="flex size-4 items-center justify-center"
-					aria-label="{kindLabel(m)}: {m.name}"
+					aria-label="{m.group}: {m.name}"
 				>
-					<MarkIcon kind={m.kind} color={m.color} icon={m.icon} class="size-3.5" />
+					<MarkIcon color={m.color} icon={m.icon} class="size-3.5" />
 				</Tooltip.Trigger>
 				{@render markTooltip(m)}
 			</Tooltip.Root>

@@ -1,4 +1,4 @@
-import { classify, categoryTriage, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { DashKind, ThreadFacts } from '../../src/lib/shared/types';
@@ -172,7 +172,6 @@ export abstract class PollerSync extends PollerSubjects {
 		// Store the facts; this ingest writes these threads itself.
 		await this.record(who, [...fetched.values()], { threads: false, allAreInboxThreads: true });
 		const decided = this.decisionsOf(who, [...fetched.values()]);
-		const placed = this.trackedPlacements(changed.map((n) => itemKeyOf(n)!));
 
 		const now = Date.now();
 		const candidates: PushCandidate[] = [];
@@ -200,8 +199,7 @@ export abstract class PollerSync extends PollerSubjects {
 				htmlUrl: subjectHtmlUrl(n),
 				enrichment,
 				me,
-				myTeams,
-				itemCategoryId: key ? (placed.get(key)?.category ?? null) : null
+				myTeams
 			};
 			let c = withOverride(classify(facts, settings), ex, n.updated_at);
 			if (ex?.category === 'muted' && ex.rule === MUTED_BY_USER)
@@ -222,10 +220,7 @@ export abstract class PollerSync extends PollerSubjects {
 					wokeBy = outcome.reason;
 				}
 			}
-			// New activity: a rule that moves threads acts now (not for a snooze that just woke).
-			const moved = triage === 'inbox' && !wokeBy ? categoryTriage(c, now) : null;
-			if (moved) triage = moved.triage;
-			const keepSnooze = triage === 'snoozed' && !moved;
+			const keepSnooze = triage === 'snoozed';
 
 			let pushed = ex?.pushed_updated_at ?? null;
 			const itemKey = key ?? n.id;
@@ -239,7 +234,6 @@ export abstract class PollerSync extends PollerSubjects {
 				});
 				pushed = n.updated_at;
 			} else if (
-				!moved &&
 				initialized &&
 				n.unread &&
 				triage === 'inbox' &&
@@ -259,8 +253,8 @@ export abstract class PollerSync extends PollerSubjects {
 				this.run(
 					`INSERT INTO threads (id, repo, subject_type, subject_key, title, html_url, reason, unread, gh_updated_at,
              category, kind, summary, why, action_label, action_url, rule, triage, pushed_updated_at, first_seen_at,
-             snoozed_until, snoozed_at, resolved_note, api_url)
-           VALUES (${marks(23)})
+             api_url)
+           VALUES (${marks(20)})
            ON CONFLICT (id) DO UPDATE SET
              repo = excluded.repo, subject_type = excluded.subject_type, subject_key = excluded.subject_key,
              title = excluded.title, html_url = excluded.html_url, reason = excluded.reason, unread = excluded.unread,
@@ -268,13 +262,11 @@ export abstract class PollerSync extends PollerSubjects {
              summary = excluded.summary, why = excluded.why, action_label = excluded.action_label,
              action_url = excluded.action_url, rule = excluded.rule, triage = excluded.triage,
              pushed_updated_at = excluded.pushed_updated_at, api_url = excluded.api_url,
-             snoozed_until = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_until ELSE excluded.snoozed_until END,
+             snoozed_until = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_until END,
              snooze_event = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snooze_event END,
-             snoozed_at = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_at ELSE excluded.snoozed_at END,
-             resolved_at = CASE WHEN excluded.resolved_note IS NOT NULL THEN NULL
-               WHEN excluded.triage = 'done' THEN threads.resolved_at END,
-             resolved_note = CASE WHEN excluded.resolved_note IS NOT NULL THEN excluded.resolved_note
-               WHEN excluded.triage = 'done' THEN threads.resolved_note END`,
+             snoozed_at = CASE WHEN ${keepSnooze ? 1 : 0} THEN threads.snoozed_at END,
+             resolved_at = CASE WHEN excluded.triage = 'done' THEN threads.resolved_at END,
+             resolved_note = CASE WHEN excluded.triage = 'done' THEN threads.resolved_note END`,
 					n.id,
 					facts.repo,
 					facts.subjectType,
@@ -294,9 +286,6 @@ export abstract class PollerSync extends PollerSubjects {
 					triage,
 					pushed,
 					now,
-					moved?.triage === 'snoozed' ? moved.until : null,
-					moved?.triage === 'snoozed' ? now : null,
-					moved?.triage === 'done' ? moved.note : null,
 					n.subject.url ?? null
 				)
 			);

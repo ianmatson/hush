@@ -25,8 +25,8 @@ The token no longer works: you revoked Hush on GitHub, the token expired, or a c
 
 ## A thread is in the wrong list
 
-- Look at the row: its summary says why Hush put it there, and its category icon shows the category of its PR or issue. That category's inbox settings can change the list.
-- Check your [categories](/docs/categories): the first rule that matches wins, so a wide rule at the top catches more than you expect. Your inbox rules from before are categories now, at the top of the list.
+- Look at the row: its summary says why Hush put it there. [Categories](/docs/categories) do not change the list.
+- If it does not need you, choose [Doesn't need me](/docs/inbox#doesnt-need-me). Hush can fix a setting for you, or move only this thread.
 - Bots' activity is FYI by default ([`botsAreFyi`](/docs/settings#botsarefyi)), and so are team review requests ([`teamReviewsAreAction`](/docs/settings#teamreviewsareaction)).
 - Press {{key:list.refresh}} to check GitHub again now.
 
@@ -38,7 +38,7 @@ Hush sees your own review, reply, or push within 15 minutes, because GitHub send
 
 1. In **Settings → Notifications**, check that this device says “Receives push notifications.”, and choose **Send test**.
 2. Check that your system allows notifications from the browser, and that focus modes or Do Not Disturb are off.
-3. Check [quiet hours](/docs/notifications#quiet-hours), and that the thread is one that gets pushed: by default only Needs you. A category with **Never push** stops pushes too.
+3. Check [quiet hours](/docs/notifications#quiet-hours), and that the thread is one that gets pushed: by default only Needs you.
 4. Check [How often](/docs/notifications#how-often):
    - An item pushes once, and then not again until you open Hush or act on it ([`pushRepeat`](/docs/settings#pushrepeat)).
    - While Hush is open and in use on any device, it does not push ([`pushWhileOpen`](/docs/settings#pushwhileopen)).
@@ -64,15 +64,16 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 
 ## An item is in the wrong category
 
-- A category that you chose by hand wins. Right-click the item and choose **Category → Hush decides** to remove it.
-- Then the first category whose rule matches wins. Check the order in **Settings → Categories & tags**.
-- Jev chooses only among categories with a description, and only when it is sure. It reads an item again only when its title, description, or labels change. Choose **Re-evaluate items** to ask again after you change categories.
-- Rules look only at the PR or issue. They cannot use `category:`, `tag:`, `event:`, `needs:`, or `in:`.
-- A notification has the category of its PR or issue. To change it, change the category of the PR or issue.
+- A category that you chose by hand wins. Right-click the item, choose the group's name, and then **Choose automatically** to remove your choice.
+- In a group with one category per item, the first category whose rule matches wins. Check the order in **Settings → Categories**.
+- Jev chooses only among categories with a description. It reads an item again only when its title, description, or labels change, or when you change the descriptions of a group. Choose **Re-evaluate items** to ask again about every category.
+- When Jev is off or cannot answer, and no rule matches, the item has no category from that group.
+- Rules look only at the PR or issue. They cannot use `category:`, `event:`, `needs:`, or `in:`.
+- A notification has the categories of its PR or issue. To change them, change the categories of the PR or issue.
 
 ## settings.json does not save
 
-Hush shows the first error under the box, and saves nothing until the file is valid. The error names the setting, for example `"quietHours.timeZone is not a known time zone."`. `Unknown setting "rules".` means that the file still has inbox rules: write them as [categories](/docs/categories), or import the file in **Settings → General → Settings file**, which changes them for you. The type and the allowed values of each setting are in [settings.json](/docs/settings#every-setting).
+Hush shows the first error under the box, and saves nothing until the file is valid. The error names the setting, for example `"quietHours.timeZone is not a known time zone."`. `Unknown setting "rules".`, `Unknown setting "categories".`, or `Unknown setting "tags".` means that the file has a setting that Hush no longer has. Remove it. Categories are in [`categoryGroups`](/docs/settings#categorygroups) now. The type and the allowed values of each setting are in [settings.json](/docs/settings#every-setting).
 
 ## An action in the peek is not there
 

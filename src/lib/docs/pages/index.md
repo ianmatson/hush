@@ -21,14 +21,14 @@ Hush is a web app for your GitHub notifications. It replaces the notifications p
 - **FYI** is everything else: team mentions, watched repositories, bots, merged and closed work.
 - **Whose turn** is one set of rules for the inbox and the [Pull requests and Issues tabs](/docs/pull-requests-and-issues). An item is in Needs you exactly when it is “Your turn”.
 - **Hush follows up by itself.** When you approve, push a fix, or reply, the thread leaves Needs you with a note such as “✓ You approved”. When it needs you again, it comes back.
-- **Categories sort everything.** Every PR and issue has one [category](/docs/categories), and its notifications have the same category. A category can send its notifications to FYI, mute them, or push them.
-- **Everything is a setting.** Categories, tags, views, sources, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.
+- **Categories sort your work.** [Category groups](/docs/categories) mark each PR and issue, such as its effort, by your rules or with Jev. Its notifications show the same categories.
+- **Everything is a setting.** Categories, views, sources, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.
 
 ## Where to start
 
 - New to Hush: [Getting started](/docs/getting-started).
 - An org's repositories are missing: [GitHub access](/docs/github-access).
-- Too much noise, or not enough: [Categories and tags](/docs/categories) and [Notifications](/docs/notifications).
+- Too much noise, or not enough: [What needs you](/docs/inbox#what-needs-you) and [Notifications](/docs/notifications).
 - You like the keyboard: [Keybinds](/docs/keybinds).
 - You want every option: [settings.json](/docs/settings).
 

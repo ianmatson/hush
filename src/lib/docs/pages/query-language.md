@@ -1,9 +1,9 @@
 ---
 title: Query language
-description: The one-line syntax of the filter boxes, notification views, and category and tag rules, with every word and value.
+description: The one-line syntax of the filter boxes, notification views, and category rules, with every word and value.
 ---
 
-One short syntax filters the inbox and the Pull requests and Issues tabs, defines [notification views](/docs/views), and writes the rules of [categories and tags](/docs/categories#rules):
+One short syntax filters the inbox and the Pull requests and Issues tabs, defines [notification views](/docs/views), and writes the rules of [categories](/docs/categories#rules):
 
 ```query
 repo:acme/* needs:review -author:bots label:"good first issue" login bug
@@ -46,23 +46,23 @@ about:"database migrations or schema changes"
 
 It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision model, reads the title, labels, start of the description, and last 2 comments, and decides whether the item is about what you wrote. It matches only when Jev is sure.
 
-- Use it in the rules of [categories and tags](/docs/categories#rules) and in [notification views](/docs/views). Hush checks the condition when you save, and again when an item's text changes. In a filter box, `about:` finds only what a saved category, tag, or view with the same words already checked.
+- Use it in the rules of [categories](/docs/categories#rules) and in [notification views](/docs/views). Hush checks the condition when you save, and again when an item's text changes. In a filter box, `about:` finds only what a saved category or view with the same words already checked.
 - Put exact words first where you can: in `repo:acme/api about:"migrations"`, Jev reads only the items of acme/api.
-- Up to 30 different `about:` conditions in all your categories, tags, and views, each up to 200 characters.
+- Up to 30 different `about:` conditions in all your categories and views, each up to 200 characters. In a category group with any number per item, each category description counts as one too.
 
-## `category:` and `tag:`
+## `category:`
 
-`category:` and `tag:` find pull requests and issues by their [category or tags](/docs/categories). Write the name or the id; `*` and `?` work too:
+`category:` finds pull requests and issues by their [categories](/docs/categories), from any group. Write the name or the id; `*` and `?` work too:
 
 ```query
-category:bugs tag:quick,"needs decision"
+category:high-effort,medium-effort
 ```
 
-They work in the Filter boxes of the inbox and of the Pull requests and Issues tabs, and in [notification views](/docs/views). For a notification, they match the category and tags of its PR or issue. The rules of categories and tags cannot use them. `category:` is not an old name for `in:`.
+It works in the Filter boxes of the inbox and of the Pull requests and Issues tabs, and in [notification views](/docs/views). For a notification, it matches the categories of its PR or issue. The rules of categories cannot use it. `category:` is not an old name for `in:`. There is no `tag:`: tags are categories in a group with any number per item.
 
 ## Words for notifications
 
-`event:`, `needs:`, and `in:` are about notifications: why GitHub notified you, what Hush thinks you must do, and the list of the thread. Use them in the inbox Filter box and in notification views. Category and tag rules look only at the PR or issue, so they cannot use these words.
+`event:`, `needs:`, and `in:` are about notifications: why GitHub notified you, what Hush thinks you must do, and the list of the thread. Use them in the inbox Filter box and in notification views. Category rules look only at the PR or issue, so they cannot use these words.
 
 ## Examples
 
@@ -79,20 +79,28 @@ They work in the Filter boxes of the inbox and of the Pull requests and Issues t
 | `label:bug OR label:crash`         | Threads with either label.                                           |
 | `repo:acme/* -author:@me`          | Everything in the acme org that you did not open.                    |
 | `about:"dependency bump"`          | Dependency updates, whoever opened them (smart decisions).           |
-| `category:bugs tag:quick`          | Quick bug fixes (not in category and tag rules).                     |
+| `category:high-effort type:pr`     | PRs that take long to review (not in category rules).                |
 
 ## In settings.json
 
-Categories, tags, and notification views store the query as text: the `rule` of a [category](/docs/settings#categories) or a [tag](/docs/settings#tags), and the `query` of a [view](/docs/settings#views). Hush checks it when you save: a query with a part that it does not understand is refused, with the error.
+Categories and notification views store the query as text: the `rule` of a [category](/docs/settings#categorygroups), and the `query` of a [view](/docs/settings#views). Hush checks it when you save: a query with a part that it does not understand is refused, with the error.
 
 ```json settings
 {
-	"tags": [
+	"categoryGroups": [
 		{
-			"id": "acme-prs",
-			"name": "Acme PRs",
-			"color": "blue",
-			"rule": "repo:acme/* type:pr -author:bots"
+			"id": "org",
+			"name": "Org",
+			"multiple": true,
+			"categories": [
+				{
+					"id": "acme-prs",
+					"name": "Acme PRs",
+					"color": "blue",
+					"rule": "repo:acme/* type:pr -author:bots",
+					"description": ""
+				}
+			]
 		}
 	]
 }

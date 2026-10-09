@@ -1,45 +1,50 @@
 ---
-title: Categories and tags
-description: Give every pull request and issue one category, and mark items with tags. A category also decides what the notifications about its items do in the inbox.
+title: Categories
+description: Sort pull requests and issues into groups of categories, by rules or with Jev. A group gives each item one category, or any number of them.
 ---
 
-Every pull request and issue has exactly one **category**: where it lives. It can also have any number of **tags**: what else is true about it. Set them up in **Settings → Categories & tags**.
+A **category** marks a pull request or issue: its effort, its area, its topic. Categories are in **groups**. A group gives each item one category, or any number of them. Set them up in **Settings → Categories**.
 
-A notification has the category and the tags of its PR or issue. Hush does not place notifications by themselves.
+A notification shows the categories of its PR or issue. Hush does not place notifications by themselves.
 
-- Categories show on rows, as filter chips on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories-and-tags), and in [feeds](/docs/feeds).
-- A category can also change the inbox: send the notification threads of its items to Needs you, FYI, or Muted, turn pushes on or off, and move new threads to Done or Snoozed. See [Inbox settings](#inbox-settings).
-- Tags only mark items. They do not change the inbox.
+- Categories show on rows, in the category filter of the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories), and in [feeds](/docs/feeds).
+- Categories do not change the inbox. They do not make a thread Needs you, FYI, or Muted, and they do not change pushes. To change the inbox, see [What needs you](/docs/inbox#what-needs-you) and [Notification views](/docs/views).
 
 ## How Hush places an item
 
-Hush checks the categories **from top to bottom**:
+Each group has a setting: **One category per item** or **Any number per item**.
 
-1. A category that you chose for the item (right-click → **Category**). **Hush decides** removes your choice.
+In a group with **One category per item**, Hush checks the categories **from top to bottom**:
+
+1. A category that you chose for the item (right-click → the group's name).
 2. The first category whose rule matches.
-3. Jev's choice among the categories that have a description, when it is sure enough. See [smart decisions](/docs/settings#smartdecisions).
-4. Otherwise **Other** (id `other`). It is always last, and you cannot delete it.
+3. Jev's choice among the categories that have a description. See [smart decisions](/docs/settings#smartdecisions).
 
-An item gets every tag whose rule matches, plus the tags that you turn on by hand (right-click → **Tags**). A tag that you turn off by hand stays off. Each tag's rule is checked on its own.
+When Jev is off or cannot answer, and no rule matches, the item has no category from the group. There is no fallback category. To make one, add a category at the bottom of the group with a rule that matches everything, such as `type:pr OR type:issue`.
 
-Hush checks the rules on the PR or issue only, never on a notification. A category or tags that you choose for a PR or issue apply to its notifications too.
+In a group with **Any number per item**, Hush checks each category on its own. An item gets every category that you turned on for it, every category whose rule matches, and every category whose description Jev says fits (when Jev is at least 80% sure). A category that you turn off for an item stays off.
 
-Hush starts with presets that you can change or delete: [categories](/docs/settings#categories) (Incidents, Bugs, Dependencies, Features, Docs, Questions, Maintenance, Other) and [tags](/docs/settings#tags) (Blocked, Needs decision, Security, Breaking change, Quick, Large). Most presets first look for GitHub's usual labels, such as `bug`, `enhancement`, `documentation`, and `dependencies`. When no label matches, Jev reads the item. Dependabot and Renovate PRs go to Dependencies, which does not push.
+Hush checks the rules on the PR or issue only, never on a notification. Categories that you choose for a PR or issue apply to its notifications too.
+
+## The default group
+
+Hush starts with one group, **Effort**, with one category per item: **Low**, **Medium**, and **High**. These categories have a description and no rule, so Jev places each item: the review effort of a pull request, or the work for an issue. You can change or delete the group. The defaults are in [`categoryGroups`](/docs/settings#categorygroups).
 
 ## Make a category
 
-In **Settings → Categories & tags**:
+In **Settings → Categories**:
 
-- **Add category** adds an empty category. Give it a name and a color, and a rule, a description for Jev, or both.
-- Or right-click a thread in the inbox and choose **Make a category…**: the new category has the thread's repository and type as its rule, and its threads go to FYI. Change what you want, and choose **Save**.
-- Move a category up or down with its buttons. Order matters: the first rule that matches wins.
-- **Defaults** puts back the preset categories or tags. Nothing changes until you choose **Save**.
+- **Add category** in a group adds an empty category. Give it a name, a color, an icon, and a rule, a description for Jev, or both.
+- Or right-click a thread in the inbox and choose **Make a category…**: the new category is in your first group, with the thread's repository and type as its rule. Change what you want, and choose **Save**.
+- Drag a category up or down to change its order. In a group with one category per item, order matters: the first rule that matches wins.
+- **Add category group** adds an empty group. Give it a name, and choose **One category per item** or **Any number per item**.
+- **Defaults** puts back the Effort group. Nothing changes until you choose **Save**.
 
-You can have up to 20 categories and 20 tags.
+You can have up to 10 groups, with up to 20 categories in each group. A category's id is unique across all groups.
 
 ## Rules
 
-A category's or a tag's rule is a [query](/docs/query-language), such as `repo:acme/website type:pr`. All of its conditions must match, and `OR` matches either side. An empty rule never matches: the category then gets items only from Jev or by hand.
+A category's rule is a [query](/docs/query-language), such as `repo:acme/website type:pr`. All of its conditions must match, and `OR` matches either side. An empty rule never matches: the category then gets items only from Jev or by hand.
 
 | Query word                     | Matches                                                          |
 | ------------------------------ | ---------------------------------------------------------------- |
@@ -53,123 +58,93 @@ A category's or a tag's rule is a [query](/docs/query-language), such as `repo:a
 | `size:<50`                     | Lines changed in a pull request.                                 |
 | `about:"database migrations"`  | What it is about, in your words. Jev decides.                    |
 
-Rules cannot use `category:` and `tag:`. They also cannot use `event:`, `needs:`, and `in:`, because these words are about notifications, and rules look only at the PR or issue. Every word and value is in the [query language](/docs/query-language) reference.
+Rules cannot use `category:`. They also cannot use `event:`, `needs:`, and `in:`, because these words are about notifications, and rules look only at the PR or issue. Every word and value is in the [query language](/docs/query-language) reference.
 
-Jev reads each item once, when Hush first sees it, and again when its title, description, or labels change. A new comment does not change its category or tags. After you change categories or tags, choose **Re-evaluate items** to ask Jev again about the items you have now. Rules without `about:` apply at once.
+## Jev and descriptions
 
-## Inbox settings
+A description tells Jev what belongs in the category, in a few words. Jev reads each item once, when Hush first sees it, and again when its title, description, or labels change. A new comment does not change its categories. When you add or change a description, Jev asks again about that group. To ask again about every category of the items you have now, choose **Re-evaluate items**. Rules without `about:` apply at once.
 
-Each category has three settings for the notification threads of its PRs and issues in the inbox:
-
-| Setting          | JSON                                                     | Does                                                                                                     |
-| ---------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **In the inbox** | `"inbox"`: `"auto"`, `"action"`, `"fyi"`, or `"muted"`   | **Hush decides** (the default), **Always Needs you**, **Always FYI**, or **Muted**.                      |
-| **Push**         | `"push"`: `"inherit"`, `"on"`, or `"off"`                | **Use the notification settings** (the default), **Always push** (also FYI), or **Never push**.          |
-| **New threads**  | `"triage"`: `"done"`, or `"snooze"` with `"snoozeHours"` | **Keep in the inbox** (the default), **Move to Done**, or **Snooze** for 1 to 720 hours (24 by default). |
-
-**New threads** acts when a thread has new activity or when the category starts to match. If you bring a thread back to the inbox yourself, it stays there until its next activity. A thread that a category moved to Done says “Category: Website”.
-
-A category never sends a thread to GitHub: Muted by a category stays in Hush. **Mute** in the inbox unsubscribes you on GitHub too.
-
-## Inbox rules from before
-
-Inbox rules are gone; categories do their work now. Hush changed your rules into categories for you:
-
-- Each enabled rule is a category at the top of the list, in the same order, with the same name and color gray. A rule with no name is “Rule 1”, “Rule 2”…
-- Its conditions are the category's rule, and its effects are the category's inbox settings.
-- A rule with no conditions (it matched every thread) puts its effects on **Other**.
-- Rules that were off are gone.
-
-A settings file with `rules` imports the same way.
+In a group with any number per item, each description counts as one condition in the limit of 30 `about:` conditions. See [Limits](/docs/limits).
 
 ## Examples
 
-As queries, with what the category does in the inbox:
+The same categories as queries:
 
-| When                         | Then                     |
-| ---------------------------- | ------------------------ |
-| `repo:acme/website`          | FYI                      |
-| `author:dependabot*`         | Muted                    |
-| `type:issue repo:sveltejs/*` | Needs you, always push   |
-| `from:github-actions`        | Move to Done             |
-| `repo:acme/nightly`          | Snooze 12 hours, no push |
+| When                         | Category      |
+| ---------------------------- | ------------- |
+| `repo:acme/website`          | Website       |
+| `author:dependabot*`         | Dependencies  |
+| `type:issue repo:sveltejs/*` | Svelte issues |
+| `label:security`             | Security      |
+| `type:pr size:<50`           | Quick         |
 
-The same categories in [settings.json](/docs/settings#categories):
-
-```json settings
-{
-	"categories": [
-		{
-			"id": "website",
-			"name": "Website",
-			"color": "blue",
-			"rule": "repo:acme/website",
-			"description": "",
-			"inbox": "fyi"
-		},
-		{
-			"id": "dependabot",
-			"name": "Dependabot",
-			"color": "gray",
-			"rule": "author:dependabot*",
-			"description": "",
-			"inbox": "muted"
-		},
-		{
-			"id": "svelte",
-			"name": "Svelte issues",
-			"color": "orange",
-			"rule": "type:issue repo:sveltejs/*",
-			"description": "",
-			"inbox": "action",
-			"push": "on"
-		},
-		{
-			"id": "bot-comments",
-			"name": "Bot comments",
-			"color": "gray",
-			"rule": "from:github-actions",
-			"description": "",
-			"triage": "done"
-		},
-		{
-			"id": "nightly",
-			"name": "Nightly",
-			"color": "teal",
-			"rule": "repo:acme/nightly",
-			"description": "",
-			"push": "off",
-			"triage": "snooze",
-			"snoozeHours": 12
-		},
-		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
-	]
-}
-```
-
-A change to `categories` replaces the whole list, so keep `other`. Tags have only `id`, `name`, `color`, and `rule`:
+In [settings.json](/docs/settings#categorygroups), with an Area group (one per item) and a Topics group (any number per item):
 
 ```json settings
 {
-	"tags": [
-		{ "id": "quick", "name": "Quick", "color": "green", "rule": "type:pr size:<50" },
+	"categoryGroups": [
 		{
-			"id": "migrations",
-			"name": "Migrations",
-			"color": "violet",
-			"rule": "about:\"database migrations or schema changes\""
+			"id": "area",
+			"name": "Area",
+			"multiple": false,
+			"categories": [
+				{
+					"id": "website",
+					"name": "Website",
+					"color": "blue",
+					"rule": "repo:acme/website",
+					"description": ""
+				},
+				{
+					"id": "dependencies",
+					"name": "Dependencies",
+					"color": "gray",
+					"rule": "author:dependabot*",
+					"description": ""
+				},
+				{
+					"id": "svelte",
+					"name": "Svelte issues",
+					"color": "orange",
+					"rule": "type:issue repo:sveltejs/*",
+					"description": ""
+				}
+			]
+		},
+		{
+			"id": "topics",
+			"name": "Topics",
+			"multiple": true,
+			"categories": [
+				{
+					"id": "security",
+					"name": "Security",
+					"color": "red",
+					"icon": "lucide:shield",
+					"rule": "label:security",
+					"description": "Vulnerabilities, secrets, permissions, or authentication"
+				},
+				{
+					"id": "quick",
+					"name": "Quick",
+					"color": "green",
+					"rule": "type:pr size:<50",
+					"description": ""
+				}
+			]
 		}
 	]
 }
 ```
 
+A change to `categoryGroups` replaces the whole list, so this example removes the Effort group. Keep it in the list to keep it.
+
 ## Feeds
 
-Each category and each tag can have an [Atom feed](/docs/feeds) of its open pull requests and issues. Choose the feed button next to it in **Settings → Categories & tags**.
+Each category can have an [Atom feed](/docs/feeds) of its open pull requests and issues. Choose the feed button next to it in **Settings → Categories**.
 
 ## Tips
 
-- Put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
-- To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter) or a [notification view](/docs/views). They can also use `category:` and `tag:`.
-- To hear about something without seeing it in Needs you, use **Always FYI** with **Always push**.
+- In a group with one category per item, put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
+- To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter) or a [notification view](/docs/views). They can also use `category:`.
 - Give a category a description, and leave its rule empty, to let Jev fill it.

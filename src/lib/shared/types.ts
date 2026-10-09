@@ -92,7 +92,7 @@ export interface Enrichment {
 	commentsNeedMe?: boolean | null;
 	urgent?: boolean;
 	smart?: string[];
-	jevCategory?: string | null;
+	jevChoices?: Record<string, string>;
 }
 
 /** Everything the classifier needs to know about one notification thread. */
@@ -109,9 +109,7 @@ export interface ThreadFacts {
 	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
 	sources?: string[];
-	itemCategoryId?: string | null;
-	itemCategory?: { id: string; name: string };
-	itemTags?: { id: string; name: string }[];
+	itemCategories?: { id: string; name: string }[];
 }
 
 export interface Classification {
@@ -125,9 +123,6 @@ export interface Classification {
 	actionUrl: string;
 	/** Set by a rule; overrides the default push decision. */
 	push?: boolean;
-	/** Set by a rule: move the thread to Done, or snooze it for `snoozeHours`. */
-	triage?: 'done' | 'snooze';
-	snoozeHours?: number;
 	/** Name of the rule that matched, if any. */
 	rule?: string;
 }
@@ -156,7 +151,6 @@ export interface RuleMatch {
 	about?: string[];
 	source?: string[];
 	itemCategory?: string[];
-	itemTag?: string[];
 	assignee?: string | string[];
 	reviewRequested?: string[];
 	size?: string[];
@@ -165,10 +159,6 @@ export interface RuleMatch {
 export type MarkColor =
 	'gray' | 'red' | 'orange' | 'amber' | 'green' | 'teal' | 'blue' | 'violet' | 'pink';
 
-export type CategoryInbox = 'auto' | Category;
-export type CategoryPush = 'inherit' | 'on' | 'off';
-export type CategoryTriage = 'done' | 'snooze';
-
 export interface ItemCategory {
 	id: string;
 	name: string;
@@ -176,31 +166,13 @@ export interface ItemCategory {
 	rule: string;
 	description: string;
 	icon?: string;
-	inbox?: CategoryInbox;
-	push?: CategoryPush;
-	triage?: CategoryTriage;
-	snoozeHours?: number;
 }
 
-export interface ItemTag {
+export interface CategoryGroup {
 	id: string;
 	name: string;
-	color: MarkColor;
-	rule: string;
-}
-
-export interface LegacyInboxRule {
-	name?: string;
-	enabled?: boolean;
-	/** A query (shared/query.ts), such as "repo:acme/* needs:review". "" matches every thread. */
-	when: string;
-	then: {
-		category?: Category;
-		push?: boolean;
-		/** Also move the thread: to Done, or snoozed for `snoozeHours` (see categoryTriage). */
-		triage?: 'done' | 'snooze';
-		snoozeHours?: number;
-	};
+	multiple: boolean;
+	categories: ItemCategory[];
 }
 
 /** Minutes after midnight, in `timeZone`. `from` after `to` crosses midnight. */
@@ -253,8 +225,7 @@ export interface Settings {
 	dash: DashSettings;
 	sources: DashSection[];
 	tracked: string[];
-	categories: ItemCategory[];
-	tags: ItemTag[];
+	categoryGroups: CategoryGroup[];
 	/** Notification views: extra inbox tabs, in order. */
 	views: SavedView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
@@ -362,9 +333,8 @@ export interface DashItem {
 	lastCommitAt: string | null;
 	commentsNeedMe?: boolean | null;
 	urgent?: boolean;
-	category?: string;
-	categoryPinned?: boolean;
-	tags?: string[];
+	categories?: string[];
+	pinnedCategories?: string[];
 	// Computed.
 	sections: string[];
 	turn: Turn;
@@ -432,8 +402,7 @@ export interface ThreadDTO {
 	authorIsBot: boolean;
 	labels: string[];
 	rule: string | null;
-	itemCategory: string | null;
-	tags: string[];
+	categories: string[];
 	/** You said it does not need you ("only this one"): FYI until it changes. */
 	override?: boolean;
 	/** What changed since you last looked at its PR or issue (none before your first look). */

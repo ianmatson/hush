@@ -12,7 +12,6 @@ import { activityText, latestActivity } from './activity';
 import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 import { compileExpr, exprMatches, ME, sizeMatches } from './query';
 import { conditionId } from './decisions';
-import { DEFAULT_SNOOZE_HOURS, threadCategory, withCategory } from './categories';
 
 /** Notification reasons, as Hush shows them. */
 export const WHY: Record<string, string> = {
@@ -36,7 +35,7 @@ export const WHY: Record<string, string> = {
 export { isBot };
 
 /** The default, opinionated classification: only things you can act on are "action". */
-export function classifyDefault(
+export function classify(
 	t: ThreadFacts,
 	settings: Pick<Settings, 'botsAreFyi' | 'teamReviewsAreAction'> &
 		Partial<Pick<Settings, 'reviewResolution' | 'newCommitsAfterReview'>>
@@ -202,9 +201,8 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 	if (m.source?.length && !t.sources?.some((name) => matchGlobs(name, m.source))) return false;
 	const named = (mark: { id: string; name: string }, globs: string[]) =>
 		matchGlobs(mark.id, globs) || matchGlobs(mark.name, globs);
-	if (m.itemCategory?.length && !(t.itemCategory && named(t.itemCategory, m.itemCategory)))
+	if (m.itemCategory?.length && !t.itemCategories?.some((x) => named(x, m.itemCategory!)))
 		return false;
-	if (m.itemTag?.length && !t.itemTags?.some((tag) => named(tag, m.itemTag!))) return false;
 	if (m.size?.length) {
 		if (e?.additions === undefined) return false;
 		const lines = e.additions + (e.deletions ?? 0);
@@ -246,30 +244,6 @@ export function withOverride(
 	if (row?.override !== 'fyi' || row.override_updated_at !== updatedAt || c.category !== 'action')
 		return c;
 	return { ...c, category: 'fyi', push: false };
-}
-
-export function classify(t: ThreadFacts, settings: Settings): Classification {
-	const base = classifyDefault(t, settings);
-	return withCategory(base, threadCategory(t, settings.categories));
-}
-
-/**
- * Where a category moves a thread that is in the inbox: to Done, or snoozed for some hours. Null
- * when its category does not move threads. Callers apply it only on new activity or when the
- * category starts to match, so a thread you moved back yourself stays where you put it.
- */
-export function categoryTriage(
-	c: Classification,
-	now = Date.now()
-): null | { triage: 'done'; note: string } | { triage: 'snoozed'; until: number; note: string } {
-	if (!c.rule || !c.triage) return null;
-	const note = `Category: ${c.rule}`;
-	if (c.triage === 'done') return { triage: 'done', note };
-	return {
-		triage: 'snoozed',
-		until: now + (c.snoozeHours ?? DEFAULT_SNOOZE_HOURS) * 3_600_000,
-		note
-	};
 }
 
 export function shouldPush(c: Classification, settings: Settings): boolean {
