@@ -1,11 +1,5 @@
-import {
-	classify,
-	classifyDefault,
-	categoryTriage,
-	shouldPush,
-	withOverride
-} from '../../src/lib/shared/classify';
-import { FALLBACK_CATEGORY_ID, placeItem, type ItemPins } from '../../src/lib/shared/categories';
+import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import { placeItem, type ItemPins } from '../../src/lib/shared/categories';
 import { TRACKED_SOURCE } from '../../src/lib/shared/sources';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
@@ -180,19 +174,13 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const out = new Map<string, ItemPins>();
 		for (let i = 0; i < keys.length; i += CHUNK) {
 			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{
-				key: string;
-				category: string | null;
-				tags_on: string;
-				tags_off: string;
-			}>(
-				`SELECT key, category, tags_on, tags_off FROM item_pins WHERE key IN (${marks(chunk.length)})`,
+			for (const r of this.all<{ key: string; pinned_on: string; pinned_off: string }>(
+				`SELECT key, pinned_on, pinned_off FROM item_pins WHERE key IN (${marks(chunk.length)})`,
 				...chunk
 			))
 				out.set(r.key, {
-					category: r.category,
-					tagsOn: JSON.parse(r.tags_on) as string[],
-					tagsOff: JSON.parse(r.tags_off) as string[]
+					on: JSON.parse(r.pinned_on) as string[],
+					off: JSON.parse(r.pinned_off) as string[]
 				});
 		}
 		return out;
@@ -215,7 +203,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		);
 		return items.map((i) => {
 			const s = facts.get(i.id);
-			if (!s) return { ...i, category: FALLBACK_CATEGORY_ID, tags: [] };
+			if (!s) return { ...i, categories: [], pinnedCategories: [] };
 			const d = decided.get(i.id);
 			const t: ThreadFacts = {
 				repo: s.repo,
@@ -230,38 +218,26 @@ export abstract class PollerSubjects extends PollerDecisions {
 			};
 			const placed = placeItem(
 				t,
-				classifyDefault(t, who.settings),
-				d?.category ?? null,
+				classify(t, who.settings),
 				pins.get(i.id),
-				who.settings
+				who.settings.categoryGroups
 			);
-			return {
-				...i,
-				category: placed.category,
-				categoryPinned: placed.categoryBy === 'pin',
-				tags: placed.tags
-			};
+			return { ...i, categories: placed.categories, pinnedCategories: placed.pinned };
 		});
 	}
 
 	protected trackedPlacements(
 		keys: string[]
-	): Map<string, { category: string | null; tags: string[]; seenAt: number }> {
-		const out = new Map<string, { category: string | null; tags: string[]; seenAt: number }>();
+	): Map<string, { categories: string[]; seenAt: number }> {
+		const out = new Map<string, { categories: string[]; seenAt: number }>();
 		for (let i = 0; i < keys.length; i += CHUNK) {
 			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{
-				key: string;
-				category: string | null;
-				tags: string;
-				seen_at: number;
-			}>(
-				`SELECT key, category, tags, seen_at FROM tracked_items WHERE key IN (${marks(chunk.length)})`,
+			for (const r of this.all<{ key: string; categories: string; seen_at: number }>(
+				`SELECT key, categories, seen_at FROM tracked_items WHERE key IN (${marks(chunk.length)})`,
 				...chunk
 			))
 				out.set(r.key, {
-					category: r.category,
-					tags: JSON.parse(r.tags) as string[],
+					categories: JSON.parse(r.categories) as string[],
 					seenAt: r.seen_at
 				});
 		}
@@ -275,22 +251,19 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const writes: (() => void)[] = [];
 		for (const i of items) {
 			const old = stored.get(i.id);
-			const category = i.category ?? null;
-			const tags = JSON.stringify(i.tags ?? []);
-			const sameMarks = !!old && old.category === category && JSON.stringify(old.tags) === tags;
+			const categories = JSON.stringify(i.categories ?? []);
+			const sameMarks = !!old && JSON.stringify(old.categories) === categories;
 			const seenAt = old && !(seen && now - old.seenAt > TRACKED_SEEN_REFRESH) ? old.seenAt : now;
 			if (sameMarks && seenAt === old.seenAt) continue;
 			if (!sameMarks) marksChanged = true;
 			writes.push(() =>
 				this.run(
-					`INSERT INTO tracked_items (key, kind, seen_at, category, tags) VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT (key) DO UPDATE SET seen_at = excluded.seen_at, category = excluded.category,
-             tags = excluded.tags`,
+					`INSERT INTO tracked_items (key, kind, seen_at, categories) VALUES (?, ?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET seen_at = excluded.seen_at, categories = excluded.categories`,
 					i.id,
 					i.kind,
 					seenAt,
-					category,
-					tags
+					categories
 				)
 			);
 		}
@@ -333,8 +306,6 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const writes: (() => void)[] = [];
 		const candidates: PushCandidate[] = [];
 		const resolved: Resolved[] = [];
-		const now = Date.now();
-		const placed = this.trackedPlacements([...new Set(items.map((i) => i.row.subject_key!))]);
 		for (const { row: r, fresh, before } of items) {
 			const e = enrichmentOf(fresh, me, decided.get(r.subject_key!));
 			const c = withOverride(
@@ -347,8 +318,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 						htmlUrl: r.html_url,
 						enrichment: e,
 						me,
-						myTeams,
-						itemCategoryId: placed.get(r.subject_key!)?.category ?? null
+						myTeams
 					},
 					settings
 				),
@@ -369,20 +339,10 @@ export abstract class PollerSubjects extends PollerDecisions {
 				e,
 				me
 			);
-			// A rule that moves threads acts when it starts to match (and not again after you moved
-			// the thread back yourself: then the rule already matched).
-			const moved =
-				out.triage === 'inbox' && !!c.rule && c.rule !== r.rule ? categoryTriage(c, now) : null;
-			const triage = moved?.triage ?? out.triage;
-			const resolvedAt = moved ? null : out.resolvedAt;
-			const note =
-				moved?.triage === 'done'
-					? moved.note
-					: triage === 'done'
-						? (out.resolvedNote ?? r.resolved_note)
-						: null;
-			// Snooze columns: 1 = a rule snoozes it now, 2 = clear them, 0 = keep.
-			const snooze = moved?.triage === 'snoozed' ? 1 : out.clearSnooze ? 2 : 0;
+			const triage = out.triage;
+			const resolvedAt = out.resolvedAt;
+			const note = triage === 'done' ? (out.resolvedNote ?? r.resolved_note) : null;
+			const clearSnooze = out.clearSnooze ? 1 : 0;
 			const same =
 				c.category === r.category &&
 				c.kind === r.kind &&
@@ -394,15 +354,14 @@ export abstract class PollerSubjects extends PollerDecisions {
 				triage === r.triage &&
 				resolvedAt === r.resolved_at &&
 				note === r.resolved_note &&
-				!snooze;
+				!clearSnooze;
 			if (same) continue;
 			writes.push(() =>
 				this.run(
 					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
              rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
-             snoozed_until = CASE ? WHEN 1 THEN ? WHEN 2 THEN NULL ELSE snoozed_until END,
-             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END,
-             snoozed_at = CASE ? WHEN 1 THEN ? ELSE snoozed_at END
+             snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
+             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
            WHERE id = ?`,
 					c.category,
 					c.kind,
@@ -414,22 +373,17 @@ export abstract class PollerSubjects extends PollerDecisions {
 					triage,
 					resolvedAt,
 					note,
-					snooze,
-					moved?.triage === 'snoozed' ? moved.until : null,
-					snooze,
-					snooze,
-					now,
+					clearSnooze,
+					clearSnooze,
 					r.id
 				)
 			);
-			if (moved?.triage === 'done') resolved.push({ id: r.id, title: r.title, note: moved.note });
-			else if (out.resolvedNote && !moved)
-				resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
+			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
 			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
 			const wanted = snoozeOver
 				? settings.pushAction
 				: settings.pushTurnChanges && shouldPush(c, settings);
-			if (out.push && wanted && !moved)
+			if (out.push && wanted)
 				candidates.push({
 					itemKey: r.subject_key ?? r.id,
 					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,

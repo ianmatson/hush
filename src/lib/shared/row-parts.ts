@@ -14,9 +14,8 @@ const ITEM_PARTS: RowPart[] = [
 	{ id: 'comments', label: 'Comment count' },
 	{ id: 'moved', label: 'Moved by you' },
 	{ id: 'changes', label: 'Changes since you looked' },
-	{ id: 'category', label: 'Category' },
-	{ id: 'tags', label: 'Tags' },
-	{ id: 'markNames', label: 'Category and tag names' },
+	{ id: 'categories', label: 'Categories' },
+	{ id: 'categoryNames', label: 'Category names' },
 	{ id: 'labels', label: 'GitHub labels' },
 	{ id: 'sources', label: 'Sources' }
 ];
@@ -39,9 +38,8 @@ export const ROW_PARTS: Record<RowKind, RowPart[]> = {
 		{ id: 'why', label: 'Why you got it' },
 		{ id: 'changes', label: 'Changes since you looked' },
 		{ id: 'override', label: '“Doesn’t need me” note' },
-		{ id: 'category', label: 'Category' },
-		{ id: 'tags', label: 'Tags' },
-		{ id: 'markNames', label: 'Category and tag names' },
+		{ id: 'categories', label: 'Categories' },
+		{ id: 'categoryNames', label: 'Category names' },
 		{ id: 'resolved', label: 'Why Hush moved it' },
 		{ id: 'draft', label: 'Draft' },
 		{ id: 'snooze', label: 'Snoozed until' }
@@ -57,10 +55,18 @@ export const ROW_KINDS: { id: RowKind; label: string }[] = [
 export const MAX_ROW_LABELS = 2;
 
 export const DEFAULT_ROWS: RowSettings = {
-	pr: ['threads', 'markNames', 'labels', 'sources'],
-	issue: ['markNames', 'labels', 'sources'],
-	thread: ['why', 'changes', 'markNames']
+	pr: ['threads', 'categoryNames', 'labels', 'sources'],
+	issue: ['categoryNames', 'labels', 'sources'],
+	thread: ['why', 'changes', 'categoryNames']
 };
+
+export const knownRowParts = (rows: Partial<RowSettings>): RowSettings =>
+	Object.fromEntries(
+		ROW_KINDS.map(({ id }) => [
+			id,
+			(rows[id] ?? DEFAULT_ROWS[id]).filter((part) => ROW_PARTS[id].some((p) => p.id === part))
+		])
+	) as RowSettings;
 
 export const rowShows = (rows: RowSettings | undefined, kind: RowKind, part: string) =>
 	!(rows ?? DEFAULT_ROWS)[kind].includes(part);

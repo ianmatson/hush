@@ -15,6 +15,9 @@ import IconPaintbrush from '@lucide/svelte/icons/paintbrush';
 import IconTestTube from '@lucide/svelte/icons/test-tube';
 import IconFlaskConical from '@lucide/svelte/icons/flask-conical';
 import IconGauge from '@lucide/svelte/icons/gauge';
+import IconSignalLow from '@lucide/svelte/icons/signal-low';
+import IconSignalMedium from '@lucide/svelte/icons/signal-medium';
+import IconSignalHigh from '@lucide/svelte/icons/signal-high';
 import IconZap from '@lucide/svelte/icons/zap';
 import IconDatabase from '@lucide/svelte/icons/database';
 import IconServer from '@lucide/svelte/icons/server';
@@ -144,6 +147,9 @@ export const LUCIDE_COMPONENTS: Record<string, Component> = {
 	'test-tube': IconTestTube,
 	'flask-conical': IconFlaskConical,
 	gauge: IconGauge,
+	'signal-low': IconSignalLow,
+	'signal-medium': IconSignalMedium,
+	'signal-high': IconSignalHigh,
 	zap: IconZap,
 	database: IconDatabase,
 	server: IconServer,
@@ -256,3 +262,24 @@ export const LUCIDE_COMPONENTS: Record<string, Component> = {
 	crown: IconCrown,
 	gem: IconGem
 };
+
+const ICON_DIR = '/node_modules/@lucide/svelte/dist/icons/';
+const LOADERS = import.meta.glob<Component>('/node_modules/@lucide/svelte/dist/icons/*.svelte', {
+	import: 'default'
+});
+
+export const ALL_LUCIDE_IDS = Object.keys(LOADERS)
+	.map((path) => path.slice(ICON_DIR.length, -'.svelte'.length))
+	.sort();
+
+const loaded = new Map<string, Promise<Component | null>>();
+
+export function loadLucide(id: string): Promise<Component | null> {
+	let icon = loaded.get(id);
+	if (!icon) {
+		const load = LOADERS[`${ICON_DIR}${id}.svelte`];
+		icon = load ? load().catch(() => null) : Promise.resolve(null);
+		loaded.set(id, icon);
+	}
+	return icon;
+}

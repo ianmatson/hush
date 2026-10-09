@@ -1,3 +1,4 @@
+import { allCategories } from './categories';
 import { ruleMatches } from './classify';
 import { compileExpr, exprMatches, queryError, type QueryExpr } from './query';
 import type { Classification, RuleMatch, SavedView, Settings, ThreadDTO, ViewBase } from './types';
@@ -17,30 +18,24 @@ export const FEED_TABS: { id: string; label: string }[] = [
 	{ id: 'fyi', label: 'FYI' },
 	{ id: 'inbox', label: 'Needs you + FYI' }
 ];
-export type MarkFeedSubject = 'category' | 'tag';
-const MARK_FEED_PREFIX: Record<MarkFeedSubject, string> = { category: 'c', tag: 't' };
-const MARK_FEED_VIEW = /^([ct]):([a-z0-9-]{1,40})$/;
+const CATEGORY_FEED_VIEW = /^c:([a-z0-9-]{1,40})$/;
 
-export const markFeedView = (subject: MarkFeedSubject, id: string) =>
-	`${MARK_FEED_PREFIX[subject]}:${id}`;
+export const categoryFeedView = (id: string) => `c:${id}`;
 
-export function parseMarkFeed(view: string): { subject: MarkFeedSubject; id: string } | null {
-	const m = MARK_FEED_VIEW.exec(view);
-	if (!m) return null;
-	return { subject: m[1] === 'c' ? 'category' : 'tag', id: m[2] };
-}
+export const parseCategoryFeed = (view: string): string | null =>
+	CATEGORY_FEED_VIEW.exec(view)?.[1] ?? null;
 
 export const feedViewOk = (view: string) =>
 	FEED_TABS.some((t) => t.id === view) ||
 	/^v:[a-z0-9]{1,16}$/.test(view) ||
-	parseMarkFeed(view) !== null;
+	parseCategoryFeed(view) !== null;
 
-export type MarkNames = Pick<Settings, 'categories' | 'tags'>;
+export type MarkNames = Pick<Settings, 'categoryGroups'>;
 
 /**
  * Does a thread match a query (a notification view, or the Filter box)? The words mean the same
- * as in rules; "in:" is the thread's list now (the view's base already picks it). "category:" and
- * "tag:" are its PR or issue's.
+ * as in rules; "in:" is the thread's list now (the view's base already picks it). "category:" is
+ * its PR or issue's.
  */
 export function threadMatches(
 	query: string | RuleMatch,
@@ -51,13 +46,10 @@ export function threadMatches(
 	const expr: QueryExpr =
 		typeof query === 'string' ? compileExpr(query) : { kind: 'match', when: query };
 	const c = { category: t.category, kind: t.kind } as Classification;
-	const category = marks?.categories.find((x) => x.id === t.itemCategory);
-	const itemCategory = t.itemCategory
-		? { id: t.itemCategory, name: category?.name ?? t.itemCategory }
-		: undefined;
-	const itemTags = (t.tags ?? []).map((id) => ({
+	const known = allCategories(marks?.categoryGroups ?? []);
+	const itemCategories = (t.categories ?? []).map((id) => ({
 		id,
-		name: marks?.tags.find((x) => x.id === id)?.name ?? id
+		name: known.find((x) => x.id === id)?.name ?? id
 	}));
 	return exprMatches(expr, (when) =>
 		ruleMatches(
@@ -70,8 +62,7 @@ export function threadMatches(
 				htmlUrl: t.htmlUrl,
 				me,
 				activity: t.activity,
-				itemCategory,
-				itemTags,
+				itemCategories,
 				enrichment: {
 					kind: 'other',
 					author: t.author ?? undefined,

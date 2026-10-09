@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedView, ThreadDTO } from './types';
 import {
+	categoryFeedView,
 	feedViewOk,
-	markFeedView,
-	parseMarkFeed,
+	parseCategoryFeed,
 	threadMatches,
 	validateViews,
 	type MarkNames
@@ -49,18 +49,28 @@ const view = (over: Partial<SavedView> = {}): SavedView => ({
 });
 
 describe('notification views', () => {
-	it('match on the category and tags of the thread’s PR or issue', () => {
+	it('match on the categories of the thread’s PR or issue', () => {
 		const marks: MarkNames = {
-			categories: [{ id: 'bugs', name: 'Bugs', color: 'red', rule: '', description: '' }],
-			tags: [{ id: 'quick', name: 'Quick', color: 'green', rule: '' }]
+			categoryGroups: [
+				{
+					id: 'area',
+					name: 'Area',
+					multiple: false,
+					categories: [{ id: 'bugs', name: 'Bugs', color: 'red', rule: '', description: '' }]
+				},
+				{
+					id: 'topics',
+					name: 'Topics',
+					multiple: true,
+					categories: [{ id: 'quick', name: 'Quick', color: 'green', rule: '', description: '' }]
+				}
+			]
 		};
-		const bug = t({ itemCategory: 'bugs', tags: ['quick'] });
+		const bug = t({ categories: ['bugs', 'quick'] });
 		expect(threadMatches('category:Bugs', bug, 'ian', marks)).toBe(true);
-		expect(threadMatches('category:bugs tag:quick', bug, 'ian', marks)).toBe(true);
-		expect(threadMatches('tag:Quick', t({ itemCategory: 'bugs', tags: [] }), 'ian', marks)).toBe(
-			false
-		);
-		expect(threadMatches('-category:bugs', t({ itemCategory: null }), 'ian', marks)).toBe(true);
+		expect(threadMatches('category:bugs category:quick', bug, 'ian', marks)).toBe(true);
+		expect(threadMatches('category:Quick', t({ categories: ['bugs'] }), 'ian', marks)).toBe(false);
+		expect(threadMatches('-category:bugs', t({ categories: [] }), 'ian', marks)).toBe(true);
 	});
 
 	it('match on text, like the Filter box', () => {
@@ -96,20 +106,17 @@ describe('notification views', () => {
 });
 
 describe('feeds', () => {
-	it('exist for tabs, saved views, categories, and tags', () => {
+	it('exist for tabs, saved views, and categories', () => {
 		expect(feedViewOk('action')).toBe(true);
 		expect(feedViewOk('v:abc')).toBe(true);
-		expect(markFeedView('category', 'bugs')).toBe('c:bugs');
-		expect(parseMarkFeed(markFeedView('tag', 'needs-decision'))).toEqual({
-			subject: 'tag',
-			id: 'needs-decision'
-		});
+		expect(categoryFeedView('needs-decision')).toBe('c:needs-decision');
+		expect(parseCategoryFeed('c:needs-decision')).toBe('needs-decision');
 		expect(feedViewOk('c:bugs')).toBe(true);
-		expect(feedViewOk('x:bugs')).toBe(false);
+		expect(feedViewOk('t:bugs')).toBe(false);
 	});
 
-	it('allow category: and tag: in notification views', () => {
-		const view = { id: 'a', name: 'A', base: 'inbox', query: 'tag:blocked' } as SavedView;
+	it('allow category: in notification views', () => {
+		const view = { id: 'a', name: 'A', base: 'inbox', query: 'category:blocked' } as SavedView;
 		expect(validateViews([view])).toBeNull();
 	});
 });

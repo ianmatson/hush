@@ -2,24 +2,17 @@ import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
 import { MAX_QUERIES } from '$lib/shared/dashboard';
 import { DEFAULT_SOURCES, MAX_SOURCES, MAX_TRACKED } from '$lib/shared/sources';
 import {
-	DEFAULT_CATEGORIES,
-	DEFAULT_TAGS,
-	FALLBACK_CATEGORY_ID,
+	DEFAULT_CATEGORY_GROUPS,
 	MARK_COLORS,
 	MAX_CATEGORIES,
+	MAX_CATEGORY_GROUPS,
 	MAX_DESCRIPTION_CHARS,
-	MAX_MARK_NAME_CHARS,
-	MAX_TAGS
+	MAX_MARK_NAME_CHARS
 } from '$lib/shared/categories';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import { IS_VALUES, MAX_CONDITION_CHARS, WORDS } from '$lib/shared/query';
-import {
-	BODY_EXCERPT_CHARS,
-	CHOICE_CONFIDENCE,
-	MAX_SMART_CONDITIONS,
-	YES_AT
-} from '$lib/shared/decisions';
+import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
 import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
@@ -78,7 +71,7 @@ const PAGE: Record<SettingsPage, string> = {
 	general: 'Settings → General',
 	inbox: 'Settings → Inbox',
 	dashboards: 'Settings → Sources',
-	categories: 'Settings → Categories & tags',
+	categories: 'Settings → Categories',
 	notifications: 'Settings → Notifications',
 	keys: 'Settings → Keybinds'
 };
@@ -97,11 +90,11 @@ export function defaultOf(key: string): unknown {
 export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
 	pushAction: {
 		type: 'boolean',
-		body: `When a thread arrives in **Needs you**, Hush sends a push to every device that has push on. A [category](/docs/categories#inbox-settings) with \`"push": "off"\` stops the push for its threads; with \`"push": "on"\` it sends one even when this is off.`
+		body: `When a thread arrives in **Needs you**, Hush sends a push to every device that has push on.`
 	},
 	pushFyi: {
 		type: 'boolean',
-		body: `Also push FYI threads. Most people leave this off and set \`"push": "on"\` on a [category](/docs/categories#inbox-settings) for the few repositories or people they care about.`
+		body: `Also push FYI threads. Most people leave this off.`
 	},
 	pushTurnChanges: {
 		type: 'boolean',
@@ -205,8 +198,8 @@ This also applies to team review requests.`
 		body: `On by default. Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
 
 - **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
-- **Categories:** Jev chooses a category for each PR and issue that no rule places, among the categories that have a description. See [Categories and tags](/docs/categories).
-- **\`about:\` conditions** in category and tag rules and in notification views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
+- **Categories:** Jev places each PR and issue in the categories that have a description, when no rule places it. See [Categories](/docs/categories).
+- **\`about:\` conditions** in category rules and in notification views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
 - **Order:** on the Pull requests and Issues tabs, items whose text says they block something or are about an incident come first inside their group.
 
 A one-time notice on the inbox and on the Pull requests and Issues tabs says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Inbox → Defaults**: Hush then deletes Jev's answers, and sends Jev nothing more.`
@@ -226,14 +219,14 @@ A one-time notice on the inbox and on the Pull requests and Issues tabs says tha
 - \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
 - \`name\`: up to 40 characters. The tab label.
 - \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
-- \`query\`: a [query](/docs/query-language), the same words as category rules. \`in:\` here is the thread's list now, after its category's inbox setting. \`category:\` and \`tag:\` match the category and tags of the thread's PR or issue. \`""\` shows every thread of the base.
+- \`query\`: a [query](/docs/query-language), the same words as category rules. \`in:\` here is the thread's list now. \`category:\` matches the categories of the thread's PR or issue. \`""\` shows every thread of the base.
 
 \`\`\`json settings
 {
   "views": [
     { "id": "web", "name": "Web team", "base": "inbox", "query": "repo:acme/web-*" },
     { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" },
-    { "id": "bugs", "name": "Bugs", "base": "inbox", "query": "category:bugs" }
+    { "id": "big", "name": "Big work", "base": "inbox", "query": "category:high-effort" }
   ]
 }
 \`\`\``
@@ -243,7 +236,7 @@ A one-time notice on the inbox and on the Pull requests and Issues tabs says tha
 		body: `The GitHub searches that decide which PRs and issues Hush tracks. The inbox gets only the notifications about these items and the \`tracked\` ones. Up to ${MAX_SOURCES}.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
-- \`name\`: up to 60 characters. Category and tag rules can test it with \`source:\`.
+- \`name\`: up to 60 characters. Category rules can test it with \`source:\`.
 - \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both.
 - \`enabled\`: \`false\` skips the search.
 
@@ -258,29 +251,54 @@ ${table(
 	DEFAULT_SOURCES.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
 )}`
 	},
-	categories: {
-		type: 'array of categories',
-		body: `Where each PR and issue lives. Every one has exactly one category, and its notification threads have the same category. Up to ${MAX_CATEGORIES}.
+	categoryGroups: {
+		type: 'array of category groups',
+		body: `Groups of categories for your PRs and issues. Up to ${MAX_CATEGORY_GROUPS} groups. A notification thread shows the categories of its PR or issue. Categories do not change the inbox.
 
-- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. \`"${FALLBACK_CATEGORY_ID}"\` is the fallback and cannot be deleted.
+Each group has:
+
+- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
+- \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
+- \`multiple\`: \`false\` gives each item one category from the group, or none. \`true\` gives each item any number of them.
+- \`categories\`: up to ${MAX_CATEGORIES} categories, in order.
+
+Each category has:
+
+- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique across all groups.
 - \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
 - \`color\`: ${MARK_COLORS.map((c) => `\`"${c}"\``).join(', ')}.
-- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. The rule looks only at the PR or issue: \`category:\`, \`tag:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
+- \`icon\` (optional): \`"lucide:<name>"\` for a [Lucide](https://lucide.dev/icons) icon, or one emoji.
+- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. The rule looks only at the PR or issue: \`category:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
 - \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
-- \`inbox\` (optional): what the notification threads of the category's items do in the inbox. \`"auto"\` (default): Hush decides. \`"action"\`: always Needs you. \`"fyi"\`: always FYI. \`"muted"\`: Muted.
-- \`push\` (optional): \`"inherit"\` (default) uses the [push settings](/docs/notifications#what-gets-pushed). \`"on"\` always pushes, also FYI threads. \`"off"\` never pushes.
-- \`triage\` (optional): \`"done"\` moves new threads to Done. \`"snooze"\` snoozes them for \`snoozeHours\` (a whole number from 1 to 720; default 24). Hush moves a thread only when it has new activity or when the category starts to match, so a thread that you move back stays where you put it.
 
-Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description, when it is at least ${CHOICE_CONFIDENCE * 100}% sure; else \`"${FALLBACK_CATEGORY_ID}"\`. Jev chooses once for each item, and again only when its title, description, or labels change. After you change categories, **Re-evaluate items** asks again for your open items. A notification thread gets the category and tags of its PR or issue; rules are never checked on the notification.
+In a group with \`"multiple": false\`, Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description. When Jev is off or cannot answer, and no rule matches, the item has no category from the group.
 
-A change to \`categories\` replaces the whole list, so keep \`"${FALLBACK_CATEGORY_ID}"\`. See [Categories and tags](/docs/categories).
+In a group with \`"multiple": true\`, an item gets every category you added to it, every category whose rule matches, and every category whose description Jev says fits (at least ${YES_AT * 100}% sure). A category you removed from the item stays off.
+
+Jev reads each item once, and again when its title, description, or labels change, or when you change the descriptions of a group. **Re-evaluate items** asks again about every category for your open items.
+
+A change to \`categoryGroups\` replaces the whole list. See [Categories](/docs/categories).
 
 \`\`\`json settings
 {
-  "categories": [
-    { "id": "website", "name": "Website", "color": "blue", "rule": "repo:acme/website", "description": "", "inbox": "fyi" },
-    { "id": "nightly", "name": "Nightly", "color": "gray", "rule": "repo:acme/nightly", "description": "", "push": "off", "triage": "snooze", "snoozeHours": 12 },
-    { "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
+  "categoryGroups": [
+    {
+      "id": "area",
+      "name": "Area",
+      "multiple": false,
+      "categories": [
+        { "id": "website", "name": "Website", "color": "blue", "rule": "repo:acme/website", "description": "" },
+        { "id": "api", "name": "API", "color": "violet", "rule": "", "description": "Changes to the public API" }
+      ]
+    },
+    {
+      "id": "topics",
+      "name": "Topics",
+      "multiple": true,
+      "categories": [
+        { "id": "security", "name": "Security", "color": "red", "icon": "lucide:shield", "rule": "label:security", "description": "Vulnerabilities, secrets, permissions, or authentication" }
+      ]
+    }
   ]
 }
 \`\`\`
@@ -288,24 +306,10 @@ A change to \`categories\` replaces the whole list, so keep \`"${FALLBACK_CATEGO
 The defaults:
 
 ${table(
-	['id', 'name', 'rule', 'description'],
-	DEFAULT_CATEGORIES.map((c) => [code(c.id), c.name, c.rule ? code(c.rule) : '', c.description])
-)}`
-	},
-	tags: {
-		type: 'array of tags',
-		body: `Marks that cut across categories: an item can have none, one, or several. Up to ${MAX_TAGS}.
-
-- \`id\`, \`name\`, \`color\`: as for categories.
-- \`rule\`: a [query](/docs/query-language). \`about:"…"\` asks Jev, once for each item (and again when its title, description, or labels change). The rule looks only at the PR or issue: \`category:\`, \`tag:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
-
-Tags only mark items: they show on rows (also on the notification rows of the item), as filter chips on the Pull requests and Issues tabs, and in feeds. They do not change the inbox.
-
-The defaults:
-
-${table(
-	['id', 'name', 'rule'],
-	DEFAULT_TAGS.map((t) => [code(t.id), t.name, code(t.rule)])
+	['group', 'id', 'name', 'description'],
+	DEFAULT_CATEGORY_GROUPS.flatMap((g) =>
+		g.categories.map((c) => [g.name, code(c.id), c.name, c.description])
+	)
 )}`
 	},
 	tracked: {
@@ -594,10 +598,12 @@ function limitsReference(): string {
 			['Items per menu', '60'],
 			['Keys per command', '4'],
 			['Push devices', '10'],
-			['Categories', String(MAX_CATEGORIES)],
-			['Tags', String(MAX_TAGS)],
-			['Category snooze (snoozeHours)', '1 to 720 hours'],
-			['Different about: conditions in categories, tags, and views', String(MAX_SMART_CONDITIONS)],
+			['Category groups', String(MAX_CATEGORY_GROUPS)],
+			['Categories in a group', String(MAX_CATEGORIES)],
+			[
+				'Different about: conditions in categories and views, and descriptions in groups with any number per item',
+				String(MAX_SMART_CONDITIONS)
+			],
 			['Length of one about: condition', `${MAX_CONDITION_CHARS} characters`],
 			[
 				'Smart decisions per account',

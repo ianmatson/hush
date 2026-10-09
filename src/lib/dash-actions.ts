@@ -5,10 +5,10 @@ import { buildMenu, type MenuEntry } from '$lib/menu';
 import type { PaletteCommand } from '$lib/palette.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS } from '$lib/shared/menus';
+import type { PinChange } from '$lib/shared/categories';
 import { itemPagePath } from '$lib/shared/item-page';
-import type { DashItem, ItemCategory, ItemTag, Turn } from '$lib/shared/types';
+import type { CategoryGroup, DashItem, Turn } from '$lib/shared/types';
 import FolderInput from '@lucide/svelte/icons/folder-input';
-import TagIcon from '@lucide/svelte/icons/tag';
 import Sparkles from '@lucide/svelte/icons/sparkles';
 import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 import Eye from '@lucide/svelte/icons/eye';
@@ -60,10 +60,8 @@ export interface DashActionContext {
 	toggleShowHidden(): void;
 	/** Ask why an item in Your turn is not your turn ("Not my turn…"). */
 	notNeeded(i: DashItem): void;
-	readonly categories: ItemCategory[];
-	readonly tags: ItemTag[];
-	setCategory(ids: string[], category: string | null): unknown;
-	setTag(ids: string[], tag: string, state: 'on' | 'off'): unknown;
+	readonly categoryGroups: CategoryGroup[];
+	pinCategory(ids: string[], change: PinChange): unknown;
 }
 
 /** ⌘K commands: refresh and hidden items, then actions on the cursor row or the selection. */
@@ -177,8 +175,44 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 			undefined,
 			ids.every((id) => ctx.byId(id)?.turn === g.turn)
 		);
-	const pinned = ids.some((x) => ctx.byId(x)?.categoryPinned);
-	const make = (id: string): MenuEntry | null => {
+	const groupMenu = (g: CategoryGroup): MenuEntry => {
+		const has = (c: string) => ids.every((x) => ctx.byId(x)?.categories?.includes(c));
+		const pinned = ids.some((x) =>
+			g.categories.some((c) => ctx.byId(x)?.pinnedCategories?.includes(c.id))
+		);
+		return {
+			type: 'sub',
+			key: `group-${g.id}`,
+			label: n(g.name),
+			icon: FolderInput,
+			items: [
+				...g.categories.map((c): MenuEntry => {
+					const checked = has(c.id);
+					return {
+						type: 'item',
+						key: `category-${c.id}`,
+						label: c.name,
+						mark: { color: c.color, icon: c.icon },
+						checked,
+						run: () =>
+							ctx.pinCategory(ids, {
+								category: c.id,
+								state: g.multiple && checked ? 'off' : 'on'
+							})
+					};
+				}),
+				...(pinned
+					? ([
+							{ type: 'sep', key: `group-${g.id}-sep` },
+							item(`group-${g.id}-auto`, 'Choose automatically', Sparkles, () =>
+								ctx.pinCategory(ids, { group: g.id, state: 'auto' })
+							)
+						] satisfies MenuEntry[])
+					: [])
+			]
+		};
+	};
+	const make = (id: string): MenuEntry | MenuEntry[] | null => {
 		switch (id) {
 			case 'peek':
 				return one ? item(id, 'Peek', PanelRightOpen, () => ctx.peek(one), key('list.peek')) : null;
@@ -221,52 +255,9 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					icon: ArrowRightLeft,
 					items: ctx.groups.map((g) => moveItem(g, `move-${g.turn}`, g.label))
 				};
-			case 'category':
-				return ctx.categories.length && ids.length
-					? {
-							type: 'sub',
-							key: id,
-							label: n('Category'),
-							icon: FolderInput,
-							items: [
-								...ctx.categories.map((c): MenuEntry => ({
-									type: 'item',
-									key: `category-${c.id}`,
-									label: c.name,
-									mark: { kind: 'category', color: c.color, icon: c.icon },
-									checked: ids.every((x) => ctx.byId(x)?.category === c.id),
-									run: () => ctx.setCategory(ids, c.id)
-								})),
-								...(pinned
-									? ([
-											{ type: 'sep', key: 'category-sep' },
-											item('category-auto', 'Choose automatically', Sparkles, () =>
-												ctx.setCategory(ids, null)
-											)
-										] satisfies MenuEntry[])
-									: [])
-							]
-						}
-					: null;
-			case 'tags':
-				return ctx.tags.length && ids.length
-					? {
-							type: 'sub',
-							key: id,
-							label: n('Tags'),
-							icon: TagIcon,
-							items: ctx.tags.map((t): MenuEntry => {
-								const tagged = ids.every((x) => ctx.byId(x)?.tags?.includes(t.id));
-								return {
-									type: 'item',
-									key: `tag-${t.id}`,
-									label: t.name,
-									mark: { kind: 'tag', color: t.color },
-									checked: tagged,
-									run: () => ctx.setTag(ids, t.id, tagged ? 'off' : 'on')
-								};
-							})
-						}
+			case 'categories':
+				return ids.length
+					? ctx.categoryGroups.filter((g) => g.categories.length).map(groupMenu)
 					: null;
 			case 'undoMove':
 				return ids.some((x) => ctx.byId(x)?.movedByYou)

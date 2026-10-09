@@ -75,44 +75,15 @@ GitHub sorts notifications by time, and gives each one a reason that does not ch
 
 - **Needs you** has only the threads where you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you. Everything else goes to **FYI**. See [what needs you](/docs/inbox#what-needs-you).
 - When you approve, push a fix, or reply, Hush moves the thread to **Done** by itself. If it needs you again, it comes back.
-- The first time you sign in, Hush lists the repositories with the most notifications that do not need you, and moves the ones that you choose to FYI.
 - When a thread is in Needs you and should not be, press {{key:inbox.notNeeded}} (**Doesn't need me**). Hush asks why, and changes a setting, or moves only this thread. See [Doesn't need me](/docs/inbox#doesnt-need-me).
 
-For a repository that you only read, or a bot, make a [category](/docs/categories) with inbox settings: right-click a thread and choose **Make a category…**. These categories send one repository to FYI, mute a bot, and move the notifications about one bot's PRs to Done:
+Bots are FYI by default ([`botsAreFyi`](/docs/settings#botsarefyi)), and a review request to one of your teams is FYI unless you turn on [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction):
 
 ```json settings
-{
-	"categories": [
-		{
-			"id": "website",
-			"name": "Website",
-			"color": "blue",
-			"rule": "repo:acme/website",
-			"description": "",
-			"inbox": "fyi"
-		},
-		{
-			"id": "renovate",
-			"name": "Renovate",
-			"color": "gray",
-			"rule": "author:renovate*",
-			"description": "",
-			"inbox": "muted"
-		},
-		{
-			"id": "quiet-bot",
-			"name": "Quiet bot",
-			"color": "gray",
-			"rule": "author:github-actions*",
-			"description": "",
-			"triage": "done"
-		},
-		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
-	]
-}
+{ "botsAreFyi": true, "teamReviewsAreAction": false }
 ```
 
-A change to `categories` replaces the whole list, so keep `other`, the fallback.
+For one repository that you only read, make a [notification view](/docs/views) for it, or choose **Mute** on its threads. [Categories](/docs/categories) sort your pull requests and issues, for example by effort, but they do not change the inbox.
 
 Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. Hush keeps only the notifications about the pull requests and issues that your [sources](/docs/pull-requests-and-issues#sources) find; it does not show releases, CI runs, or discussions. So the GitHub steps above still help: they leave Hush less to sort.
 

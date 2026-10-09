@@ -107,7 +107,7 @@ export function enrichmentOf(
 		commentsNeedMe: decisions.commentsNeedMe,
 		urgent: decisions.urgent,
 		smart: decisions.smart,
-		jevCategory: decisions.category
+		jevChoices: decisions.choices
 	};
 	if (s.kind === 'issue') return { ...base, state: s.state === 'closed' ? 'closed' : 'open' };
 	return {

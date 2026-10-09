@@ -1,8 +1,16 @@
 import type { DashKind, Turn } from '../../src/lib/shared/types';
+import type { PinChange } from '../../src/lib/shared/categories';
 import { routes, poller, json, query } from '../app';
 
 const TURNS = new Set<Turn>(['you', 'team', 'them', 'none']);
-const PIN_STATES = new Set(['on', 'off', 'auto']);
+
+function pinChangeOf(body: Record<string, unknown>): PinChange | null {
+	if (typeof body.category === 'string' && (body.state === 'on' || body.state === 'off'))
+		return { category: body.category, state: body.state };
+	if (typeof body.group === 'string' && body.state === 'auto')
+		return { group: body.group, state: 'auto' };
+	return null;
+}
 
 /**
  * Save a drop: an optional move to another group (`turn`, or null to undo a move) and the new
@@ -87,38 +95,20 @@ const app = routes()
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
 		return c.json(await poller(c.env, c.get('user').id).mute(ids));
 	})
-	.post(
-		'/api/items/pin',
-		json<{
-			ids: string[];
-			category?: string | null;
-			tag?: string;
-			tagState?: 'on' | 'off' | 'auto';
-		}>(),
-		async (c) => {
-			const body = c.req.valid('json');
-			const ids = Array.isArray(body.ids)
-				? (body.ids as unknown[])
-						.filter((id): id is string => typeof id === 'string' && id.length <= 100)
-						.slice(0, 300)
-				: [];
-			if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
-			const category = body.category;
-			if (category !== undefined && category !== null && typeof category !== 'string')
-				return c.json({ error: 'Invalid category' }, 400);
-			if (body.tag !== undefined && typeof body.tag !== 'string')
-				return c.json({ error: 'Invalid tag' }, 400);
-			if (body.tag !== undefined && !PIN_STATES.has(body.tagState ?? ''))
-				return c.json({ error: 'Invalid tag state' }, 400);
-			return c.json(
-				await poller(c.env, c.get('user').id).pinItems(ids, {
-					category,
-					tag: body.tag,
-					tagState: body.tagState
-				})
-			);
-		}
-	)
+	.post('/api/items/pin', json<{ ids: string[] } & PinChange>(), async (c) => {
+		const body = c.req.valid('json') as { ids?: unknown } & Record<string, unknown>;
+		const ids = Array.isArray(body.ids)
+			? (body.ids as unknown[])
+					.filter((id): id is string => typeof id === 'string' && id.length <= 100)
+					.slice(0, 300)
+			: [];
+		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
+		const change = pinChangeOf(body);
+		if (!change) return c.json({ error: 'Invalid pin' }, 400);
+		const out = await poller(c.env, c.get('user').id).pinItems(ids, change);
+		if ('error' in out) return c.json({ error: out.error }, out.status);
+		return c.json(out);
+	})
 	.post('/api/items/reevaluate', async (c) =>
 		c.json(await poller(c.env, c.get('user').id).reevaluateItems())
 	)

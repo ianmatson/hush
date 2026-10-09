@@ -75,14 +75,8 @@ export const WORDS: QueryWord[] = [
 	{
 		key: 'category',
 		field: 'itemCategory',
-		help: 'Its category (name or id); not in category and tag rules',
-		example: 'category:bugs'
-	},
-	{
-		key: 'tag',
-		field: 'itemTag',
-		help: 'Has this tag (name or id); not in category and tag rules',
-		example: 'tag:blocked'
+		help: 'Has this category (name or id); not in category rules',
+		example: 'category:low-effort'
 	},
 	{
 		key: 'source',
@@ -177,7 +171,7 @@ export const usesNotificationWords = (query: string) =>
 	leavesOf(compileExpr(query)).some((w) => NOTIFICATION_FIELDS.some((f) => w[f] !== undefined));
 
 export const usesItemMarks = (query: string) =>
-	leavesOf(compileExpr(query)).some((w) => !!w.itemCategory?.length || !!w.itemTag?.length);
+	leavesOf(compileExpr(query)).some((w) => !!w.itemCategory?.length);
 
 export const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
 const WORD = new Map(WORDS.map((w) => [w.key, w]));

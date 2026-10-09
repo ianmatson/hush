@@ -6,7 +6,7 @@
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import Settings2 from '@lucide/svelte/icons/settings-2';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
-	import Tags from '@lucide/svelte/icons/tags';
+	import Shapes from '@lucide/svelte/icons/shapes';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Check from '@lucide/svelte/icons/check';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -17,7 +17,7 @@
 		{ href: '/settings/general', label: 'General', icon: Settings2 },
 		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
 		{ href: '/settings/dashboards', label: 'Sources', icon: GitPullRequest },
-		{ href: '/settings/categories', label: 'Categories & tags', icon: Tags },
+		{ href: '/settings/categories', label: 'Categories', icon: Shapes },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
 		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard, needsKeyboard: true }
 	];

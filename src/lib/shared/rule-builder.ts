@@ -33,7 +33,7 @@ export interface BuilderField {
 	placeholder?: string;
 	help?: string;
 	options?: { value: string; label: string }[];
-	suggest?: 'repo' | 'person' | 'label' | 'source' | 'category' | 'tag';
+	suggest?: 'repo' | 'person' | 'label' | 'source' | 'category';
 	canNegate: boolean;
 }
 
@@ -53,7 +53,6 @@ const LABELS: Record<
 	},
 	size: { label: 'Size' },
 	category: { label: 'Category', suggest: 'category' },
-	tag: { label: 'Tag', suggest: 'tag' },
 	source: { label: 'Source', suggest: 'source' },
 	about: { label: 'About (Jev decides)', placeholder: 'database migrations' },
 	type: { label: 'Type' },

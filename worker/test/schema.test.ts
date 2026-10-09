@@ -169,22 +169,21 @@ describe('queries that run on every poll or watch', () => {
 	};
 	const readsEveryThread = (details: string[]) => details.some((d) => /^SCAN threads\b/.test(d));
 
-	it('reads threads with their facts, decisions, and item category and tags by thread columns', () => {
+	it('reads threads with their facts, decisions, and item categories by thread columns', () => {
 		const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
 		const db = new DatabaseSync(':memory:');
 		db.exec(SCHEMA);
-		db.exec(`INSERT INTO tracked_items (key, kind, seen_at, category, tags)
-		  VALUES ('o/r#1', 'issue', 0, 'bugs', '["quick"]')`);
+		db.exec(`INSERT INTO tracked_items (key, kind, seen_at, categories)
+		  VALUES ('o/r#1', 'issue', 0, '["bugs","quick"]')`);
 		db.exec(`INSERT INTO threads (id, repo, subject_type, subject_key, title, html_url, reason, unread,
 		  gh_updated_at, category, kind, summary, why, action_label, action_url, triage, first_seen_at)
 		  VALUES ('t1', 'o/r', 'Issue', 'o/r#1', 'T', 'u', 'mention', 1, 'x', 'fyi', 'none', '', '', '', '', 'inbox', 0)`);
 		const rows = db.prepare(`${THREADS} WHERE category != 'muted' AND triage = 'inbox'`).all() as {
 			id: string;
-			item_category: string | null;
-			item_tags: string | null;
+			item_categories: string | null;
 		}[];
 		expect(rows).toEqual([
-			expect.objectContaining({ id: 't1', item_category: 'bugs', item_tags: '["quick"]' })
+			expect.objectContaining({ id: 't1', item_categories: '["bugs","quick"]' })
 		]);
 	});
 

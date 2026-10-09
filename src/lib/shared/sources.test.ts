@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDefault, queryMatches } from './classify';
+import { classify, queryMatches } from './classify';
 import { DEFAULT_SETTINGS } from './settings';
 import {
 	DEFAULT_SOURCES,
@@ -125,7 +125,7 @@ describe('source: in rules', () => {
 		sources
 	});
 	const matches = (q: string, facts: ThreadFacts) =>
-		queryMatches(q, facts, classifyDefault(facts, DEFAULT_SETTINGS));
+		queryMatches(q, facts, classify(facts, DEFAULT_SETTINGS));
 	it('matches the name of a source that found the item', () => {
 		expect(matches('source:"Assigned to you"', t(['Assigned to you']))).toBe(true);
 		expect(matches('source:"assigned*"', t(['Assigned to you']))).toBe(true);

@@ -20,6 +20,9 @@ export const LUCIDE_ICONS: MarkIconOption[] = [
 	{ id: 'test-tube', keywords: 'test experiment' },
 	{ id: 'flask-conical', keywords: 'experiment lab' },
 	{ id: 'gauge', keywords: 'performance speed' },
+	{ id: 'signal-low', keywords: 'low effort small' },
+	{ id: 'signal-medium', keywords: 'medium effort' },
+	{ id: 'signal-high', keywords: 'high effort large' },
 	{ id: 'zap', keywords: 'fast quick lightning' },
 	{ id: 'database', keywords: 'data database sql' },
 	{ id: 'server', keywords: 'backend server infra' },
@@ -267,6 +270,7 @@ export const EMOJI: MarkIconOption[] = [
 ];
 
 export const LUCIDE_PREFIX = 'lucide:';
+const LUCIDE_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_EMOJI_CHARS = 16;
 const EMOJI_PATTERN = /^\p{Extended_Pictographic}/u;
 
@@ -276,7 +280,7 @@ export function parseMarkIcon(icon: string | undefined): MarkIcon | null {
 	if (!icon) return null;
 	if (icon.startsWith(LUCIDE_PREFIX)) {
 		const id = icon.slice(LUCIDE_PREFIX.length);
-		return LUCIDE_ICONS.some((i) => i.id === id) ? { kind: 'lucide', id } : null;
+		return LUCIDE_ID.test(id) ? { kind: 'lucide', id } : null;
 	}
 	return icon.length <= MAX_EMOJI_CHARS && EMOJI_PATTERN.test(icon)
 		? { kind: 'emoji', text: icon }
@@ -291,3 +295,26 @@ export function searchIcons(options: MarkIconOption[], query: string): MarkIconO
 		return words.every((w) => text.includes(w));
 	});
 }
+
+function curatedFirst(curated: MarkIconOption[], rest: MarkIconOption[]): MarkIconOption[] {
+	const known = new Map(curated.map((o) => [o.id, o.keywords]));
+	return [...curated, ...rest.filter((o) => !known.has(o.id))].map((o) => ({
+		id: o.id,
+		keywords: [known.get(o.id), o.keywords].filter(Boolean).join(' ')
+	}));
+}
+
+export const allLucideOptions = (ids: string[]) =>
+	curatedFirst(
+		LUCIDE_ICONS,
+		ids.map((id) => ({ id, keywords: id.replaceAll('-', ' ') }))
+	);
+
+export const allEmojiOptions = (entries: { emoji: string; names: string[]; tags: string[] }[]) =>
+	curatedFirst(
+		EMOJI,
+		entries.map((e) => ({
+			id: e.emoji,
+			keywords: [...e.names.map((n) => n.replaceAll('_', ' ')), ...e.tags].join(' ')
+		}))
+	);

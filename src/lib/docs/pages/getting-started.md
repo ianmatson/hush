@@ -9,10 +9,9 @@ Open [app.hush-gh.com](https://app.hush-gh.com) and choose **Sign in with GitHub
 
 After you sign in, Hush runs your [sources](/docs/pull-requests-and-issues#sources) and reads your notifications from the last 14 days. It keeps only the notifications about the PRs and issues that your sources find (see [What comes in](/docs/inbox#what-comes-in)). The first sync can take a minute; the inbox says “First sync in progress…” until it is done. After that, Hush checks GitHub every few minutes by itself (see [Limits](/docs/limits)).
 
-The first time, **Welcome to Hush** is at the top of the inbox. It says what Hush found (“From 47 notifications, Hush found 5 things that need you. It moved 6 to FYI, and 36 that are already finished to Done.”), and asks three questions:
+The first time, **Welcome to Hush** is at the top of the inbox. It says what Hush found (“From 47 notifications, Hush found 5 things that need you. It moved 6 to FYI, and 36 that are already finished to Done.”), and asks two questions:
 
 - **Review requests to my teams need me**: on or off. Off, team requests are FYI, and show under “Your team's turn” on the Pull requests tab.
-- **Repositories you only want to read about**: the repositories with the most notifications that do not need you. Everything from the ones that you check goes to FYI: Hush adds a [category](/docs/categories) named “Read only” for them, with its threads set to FYI.
 - **Push to this device**: pushes what needs you.
 
 Choose **Done** to save, or **Skip**. You can change all of it later.
@@ -22,7 +21,7 @@ If an org that you work in is missing, its owners may not have approved Hush yet
 ## 2. Know the three tabs
 
 - **Inbox**: your GitHub notifications about the PRs and issues that Hush tracks, sorted. The **Needs you** tab has only what waits on you; **FYI** has the rest. Snoozed, Done, and Muted are there too. See [Inbox](/docs/inbox).
-- **Pull requests**: open PRs that involve you, from saved GitHub searches (your sources), grouped by whose turn it is, each with a category and tags. See [Pull requests and issues](/docs/pull-requests-and-issues).
+- **Pull requests**: open PRs that involve you, from saved GitHub searches (your sources), grouped by whose turn it is, each with its categories. See [Pull requests and issues](/docs/pull-requests-and-issues).
 - **Issues**: the same for issues.
 
 A number next to a tab is how many items are your turn there.
@@ -53,7 +52,8 @@ You can change every key. See [Keybinds](/docs/keybinds).
 
 ## 6. Make it yours
 
-- Too much in Needs you from one repository? Right-click a thread and choose **Make a category…**. See [Categories and tags](/docs/categories).
+- Something in Needs you that does not need you? Choose **Doesn't need me** on it. See [Doesn't need me](/docs/inbox#doesnt-need-me).
+- Sort your PRs and issues your own way: right-click a thread and choose **Make a category…**. See [Categories](/docs/categories).
 - Smart decisions are on: Jev, a decision model, reads your PRs and issues to decide whether new comments need you, and to choose categories. Turn it off in **Settings → Inbox → Defaults**. See [smart decisions](/docs/settings#smartdecisions) and [Privacy](/privacy).
 - Want a tab for one project? Type a filter such as `repo:acme/web-*` and choose **Save this filter as a notification view**. See [Notification views](/docs/views).
 - Install Hush as an app: in Chrome or Edge, choose **Install** in the address bar; in Safari on macOS, choose **File → Add to Dock**. The app icon can show a badge (**Settings → General → Tab title & icon**).

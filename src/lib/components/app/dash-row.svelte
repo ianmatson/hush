@@ -121,9 +121,7 @@
 	const said = $derived(saidBy(i.turnReason));
 	const show = (part: string) => !hidden.includes(part);
 	const [owner, repoName] = $derived(i.repo.split('/'));
-	const shownMarks = $derived(
-		marks.filter((m) => show(m.kind === 'category' ? 'category' : 'tags'))
-	);
+	const shownMarks = $derived(show('categories') ? marks : []);
 	const external = $derived(
 		show('external') ? externalContributor(i.authorAssociation, i.authorIsBot) : null
 	);
@@ -245,7 +243,7 @@
 					><MessageSquare class="size-3" />{i.comments}</span
 				>
 			{/if}
-			{#if shownMarks.length && !show('markNames')}
+			{#if shownMarks.length && !show('categoryNames')}
 				<span class="opacity-50">·</span>
 				<MarkList marks={shownMarks} />
 			{/if}
@@ -318,7 +316,7 @@
 			{#if i.draft && !said.has('draft') && show('draft')}
 				<span class="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">Draft</span>
 			{/if}
-			{#if show('markNames')}<MarkList marks={shownMarks} showNames />{/if}
+			{#if show('categoryNames')}<MarkList marks={shownMarks} showNames />{/if}
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
 			{#each show('labels') ? i.labels.slice(0, MAX_ROW_LABELS) : [] as l (l.name)}
 				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}

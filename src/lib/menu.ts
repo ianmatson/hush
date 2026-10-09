@@ -13,7 +13,7 @@ export type MenuEntry =
 			shortcut?: string;
 			disabled?: boolean;
 			checked?: boolean;
-			mark?: { kind: 'category' | 'tag'; color: MarkColor; icon?: string };
+			mark?: { color: MarkColor; icon?: string };
 			run: () => void;
 	  }
 	| { type: 'sep'; key: string }
@@ -34,8 +34,11 @@ export type MenuEntry =
  * Build a menu from saved ids. `make` returns the entry for an id, or null when it does not apply
  * here (then it is left out). Separators are tidied after that.
  */
-export function buildMenu(ids: string[], make: (id: string) => MenuEntry | null): MenuEntry[] {
-	const entries = ids.map((id, k) =>
+export function buildMenu(
+	ids: string[],
+	make: (id: string) => MenuEntry | MenuEntry[] | null
+): MenuEntry[] {
+	const entries = ids.flatMap((id, k) =>
 		id === SEP ? ({ type: 'sep', key: `sep-${k}` } as MenuEntry) : make(id)
 	);
 	return tidySeparators(

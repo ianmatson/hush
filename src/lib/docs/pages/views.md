@@ -16,7 +16,7 @@ In the view editor:
 - **Show threads from**: the base list. Needs you + FYI, Needs you, FYI, Snoozed, or Done.
 - **Only threads where**: a [query](/docs/query-language), as text or picked one by one. It is the same language as the rules of [categories](/docs/categories#rules). No query: the view shows every thread of its base.
 
-`category:` and `tag:` work in a view. They match the category and tags of the thread's PR or issue: `category:bugs` shows the notifications about bugs.
+`category:` works in a view. It matches the categories of the thread's PR or issue: `category:high-effort` shows the notifications about items with high effort.
 
 Choose **Save view**. The new tab opens, with its count.
 
@@ -42,9 +42,9 @@ Notification views are the [`views`](/docs/settings#views) setting:
 			"query": "repo:acme/web-* needs:review"
 		},
 		{ "id": "alice", "name": "From Alice", "base": "inbox", "query": "from:alice" },
-		{ "id": "bugs", "name": "Bugs", "base": "inbox", "query": "category:bugs" }
+		{ "id": "big", "name": "Big work", "base": "inbox", "query": "category:high-effort" }
 	]
 }
 ```
 
-In a view, `in:` is the thread's list now, after its category's inbox settings.
+In a view, `in:` is the thread's list now.

@@ -18,7 +18,7 @@ description: Octobox and Hush are both web apps for GitHub notifications. Octobo
 | Price                | Free for open source; enhanced data for private repos from $10 per user per month         | Free in beta; planned $3 a month or $30 a year              |
 | Open source          | Yes (AGPL-3.0)                                                                            | Yes                                                         |
 | Sort order           | Time, with search and filters                                                             | Needs you, FYI, Muted, by whose turn it is                  |
-| Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | Categories, tags, a query language, notification views      |
+| Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | Categories, a query language, notification views            |
 | Push alerts          | Not documented                                                                            | Web Push, quiet hours, digests, limits                      |
 | Pull request actions | Comment from the thread view (beta)                                                       | Approve, request changes, comment, merge, close, re-run CI  |
 | GitHub Enterprise    | Yes, when self-hosted                                                                     | No (github.com only)                                        |
@@ -29,7 +29,7 @@ description: Octobox and Hush are both web apps for GitHub notifications. Octobo
 
 **Octobox** adds an **archive** state to GitHub notifications: you archive a thread when you finish, and Octobox brings it back to the inbox when new activity comes. You can also star and mute threads. Its search takes prefixes such as `repo:`, `owner:`, `type:`, `reason:`, `state:`, `label:`, `author:`, `status:` (CI), `bot:`, `draft:`, and `assignee:`, and combines them with free text. With its optional GitHub App, Octobox also gets the state, CI status, labels, and author of each item. The list is sorted by time; Octobox does not decide which threads need you.
 
-**Hush** reads the pull request or issue behind each notification and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When a thread stops needing you (you approved, CI passes now, it was merged), Hush moves it to Done with a note; if it needs you again, it comes back. [Categories](/docs/categories) change where threads go and whether they push.
+**Hush** reads the pull request or issue behind each notification and decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When a thread stops needing you (you approved, CI passes now, it was merged), Hush moves it to Done with a note; if it needs you again, it comes back. **Doesn't need me** and a few settings change where threads go, and [categories](/docs/categories) sort your pull requests and issues.
 
 Both apps bring a finished thread back when there is new activity, and in both, Mute stops the notifications of that thread.
 
@@ -65,7 +65,7 @@ Both apps bring a finished thread back when there is new activity, and in both, 
 - Push alerts on desktop and phone, with quiet hours and digests.
 - Approve, request changes, merge, and re-run CI from the list.
 - Dashboards of pull requests and issues that involve you, also with no notification.
-- Categories that sort, push, mute, or snooze threads by themselves.
+- Categories that sort pull requests and issues by your rules, or by Jev.
 
 ## Choose Octobox if…
 

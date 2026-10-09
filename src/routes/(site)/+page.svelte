@@ -120,8 +120,7 @@
 					Hush reads the PR or issue behind each notification, and puts it where it belongs: <b
 						>Needs you</b
 					>
-					when you are next to act, <b>FYI</b> when you only want to know, and muted when your categories
-					say so.
+					when you are next to act, <b>FYI</b> when you only want to know, and muted when you say so.
 				</p>
 			</div>
 			<NoiseSort />
@@ -158,10 +157,10 @@
 				<div class="intro">
 					<h2 id="config-title">Sorted <em>your way.</em></h2>
 					<p>
-						Give a category a one-line rule, such as <code>author:dependabot*</code>, and send what
-						it catches to <b>Muted</b>. Save any filter as its own tab. Change every key, menu, and
-						swipe. All of it lives in one <code>settings.json</code> that you can edit, export, or hand
-						to an agent.
+						Give a category a one-line rule, such as <code>author:dependabot*</code>, or a few words
+						that Jev reads to sort your PRs and issues. Save any filter as its own tab. Change every
+						key, menu, and swipe. All of it lives in one <code>settings.json</code> that you can edit,
+						export, or hand to an agent.
 					</p>
 					<a class="link" href="/docs/categories"
 						>How categories work <span aria-hidden="true">→</span></a

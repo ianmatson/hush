@@ -41,39 +41,11 @@ Everything on this page applies to Slack as it does to push: what gets pushed, q
 | **FYI items** ([`pushFyi`](/docs/settings#pushfyi))                 | off     | FYI threads too. Usually noisy.                                                                         |
 | [`pushTurnChanges`](/docs/settings#pushturnchanges) (settings.json) | on      | A thread that becomes your turn with no new notification, for example new commits after your review.    |
 
-Each [category](/docs/categories#inbox-settings) can change this for its threads, in **Settings → Categories & tags → Push**:
+[Categories](/docs/categories) do not change pushes. To get fewer pushes:
 
-- **Use the notification settings** (`"push": "inherit"`, the default): the settings above decide.
-- **Always push** (`"push": "on"`): pushes its threads, also FYI threads.
-- **Never push** (`"push": "off"`): never pushes its threads, also Needs you.
-
-This is the best way to hear about one repository or one person, or to silence one:
-
-```json settings
-{
-	"categories": [
-		{
-			"id": "web",
-			"name": "Web",
-			"color": "blue",
-			"rule": "repo:acme/web",
-			"description": "",
-			"push": "on"
-		},
-		{
-			"id": "bots",
-			"name": "Bots",
-			"color": "gray",
-			"rule": "author:bots",
-			"description": "",
-			"push": "off"
-		},
-		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
-	]
-}
-```
-
-A change to `categories` replaces the whole list, so keep `other`: it is the fallback.
+- Keep [`botsAreFyi`](/docs/settings#botsarefyi) on (the default): activity by bots is FYI, so it is not pushed.
+- Choose [Doesn't need me](/docs/inbox#doesnt-need-me) on a thread that should not be in Needs you.
+- [Mute](/docs/inbox#triage) a thread: GitHub stops notifying you about it.
 
 Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 items arrive in one check, they come as one push: “5 things need you”.
 

@@ -30,7 +30,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, for free, wit
 
 **Neat** shows your GitHub notifications in a menu bar window. It says it pings you "only when an issue needs your attention", and lets you choose which projects, users, and events get through, for example to stop a noisy bot. You can pin a notification to set its priority. Neat does not document how it decides what needs your attention.
 
-**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, comments) and decides if you are the next person who must act. [What needs you](/docs/inbox#what-needs-you) lists the cases. [Categories](/docs/categories) change where threads go, and Hush moves a thread to Done by itself when it stops needing you.
+**Hush** reads the pull request or issue behind each notification (CI, reviews, review requests, conflicts, comments) and decides if you are the next person who must act. [What needs you](/docs/inbox#what-needs-you) lists the cases. **Doesn't need me** changes where threads go, and Hush moves a thread to Done by itself when it stops needing you.
 
 ## Pull requests
 
@@ -72,7 +72,7 @@ Neat released seven versions from 18 to 20 August 2026 (v0.0.58 to v0.0.64). The
 ## Choose Hush if…
 
 - You use Windows, Linux, or a phone, or more than one computer.
-- You want to know exactly why a thread needs you, and change that with categories.
+- You want to know exactly why a thread needs you, and change that.
 - You want to act on pull requests from the same list.
 
 ## Sources
@@ -82,6 +82,6 @@ Neat released seven versions from 18 to 20 August 2026 (v0.0.58 to v0.0.64). The
 - [Neat on GitHub Marketplace](https://github.com/marketplace/notifications-by-neat): price, "macOS only"
 - [Neat privacy policy](https://neat.run/privacy)
 - [Neat releases](https://github.com/neat-run/activity-feed-public/releases): v0.0.64, 20 August 2026
-- Hush: [inbox](/docs/inbox), [categories and tags](/docs/categories), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
+- Hush: [inbox](/docs/inbox), [categories](/docs/categories), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

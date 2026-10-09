@@ -29,7 +29,7 @@
 	import { leavesOf, parseExpr } from '$lib/shared/query';
 	import { NEW_COMMITS_REASON } from '$lib/shared/dashboard';
 	import { conditionId, smartConditions } from '$lib/shared/decisions';
-	import { markQueries } from '$lib/shared/categories';
+	import { categoryConditionTexts, markQueries } from '$lib/shared/categories';
 	import { saveSettings } from '$lib/save-settings';
 	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
@@ -150,7 +150,8 @@
 		new Set(
 			smartConditions(
 				me.data?.settings.views ?? [],
-				me.data ? markQueries(me.data.settings) : []
+				me.data ? markQueries(me.data.settings) : [],
+				me.data ? categoryConditionTexts(me.data.settings.categoryGroups) : []
 			).map((c) => c.id)
 		)
 	);
@@ -904,7 +905,7 @@
 												thread={t}
 												showList={searching}
 												hidden={me.data?.settings.rows.thread ?? []}
-												marks={rowMarks(t.itemCategory, t.tags, me.data?.settings)}
+												marks={rowMarks(t.categories, me.data?.settings)}
 												selected={t.id === selectedId}
 												checked={sel.has(t.id)}
 												selecting={sel.size > 0}
@@ -1007,7 +1008,7 @@
 			seenAt={t.seenAt ?? null}
 			notes={[
 				t.why && `GitHub: ${t.why.charAt(0).toLowerCase()}${t.why.slice(1)}`,
-				t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Category: ${t.rule}`),
+				t.rule === 'Muted by you' && 'You muted it',
 				t.override && 'You said it doesn’t need you, until it changes',
 				t.resolvedNote && `Hush moved it: ${t.resolvedNote}`
 			]}

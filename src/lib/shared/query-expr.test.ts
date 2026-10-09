@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDefault, queryMatches } from './classify';
+import { classify, queryMatches } from './classify';
 import {
 	aboutTexts,
 	compileExpr,
@@ -39,7 +39,7 @@ function thread(
 }
 
 const matches = (query: string, t: ThreadFacts) =>
-	queryMatches(query, t, classifyDefault(t, DEFAULT_SETTINGS));
+	queryMatches(query, t, classify(t, DEFAULT_SETTINGS));
 
 describe('parseExpr', () => {
 	it('keeps a plain query as one simple condition', () => {

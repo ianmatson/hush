@@ -53,7 +53,7 @@ The feed has the threads that are in the tab now, newest first. A thread that yo
 
 ### A feed for one topic
 
-Make a notification view, then make a feed of it. For example, a view of the review requests in one repository, and a view of the notifications about bugs:
+Make a notification view, then make a feed of it. For example, a view of the review requests in one repository, and a view of the notifications about items with high effort:
 
 ```json settings
 {
@@ -64,7 +64,7 @@ Make a notification view, then make a feed of it. For example, a view of the rev
 			"base": "action",
 			"query": "repo:acme/web needs:review"
 		},
-		{ "id": "bugs", "name": "Bugs", "base": "inbox", "query": "category:bugs" }
+		{ "id": "big", "name": "Big work", "base": "inbox", "query": "category:high-effort" }
 	]
 }
 ```
@@ -73,17 +73,34 @@ The feed of a view stops working when you delete the view.
 
 ### A feed of open pull requests and issues
 
-Each [category and tag](/docs/categories) can have a feed too, in **Settings → Categories & tags**. It lists the open pull requests and issues in the category, or with the tag, newest update first. For example, a tag for small pull requests:
+Each [category](/docs/categories) can have a feed too, in **Settings → Categories**. It lists the open pull requests and issues in the category, newest update first. For example, a category for small pull requests, in a group with any number per item:
 
 ```json settings
-{ "tags": [{ "id": "quick", "name": "Quick", "color": "green", "rule": "type:pr size:<50" }] }
+{
+	"categoryGroups": [
+		{
+			"id": "size",
+			"name": "Size",
+			"multiple": true,
+			"categories": [
+				{
+					"id": "quick",
+					"name": "Quick",
+					"color": "green",
+					"rule": "type:pr size:<50",
+					"description": ""
+				}
+			]
+		}
+	]
+}
 ```
 
 ## When to use what
 
 - **Releases of projects that you use:** GitHub's `releases.atom`. It needs no account.
 - **Your own notifications, sorted, in a reader:** a Hush feed of Needs you or a notification view.
-- **Open pull requests and issues of one kind, in a reader:** a Hush feed of a category or a tag.
+- **Open pull requests and issues of one kind, in a reader:** a Hush feed of a category.
 - **Push to your phone in place of a reader:** see [push notifications for review requests and CI](/guides/github-push-notifications).
 
 ## Sources

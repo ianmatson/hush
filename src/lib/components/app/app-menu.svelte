@@ -34,7 +34,7 @@
 		{:else if e.type === 'item'}
 			<M.Item disabled={e.disabled} onclick={e.run}>
 				{#if e.mark}
-					<MarkIcon kind={e.mark.kind} color={e.mark.color} icon={e.mark.icon} />
+					<MarkIcon color={e.mark.color} icon={e.mark.icon} />
 				{:else if e.icon}<e.icon />{/if}{e.label}
 				{#if e.checked}<Check class="ml-auto" aria-label="Current" />{/if}
 				{#if e.shortcut && kind === 'context'}<M.Shortcut>{e.shortcut}</M.Shortcut>{/if}

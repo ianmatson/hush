@@ -12,9 +12,9 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **It has only your changes.** A setting that you did not change is not in the file; it uses its default. A new default in Hush then applies to you too.
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
-- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also `rules`: inbox rules are now [categories](/docs/categories).
-- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categories` or `sources`, is always replaced as a whole.
-- **Changes apply at once**, on every device. A change to `categories`, `tags`, `botsAreFyi`, `teamReviewsAreAction`, `reviewResolution`, or `newCommitsAfterReview` sorts your stored threads and items again.
+- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also `rules`, `categories`, and `tags`, which Hush no longer has. Categories are in [`categoryGroups`](#categorygroups) now.
+- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categoryGroups` or `sources`, is always replaced as a whole.
+- **Changes apply at once**, on every device. A change to `botsAreFyi`, `teamReviewsAreAction`, `reviewResolution`, or `newCommitsAfterReview` sorts your stored threads and items again. A change to `categoryGroups` places your items in categories again.
 
 A complete example:
 
@@ -24,34 +24,43 @@ A complete example:
 	"quietHours": { "from": 1320, "to": 420, "weekends": true, "timeZone": "America/New_York" },
 	"reviewResolution": "any_review",
 	"teamReviewsAreAction": true,
-	"categories": [
+	"categoryGroups": [
 		{
-			"id": "website",
-			"name": "Website",
-			"color": "blue",
-			"rule": "repo:acme/website",
-			"description": "",
-			"inbox": "fyi"
+			"id": "area",
+			"name": "Area",
+			"multiple": false,
+			"categories": [
+				{
+					"id": "website",
+					"name": "Website",
+					"color": "blue",
+					"rule": "repo:acme/website",
+					"description": ""
+				},
+				{
+					"id": "renovate",
+					"name": "Renovate",
+					"color": "gray",
+					"rule": "author:renovate*",
+					"description": ""
+				}
+			]
 		},
 		{
-			"id": "renovate",
-			"name": "Renovate",
-			"color": "gray",
-			"rule": "author:renovate*",
-			"description": "",
-			"inbox": "muted"
-		},
-		{
-			"id": "alice",
-			"name": "From Alice",
-			"color": "pink",
-			"rule": "from:alice",
-			"description": "",
-			"push": "on"
-		},
-		{ "id": "other", "name": "Other", "color": "gray", "rule": "", "description": "" }
+			"id": "size",
+			"name": "Size",
+			"multiple": true,
+			"categories": [
+				{
+					"id": "quick",
+					"name": "Quick",
+					"color": "green",
+					"rule": "type:pr size:<50",
+					"description": ""
+				}
+			]
+		}
 	],
-	"tags": [{ "id": "quick", "name": "Quick", "color": "green", "rule": "type:pr size:<50" }],
 	"views": [{ "id": "web", "name": "Web", "base": "inbox", "query": "repo:acme/web-*" }],
 	"dash": {
 		"scope": "org:acme archived:false",
@@ -84,8 +93,8 @@ The file is your settings.json in a small wrapper:
 }
 ```
 
-- `hush` is the file format version: `2`. A version `1` file (conditions as JSON objects) still imports: Hush writes its conditions as queries. A file with inbox `rules` imports too: Hush changes them into categories, the same way it changed your own rules (see [Inbox rules from before](/docs/categories#inbox-rules-from-before)).
+- `hush` is the file format version: `2`. A version `1` file (conditions as JSON objects) still imports: Hush writes its conditions as queries.
 - `settings` has only the changes, the same as settings.json.
-- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many categories and views the file has. Settings that Hush no longer has are left out.
+- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many category groups and views the file has. Settings that Hush no longer has, such as `rules`, `categories`, and `tags`, are left out.
 
 {{ref:settings}}

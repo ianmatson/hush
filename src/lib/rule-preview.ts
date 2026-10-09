@@ -1,5 +1,5 @@
 import { keys, queryClient } from './queries';
-import { itemQueryFacts } from './shared/categories';
+import { allCategories, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/classify';
 import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
 import type {
@@ -47,7 +47,7 @@ export function cachedThreads(): ThreadDTO[] {
 export function previewItems(
 	query: string,
 	me: string,
-	settings: Pick<Settings, 'categories' | 'tags' | 'sources'>,
+	settings: Pick<Settings, 'categoryGroups' | 'sources'>,
 	items: DashItem[] = cachedItems()
 ): RulePreview | null {
 	if (!query.trim() || parseExpr(query).errors.length || !items.length) return null;
@@ -93,7 +93,7 @@ const uniq = (xs: (string | null | undefined)[]) =>
 	[...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
 
 export function ruleSuggestions(
-	settings: Pick<Settings, 'categories' | 'tags' | 'sources'> | undefined
+	settings: Pick<Settings, 'categoryGroups' | 'sources'> | undefined
 ): Partial<Record<NonNullable<BuilderField['suggest']>, string[]>> {
 	const items = cachedItems();
 	const threads = cachedThreads();
@@ -110,7 +110,6 @@ export function ruleSuggestions(
 			...threads.flatMap((t) => t.labels)
 		]),
 		source: uniq(settings?.sources.map((s) => s.name) ?? []),
-		category: uniq(settings?.categories.map((c) => c.name) ?? []),
-		tag: uniq(settings?.tags.map((t) => t.name) ?? [])
+		category: uniq(allCategories(settings?.categoryGroups ?? []).map((c) => c.name))
 	};
 }

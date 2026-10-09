@@ -26,8 +26,8 @@ _Last updated: 7 October 2026._
 
 - Your notification threads: the repository, the title, the link, why GitHub notified you, read or unread, and what you did with it (Done, Snoozed, Muted).
 - For each pull request and issue behind them: its state, author, labels, CI result, reviews and review requests, size, the first 500 characters of its description, and the 2 newest comments (their author, time, and text).
-- Unless you turn off [smart decisions](/docs/settings#smartdecisions): Jev's answers for each pull request and issue (whether the newest comments need a reply from you, how urgent it is, which category fits it, and which of your `about:` conditions it matches), and how many tokens your account used today.
-- The categories and tags of your pull requests and issues, and the ones that you chose by hand.
+- Unless you turn off [smart decisions](/docs/settings#smartdecisions): Jev's answers for each pull request and issue (whether the newest comments need a reply from you, how urgent it is, which categories fit it, and which of your `about:` conditions it matches), and how many tokens your account used today.
+- The categories of your pull requests and issues, and the ones that you chose by hand.
 - The results of your Pull requests and Issues searches, and the items that you hid or moved there.
 - Your teams (their names), for team review requests.
 

@@ -1,8 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { MarkColor } from '$lib/shared/types';
-	import { EMOJI, LUCIDE_ICONS, LUCIDE_PREFIX, searchIcons } from '$lib/shared/mark-icons';
-	import { LUCIDE_COMPONENTS } from '$lib/mark-icon-components';
+	import {
+		allEmojiOptions,
+		allLucideOptions,
+		EMOJI,
+		LUCIDE_PREFIX,
+		searchIcons,
+		type MarkIconOption
+	} from '$lib/shared/mark-icons';
+	import { ALL_LUCIDE_IDS } from '$lib/mark-icon-components';
+	import { loadEmojiList } from '$lib/emoji';
 	import { MARK_DOT, MARK_TEXT } from '$lib/marks';
 	import { MARK_COLORS } from '$lib/shared/categories';
 	import { cn } from '$lib/utils';
@@ -10,6 +18,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import MarkIcon from './mark-icon.svelte';
+	import LucideIcon from './lucide-icon.svelte';
 
 	let {
 		icon,
@@ -30,8 +39,23 @@
 	const tabFor = (current: string | undefined) =>
 		current && !current.startsWith(LUCIDE_PREFIX) ? 'emoji' : 'icons';
 	let tab = $state<'icons' | 'emoji'>(untrack(() => tabFor(icon)));
-	const icons = $derived(searchIcons(LUCIDE_ICONS, query));
-	const emoji = $derived(searchIcons(EMOJI, query));
+	const PAGE = 96;
+	const NEAR_BOTTOM_PX = 120;
+	const lucideOptions = allLucideOptions(ALL_LUCIDE_IDS);
+	let emojiOptions = $state<MarkIconOption[]>(EMOJI);
+	let shown = $state(PAGE);
+	const icons = $derived(searchIcons(lucideOptions, query));
+	const emoji = $derived(searchIcons(emojiOptions, query));
+
+	$effect(() => {
+		if (!open) return;
+		void loadEmojiList().then((entries) => (emojiOptions = allEmojiOptions(entries)));
+	});
+
+	function showMoreNearBottom(e: Event) {
+		const el = e.currentTarget as HTMLElement;
+		if (el.scrollTop + el.clientHeight > el.scrollHeight - NEAR_BOTTOM_PX) shown += PAGE;
+	}
 
 	function pick(next: string | undefined) {
 		onpick(next);
@@ -45,7 +69,7 @@
 		class="flex size-8 shrink-0 items-center justify-center rounded-md border hover:bg-muted"
 		aria-label="{label}: icon and colour"
 	>
-		<MarkIcon kind="category" {color} {icon} class="size-4" />
+		<MarkIcon {color} {icon} class="size-4" />
 	</Popover.Trigger>
 	<Popover.Content align="start" class="w-80 p-2">
 		{#if oncolor}
@@ -74,11 +98,12 @@
 		{/if}
 		<Input
 			bind:value={query}
+			oninput={() => (shown = PAGE)}
 			placeholder="Search icons and emoji"
 			aria-label="Search icons and emoji"
 			class="mb-2 h-8"
 		/>
-		<Tabs.Root bind:value={tab}>
+		<Tabs.Root bind:value={tab} onValueChange={() => (shown = PAGE)}>
 			<div class="flex items-center justify-between gap-2">
 				<Tabs.List>
 					<Tabs.Trigger value="icons">Icons</Tabs.Trigger>
@@ -91,9 +116,11 @@
 				>
 			</div>
 			<Tabs.Content value="icons">
-				<div class="grid max-h-60 grid-cols-8 gap-0.5 overflow-y-auto pt-2">
-					{#each icons as o (o.id)}
-						{@const Lucide = LUCIDE_COMPONENTS[o.id]}
+				<div
+					class="grid max-h-60 grid-cols-8 gap-0.5 overflow-y-auto pt-2"
+					onscroll={showMoreNearBottom}
+				>
+					{#each icons.slice(0, shown) as o (o.id)}
 						<button
 							type="button"
 							title={o.id}
@@ -105,7 +132,7 @@
 							)}
 							onclick={() => pick(`${LUCIDE_PREFIX}${o.id}`)}
 						>
-							<Lucide class={cn('size-4', MARK_TEXT[color])} />
+							<LucideIcon id={o.id} class={cn('size-4', MARK_TEXT[color])} />
 						</button>
 					{:else}
 						<p class="col-span-8 py-4 text-center text-xs text-muted-foreground">No icons match.</p>
@@ -113,8 +140,11 @@
 				</div>
 			</Tabs.Content>
 			<Tabs.Content value="emoji">
-				<div class="grid max-h-60 grid-cols-8 gap-0.5 overflow-y-auto pt-2">
-					{#each emoji as o (o.id)}
+				<div
+					class="grid max-h-60 grid-cols-8 gap-0.5 overflow-y-auto pt-2"
+					onscroll={showMoreNearBottom}
+				>
+					{#each emoji.slice(0, shown) as o (o.id)}
 						<button
 							type="button"
 							title={o.keywords}

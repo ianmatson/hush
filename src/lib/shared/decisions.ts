@@ -7,7 +7,6 @@ export const NO_AT = 0.2;
 export const URGENT_SCORE = 1.5;
 export const BODY_EXCERPT_CHARS = 500;
 export const MAX_SMART_CONDITIONS = 30;
-export const CHOICE_CONFIDENCE = 0.6;
 export const CHARS_PER_TOKEN = 4;
 
 export const URGENCY_LEVELS = [
@@ -19,7 +18,7 @@ export const URGENCY_LEVELS = [
 const REPLY = 'reply';
 const URGENCY = 'urgency';
 const ABOUT_PREFIX = 'about_';
-const CATEGORY = 'category';
+const CHOICE_PREFIX = 'choice_';
 
 export interface StoredDecisions {
 	contentHash: string;
@@ -27,26 +26,26 @@ export interface StoredDecisions {
 	urgency?: number;
 	identityHash?: string;
 	about?: Record<string, number>;
-	category?: { id: string; confidence: number };
+	choices?: Record<string, { id: string; confidence: number }>;
 }
 
 export interface SubjectDecisions {
 	commentsNeedMe: boolean | null;
 	urgent: boolean;
 	smart: string[];
-	category: string | null;
+	choices: Record<string, string>;
 }
 
 export const NO_DECISIONS: SubjectDecisions = {
 	commentsNeedMe: null,
 	urgent: false,
 	smart: [],
-	category: null
+	choices: {}
 };
 
-export interface CategoryOption {
-	id: string;
-	label: string;
+export interface DecisionChoice {
+	key: string;
+	options: Record<string, string>;
 }
 
 export type DecisionQuestion =
@@ -101,12 +100,15 @@ const normalizeCondition = (text: string) => text.trim().replace(/\s+/g, ' ').to
 
 export const conditionId = (text: string) => cyrb53(normalizeCondition(text));
 
-export function smartConditions(views: SavedView[], markQueries: string[] = []): SmartCondition[] {
+export function smartConditions(
+	views: SavedView[],
+	markQueries: string[] = [],
+	extraTexts: string[] = []
+): SmartCondition[] {
 	const byId = new Map<string, SmartCondition>();
 	const queries = [...views.map((v) => v.query ?? ''), ...markQueries];
-	for (const query of queries)
-		for (const text of aboutTexts(query))
-			byId.set(conditionId(text), { id: conditionId(text), text });
+	const texts = [...queries.flatMap(aboutTexts), ...extraTexts];
+	for (const text of texts) byId.set(conditionId(text), { id: conditionId(text), text });
 	return [...byId.values()];
 }
 
@@ -196,11 +198,11 @@ function aboutQuestion(text: string): DecisionQuestion {
 	};
 }
 
-function categoryQuestion(options: CategoryOption[]): DecisionQuestion {
+function choiceQuestion(options: Record<string, string>): DecisionQuestion {
 	return {
 		type: 'choice',
 		instructions: 'Which category fits this pull request or issue best?',
-		criteria: Object.fromEntries(options.map((o) => [o.id, o.label]))
+		criteria: options
 	};
 }
 
@@ -209,6 +211,7 @@ export interface DecisionPlan {
 	contentHash: string;
 	identityHash: string | null;
 	aboutIds: Record<string, string>;
+	choiceKeys: Record<string, string>;
 }
 
 export function planDecisions(
@@ -216,7 +219,7 @@ export function planDecisions(
 	me: string,
 	stored: StoredDecisions | null | undefined,
 	conditions: SmartCondition[],
-	categoryOptions: CategoryOption[] = []
+	choices: DecisionChoice[] = []
 ): DecisionPlan | null {
 	const hash = contentHash(s);
 	const idHash = identityHash(s);
@@ -226,21 +229,28 @@ export function planDecisions(
 	if (content?.reply === undefined && newestCommentIsFromAnotherPerson(s, me))
 		questions[REPLY] = replyQuestion(me);
 	if (content?.urgency === undefined) questions[URGENCY] = URGENCY_QUESTION;
+	const identity = identityKnown ? stored : null;
 	const aboutIds: Record<string, string> = {};
-	if (!identityKnown) {
-		for (const c of conditions) {
-			const key = `${ABOUT_PREFIX}${c.id}`;
-			questions[key] = aboutQuestion(c.text);
-			aboutIds[key] = c.id;
-		}
-		if (categoryOptions.length > 1) questions[CATEGORY] = categoryQuestion(categoryOptions);
+	for (const c of conditions) {
+		if (identity?.about?.[c.id] !== undefined) continue;
+		const key = `${ABOUT_PREFIX}${c.id}`;
+		questions[key] = aboutQuestion(c.text);
+		aboutIds[key] = c.id;
+	}
+	const choiceKeys: Record<string, string> = {};
+	for (const choice of choices) {
+		if (identity?.choices?.[choice.key] !== undefined) continue;
+		const key = `${CHOICE_PREFIX}${choice.key}`;
+		questions[key] = choiceQuestion(choice.options);
+		choiceKeys[key] = choice.key;
 	}
 	if (!Object.keys(questions).length) return null;
 	return {
 		request: { state: decisionState(s, me), questions },
 		contentHash: hash,
 		identityHash: identityKnown ? null : idHash,
-		aboutIds
+		aboutIds,
+		choiceKeys
 	};
 }
 
@@ -269,7 +279,7 @@ export function mergeDecisions(
 		...(sameContent ? { reply: stored?.reply, urgency: stored?.urgency } : {}),
 		...(plan.identityHash
 			? { identityHash: plan.identityHash }
-			: { identityHash: stored?.identityHash, about: stored?.about, category: stored?.category })
+			: { identityHash: stored?.identityHash, about: stored?.about, choices: stored?.choices })
 	};
 	const reply = noulOf(answers[REPLY]);
 	if (reply !== undefined) base.reply = reply;
@@ -279,15 +289,17 @@ export function mergeDecisions(
 		const p = noulOf(answers[key]);
 		if (p !== undefined) base.about = { ...base.about, [id]: p };
 	}
-	const category = choiceOf(answers[CATEGORY]);
-	if (category) base.category = category;
+	for (const [key, choiceKey] of Object.entries(plan.choiceKeys)) {
+		const choice = choiceOf(answers[key]);
+		if (choice) base.choices = { ...base.choices, [choiceKey]: choice };
+	}
 	return Object.fromEntries(
 		Object.entries(base).filter(([, v]) => v !== undefined)
 	) as unknown as StoredDecisions;
 }
 
 export function forgetIdentityAnswers(stored: StoredDecisions): StoredDecisions {
-	const { identityHash: _id, about: _about, category: _category, ...kept } = stored;
+	const { identityHash: _id, about: _about, choices: _choices, ...kept } = stored;
 	return kept;
 }
 
@@ -313,10 +325,9 @@ export function readDecisions(
 					.filter(([, p]) => yesOrNo(p) === true)
 					.map(([id]) => id)
 			: [],
-		category:
-			identity && stored.category && stored.category.confidence >= CHOICE_CONFIDENCE
-				? stored.category.id
-				: null
+		choices: identity
+			? Object.fromEntries(Object.entries(stored.choices ?? {}).map(([key, c]) => [key, c.id]))
+			: {}
 	};
 }
 

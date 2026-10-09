@@ -23,8 +23,8 @@ When your sources stop finding a PR or issue (for example, it was merged or clos
 | **Needs you** | Threads where you are the next person who must act.                              |
 | **FYI**       | Activity that you may want to know about, but that does not need you.            |
 | **Snoozed**   | Threads that you snoozed. They come back at the time, or when the thing happens. |
-| **Done**      | Threads that you (or Hush, or a category) finished.                              |
-| **Muted**     | Threads that you muted, or that a category mutes.                                |
+| **Done**      | Threads that you (or Hush) finished.                                             |
+| **Muted**     | Threads that you muted.                                                          |
 
 After these come your [notification views](/docs/views). Keys {{key:inbox.view.1}} to {{key:inbox.view.5}} open the built-in tabs, and {{key:inbox.view.6}} to {{key:inbox.view.9}} your first four notification views.
 
@@ -58,7 +58,7 @@ Everything else is **FYI**: team mentions, repositories that you watch, merged a
 
 Turn the bot, team, and smart decisions settings on or off in **Settings → Inbox → Defaults**.
 
-The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” on the Pull requests tab. To change where threads go, use the inbox settings of a [category](/docs/categories#inbox-settings).
+The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” on the Pull requests tab. To change where threads go, use [Doesn't need me](#doesnt-need-me), or a setting such as [`botsAreFyi`](/docs/settings#botsarefyi). Categories do not change where threads go.
 
 ## Rows
 
@@ -67,14 +67,14 @@ Each row shows:
 - **What happened**, in one line: “CI failed on your PR”, “@alice requests your review”, “@github-actions commented on your PR”.
 - The title, the repository, and the number.
 - **Why GitHub notified you**: “Review requested”, “You opened this”, “Watching repo”… A row does not show a fact twice: when the first line already says why, or that it is a draft, that tag is left out.
-- The icon of its PR or issue's [category](/docs/categories), and the icons of its tags. Hold the pointer on an icon to see its name.
+- The icons of its PR or issue's [categories](/docs/categories). Hold the pointer on an icon to see its name.
 - **What changed since you looked**, for a PR or issue: “+2 commits”, “CI fails”, “@alice approved”, “3 new comments”. See [Since you looked](#since-you-looked).
 - A note such as “✓ You approved” when Hush moved it to Done by itself.
 - The time and the condition of a snooze.
 - A dot when it is unread.
 - The **main action** button: Review, Fix CI, Address, Resolve, Merge, Reply, Triage, or Open. It opens the right page on GitHub (the files of a PR to review, its checks to fix CI) and marks the thread as read.
 
-To choose the parts that rows show, go to **Settings → General → Row contents**. The Notifications row has **Category**, **Tags**, and **Category and tag names** parts, and more. See [`rows.thread`](/docs/settings#rows-thread).
+To choose the parts that rows show, go to **Settings → General → Row contents**. The Notifications row has **Categories** and **Category names** parts, and more. See [`rows.thread`](/docs/settings#rows-thread).
 
 Click a row to [peek](/docs/peek) at it.
 
@@ -135,8 +135,6 @@ The Snooze menu has times and conditions. A time is on your computer's clock.
 
 A snooze “until” also ends after 7 days, so nothing sleeps forever. If the PR or issue is merged or closed first, the snooze ends at once, because the event can no longer happen. When a snooze ends because the thing happened, Hush pushes “Snooze over: CI passed”. Conditions that are already true are not offered.
 
-A [category](/docs/categories#inbox-settings) can snooze its new threads for a number of hours.
-
 ## Select many
 
 - {{key:list.select}} selects or deselects the row under the cursor. {{key:list.extendNext}} and {{key:list.extendPrev}} extend the selection.
@@ -154,7 +152,7 @@ repo:acme/* needs:review -author:bots
 
 Plain words must all be in the title, the repository, or the author. Suggestions show while you type; {{key:list.search}} goes to the box. When a filter has an error, the message shows under the box, and the part with the error is left out.
 
-`category:` and `tag:` work here too. They match the category and tags of the thread's PR or issue: `category:bugs tag:quick`.
+`category:` works here too. It matches the categories of the thread's PR or issue: `category:high-effort`.
 
 To keep a filter, choose the bookmark button at the end of the box: **Save this filter as a notification view (a new tab)**. See [Notification views](/docs/views).
 
@@ -166,7 +164,7 @@ While the box has text, choose **Search: everywhere** under it to search every t
 
 Right-click a row (or choose “⋯” on a phone) for every action: Peek, the main action, Open on GitHub, Done, Snooze, Mute, Move to inbox, Mark as read, Copy link, **Make a category…**, and selection. With a selection, the menu acts on all selected rows. You can change the items and their order: see [Menus](/docs/appearance-and-menus#menus).
 
-**Make a category…** opens **Settings → Categories & tags** with a new category. Its rule is this thread's repository and type, and its threads go to FYI. Change it, and choose **Save**. See [Categories and tags](/docs/categories).
+**Make a category…** opens **Settings → Categories** with a new category in your first group. Its rule is this thread's repository and type. Change it, and choose **Save**. See [Categories](/docs/categories).
 
 ## Sync
 
