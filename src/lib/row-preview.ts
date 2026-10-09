@@ -86,7 +86,7 @@ export const PREVIEW_MARKS: RowMark[] = [
 		name: 'Low',
 		group: 'Effort',
 		color: 'green',
-		icon: 'lucide:signal-low'
+		icon: 'lucide:timer'
 	},
 	{
 		key: 'preview-security',

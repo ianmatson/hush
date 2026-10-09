@@ -180,7 +180,7 @@
 				['json', 'settings.json', 'json advanced all every raw'],
 				['inbox', 'Inbox, views, and feeds', 'feeds defaults'],
 				['dashboards', 'Sources', 'sections searches tracked teams dashboards'],
-				['categories', 'Categories', 'categories groups tags rules labels effort feeds'],
+				['categories', 'Categories', 'categories groups tags rules labels effort impact feeds'],
 				['notifications', 'Notifications', 'push quiet']
 			] as const
 		)

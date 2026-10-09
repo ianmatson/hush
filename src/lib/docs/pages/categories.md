@@ -28,7 +28,12 @@ Hush checks the rules on the PR or issue only, never on a notification. Categori
 
 ## The default group
 
-Hush starts with one group, **Effort**, with one category per item: **Low**, **Medium**, and **High**. These categories have a description and no rule, so Jev places each item: the review effort of a pull request, or the work for an issue. You can change or delete the group. The defaults are in [`categoryGroups`](/docs/settings#categorygroups).
+Hush starts with two groups, each with one category per item: **Low**, **Medium**, and **High**. These categories have a description and no rule, so Jev places each item.
+
+- **Effort**: the review effort of a pull request, or the work for an issue.
+- **Impact**: how much the item changes for the people who use the product. A bug fix removes a problem, and a feature adds something. Both can have a low or a high impact.
+
+You can change or delete the groups. The defaults are in [`categoryGroups`](/docs/settings#categorygroups).
 
 ## Make a category
 
@@ -38,7 +43,7 @@ In **Settings → Categories**:
 - Or right-click a thread in the inbox and choose **Make a category…**: the new category is in your first group, with the thread's repository and type as its rule. Change what you want, and choose **Save**.
 - Drag a category up or down to change its order. In a group with one category per item, order matters: the first rule that matches wins.
 - **Add category group** adds an empty group. Give it a name, and choose **One category per item** or **Any number per item**.
-- **Defaults** puts back the Effort group. Nothing changes until you choose **Save**.
+- **Defaults** puts back the Effort and Impact groups. Nothing changes until you choose **Save**.
 
 You can have up to 10 groups, with up to 20 categories in each group. A category's id is unique across all groups.
 
@@ -137,7 +142,7 @@ In [settings.json](/docs/settings#categorygroups), with an Area group (one per i
 }
 ```
 
-A change to `categoryGroups` replaces the whole list, so this example removes the Effort group. Keep it in the list to keep it.
+A change to `categoryGroups` replaces the whole list, so this example removes the Effort and Impact groups. Keep them in the list to keep them.
 
 ## Feeds
 

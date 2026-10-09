@@ -35,7 +35,7 @@ The reason that GitHub gives is fixed when the notification arrives. A thread wi
 
 **Hush** reads the same notifications, but keeps only the ones about the pull requests and issues that your saved searches find. Releases, CI runs, discussions, and security alerts stay on GitHub. Hush reads the pull request or issue behind each notification: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what needs you](/docs/inbox#what-needs-you).
 
-You can change the defaults with settings, for example whether bots are FYI, and with **Doesn't need me** on a thread. [Categories](/docs/categories) sort your pull requests and issues, for example by review effort.
+You can change the defaults with settings, for example whether bots are FYI, and with **Doesn't need me** on a thread. [Categories](/docs/categories) sort your pull requests and issues, for example by review effort or impact.
 
 ## Pull requests and reviews
 

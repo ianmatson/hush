@@ -39,7 +39,7 @@ export const DEFAULT_CATEGORY_GROUPS: CategoryGroup[] = [
 				id: 'low-effort',
 				name: 'Low',
 				color: 'green',
-				icon: 'lucide:signal-low',
+				icon: 'lucide:timer',
 				rule: '',
 				description:
 					'A pull request that takes minutes to review, or an issue that takes an hour or less to do'
@@ -48,7 +48,7 @@ export const DEFAULT_CATEGORY_GROUPS: CategoryGroup[] = [
 				id: 'medium-effort',
 				name: 'Medium',
 				color: 'amber',
-				icon: 'lucide:signal-medium',
+				icon: 'lucide:clock',
 				rule: '',
 				description:
 					'A pull request that takes up to an hour to review, or an issue that takes up to a day to do'
@@ -57,10 +57,44 @@ export const DEFAULT_CATEGORY_GROUPS: CategoryGroup[] = [
 				id: 'high-effort',
 				name: 'High',
 				color: 'red',
-				icon: 'lucide:signal-high',
+				icon: 'lucide:calendar-clock',
 				rule: '',
 				description:
 					'A pull request that takes more than an hour to review, or an issue that takes more than a day to do'
+			}
+		]
+	},
+	{
+		id: 'impact',
+		name: 'Impact',
+		multiple: false,
+		categories: [
+			{
+				id: 'low-impact',
+				name: 'Low',
+				color: 'gray',
+				icon: 'lucide:minus',
+				rule: '',
+				description:
+					'A fix or feature that few people notice, such as a small edge case, internal cleanup, or a minor tweak'
+			},
+			{
+				id: 'medium-impact',
+				name: 'Medium',
+				color: 'blue',
+				icon: 'lucide:chevron-up',
+				rule: '',
+				description:
+					'A fix or feature that some users or teams notice, such as a bug in one workflow or an improvement to one part of the product'
+			},
+			{
+				id: 'high-impact',
+				name: 'High',
+				color: 'violet',
+				icon: 'lucide:chevrons-up',
+				rule: '',
+				description:
+					'A fix or feature that many users notice, such as an outage, data loss, a security hole, a broken core flow, or a major new capability'
 			}
 		]
 	}

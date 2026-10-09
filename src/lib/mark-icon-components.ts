@@ -18,6 +18,9 @@ import IconGauge from '@lucide/svelte/icons/gauge';
 import IconSignalLow from '@lucide/svelte/icons/signal-low';
 import IconSignalMedium from '@lucide/svelte/icons/signal-medium';
 import IconSignalHigh from '@lucide/svelte/icons/signal-high';
+import IconMinus from '@lucide/svelte/icons/minus';
+import IconChevronUp from '@lucide/svelte/icons/chevron-up';
+import IconChevronsUp from '@lucide/svelte/icons/chevrons-up';
 import IconZap from '@lucide/svelte/icons/zap';
 import IconDatabase from '@lucide/svelte/icons/database';
 import IconServer from '@lucide/svelte/icons/server';
@@ -51,6 +54,7 @@ import IconBot from '@lucide/svelte/icons/bot';
 import IconCalendar from '@lucide/svelte/icons/calendar';
 import IconClock from '@lucide/svelte/icons/clock';
 import IconTimer from '@lucide/svelte/icons/timer';
+import IconCalendarClock from '@lucide/svelte/icons/calendar-clock';
 import IconHourglass from '@lucide/svelte/icons/hourglass';
 import IconTarget from '@lucide/svelte/icons/target';
 import IconTrophy from '@lucide/svelte/icons/trophy';
@@ -150,6 +154,9 @@ export const LUCIDE_COMPONENTS: Record<string, Component> = {
 	'signal-low': IconSignalLow,
 	'signal-medium': IconSignalMedium,
 	'signal-high': IconSignalHigh,
+	minus: IconMinus,
+	'chevron-up': IconChevronUp,
+	'chevrons-up': IconChevronsUp,
 	zap: IconZap,
 	database: IconDatabase,
 	server: IconServer,
@@ -183,6 +190,7 @@ export const LUCIDE_COMPONENTS: Record<string, Component> = {
 	calendar: IconCalendar,
 	clock: IconClock,
 	timer: IconTimer,
+	'calendar-clock': IconCalendarClock,
 	hourglass: IconHourglass,
 	target: IconTarget,
 	trophy: IconTrophy,
