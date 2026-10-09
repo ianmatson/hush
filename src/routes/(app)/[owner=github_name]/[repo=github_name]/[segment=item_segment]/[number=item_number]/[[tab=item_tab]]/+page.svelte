@@ -114,14 +114,14 @@
 	>
 		<Button variant="ghost" size="sm" onclick={back}><ArrowLeft />Back</Button>
 		{#if kind === 'pr'}
-			<nav aria-label="Pull request" class="grid grid-cols-[1fr_1fr] items-center gap-1 text-sm">
+			<nav aria-label="Pull request" class="flex items-center gap-1 text-sm">
 				<a
 					href={conversationPath}
 					data-sveltekit-replacestate
 					data-sveltekit-noscroll
 					aria-current={onFilesTab ? undefined : 'page'}
 					class={cn(
-						'rounded-md px-2 py-1 text-center text-muted-foreground hover:text-foreground',
+						'rounded-md px-2 py-1 text-muted-foreground hover:text-foreground',
 						!onFilesTab && 'bg-muted text-foreground'
 					)}>Conversation</a
 				>
@@ -131,7 +131,7 @@
 					data-sveltekit-noscroll
 					aria-current={onFilesTab ? 'page' : undefined}
 					class={cn(
-						'flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground hover:text-foreground',
+						'flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground hover:text-foreground',
 						onFilesTab && 'bg-muted text-foreground'
 					)}
 					>Files{#if pr}<span class="text-xs text-muted-foreground tabular-nums">{pr.files}</span
