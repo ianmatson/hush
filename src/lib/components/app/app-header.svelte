@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { alertsQuery, dashQuery, leaveTo, meQuery, threadsQuery } from '$lib/queries';
+	import { alertsQuery, dashQuery, leaveTo, meQuery } from '$lib/queries';
 	import { fitItems } from '$lib/fit';
 	import { tick } from 'svelte';
 	import type { DashResponse } from '$lib/shared/types';
@@ -25,10 +25,6 @@
 	import { palette } from '$lib/palette.svelte';
 
 	const me = createQuery(meQuery);
-	const inboxCount = createQuery(() => ({
-		...threadsQuery('action'),
-		select: (d) => d.counts.action
-	}));
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
 	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
@@ -43,8 +39,7 @@
 			href: `/v/${v.id}`,
 			label: v.name,
 			badge: unreadIn(prs.data, v.id) + unreadIn(issues.data, v.id)
-		})),
-		{ href: '/inbox', label: 'Inbox', badge: inboxCount.data }
+		}))
 	]);
 
 	const GAP = 2;

@@ -28,12 +28,10 @@ import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { DEFAULT_PUSH_FACTS, PUSH_FACTS } from '$lib/shared/push-facts';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
-import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
 import {
 	ALERT_LOG_KEEP,
 	DASH_TTL,
 	FILL_MAX,
-	FIRST_SYNC_DAYS,
 	MAX_INDIVIDUAL_PUSHES,
 	PAUSE_AFTER_NO_PUSH,
 	PAUSE_AFTER_WITH_PUSH,
@@ -41,8 +39,7 @@ import {
 	POLL_IDLE,
 	TEAMS_TTL,
 	TRACKED_KEEP,
-	TRACKED_REBUILD_GAP,
-	WATCH_EVERY
+	TRACKED_REBUILD_GAP
 } from '../../../worker/poller/shared';
 import {
 	APP_FOCUS_LASTS_MS,
@@ -75,7 +72,6 @@ const table = (head: string[], rows: string[][]) =>
 
 const PAGE: Record<SettingsPage, string> = {
 	general: 'Settings → General',
-	inbox: 'Settings → Inbox',
 	views: 'Settings → Views',
 	categories: 'Settings → Categories',
 	notifications: 'Settings → Notifications',
@@ -125,7 +121,7 @@ The default: ${code(json(DEFAULT_PUSH_FACTS))}. An empty list pushes nothing (ex
 		type: '"once", "reason", or "every"',
 		body: `When one PR or issue can push again. Hush keeps one notification for each PR or issue, and a later push replaces it.
 
-- \`"once"\` (default): one push, then nothing more for that item until you open Hush, read the item on GitHub, or act on it (Done, Read, Snooze, Mute).
+- \`"once"\` (default): one push, then nothing more for that item until you open it in Hush.
 - \`"reason"\`: the same, but a new reason pushes again, for example when "Review requested" becomes "Changes requested".
 - \`"every"\`: each update pushes.
 
@@ -177,53 +173,24 @@ A snooze that ends always pushes.
 
 iPhone and iPad can ignore this: Safari on iOS does not always remove a notification when Hush asks.`
 	},
-	peekMarksRead: {
-		type: 'boolean',
-		body: `A PR or issue that stays open in the peek for 1.5 seconds is marked as read, in Hush and on GitHub. Off: only **Read** (or opening it on GitHub) marks it.`
-	},
-	reviewResolution: {
-		type: '"strict" or "any_review"',
-		body: `When a review request stops being your turn.
-
-- \`"strict"\`: when GitHub no longer asks you: you reviewed, or the request was removed.
-- \`"any_review"\`: also when someone other than you and the author approves or requests changes after the newest push. Useful on teams where one review is enough.
-
-This also applies to team review requests.`
-	},
-	newCommitsAfterReview: {
-		type: '"always", "changes_requested", or "never"',
-		body: `When new commits on a PR that you reviewed make it your turn again (“New commits since your review”). Settings → Inbox → **New commits after my review need me**.
-
-- \`"always"\` (default): after any review.
-- \`"changes_requested"\`: only when your last review requested changes. After an approval or a comment, the PR waits on others.
-- \`"never"\`: new commits never make it your turn. A new review request still does.`
-	},
-	botsAreFyi: {
-		type: 'boolean',
-		body: `PRs that bots open (dependabot, renovate…) are FYI, and they show in Other on the Pull requests tab, unless they ask for your review by name. Comments and mentions by bots do not count as replies. A bot is a login that ends in \`[bot]\`, or starts with dependabot, renovate, github-actions, or codecov.`
-	},
 	smartDecisions: {
 		type: 'boolean',
 		body: `On by default. Hush asks Jev, a decision model from TypeSafe (through Cloudflare Workers AI), to read the title, labels, first ${BODY_EXCERPT_CHARS} characters of the description, and last 2 comments of your PRs and issues. Jev never sees code, CI, or reviews, and writes nothing.
 
-- **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
+- **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
 - **Categories:** Jev places each PR and issue in the categories that have a description, when no rule places it. See [Categories](/docs/categories).
-- **\`about:\` conditions** in category rules and in notification views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
-- **Order:** in your views, items whose text says they block something or are about an incident come first inside their group.
+- **\`about:\` conditions** in category rules: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
+- **Order:** in your views, items whose text says they block something or are about an incident come first inside their section.
 
-A one-time notice on the inbox and on your views says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Inbox → Defaults**: Hush then deletes Jev's answers, and sends Jev nothing more.`
+A one-time notice on your views says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
 	},
 	pushUrgentNow: {
 		type: 'boolean',
-		body: `Needs **smartDecisions**. On, a “Needs you” item whose text says it blocks something or is about an incident pushes at once, also during a digest (**pushDigestMinutes**) or over the push limit (**pushLimit**). Quiet hours still hold it. Off by default.`
-	},
-	teamReviewsAreAction: {
-		type: 'boolean',
-		body: `A review request to a team you are in goes to **Needs you** (and is pushed). Off, it is FYI in the inbox. In a view grouped by **Your role**, it is under **Reviews** either way.`
+		body: `Needs **smartDecisions**. On, a push about an item whose text says it blocks something or is about an incident goes at once, also during a digest (**pushDigestMinutes**) or over the push limit (**pushLimit**). Quiet hours still hold it. Off by default.`
 	},
 	views: {
 		type: 'array of views',
-		body: `The views in the top bar, in this order. Up to ${MAX_VIEWS}. A view shows the open PRs and issues that its searches find. The inbox gets only the notifications about the PRs and issues of your views.
+		body: `The views in the top bar, in this order. Up to ${MAX_VIEWS}. A view shows the open PRs and issues that its searches find.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`), feed, and the \`view:\` word use it.
 - \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label. Category rules can test it with \`view:\`.
@@ -232,7 +199,7 @@ A one-time notice on the inbox and on your views says that this is on. When you 
 - \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
 A view needs at least one search, and you keep at least one view.
 
-Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once, and Hush removes their notifications.
+Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once.
 
 A change to \`views\` replaces the whole list. To add a view, write the defaults below and your new one.
 
@@ -255,7 +222,7 @@ ${viewsReference()}`
 	},
 	categoryGroups: {
 		type: 'array of category groups',
-		body: `Groups of categories for your PRs and issues. Up to ${MAX_CATEGORY_GROUPS} groups. A notification thread shows the categories of its PR or issue. Categories do not change the inbox.
+		body: `Groups of categories for your PRs and issues. Up to ${MAX_CATEGORY_GROUPS} groups.
 
 Each group has:
 
@@ -269,7 +236,7 @@ Each category has:
 - \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
 - \`color\`: ${MARK_COLORS.map((c) => `\`"${c}"\``).join(', ')}.
 - \`icon\` (optional): \`"lucide:<name>"\` for a [Lucide](https://lucide.dev/icons) icon, or one emoji.
-- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. The rule looks only at the PR or issue: \`category:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
+- \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. The rule looks only at the PR or issue.
 - \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
 
 An item gets one category from each group, in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description. When no rule matches and Jev is off or cannot answer, the item is **Not sorted** in that group: it has no category from the group.
@@ -319,7 +286,7 @@ ${table(
 	},
 	'dash.staleDays': {
 		type: 'whole number, 1 to 60',
-		body: `An item whose turn started more than this many days ago is **stale**: it shows how long it waited (“waiting 5d”) in amber. Items in the Other group are never stale.`
+		body: `An item whose turn started more than this many days ago is **stale**: it shows how long it waited (“waiting 5d”) in amber. Items that wait on nobody are never stale.`
 	},
 	'dash.hideOthersDrafts': {
 		type: 'boolean',
@@ -329,31 +296,23 @@ ${table(
 		type: 'boolean',
 		body: `Leave out PRs and issues that bots opened, unless your review is requested from you by name.`
 	},
-	'menus.inbox': {
+	'menus.dash': {
 		type: 'array of menu item ids',
-		body: `The items of the right-click menu (and the “⋯” menu on phones) of inbox threads, in order. \`"${SEP}"\` is a separator line. Items that you leave out are hidden. Items that do not apply to a thread, such as Done in the Done tab, are left out when the menu opens. See the item ids in [Menus](/docs/appearance-and-menus#menu-items).
+		body: `The items of the right-click menu (and the “⋯” menu on phones) of pull requests and issues, in order. \`"${SEP}"\` is a separator line. Items that you leave out are hidden. Items that do not apply to an item, such as “Open on GitHub” when it is the main action, are left out when the menu opens. See the item ids in [Menus](/docs/appearance-and-menus#menu-items).
 
 \`\`\`json settings
-{ "menus": { "inbox": ["peek", "main", "sep", "done", "snooze:tomorrow", "until:ci_pass", "mute", "sep", "copy"] } }
+{ "menus": { "dash": ["peek", "main", "sep", "snooze", "mute", "read", "sep", "copy"] } }
 \`\`\`
 
 Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush which new items you have already seen.`
 	},
-	'menus.dash': {
-		type: 'array of menu item ids',
-		body: `The menu of pull requests and issues on the dashboards, the same way as \`menus.inbox\`.`
-	},
-	'swipe.inbox': {
-		type: '{ "left": action, "right": action }',
-		body: `On a phone or tablet, swipe an inbox thread to the right or to the left to act on it: the row moves with your finger, shows the action, and acts when you let go past the line. A mouse or pen never swipes. The actions: ${SWIPE_ACTIONS.inbox.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.
-
-\`\`\`json settings
-{ "swipe": { "inbox": { "right": "done", "left": "mute" } } }
-\`\`\``
-	},
 	'swipe.dash': {
 		type: '{ "left": action, "right": action }',
-		body: `The same for pull requests and issues in views. The actions: ${SWIPE_ACTIONS.dash.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.`
+		body: `On a phone or tablet, swipe a pull request or issue to the right or to the left to act on it: the row moves with your finger, shows the action, and acts when you let go past the line. A mouse or pen never swipes. The actions: ${SWIPE_ACTIONS.dash.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.
+
+\`\`\`json settings
+{ "swipe": { "dash": { "right": "snooze", "left": "read" } } }
+\`\`\``
 	},
 	'rows.pr': {
 		type: 'array of part ids',
@@ -367,10 +326,6 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 		type: 'array of part ids',
 		body: `The same for issue rows. Parts: ${ROW_PARTS.issue.map((p) => `\`"${p.id}"\` (${p.label})`).join(', ')}.`
 	},
-	'rows.thread': {
-		type: 'array of part ids',
-		body: `The same for notification rows in the inbox. The summary, the repository, and the title always show. Parts: ${ROW_PARTS.thread.map((p) => `\`"${p.id}"\` (${p.label})`).join(', ')}.`
-	},
 	keys: {
 		type: 'object: command id → array of keys',
 		body: `The keyboard shortcuts that you changed. For each [command id](/docs/keybinds#all-shortcuts), the keys that replace its default keys, up to 4. \`[]\` turns the shortcut off. Commands that you do not list keep their defaults.
@@ -383,7 +338,7 @@ How to write a key:
 - Other characters are themselves, with no Shift: \`"?"\`, \`"/"\`, \`"1"\`.
 
 \`\`\`json settings
-{ "keys": { "inbox.done": ["d", "e"], "inbox.mute": [], "palette": ["Mod+k", "Mod+p"] } }
+{ "keys": { "dash.snooze": ["d", "e"], "dash.mute": [], "palette": ["Mod+k", "Mod+p"] } }
 \`\`\``
 	}
 };
@@ -434,7 +389,7 @@ export function keyMention(id: string, where = 'docs'): string {
 	return c.keys.length ? c.keys.map(one).join(' or ') : '(no key)';
 }
 
-/** Some commands and their keys, in this order: {{ref:keys list.next inbox.done}}. */
+/** Some commands and their keys, in this order: {{ref:keys list.next dash.snooze}}. */
 function someKeys(ids: string[]): string {
 	return table(
 		['Key', 'What it does'],
@@ -502,7 +457,7 @@ function queryReference(): string {
 }
 
 function menusReference(): string {
-	return (['inbox', 'dash'] as MenuKind[])
+	return (['dash'] as MenuKind[])
 		.map((kind) => {
 			const rows = MENU_ITEMS[kind].map((i) => [
 				code(i.id),
@@ -510,8 +465,7 @@ function menusReference(): string {
 				i.note ?? '',
 				DEFAULT_MENUS[kind].includes(i.id) ? 'yes' : 'no'
 			]);
-			const title =
-				kind === 'inbox' ? 'Inbox threads (menus.inbox)' : 'PRs and issues (menus.dash)';
+			const title = 'PRs and issues (menus.dash)';
 			return `### ${title}\n\n${table(['Id', 'Item', 'Shows', 'In the default menu'], rows)}\n\nThe default order: ${code(json(DEFAULT_MENUS[kind]))}`;
 		})
 		.join('\n\n');
@@ -519,11 +473,10 @@ function menusReference(): string {
 
 function snoozeReference(): string {
 	return table(
-		['Snooze until', 'For', 'Menu id'],
+		['Snooze until', 'For'],
 		SNOOZE_EVENTS.map((e) => [
 			e.label,
-			e.kinds.includes('issue') ? 'Pull requests and issues' : 'Pull requests',
-			code(`until:${e.id}`)
+			e.kinds.includes('issue') ? 'Pull requests and issues' : 'Pull requests'
 		])
 	);
 }
@@ -552,8 +505,6 @@ function limitsReference(): string {
 		[
 			['Poll for new notifications, when Hush is open or push is on', `every ${dur(POLL_ACTIVE)}`],
 			['Poll when idle (no open tab for 15 minutes, no push devices)', `every ${dur(POLL_IDLE)}`],
-			['First sync after sign-in', `notifications from the last ${FIRST_SYNC_DAYS} days`],
-			['Inbox watcher (turn changes with no notification)', `every ${dur(WATCH_EVERY)}`],
 			[
 				'The searches of your views',
 				`run every ${dur(DASH_TTL)} while Hush polls; refresh any time`
@@ -568,14 +519,9 @@ function limitsReference(): string {
 				'Polling stops with no visit for',
 				`${dur(PAUSE_AFTER_NO_PUSH)} (${dur(PAUSE_AFTER_WITH_PUSH)} with push devices); opening Hush starts it again`
 			],
-			['A Done thread comes back when it needs you again, within', dur(REOPEN_WINDOW_MS)],
 			['A snooze “until something happens” also ends after', dur(SNOOZE_EVENT_MAX_MS)],
-			[
-				'Pushes per poll before they become one push (“5 things need you”)',
-				String(MAX_INDIVIDUAL_PUSHES)
-			],
+			['Pushes per poll before they become one push (“5 alerts”)', String(MAX_INDIVIDUAL_PUSHES)],
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
-			['Done threads with no activity are forgotten after', '30 days'],
 			['Views', String(MAX_VIEWS)],
 			['Searches in a view', String(MAX_VIEW_SEARCHES)],
 			['GitHub searches for pull requests, and for issues', String(MAX_QUERIES)],
@@ -584,14 +530,14 @@ function limitsReference(): string {
 			['Push devices', '10'],
 			['Category groups', String(MAX_CATEGORY_GROUPS)],
 			['Categories in a group', String(MAX_CATEGORIES)],
-			['Different about: conditions in categories and views', String(MAX_SMART_CONDITIONS)],
+			['Different about: conditions in categories', String(MAX_SMART_CONDITIONS)],
 			['Length of one about: condition', `${MAX_CONDITION_CHARS} characters`],
 			[
 				'Smart decisions per account',
 				`${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day`
 			],
 			[
-				'Threads checked again when you turn on smart decisions or add an about: condition',
+				'Items checked again when you turn on smart decisions or add an about: condition',
 				String(FILL_MAX)
 			],
 			[

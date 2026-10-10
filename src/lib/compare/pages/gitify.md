@@ -86,6 +86,6 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 - [gitify-app/gitify on GitHub](https://github.com/gitify-app/gitify): README, MIT license, supported forges
 - [Gitify releases](https://github.com/gitify-app/gitify/releases): v7.8.0, 6 September 2026
 - [Gitify settings and filter types](https://github.com/gitify-app/gitify/blob/main/src/renderer/stores/types.ts), source code
-- Hush: [inbox](/docs/inbox), [notifications](/docs/notifications), [GitHub access](/docs/github-access), [pricing](/pricing)
+- Hush: [views](/docs/views), [notifications](/docs/notifications), [GitHub access](/docs/github-access), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

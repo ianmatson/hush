@@ -137,7 +137,7 @@ const app = routes()
 	.get('/api/auth/callback', async (c) => {
 		const [state, use] = (getCookie(c, STATE_COOKIE) ?? '').split('.');
 		// A switch back from a custom token starts in Settings, while you are signed in: its errors
-		// go there (the sign-in page would send a signed-in user on to the inbox).
+		// go there (the sign-in page would send a signed-in user on to their views).
 		const fail = (message: string) =>
 			c.redirect(
 				use === 'app'
@@ -197,7 +197,7 @@ const app = routes()
 		return c.redirect(
 			use === 'app'
 				? `${c.env.APP_URL}/settings/general?signed_in=1#token`
-				: `${c.env.APP_URL}/inbox?signed_in=1`
+				: `${c.env.APP_URL}/v?signed_in=1`
 		);
 	})
 	/**
@@ -287,7 +287,7 @@ const app = routes()
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status, onboarded } = await poller(c.env, u.id).me();
+		const { settings, status } = await poller(c.env, u.id).me(new URL(c.req.url).origin);
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,
@@ -296,13 +296,10 @@ const app = routes()
 			lastPollAt: status.lastPollAt,
 			nextPollAt: status.nextPollAt,
 			lastPollError: status.lastError,
-			ssoHiddenOrgs: status.ssoHiddenOrgs ?? 0,
-			firstSync: status.firstSync,
 			smartDecisionsPaused: !!status.smartDecisionsPaused,
 			smartDecisionsChecking: !!status.smartDecisionsChecking,
 			scopes: u.scopes ? u.scopes.split(',') : [],
-			tokenSource: u.token_source,
-			onboarded
+			tokenSource: u.token_source
 		};
 		return c.json(me);
 	});

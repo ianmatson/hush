@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify, queryMatches } from './classify';
+import { queryMatches } from './rules';
 import {
 	aboutTexts,
 	compileExpr,
@@ -8,21 +8,15 @@ import {
 	queryError,
 	sizeMatches
 } from './query';
-import { DEFAULT_SETTINGS } from './settings';
-import type { Enrichment, ThreadFacts } from './types';
+import type { Enrichment, RuleFacts } from './types';
 
 const ME = 'ian';
 
-function thread(
-	over: Partial<ThreadFacts> = {},
-	enrichment: Partial<Enrichment> = {}
-): ThreadFacts {
+function thread(over: Partial<RuleFacts> = {}, enrichment: Partial<Enrichment> = {}): RuleFacts {
 	return {
 		repo: 'acme/web',
 		subjectType: 'PullRequest',
 		title: 'Fix the login timeout',
-		reason: 'review_requested',
-		htmlUrl: 'https://github.com/acme/web/pull/1',
 		me: ME,
 		enrichment: {
 			kind: 'pr',
@@ -38,8 +32,7 @@ function thread(
 	};
 }
 
-const matches = (query: string, t: ThreadFacts) =>
-	queryMatches(query, t, classify(t, DEFAULT_SETTINGS));
+const matches = (query: string, t: RuleFacts) => queryMatches(query, t);
 
 describe('parseExpr', () => {
 	it('keeps a plain query as one simple condition', () => {
@@ -59,7 +52,7 @@ describe('parseExpr', () => {
 		expect(parseExpr('label:bug OR').errors).toContain('“OR” needs a condition on both sides.');
 	});
 	it('reports errors inside groups', () => {
-		expect(queryError('(kind:review OR label:bug)')).toBe('Use needs: instead of kind:.');
+		expect(queryError('(by:alice OR label:bug)')).toBe('Use from: instead of by:.');
 	});
 	it('keeps quoted text with parentheses together', () => {
 		expect(aboutTexts('about:"bugs (and crashes)" OR label:x')).toEqual(['bugs (and crashes)']);

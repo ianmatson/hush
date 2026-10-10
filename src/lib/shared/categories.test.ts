@@ -8,24 +8,15 @@ import {
 	placeItem,
 	validateCategoryGroups
 } from './categories';
-import { classify, queryMatches } from './classify';
+import { queryMatches } from './rules';
 import { DEFAULT_SETTINGS } from './settings';
-import type {
-	CategoryGroup,
-	Classification,
-	DashItem,
-	Enrichment,
-	ItemCategory,
-	ThreadFacts
-} from './types';
+import type { CategoryGroup, DashItem, Enrichment, ItemCategory, RuleFacts } from './types';
 
-const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<ThreadFacts> = {}) =>
+const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<RuleFacts> = {}) =>
 	({
 		repo: 'acme/web',
 		subjectType: 'PullRequest',
 		title: 'Fix the login timeout',
-		reason: '',
-		htmlUrl: 'https://github.com/acme/web/pull/1',
 		me: 'ian',
 		enrichment: {
 			kind: 'pr',
@@ -38,7 +29,7 @@ const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<ThreadFacts>
 		},
 		views: ['Mine'],
 		...over
-	}) satisfies ThreadFacts;
+	}) satisfies RuleFacts;
 
 const group = (categories: ItemCategory[], id = 'area'): CategoryGroup => ({
 	id,
@@ -46,8 +37,8 @@ const group = (categories: ItemCategory[], id = 'area'): CategoryGroup => ({
 	categories
 });
 
-const place = (t: ThreadFacts, groups: CategoryGroup[], pinned: string[] = []) =>
-	placeItem(t, classify(t, DEFAULT_SETTINGS), pinned, groups);
+const place = (t: RuleFacts, groups: CategoryGroup[], pinned: string[] = []) =>
+	placeItem(t, pinned, groups);
 
 const API: ItemCategory = {
 	id: 'api',
@@ -110,8 +101,8 @@ describe('placeItem', () => {
 	it('lets a stored rule that is not valid now match nothing', () => {
 		const old = { ...API, rule: 'repo:acme/* type:ci' };
 		expect(place(thread(), [group([old])]).categories).toEqual([]);
-		const notification = { ...API, rule: 'repo:acme/* in:fyi' };
-		expect(place(thread(), [group([notification])]).categories).toEqual([]);
+		const removedWord = { ...API, rule: 'repo:acme/* in:fyi' };
+		expect(place(thread(), [group([removedWord])]).categories).toEqual([]);
 	});
 	it('ignores a pin to a deleted category', () => {
 		expect(place(thread(), [area], ['gone'])).toEqual({ categories: [], pinned: [] });
@@ -217,7 +208,7 @@ describe('validation', () => {
 	});
 });
 
-describe('category: in the Filter box', () => {
+describe('rules on the facts of an item', () => {
 	const item = {
 		id: 'acme/web#1',
 		kind: 'pr',
@@ -243,25 +234,16 @@ describe('category: in the Filter box', () => {
 		categories: ['low-effort']
 	} as unknown as DashItem;
 	const facts = itemQueryFacts(item, 'ian', DEFAULT_SETTINGS);
-	const c = { category: 'fyi', kind: 'none' } as Classification;
-
-	it('matches any category of the item by id or name', () => {
-		expect(queryMatches('category:low-effort', facts, c)).toBe(true);
-		expect(queryMatches('category:Low', facts, c)).toBe(true);
-		expect(queryMatches('category:high-effort', facts, c)).toBe(false);
-		expect(queryMatches('-category:High', facts, c)).toBe(true);
+	it('match the PR or issue', () => {
+		expect(queryMatches('repo:acme/* author:alice', facts)).toBe(true);
+		expect(queryMatches('author:bots', facts)).toBe(false);
 	});
 
-	it('cannot be used in category rules', () => {
-		expect(validateCategoryGroups([group([{ ...API, rule: 'category:bugs' }])])).toMatch(
-			/cannot use category:/
-		);
-	});
-	it.each(['needs:review', 'event:mentioned', 'in:fyi', 'repo:acme/* (author:bots OR -in:muted)'])(
-		'rules cannot use notification words: %s',
+	it.each(['category:bugs', 'needs:review', 'event:mentioned', 'in:fyi'])(
+		'rules cannot use removed words: %s',
 		(rule) => {
 			expect(validateCategoryGroups([group([{ ...API, rule }])])).toMatch(
-				/cannot use event:, needs:, or in:/
+				/Unknown “(category|needs|event|in):”/
 			);
 		}
 	);

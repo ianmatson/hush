@@ -47,20 +47,18 @@ describe('keymap', () => {
 
 	it('finds the command for a key in the active scopes', () => {
 		const map = bindings();
-		expect(commandIn(map, 'e', ['list', 'inbox'])).toBe('inbox.done');
 		expect(commandIn(map, 'e', ['list', 'dash'])).toBe('dash.snooze');
 		expect(commandIn(map, 'Mod+k', ['global'])).toBe('palette');
-		expect(commandIn(map, 'q', ['list', 'inbox'])).toBeNull();
+		expect(commandIn(map, 'q', ['list', 'dash'])).toBeNull();
 	});
 
 	it('applies your changes and sees conflicts', () => {
-		const map = bindings({ 'inbox.done': ['d'], 'list.copy': [] });
-		expect(commandIn(map, 'd', ['inbox'])).toBe('inbox.done');
-		expect(commandIn(map, 'e', ['inbox'])).toBeNull();
+		const map = bindings({ 'dash.snooze': ['d'], 'list.copy': [] });
+		expect(commandIn(map, 'd', ['dash'])).toBe('dash.snooze');
+		expect(commandIn(map, 'e', ['dash'])).toBeNull();
 		expect(commandIn(map, 'c', ['list'])).toBeNull();
 		expect(conflicts(map, 'peek.approve', 'j').map((c) => c.id)).toEqual(['list.next']);
-		// The inbox and the dashboards are never active together.
-		expect(conflicts(map, 'dash.snooze', 'd')).toEqual([]);
+		expect(conflicts(map, 'page.files', 'd')).toEqual([]);
 	});
 
 	it('shows keys for people', () => {
@@ -70,11 +68,11 @@ describe('keymap', () => {
 	});
 
 	it('checks the setting', () => {
-		expect(validateKeys({ 'inbox.done': ['d', 'Shift+d'] })).toBeNull();
+		expect(validateKeys({ 'dash.snooze': ['d', 'Shift+d'] })).toBeNull();
 		expect(validateKeys({ nope: ['d'] })).toMatch(/unknown command/);
-		expect(validateKeys({ 'inbox.done': ['D'] })).toMatch(/not a key/);
-		expect(validateKeys({ 'inbox.done': ['Shift+Mod+d'] })).toMatch(/not a key/);
-		expect(validateKeys({ 'inbox.done': 'd' })).toMatch(/list/);
+		expect(validateKeys({ 'dash.snooze': ['D'] })).toMatch(/not a key/);
+		expect(validateKeys({ 'dash.snooze': ['Shift+Mod+d'] })).toMatch(/not a key/);
+		expect(validateKeys({ 'dash.snooze': 'd' })).toMatch(/list/);
 		expect(validateKeys([])).toMatch(/object/);
 	});
 });

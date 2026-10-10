@@ -1,8 +1,8 @@
 /**
- * Swipe actions on phones and tablets (touch only: a mouse drags, it never swipes). Each list
- * has one action for a swipe to the right and one for a swipe to the left.
+ * Swipe actions on phones and tablets (touch only: a mouse drags, it never swipes): one action
+ * for a swipe to the right and one for a swipe to the left.
  */
-export type SwipeKind = 'inbox' | 'dash';
+export type SwipeKind = 'dash';
 export interface SwipePair {
 	left: string;
 	right: string;
@@ -10,14 +10,6 @@ export interface SwipePair {
 export type SwipeSettings = Record<SwipeKind, SwipePair>;
 
 export const SWIPE_ACTIONS: Record<SwipeKind, { id: string; label: string }[]> = {
-	inbox: [
-		{ id: 'none', label: 'Nothing' },
-		{ id: 'done', label: 'Done' },
-		{ id: 'snooze', label: 'Snooze…' },
-		{ id: 'mute', label: 'Mute' },
-		{ id: 'read', label: 'Read / unread' },
-		{ id: 'not-needed', label: 'Doesn’t need me…' }
-	],
 	dash: [
 		{ id: 'none', label: 'Nothing' },
 		{ id: 'snooze', label: 'Snooze until new activity' },
@@ -27,7 +19,6 @@ export const SWIPE_ACTIONS: Record<SwipeKind, { id: string; label: string }[]> =
 };
 
 export const DEFAULT_SWIPE: SwipeSettings = {
-	inbox: { right: 'done', left: 'snooze' },
 	dash: { right: 'snooze', left: 'mute' }
 };
 
@@ -42,7 +33,7 @@ export function knownSwipe(
 		};
 		return { ...DEFAULT_SWIPE[kind], left: choose('left'), right: choose('right') };
 	};
-	return { inbox: pairOf('inbox'), dash: pairOf('dash') };
+	return { dash: pairOf('dash') };
 }
 
 export function validateSwipe(v: unknown): string | null {

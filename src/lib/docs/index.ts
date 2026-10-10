@@ -31,7 +31,7 @@ export const NAV: { group: string; pages: string[] }[] = [
 	{ group: 'Start', pages: ['', 'getting-started', 'github-access'] },
 	{
 		group: 'Use Hush',
-		pages: ['views', 'pull-requests-and-issues', 'inbox', 'peek', 'notifications', 'feeds']
+		pages: ['views', 'pull-requests-and-issues', 'peek', 'notifications', 'feeds']
 	},
 	{
 		group: 'Make it yours',

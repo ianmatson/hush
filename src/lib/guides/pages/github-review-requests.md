@@ -55,27 +55,24 @@ If you review for one or two teams, a saved view with `user-review-requested:@me
 
 ## Where Hush helps
 
-GitHub's searches know who was asked. They do not know if the request still waits on you: if the author pushed new commits since your review, or if someone else already reviewed. Hush looks at the reviews, commits, and CI of each pull request, and puts a review request in **Needs you** when it is your turn:
+GitHub's searches know who was asked. They do not know if the request still waits on you: for example, if the author pushed new commits since your review. Hush looks at the reviews, commits, and CI of each pull request, and shows a review as **your turn** when it waits on you:
 
-- Your review is requested from you by name, or again after your review.
-- New commits arrived since your review.
+- Your review is requested from you by name (“Review requested”), or again after your review (“Re-review requested”).
+- New commits arrived since your review (“New commits since your review”).
 - The pull request is assigned to you.
 
-When you approve or request changes, Hush moves the thread to **Done** by itself. See [what needs you](/docs/inbox#what-needs-you).
+When you approve or request changes, the pull request stops being your turn: the row says “You approved” or “Waiting on author”. A request ends only when GitHub no longer asks you, so a review by someone else does not end your request. See [whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is).
 
-Team requests are **FYI** by default. In a view grouped by **Your role**, they are under **Reviews**, with “Review for acme/web” on the row (see [Group by](/docs/pull-requests-and-issues#group-by)). You can change this:
+A request to one of your teams is **your team's turn**, with “Review for acme/web” on the row. In a view grouped by **Your role**, team requests are under **Reviews** (see [Group by](/docs/pull-requests-and-issues#group-by)). You can change what you see and what pushes:
 
-- [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests go to Needs you.
-- [`pushFacts`](/docs/settings#pushfacts) with `team-review-requested`: team review requests push.
-- [`reviewResolution`](/docs/settings#reviewresolution) `"any_review"`: a review by someone else settles a request. Use it on teams where one review is enough.
+- [`pushFacts`](/docs/settings#pushfacts) with `team-review-requested`: team review requests push too.
 - [`dash.excludedTeams`](/docs/settings#dash-excludedteams): leave out big teams, such as "everyone".
 
 A [view](/docs/views) with only your review requests, next to the default Mine view, and the settings above:
 
 ```json settings
 {
-	"teamReviewsAreAction": false,
-	"reviewResolution": "any_review",
+	"pushFacts": ["review-requested", "team-review-requested", "mentioned", "replied", "ci-failed"],
 	"dash": { "excludedTeams": ["acme/everyone"] },
 	"views": [
 		{
@@ -94,7 +91,7 @@ A [view](/docs/views) with only your review requests, next to the default Mine v
 }
 ```
 
-To read the pull request and approve it without leaving Hush, use the [peek](/docs/peek). For the diff and line comments, Hush sends you to GitHub.
+To read the pull request and approve it without leaving Hush, use the [peek](/docs/peek). Its [full page](/docs/peek#full-page) shows the diff, and you can write line comments there.
 
 ## Sources
 

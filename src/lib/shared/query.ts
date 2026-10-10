@@ -2,10 +2,10 @@ import { tokens } from './text-match';
 import type { RuleMatch } from './types';
 
 /**
- * One small query language for rules, notification views, and the Filter box. Rules and views store the
- * text; it compiles to RuleMatch, the form the matcher reads (and back, for the visual editor):
+ * One small query language for category rules. Rules store the text; it compiles to RuleMatch,
+ * the form the matcher reads (and back, for the visual editor):
  *
- *   repo:acme/* needs:review -author:bots label:"good first issue" login bug
+ *   repo:acme/* -author:bots label:"good first issue" login bug
  *
  * - `word:value` is a condition; `word:a,b` (or the word twice) matches any of the values.
  * - `author:bots` and `from:bots` mean any bot; `-author:bots` and `-from:bots` mean a person.
@@ -73,12 +73,6 @@ export const WORDS: QueryWord[] = [
 		example: 'size:<50'
 	},
 	{
-		key: 'category',
-		field: 'itemCategory',
-		help: 'Has this category (name or id); not in category rules',
-		example: 'category:low-effort'
-	},
-	{
 		key: 'view',
 		field: 'view',
 		help: 'Which view has it (its name)',
@@ -99,50 +93,6 @@ export const WORDS: QueryWord[] = [
 			pr: v('PullRequest', 'Pull request'),
 			issue: v('Issue', 'Issue')
 		}
-	},
-	{
-		key: 'event',
-		field: 'reason',
-		help: 'Why GitHub notified you',
-		example: 'event:you-opened',
-		values: {
-			'review-requested': v('review_requested', 'Your review was requested'),
-			mentioned: v('mention', 'You were mentioned'),
-			'team-mentioned': v('team_mention', 'Your team was mentioned'),
-			'you-opened': v('author', 'You opened it'),
-			'you-commented': v('comment', 'You commented on it'),
-			assigned: v('assign', 'You were assigned'),
-			watching: v('subscribed', 'You watch the repository'),
-			subscribed: v('manual', 'You subscribed to it'),
-			'state-changed': v('state_change', 'You changed its state')
-		}
-	},
-	{
-		key: 'needs',
-		field: 'kind',
-		help: 'What Hush thinks you must do',
-		example: 'needs:review',
-		values: {
-			review: v('review', 'Review it'),
-			'fix-ci': v('fix_ci', 'Fix failing CI'),
-			changes: v('address_review', 'Address review comments'),
-			conflict: v('resolve_conflict', 'Resolve a merge conflict'),
-			merge: v('merge', 'Merge it'),
-			reply: v('reply', 'Reply'),
-			triage: v('triage', 'Triage it'),
-			nothing: v('none', 'Nothing: FYI')
-		}
-	},
-	{
-		key: 'in',
-		field: 'category',
-		help: "Hush's list for it, before your rules",
-		example: 'in:fyi',
-		values: {
-			'needs-you': v('action', 'Needs you'),
-			fyi: v('fyi', 'FYI'),
-			muted: v('muted', 'Muted')
-		}
 	}
 ];
 
@@ -156,22 +106,8 @@ export const IS_VALUES: Record<string, string> = {
 
 /** Words that were renamed: a clear error, not a silent miss. */
 const RENAMED: Record<string, string> = {
-	kind: 'needs',
-	reason: 'event',
-	why: 'event',
 	by: 'from'
 };
-
-export const NOTIFICATION_WORDS = ['event', 'needs', 'in'];
-const NOTIFICATION_FIELDS = WORDS.filter((w) => NOTIFICATION_WORDS.includes(w.key)).map(
-	(w) => w.field
-);
-
-export const usesNotificationWords = (query: string) =>
-	leavesOf(compileExpr(query)).some((w) => NOTIFICATION_FIELDS.some((f) => w[f] !== undefined));
-
-export const usesItemMarks = (query: string) =>
-	leavesOf(compileExpr(query)).some((w) => !!w.itemCategory?.length);
 
 export const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
 const WORD = new Map(WORDS.map((w) => [w.key, w]));

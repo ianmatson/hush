@@ -16,6 +16,7 @@
 	import type { ThemeSwatch } from '$lib/themes/list';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
+	import { START_PAGE_KEY, startPath } from '$lib/start-page';
 
 	const modes = [
 		{ id: 'light', label: 'Light', icon: Sun },
@@ -28,15 +29,19 @@
 	const current = $derived(ALL_THEMES.find((t) => t.id === theme.current));
 
 	const me = createQuery(meQuery);
-	const starts = $derived<Record<string, string>>({
-		'/inbox': 'Inbox',
-		...Object.fromEntries((me.data?.settings.views ?? []).map((v) => [`/v/${v.id}`, v.name]))
-	});
-	let start = $state('/inbox');
+	const views = $derived(me.data?.settings.views ?? []);
+	const starts = $derived<Record<string, string>>(
+		Object.fromEntries(views.map((v) => [`/v/${v.id}`, v.name]))
+	);
+	let saved = $state<string | null>(null);
 	onMount(() => {
-		start = localStorage.getItem('hush:start') ?? '/inbox';
+		saved = localStorage.getItem(START_PAGE_KEY);
 	});
-	$effect(() => localStorage.setItem('hush:start', start));
+	const start = $derived(views.length ? startPath(views, saved) : '');
+	function chooseStart(path: string) {
+		saved = path;
+		localStorage.setItem(START_PAGE_KEY, path);
+	}
 </script>
 
 {#snippet swatch(c: ThemeSwatch)}
@@ -90,8 +95,8 @@
 				</Button>
 			</SettingRow>
 			<SettingRow label="Start page" description="The tab Hush opens first.">
-				<Select.Root type="single" bind:value={start}>
-					<Select.Trigger class="w-40">{starts[start] ?? 'Inbox'}</Select.Trigger>
+				<Select.Root type="single" value={start} onValueChange={chooseStart}>
+					<Select.Trigger class="w-40">{starts[start] ?? ''}</Select.Trigger>
 					<Select.Content>
 						{#each Object.entries(starts) as [value, label] (value)}
 							<Select.Item {value} {label} />

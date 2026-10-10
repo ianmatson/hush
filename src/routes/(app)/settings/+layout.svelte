@@ -2,7 +2,6 @@
 	import { page } from '$app/state';
 	import { cn } from '$lib/utils';
 	import Bell from '@lucide/svelte/icons/bell';
-	import Inbox from '@lucide/svelte/icons/inbox';
 	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import Settings2 from '@lucide/svelte/icons/settings-2';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
@@ -16,7 +15,6 @@
 	const sections = [
 		{ href: '/settings/general', label: 'General', icon: Settings2 },
 		{ href: '/settings/views', label: 'Views', icon: LayoutList },
-		{ href: '/settings/inbox', label: 'Inbox', icon: Inbox },
 		{ href: '/settings/categories', label: 'Categories', icon: Shapes },
 		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
 		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard, needsKeyboard: true }

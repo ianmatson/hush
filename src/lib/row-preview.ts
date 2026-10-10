@@ -1,5 +1,5 @@
 import type { RowMark } from './marks';
-import type { DashItem, ThreadDTO } from './shared/types';
+import type { DashItem } from './shared/types';
 
 const HOUR = 3_600_000;
 const hoursAgo = (n: number) => new Date(Date.now() - n * HOUR).toISOString();
@@ -42,8 +42,6 @@ const PREVIEW_ITEM: DashItem = {
 	myLastReviewAt: null,
 	openThreads: 2,
 	stackBelowNearestFirst: [],
-	lastVerdictBy: null,
-	lastVerdictAt: null,
 	myLastReviewState: null,
 	lastCommitAt: hoursAgo(3),
 	categories: ['preview-low', 'preview-security'],
@@ -95,36 +93,3 @@ export const PREVIEW_MARKS: RowMark[] = [
 		icon: 'lucide:shield'
 	}
 ];
-
-export const PREVIEW_THREAD: ThreadDTO = {
-	id: 'preview-thread',
-	repo: 'acme/web',
-	subjectType: 'PullRequest',
-	title: 'Add rate limits to the public API',
-	reason: 'review_requested',
-	unread: true,
-	updatedAt: hoursAgo(2),
-	htmlUrl: 'https://github.com/acme/web/pull/128',
-	category: 'action',
-	kind: 'review',
-	summary: '@octocat asked you for a review',
-	why: 'Review requested by @octocat',
-	actionLabel: 'Review',
-	actionUrl: 'https://github.com/acme/web/pull/128/files',
-	triage: 'snoozed',
-	snoozedUntil: Date.now() + 20 * HOUR,
-	snoozeEvent: null,
-	resolvedNote: 'Category: Web team',
-	number: 128,
-	state: 'open',
-	draft: true,
-	ci: 'FAILURE',
-	author: 'octocat',
-	authorIsBot: false,
-	labels: ['api'],
-	rule: 'Web team',
-	categories: ['preview-low', 'preview-security'],
-	override: true,
-	changes: [{ kind: 'commits', text: '2 new commits', tone: null }],
-	activity: null
-};

@@ -131,12 +131,9 @@ export abstract class PollerDashboard extends PollerSync {
 	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
-		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview, views } = who.settings;
+		const { dash, views } = who.settings;
 		const sections = sectionsFor(kind, views);
 		const sig = JSON.stringify([
-			botsAreFyi,
-			reviewResolution,
-			newCommitsAfterReview,
 			sections,
 			dash.excludedTeams,
 			dash.staleDays,
@@ -209,21 +206,19 @@ export abstract class PollerDashboard extends PollerSync {
 						ordered.map((s) => s.name),
 						who.me,
 						dash.staleDays,
-						Date.now(),
-						{ botsAreFyi, reviewResolution, newCommitsAfterReview }
+						Date.now()
 					);
 				})
 		);
 		const placed = this.placeItems(who, items, facts);
-		const marksChanged = this.storePlacements(placed, true);
+		this.storeTracked(placed, true);
 		const complete = !searchErrors.length && !detailErrors.length;
 		if (cached && cached.sig !== sig && complete)
-			await this.untrackMissing(
+			this.untrackMissing(
 				kind,
 				placed.map((i) => i.id)
 			);
 		await this.storeTrackedBuild(kind, complete);
-		if (marksChanged) await this.bumpVersion();
 		const nodeIdOf = (key: string) => latest.get(key)?.id ?? '';
 		const statuses =
 			who.projectAccess === 'none'
@@ -249,7 +244,6 @@ export abstract class PollerDashboard extends PollerSync {
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		await this.pushNewItems(who, kind, placed, complete);
-		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
 		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
 	}

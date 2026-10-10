@@ -5,10 +5,9 @@ description: Sort pull requests and issues into groups of categories, by rules o
 
 A **category** marks a pull request or issue: its effort, its area, its topic. Categories are in **groups**. Each item gets one category from each group. Set them up in **Settings → Categories**.
 
-A notification shows the categories of its PR or issue. Hush does not place notifications by themselves.
-
 - Categories show on rows, in the category filter of your [views](/docs/pull-requests-and-issues#categories), and in [feeds](/docs/feeds).
-- Categories do not change the inbox. They do not make a thread Needs you, FYI, or Muted, and they do not change pushes. To change the inbox, see [What needs you](/docs/inbox#what-needs-you).
+- A view can put its items into sections by a category group: see [Group by](/docs/pull-requests-and-issues#group-by).
+- Categories do not change whose turn it is, and they do not change pushes. See [whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is).
 
 ## How Hush places an item
 
@@ -19,8 +18,6 @@ Hush checks the categories of each group **from top to bottom**:
 3. Jev's choice among the categories that have a description. See [smart decisions](/docs/settings#smartdecisions).
 
 When no rule matches, and Jev is off or cannot answer, the item is **Not sorted** in that group: it has no category from the group. To see these items, choose **Not sorted** under the group in the category filter of a [view](/docs/pull-requests-and-issues#categories). There is no fallback category. To make one, add a category at the bottom of the group with a rule that matches everything, such as `type:pr OR type:issue`.
-
-Hush checks the rules on the PR or issue only, never on a notification. Categories that you choose for a PR or issue apply to its notifications too.
 
 ## The default group
 
@@ -36,7 +33,6 @@ You can change or delete the groups. The defaults are in [`categoryGroups`](/doc
 In **Settings → Categories**:
 
 - **Add category** in a group adds an empty category. Give it a name, a color, an icon, and a rule, a description for Jev, or both.
-- Or right-click a thread in the inbox and choose **Make a category…**: the new category is in your first group, with the thread's repository and type as its rule. Change what you want, and choose **Save**.
 - Drag a category up or down to change its order. Order matters: the first rule that matches wins.
 - **Add category group** adds an empty group. Give it a name.
 - **Defaults** puts back the Effort and Impact groups. Nothing changes until you choose **Save**.
@@ -59,9 +55,11 @@ A category's rule is a [query](/docs/query-language), such as `repo:acme/website
 | `size:<50`                     | Lines changed in a pull request.                    |
 | `about:"database migrations"`  | What it is about, in your words. Jev decides.       |
 
-Rules cannot use `category:`. They also cannot use `event:`, `needs:`, and `in:`, because these words are about notifications, and rules look only at the PR or issue. Every word and value is in the [query language](/docs/query-language) reference.
+Rules cannot use `category:`. Every word and value is in the [query language](/docs/query-language) reference.
 
 ## Jev and descriptions
+
+Jev works only when [smart decisions](/docs/settings#smartdecisions) are on (the default). The switch is in **Settings → Categories → Smart decisions**.
 
 A description tells Jev what belongs in the category, in a few words. Jev chooses one of the categories in the group that have a description, so it needs two or more of them; with only one, Jev does not choose. For a yes-or-no category, such as “Security”, write `about:"…"` in its rule instead: Jev then answers yes or no for that category alone.
 
@@ -138,5 +136,4 @@ Each category can have an [Atom feed](/docs/feeds) of its open pull requests and
 ## Tips
 
 - Put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
-- To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter). It can also use `category:`.
 - Give a category a description, and leave its rule empty, to let Jev fill it.

@@ -1,11 +1,11 @@
 ---
 title: How to get push notifications for GitHub review requests and CI failures on your phone
-description: GitHub Mobile pushes review requests, mentions, assignments, and failed runs that you started. Hush pushes what waits on you from any browser, including CI that fails on your pull requests. How to set up both, also on iPhone.
+description: GitHub Mobile pushes review requests, mentions, assignments, and failed runs that you started. Hush pushes the facts that you choose from any browser, including CI that fails on your pull requests. How to set up both, also on iPhone.
 ---
 
 ## Short answer
 
-**Install GitHub Mobile, and turn on push for review requests and for GitHub Actions, with "failed workflows only". GitHub then pushes review requests to you, and workflow runs that you started when they fail. To get one push for each pull request, only when it is your turn, use a web app such as Hush. On iPhone, first add it to the Home Screen (iOS 16.4 or later), then turn on push.**
+**Install GitHub Mobile, and turn on push for review requests and for GitHub Actions, with "failed workflows only". GitHub then pushes review requests to you, and workflow runs that you started when they fail. To get one push for each pull request, only for the facts that you choose, use a web app such as Hush. On iPhone, first add it to the Home Screen (iOS 16.4 or later), then turn on push.**
 
 ## Option 1: GitHub Mobile
 
@@ -38,7 +38,7 @@ Hush sends standard Web Push to browsers and installed web apps. It pushes the f
 3. Under **Devices**, choose **Turn on**, and allow notifications when the browser asks.
 4. Choose **Send test**.
 
-In Chrome, Edge, and on Android, each alert has **Done** and **Snooze 3h** buttons.
+A push opens its pull request or issue on GitHub.
 
 ### On iPhone or iPad
 

@@ -4,8 +4,8 @@ import type { CiState, Enrichment, LastComment, StackLink } from './types';
 
 /**
  * Everything Hush knows about one PR or issue, as GitHub last returned it. The one record that
- * every view derives from: inbox threads (enrichmentOf), dashboard items (dashFactsOf), and the
- * alert history. Every GitHub read of a PR or issue (poll, watcher, dashboard search, peek, quick
+ * everything derives from: rules and decisions (enrichmentOf), dashboard items (dashFactsOf), and
+ * pushes. Every GitHub read of a PR or issue (notification poll, dashboard search, peek, quick
  * check) stores one of these in the `subjects` table, and a change updates every view at once.
  *
  * It is per user: `myReview` is your own review, and nothing here depends on your settings or
@@ -79,7 +79,7 @@ export function lastVerdictOf(s: SubjectFacts, me: string): { by: string; at: st
 	return best;
 }
 
-/** The inbox's view of a subject (stored on each thread, read by the classifier). */
+/** The facts that category rules and decisions read about a subject. */
 export function enrichmentOf(
 	s: SubjectFacts,
 	me: string,
@@ -141,9 +141,7 @@ export function dashFactsOf(
 		.map((r) => r.name);
 	// The newest review-request event for you or one of your teams.
 	const ev = [...s.requestEvents].reverse().find(isMine);
-	const verdict = pr ? lastVerdictOf(s, me) : null;
 	return {
-		// The same key as the inbox's threads: one record of each PR or issue for both.
 		id: subjectKey(s.repo, s.number),
 		kind: s.kind,
 		number: s.number,
@@ -178,8 +176,6 @@ export function dashFactsOf(
 		myLastReviewState: s.myReview?.state ?? null,
 		openThreads: pr ? s.openThreads : 0,
 		stackBelowNearestFirst: pr ? (s.stackBelowNearestFirst ?? []) : [],
-		lastVerdictBy: verdict?.by ?? null,
-		lastVerdictAt: verdict?.at ?? null,
 		lastCommitAt: s.lastCommitAt,
 		commentsNeedMe: decisions.commentsNeedMe,
 		urgent: decisions.urgent

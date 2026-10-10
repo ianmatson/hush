@@ -64,6 +64,6 @@ You can also use both: gh-hush to unsubscribe from noise, and Hush to sort what 
 
 - [maxbeizer/gh-hush on GitHub](https://github.com/maxbeizer/gh-hush): README, MIT license, rules, API limit
 - [gh-hush releases](https://github.com/maxbeizer/gh-hush/releases): v0.5.0, 13 September 2026
-- Hush: [inbox](/docs/inbox), [categories](/docs/categories), [GitHub access](/docs/github-access), [pricing](/pricing)
+- Hush: [views](/docs/views), [categories](/docs/categories), [GitHub access](/docs/github-access), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

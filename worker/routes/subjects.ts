@@ -41,7 +41,7 @@ const app = routes()
 					{ error: 'GitHub did not find this PR or issue. Maybe you have no access.' },
 					404
 				);
-			// The peek is a fresh read too: store it, so the inbox and dashboards agree with it.
+			// The peek is a fresh read too: store it, so the dashboards agree with it.
 			const sync = await poller(c.env, u.id)
 				.recordFetched(found.subject)
 				.catch(() => ({ changed: false, resolved: [] }));

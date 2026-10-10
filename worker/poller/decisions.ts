@@ -1,4 +1,4 @@
-import { ruleMatches } from '../../src/lib/shared/classify';
+import { ruleMatches } from '../../src/lib/shared/rules';
 import {
 	conditionId,
 	estimateTokens,
@@ -16,7 +16,7 @@ import {
 import { aboutTexts, compileExpr, type QueryExpr } from '../../src/lib/shared/query';
 import { groupChoices, markQueries } from '../../src/lib/shared/categories';
 import { enrichmentOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
-import type { Classification, RuleMatch, Settings } from '../../src/lib/shared/types';
+import type { RuleFacts, RuleMatch, Settings } from '../../src/lib/shared/types';
 import { dailyTokenBudget, decide, decisionsAvailable } from '../decide';
 import { PollerAlerts } from './alerts';
 import type { Who } from './shared';
@@ -40,11 +40,10 @@ type ConditionScope = {
 };
 type Maybe = boolean | 'maybe';
 
-const NO_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
 const utcDay = (now = Date.now()) => new Date(now).toISOString().slice(0, 10);
 
 function exactPartsOf(when: RuleMatch): RuleMatch {
-	const { about: _about, reason: _reason, kind: _kind, category: _category, ...exact } = when;
+	const { about: _about, ...exact } = when;
 	return exact;
 }
 
@@ -135,21 +134,16 @@ export abstract class PollerDecisions extends PollerAlerts {
 	}
 
 	private conditionsFor(s: SubjectFacts, who: Who, scopes: ConditionScope[]): SmartCondition[] {
-		const facts = {
+		const facts: RuleFacts = {
 			repo: s.repo,
 			subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
 			title: s.title,
-			reason: '',
-			htmlUrl: s.url,
 			enrichment: enrichmentOf(s, who.me),
 			me: who.me
 		};
 		return scopes
 			.filter(({ exprs }) =>
-				exprs.some(
-					(expr) =>
-						couldMatch(expr, (when) => ruleMatches(when, facts, NO_CLASSIFICATION)) !== false
-				)
+				exprs.some((expr) => couldMatch(expr, (when) => ruleMatches(when, facts)) !== false)
 			)
 			.map(({ condition }) => condition);
 	}

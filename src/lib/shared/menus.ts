@@ -1,11 +1,9 @@
-import { SNOOZE_EVENTS } from './snooze';
-
 /**
- * The right-click and "⋯" menus, as saved lists of item ids (Settings → Menus). Ids not in a
- * list are hidden. `sep` is a separator. Items that do not apply to a thread (Done in the Done
- * view, "Open on GitHub" when it equals the main action) are still left out when the menu opens.
+ * The right-click and "⋯" menu, as a saved list of item ids (Settings → Menus). Ids not in the
+ * list are hidden. `sep` is a separator. Items that do not apply to an item ("Open on GitHub"
+ * when it equals the main action) are still left out when the menu opens.
  */
-export type MenuKind = 'inbox' | 'dash';
+export type MenuKind = 'dash';
 export const SEP = 'sep';
 
 export interface MenuItemInfo {
@@ -17,56 +15,7 @@ export interface MenuItemInfo {
 	group: 'main' | 'shortcut';
 }
 
-const SNOOZE_TIMES = [
-	['1h', '1 hour'],
-	['3h', '3 hours'],
-	['tomorrow', 'Tomorrow 9:00'],
-	['monday', 'Next Monday 9:00']
-] as const;
-
 export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
-	inbox: [
-		{ id: 'peek', label: 'Peek', group: 'main' },
-		{ id: 'page', label: 'Open full page', note: 'Pull requests and issues', group: 'main' },
-		{ id: 'main', label: 'Main action', note: 'Review, Reply, Fix CI…', group: 'main' },
-		{
-			id: 'github',
-			label: 'Open on GitHub',
-			note: 'When it differs from the main action',
-			group: 'main'
-		},
-		{ id: 'done', label: 'Done', note: 'Needs you and FYI', group: 'main' },
-		{ id: 'snooze', label: 'Snooze', note: 'Every time and condition', group: 'main' },
-		{ id: 'mute', label: 'Mute', note: 'Needs you and FYI', group: 'main' },
-		{
-			id: 'restore',
-			label: 'Move to inbox / Unmute',
-			note: 'Snoozed, Done, and Muted',
-			group: 'main'
-		},
-		{ id: 'read', label: 'Mark as read / unread', group: 'main' },
-		{ id: 'not-needed', label: 'Doesn’t need me…', note: 'Needs you', group: 'main' },
-		{ id: 'copy', label: 'Copy link', group: 'main' },
-		{
-			id: 'rule',
-			label: 'Make a category…',
-			note: 'A new category with this repo and type',
-			group: 'main'
-		},
-		{ id: 'select', label: 'Select / Deselect', group: 'main' },
-		{ id: 'selectAll', label: 'Select all', group: 'main' },
-		...SNOOZE_TIMES.map(([id, label]) => ({
-			id: `snooze:${id}`,
-			label: /^\d/.test(label) ? `Snooze for ${label}` : `Snooze until ${label}`,
-			group: 'shortcut' as const
-		})),
-		...SNOOZE_EVENTS.map((e) => ({
-			id: `until:${e.id}`,
-			label: `Snooze until ${e.label.charAt(0).toLowerCase()}${e.label.slice(1)}`,
-			note: e.kinds.includes('issue') ? 'Pull requests and issues' : 'Pull requests',
-			group: 'shortcut' as const
-		}))
-	],
 	dash: [
 		{ id: 'peek', label: 'Peek', group: 'main' },
 		{ id: 'page', label: 'Open full page', note: 'Pull requests and issues', group: 'main' },
@@ -103,24 +52,6 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 };
 
 export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
-	inbox: [
-		'peek',
-		'page',
-		'main',
-		'github',
-		SEP,
-		'done',
-		'snooze',
-		'mute',
-		'restore',
-		'read',
-		'not-needed',
-		'copy',
-		'rule',
-		SEP,
-		'select',
-		'selectAll'
-	],
 	dash: [
 		'peek',
 		'page',
@@ -144,10 +75,7 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
  */
 export const MENUS_VERSION = 8;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
-	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
-	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
 	{ kind: 'dash', id: 'mute', after: 'snooze', version: 4 },
-	{ kind: 'inbox', id: 'page', after: 'peek', version: 6 },
 	{ kind: 'dash', id: 'page', after: 'peek', version: 6 },
 	{ kind: 'dash', id: 'categories', after: SEP, version: 7 },
 	{ kind: 'dash', id: 'snooze', after: 'categories', version: 8 },
@@ -161,7 +89,6 @@ export function upgradeMenus(
 	const known = (kind: MenuKind) => (id: string) =>
 		id === SEP || MENU_ITEMS[kind].some((i) => i.id === id);
 	const out = {
-		inbox: (saved.inbox ?? DEFAULT_MENUS.inbox).filter(known('inbox')),
 		dash: (saved.dash ?? DEFAULT_MENUS.dash).filter(known('dash')),
 		v: MENUS_VERSION
 	};
@@ -187,7 +114,7 @@ export function tidySeparators<T>(list: T[], isSep: (x: T) => boolean): T[] {
 
 export function validateMenus(m: unknown): string | null {
 	if (typeof m !== 'object' || m === null) return 'Menus must be an object.';
-	for (const kind of ['inbox', 'dash'] as MenuKind[]) {
+	for (const kind of ['dash'] as MenuKind[]) {
 		const list = (m as Record<string, unknown>)[kind];
 		if (list === undefined) continue;
 		if (!Array.isArray(list) || list.length > 60)

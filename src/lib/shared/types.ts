@@ -2,10 +2,6 @@ import type { Activity } from './activity';
 import type { SnoozeChoice } from './item-snooze';
 // Types shared by the Worker (worker/) and the SPA (src/).
 
-export type Category = 'action' | 'fyi' | 'muted';
-export type Triage = 'inbox' | 'done' | 'snoozed';
-export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all' | 'inbox';
-
 export type ActionKind =
 	| 'review'
 	| 'fix_ci'
@@ -16,25 +12,6 @@ export type ActionKind =
 	| 'triage'
 	| 'security'
 	| 'none';
-
-/** GitHub notification `reason` values. */
-export type Reason =
-	| 'approval_requested'
-	| 'assign'
-	| 'author'
-	| 'comment'
-	| 'ci_activity'
-	| 'invitation'
-	| 'manual'
-	| 'member_feature_requested'
-	| 'mention'
-	| 'review_requested'
-	| 'security_alert'
-	| 'security_advisory_credit'
-	| 'state_change'
-	| 'subscribed'
-	| 'team_mention'
-	| (string & {});
 
 export type CiState = 'SUCCESS' | 'FAILURE' | 'ERROR' | 'PENDING' | 'EXPECTED';
 
@@ -84,50 +61,25 @@ export interface Enrichment {
 	jevChoices?: Record<string, string>;
 }
 
-/** Everything the classifier needs to know about one notification thread. */
-export interface ThreadFacts {
+export interface RuleFacts {
 	repo: string;
 	subjectType: string;
 	title: string;
-	reason: Reason;
-	htmlUrl: string;
 	enrichment: Enrichment | null;
 	me: string;
-	/** "org/team" slugs of the teams you are in. */
-	myTeams?: string[];
-	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
 	views?: string[];
-	itemCategories?: { id: string; name: string }[];
-}
-
-export interface Classification {
-	category: Category;
-	kind: ActionKind;
-	/** One line that says what happened, e.g. "CI failed on your PR". */
-	summary: string;
-	/** Short "why you see this" tag. */
-	why: string;
-	actionLabel: string;
-	actionUrl: string;
-	/** Set by a rule; overrides the default push decision. */
-	push?: boolean;
-	/** Name of the rule that matched, if any. */
-	rule?: string;
 }
 
 export interface RuleMatch {
 	/** Glob(s) on "owner/repo", e.g. "acme/*". */
 	repo?: string | string[];
-	reason?: Reason[];
 	/** GitHub subject types: PullRequest, Issue, Release, Discussion, CheckSuite, Commit… */
 	type?: string[];
 	/** Glob(s) on the subject author's login. */
 	author?: string | string[];
 	/** Words that must all be in the title, repo, or author (not case-sensitive). */
 	text?: string;
-	kind?: ActionKind[];
-	category?: Category[];
 	bot?: boolean;
 	label?: string[];
 	draft?: boolean;
@@ -139,7 +91,6 @@ export interface RuleMatch {
 	byBot?: boolean;
 	about?: string[];
 	view?: string[];
-	itemCategory?: string[];
 	assignee?: string | string[];
 	reviewRequested?: string[];
 	size?: string[];
@@ -189,29 +140,13 @@ export interface Settings {
 	alertChannels: AlertChannels;
 	smartDecisions: boolean;
 	clearNotifications: import('./push-policy').ClearNotifications;
-	/** A thread open in the peek for a moment is marked as read. */
-	peekMarksRead: boolean;
-	/**
-	 * When a review request stops being your turn. "strict": when GitHub no longer asks you.
-	 * "any_review": also when someone else approves or asks for changes after the last push.
-	 */
-	reviewResolution: 'strict' | 'any_review';
-	/**
-	 * When new commits after your review make it your turn again. "always", "changes_requested":
-	 * only when your last review asked for changes, or "never".
-	 */
-	newCommitsAfterReview: import('./dashboard').NewCommitsAfterReview;
-	/** Treat activity by bots (dependabot, renovate…) as FYI. */
-	botsAreFyi: boolean;
-	/** A review request to one of your teams is "Needs you", not FYI. */
-	teamReviewsAreAction: boolean;
 	dash: DashSettings;
 	categoryGroups: CategoryGroup[];
 	views: ItemView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
 	keys: Record<string, string[]>;
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
-	menus: { inbox: string[]; dash: string[]; v?: number };
+	menus: { dash: string[]; v?: number };
 	/** Swipe actions on touch screens, for each list (see shared/swipe.ts). */
 	swipe: import('./swipe').SwipeSettings;
 	rows: import('./row-parts').RowSettings;
@@ -324,9 +259,6 @@ export interface DashItem {
 	/** Review threads nobody resolved yet (up to 50). */
 	openThreads: number;
 	stackBelowNearestFirst?: StackLink[];
-	/** Newest approval or change request by someone else (not you, not the author). */
-	lastVerdictBy: string | null;
-	lastVerdictAt: string | null;
 	myLastReviewState: string | null;
 	lastCommitAt: string | null;
 	commentsNeedMe?: boolean | null;
@@ -381,55 +313,6 @@ export interface DashResponse {
 	projects?: DashProject[];
 }
 
-/** A thread as the API returns it to the SPA. */
-export interface ThreadDTO {
-	id: string;
-	repo: string;
-	subjectType: string;
-	title: string;
-	reason: Reason;
-	unread: boolean;
-	updatedAt: string;
-	htmlUrl: string;
-	category: Category;
-	kind: ActionKind;
-	summary: string;
-	why: string;
-	actionLabel: string;
-	actionUrl: string;
-	triage: Triage;
-	snoozedUntil: number | null;
-	/** Snoozed until something happens (e.g. "ci_pass"); `snoozedUntil` is then the deadline. */
-	snoozeEvent: string | null;
-	/** Set when Hush moved the thread to Done by itself, e.g. "You approved". */
-	resolvedNote: string | null;
-	number: number | null;
-	state: Enrichment['state'] | null;
-	draft: boolean;
-	ci: CiState | null;
-	author: string | null;
-	authorIsBot: boolean;
-	labels: string[];
-	rule: string | null;
-	categories: string[];
-	/** You said it does not need you ("only this one"): FYI until it changes. */
-	override?: boolean;
-	/** What changed since you last looked at its PR or issue (none before your first look). */
-	changes?: Change[];
-	/** When you last looked at its PR or issue, or null. */
-	seenAt?: number | null;
-	/** The newest comment, review, or push (who, and whether a bot): shared/activity.ts. */
-	activity: Activity | null;
-	smart?: string[];
-}
-
-export interface Counts {
-	action: number;
-	fyi: number;
-	snoozed: number;
-}
-
-/** A feed: one inbox tab as Atom. `view` is 'action', 'fyi', 'inbox', or 'v:<notification view id>'. */
 export interface FeedDTO {
 	view: string;
 	/** Only when the feed was just made: Hush keeps only a hash of the address. */
@@ -454,20 +337,13 @@ export interface MeDTO {
 	avatarUrl: string | null;
 	settings: Settings;
 	lastPollAt: number | null;
-	/** When the server polls GitHub next; the browser refreshes the inbox just after it. */
 	nextPollAt: number | null;
 	lastPollError: string | null;
-	/** Orgs whose notifications GitHub hides from this token (SAML SSO not authorized). */
-	ssoHiddenOrgs: number;
 	scopes: string[];
 	/** 'app': the token from Sign in with GitHub. 'own': a token you added in Settings. */
 	tokenSource: 'app' | 'own';
-	/** The first sync after sign-in has not finished: the inbox is still filling. */
-	firstSync: boolean;
 	smartDecisionsPaused: boolean;
 	smartDecisionsChecking: boolean;
-	/** The first-run questions were answered (or skipped). */
-	onboarded: boolean;
 }
 
 /**
@@ -536,21 +412,12 @@ export interface AlertDTO {
 	body: string;
 	/** Where the alert went (the main action). */
 	url: string;
-	/** The thread, while Hush still has it (it can be peeked). PRs and issues have a number. */
-	thread: {
-		id: string;
-		repo: string;
-		number: number | null;
-		title: string;
-		htmlUrl: string;
-		/** What happened to it since: "Done", "Muted", "Snoozed", or the resolved note. */
-		state: string | null;
-	} | null;
+	item: { repo: string; number: number; kind: DashKind } | null;
 }
 
 export interface PeekDTO {
 	/** The peek also updated the stored facts: `changed` means the lists are out of date. */
-	sync?: { changed: boolean; resolved: { title: string; note: string }[] };
+	sync?: { changed: boolean };
 	kind: 'pr' | 'issue';
 	number: number;
 	title: string;
@@ -632,7 +499,6 @@ export interface PeekStack {
  * the tab refetches only that (or, for `status`, uses the values in the message).
  */
 export type LiveMessage =
-	| { type: 'threads' }
 	| { type: 'alerts' }
 	| { type: 'dash'; kind: DashKind }
 	| { type: 'settings' }
@@ -643,6 +509,4 @@ export type LiveMessage =
 			lastPollAt: number | null;
 			nextPollAt: number | null;
 			lastPollError: string | null;
-			ssoHiddenOrgs: number;
-			firstSync: boolean;
 	  };

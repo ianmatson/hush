@@ -1,11 +1,11 @@
 ---
 title: How to reduce GitHub notification noise
-description: Too many GitHub notifications? Unwatch busy repositories, turn off automatic watching, filter the inbox, and route email with GitHub's own settings. Then sort what is left by whose turn it is.
+description: Too many GitHub notifications? Unwatch busy repositories, turn off automatic watching, filter the inbox, and route email with GitHub's own settings. Then see your pull requests and issues by whose turn it is.
 ---
 
 ## Short answer
 
-**To get fewer GitHub notifications, unwatch the repositories that you only read, turn off automatic watching, and filter your inbox by reason, for example `reason:review-requested` or `reason:mention`. If the list is still too long, a tool such as Hush can sort what is left by who must act next.**
+**To get fewer GitHub notifications, unwatch the repositories that you only read, turn off automatic watching, and filter your inbox by reason, for example `reason:review-requested` or `reason:mention`. If the list is still too long, a tool such as Hush can show your pull requests and issues by whose turn it is.**
 
 GitHub's own settings are free and remove the most noise. Do them first.
 
@@ -71,21 +71,26 @@ If you work in a few repositories and the steps above leave a short list, you do
 
 ## Where Hush helps
 
-GitHub sorts notifications by time, and gives each one a reason that does not change. A thread with `reason:review-requested` keeps that reason after you review. Hush reads the same notifications, then looks at the pull request or issue behind each one: its CI, reviews, review requests, conflicts, and newest comment.
+GitHub sorts notifications by time, and gives each one a reason that does not change. A thread with `reason:review-requested` keeps that reason after you review. Hush does not show you a list of notifications. It shows the open pull requests and issues that your saved searches find, and checks each one: its CI, reviews, review requests, conflicts, and newest comment.
 
-- **Needs you** has only the threads where you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you. Everything else goes to **FYI**. See [what needs you](/docs/inbox#what-needs-you).
-- When you approve, push a fix, or reply, Hush moves the thread to **Done** by itself. If it needs you again, it comes back.
-- When a thread is in Needs you and should not be, press {{key:inbox.notNeeded}} (**Doesn't need me**). Hush asks why, and changes a setting, or moves only this thread. See [Doesn't need me](/docs/inbox#doesnt-need-me).
+- Each row says whose turn it is, and why: “Review requested”, “CI failing”, “@alice replied”. The items that are your turn come first. See [whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is).
+- When you approve, push a fix, or reply, the item stops being your turn by itself. If it needs you again, it is your turn again.
+- A pull request that a bot opened is not your turn, unless it asks for your review by name. A review request to one of your teams shows as your team's turn, not yours.
+- **Snooze** hides an item until something new happens on it, or until a time. **Mute** hides it until you unmute it. See [Snooze](/docs/pull-requests-and-issues#snooze).
+- Hush pushes only the facts that you choose, such as a review request or failed CI on your pull request. See [What gets pushed](/docs/notifications#what-gets-pushed).
 
-Bots are FYI by default ([`botsAreFyi`](/docs/settings#botsarefyi)), and a review request to one of your teams is FYI unless you turn on [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction):
+To push less, choose fewer facts. To see less, leave big teams out of `@team` searches, and keep bots and others' drafts out of your [views](/docs/views):
 
 ```json settings
-{ "botsAreFyi": true, "teamReviewsAreAction": false }
+{
+	"pushFacts": ["review-requested", "mentioned", "ci-failed"],
+	"dash": { "excludedTeams": ["acme/everyone"], "hideBots": true, "hideOthersDrafts": true }
+}
 ```
 
-For one repository that you only read, choose **Mute** on its threads, or leave it out of your [views](/docs/views). [Categories](/docs/categories) sort your pull requests and issues, for example by effort, but they do not change the inbox.
+For one repository that you only read, leave it out of your [views](/docs/views). [Categories](/docs/categories) sort your pull requests and issues, for example by effort, but they do not change whose turn it is.
 
-Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. Hush keeps only the notifications about the pull requests and issues of your [views](/docs/views); it does not show releases, CI runs, or discussions. So the GitHub steps above still help: they leave Hush less to sort.
+Hush never changes your notifications on GitHub: it only reads them, to learn quickly that an item changed. Snooze and Mute stay in Hush. So the GitHub steps above still help: they keep your GitHub inbox short too.
 
 ## Sources
 

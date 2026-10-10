@@ -1,15 +1,14 @@
-import { queryMatches } from './classify';
+import { queryMatches } from './rules';
 import { cyrb53, type DecisionChoice } from './decisions';
-import { queryError, usesItemMarks, usesNotificationWords } from './query';
+import { queryError } from './query';
 import { parseMarkIcon } from './mark-icons';
 import type {
 	CategoryGroup,
-	Classification,
 	DashItem,
 	ItemCategory,
 	MarkColor,
 	Settings,
-	ThreadFacts
+	RuleFacts
 } from './types';
 
 export const MAX_CATEGORY_GROUPS = 10;
@@ -124,21 +123,16 @@ const usableRules = new Map<string, boolean>();
 export function ruleUsable(rule: string): boolean {
 	let ok = usableRules.get(rule);
 	if (ok === undefined) {
-		ok = !!rule.trim() && !queryError(rule) && !usesNotificationWords(rule) && !usesItemMarks(rule);
+		ok = !!rule.trim() && !queryError(rule);
 		usableRules.set(rule, ok);
 	}
 	return ok;
 }
 
-function placeInGroup(
-	g: CategoryGroup,
-	t: ThreadFacts,
-	c: Classification,
-	pinned: string[]
-): string | null {
+function placeInGroup(g: CategoryGroup, t: RuleFacts, pinned: string[]): string | null {
 	const chosenByYou = g.categories.find((x) => pinned.includes(x.id));
 	if (chosenByYou) return chosenByYou.id;
-	const ruled = g.categories.find((x) => ruleUsable(x.rule) && queryMatches(x.rule, t, c));
+	const ruled = g.categories.find((x) => ruleUsable(x.rule) && queryMatches(x.rule, t));
 	if (ruled) return ruled.id;
 	const choice = groupChoice(g);
 	const chosenByJev = choice ? t.enrichment?.jevChoices?.[choice.key] : undefined;
@@ -163,15 +157,14 @@ export interface Placement {
 }
 
 export function placeItem(
-	t: ThreadFacts,
-	c: Classification,
+	t: RuleFacts,
 	pinned: string[] | undefined,
 	groups: CategoryGroup[]
 ): Placement {
 	const ids = new Set(allCategories(groups).map((x) => x.id));
 	const known = (pinned ?? []).filter((id) => ids.has(id));
 	return {
-		categories: groups.flatMap((g) => placeInGroup(g, t, c, known) ?? []),
+		categories: groups.flatMap((g) => placeInGroup(g, t, known) ?? []),
 		pinned: known
 	};
 }
@@ -192,15 +185,13 @@ export function matchesCategoryFilter(
 export function itemQueryFacts(
 	i: DashItem,
 	me: string,
-	settings: Pick<Settings, 'categoryGroups' | 'views'>
-): ThreadFacts {
+	settings: Pick<Settings, 'views'>
+): RuleFacts {
 	const viewNames = new Map(settings.views.map((v) => [v.id, v.name]));
 	return {
 		repo: i.repo,
 		subjectType: i.kind === 'pr' ? 'PullRequest' : 'Issue',
 		title: i.title,
-		reason: '',
-		htmlUrl: i.url,
 		me,
 		enrichment: {
 			kind: i.kind,
@@ -222,10 +213,7 @@ export function itemQueryFacts(
 					at: i.lastCommentAt ?? i.updatedAt
 				}
 			: null,
-		views: i.sections.map((id) => viewNames.get(id) ?? id),
-		itemCategories: allCategories(settings.categoryGroups)
-			.filter((c) => i.categories?.includes(c.id))
-			.map((c) => ({ id: c.id, name: c.name }))
+		views: i.sections.map((id) => viewNames.get(id) ?? id)
 	};
 }
 
@@ -247,9 +235,6 @@ function validateCategory(c: Partial<ItemCategory> | null, ids: Set<string>): st
 	if (typeof c.rule !== 'string') return `"${c.name}": the rule must be text.`;
 	const err = c.rule.trim() ? queryError(c.rule) : null;
 	if (err) return `"${c.name}": ${err}`;
-	if (usesItemMarks(c.rule)) return `"${c.name}": rules cannot use category:.`;
-	if (usesNotificationWords(c.rule))
-		return `"${c.name}": rules look at the PR or issue, so they cannot use event:, needs:, or in:.`;
 	if (typeof c.description !== 'string' || c.description.length > MAX_DESCRIPTION_CHARS)
 		return `"${c.name}": the description must be ${MAX_DESCRIPTION_CHARS} characters or fewer.`;
 	if (c.icon !== undefined && !parseMarkIcon(c.icon))

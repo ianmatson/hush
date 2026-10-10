@@ -44,10 +44,7 @@ function pushFact(f: { id: PushFact; label: string }): SettingToggle {
 }
 
 export const SETTING_TOGGLES: SettingToggle[] = [
-	topLevel('botsAreFyi', 'Bot activity is FYI', 'bots dependabot renovate inbox'),
-	topLevel('teamReviewsAreAction', 'Team review requests need me', 'teams reviews inbox'),
-	topLevel('smartDecisions', 'Smart decisions', 'jev ai comments'),
-	topLevel('peekMarksRead', 'Peek marks threads as read', 'peek read unread'),
+	topLevel('smartDecisions', 'Smart decisions', 'jev ai comments categories'),
 	topLevel('pushUrgentNow', 'Push blocking items at once', 'push urgent digest'),
 	topLevel('pushWhileOpen', 'Push while Hush is open', 'push notifications'),
 	dash('hideBots', 'Hide PRs and issues that bots opened', 'bots dependabot renovate apps'),

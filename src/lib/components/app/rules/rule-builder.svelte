@@ -93,7 +93,6 @@
 		value = $bindable(''),
 		id,
 		label = 'Rule',
-		exclude = [],
 		allowGroups = true,
 		suggestions = {},
 		preview,
@@ -103,7 +102,6 @@
 		value: string;
 		id: string;
 		label?: string;
-		exclude?: string[];
 		allowGroups?: boolean;
 		suggestions?: Partial<Record<NonNullable<BuilderField['suggest']>, string[]>>;
 		preview?: (query: string) => RulePreview | null;
@@ -111,7 +109,7 @@
 		emptyText?: string;
 	} = $props();
 
-	const fields = $derived(BUILDER_FIELDS.filter((f) => !exclude.includes(f.word)));
+	const fields = BUILDER_FIELDS;
 	const MODES: { value: BuilderMode; label: string }[] = [
 		{ value: 'all', label: 'all' },
 		{ value: 'any', label: 'any' }

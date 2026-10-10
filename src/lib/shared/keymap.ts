@@ -10,7 +10,7 @@
  */
 
 /** Where a command works. Scopes that are active together must not share a key. */
-export type KeyScope = 'global' | 'list' | 'inbox' | 'dash' | 'peek' | 'page' | 'editor';
+export type KeyScope = 'global' | 'list' | 'dash' | 'peek' | 'page' | 'editor';
 
 export interface KeyCommand {
 	id: string;
@@ -21,8 +21,7 @@ export interface KeyCommand {
 
 export const SCOPE_LABEL: Record<KeyScope, string> = {
 	global: 'Everywhere',
-	list: 'Lists (inbox and dashboards)',
-	inbox: 'Inbox',
+	list: 'Lists',
 	dash: 'Pull requests and issues',
 	peek: 'Peek: actions on GitHub',
 	page: 'Full page',
@@ -31,11 +30,10 @@ export const SCOPE_LABEL: Record<KeyScope, string> = {
 
 /** The scopes that are active at the same time as each scope (a key must be unique there). */
 const TOGETHER: Record<KeyScope, KeyScope[]> = {
-	global: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
-	list: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
-	inbox: ['global', 'list', 'inbox', 'peek'],
+	global: ['global', 'list', 'dash', 'peek', 'page'],
+	list: ['global', 'list', 'dash', 'peek', 'page'],
 	dash: ['global', 'list', 'dash', 'peek'],
-	peek: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
+	peek: ['global', 'list', 'dash', 'peek', 'page'],
 	page: ['global', 'list', 'peek', 'page'],
 	editor: ['editor']
 };
@@ -71,18 +69,6 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'list.refresh', label: 'Sync with GitHub now', scope: 'list', keys: ['r'] },
 	{ id: 'list.search', label: 'Search', scope: 'list', keys: ['/'] },
 	{ id: 'list.help', label: 'Show shortcuts', scope: 'list', keys: ['?'] },
-
-	{ id: 'inbox.done', label: 'Done', scope: 'inbox', keys: ['e'] },
-	{ id: 'inbox.snooze', label: 'Snooze until tomorrow 9:00', scope: 'inbox', keys: ['s'] },
-	{ id: 'inbox.mute', label: 'Mute the thread', scope: 'inbox', keys: ['m'] },
-	{ id: 'inbox.read', label: 'Mark as read / unread', scope: 'inbox', keys: ['u'] },
-	{ id: 'inbox.notNeeded', label: 'Doesn’t need me…', scope: 'inbox', keys: ['n'] },
-	...range(1, 5).map((n) => ({
-		id: `inbox.view.${n}`,
-		label: `Inbox list ${n}`,
-		scope: 'inbox' as const,
-		keys: [String(n)]
-	})),
 
 	{
 		id: 'dash.snooze',

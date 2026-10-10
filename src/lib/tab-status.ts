@@ -1,6 +1,6 @@
 // Page title, favicon dot, and app badge from the notification counts. Preferences are per browser.
 
-export type CountSource = 'alerts' | 'inbox' | 'inboxFyi' | 'prYou' | 'prTeam' | 'issueYou';
+export type CountSource = 'alerts' | 'unread' | 'prYou' | 'prTeam' | 'issueYou';
 export type Counts = Record<CountSource, number>;
 export type DotColor = 'red' | 'blue' | 'amber' | 'green';
 
@@ -13,8 +13,7 @@ export interface TabStatusPrefs {
 
 export const SOURCES: { id: CountSource; label: string; short: string }[] = [
 	{ id: 'alerts', label: 'Alerts: unread', short: 'new' },
-	{ id: 'inbox', label: 'Inbox: Needs you', short: '' },
-	{ id: 'inboxFyi', label: 'Inbox: FYI', short: 'FYI' },
+	{ id: 'unread', label: 'Pull requests and issues: unread', short: 'unread' },
 	{ id: 'prYou', label: 'Pull requests: your turn', short: 'PR' },
 	{ id: 'prTeam', label: "Pull requests: your team's turn", short: 'team' },
 	{ id: 'issueYou', label: 'Issues: your turn', short: 'issue' }
@@ -22,9 +21,8 @@ export const SOURCES: { id: CountSource; label: string; short: string }[] = [
 
 // Alerts you have not seen yet (the bell), on this device.
 const DEFAULT_SOURCES: CountSource[] = ['alerts'];
-/** The defaults before version 2; saved lists equal to them move to the new default. */
-const OLD_DEFAULT_SOURCES: CountSource[] = ['inbox', 'prYou', 'issueYou'];
 const PREFS_VERSION = 2;
+const isSource = (id: string): id is CountSource => SOURCES.some((s) => s.id === id);
 
 export const DEFAULT_PREFS: TabStatusPrefs = {
 	title: { enabled: true, sources: DEFAULT_SOURCES, style: 'total' },
@@ -51,18 +49,13 @@ export function loadPrefs(): TabStatusPrefs {
 			favicon: { ...DEFAULT_PREFS.favicon, ...raw.favicon },
 			appBadge: { ...DEFAULT_PREFS.appBadge, ...raw.appBadge }
 		};
-		// Version 2 changed the default to unread alerts. Lists you changed stay as they are.
-		if ((raw.v ?? 1) < 2)
-			for (const g of [prefs.title, prefs.favicon, prefs.appBadge])
-				if (sameSet(g.sources, OLD_DEFAULT_SOURCES)) g.sources = [...DEFAULT_SOURCES];
+		for (const g of [prefs.title, prefs.favicon, prefs.appBadge])
+			g.sources = g.sources.filter(isSource);
 		return prefs;
 	} catch {
 		return structuredClone(DEFAULT_PREFS);
 	}
 }
-
-const sameSet = (a: CountSource[], b: CountSource[]) =>
-	a.length === b.length && b.every((x) => a.includes(x));
 
 export function savePrefs(p: TabStatusPrefs) {
 	localStorage.setItem(KEY, JSON.stringify({ ...p, v: PREFS_VERSION }));

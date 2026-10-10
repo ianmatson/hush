@@ -191,12 +191,11 @@ const app = routes()
 			}
 		}
 		if (error) return c.json({ error }, 422);
-		if (noSubject) return c.json({ ok: true as const, resolved: [], entry });
-		// Read it again now: the thread, the dashboards, and the peek show the new state at once.
-		const { resolved } = await poller(c.env, u.id)
+		if (noSubject) return c.json({ ok: true as const, entry });
+		await poller(c.env, u.id)
 			.recheck(repo, number)
-			.catch(() => ({ resolved: [] }));
-		return c.json({ ok: true as const, resolved, entry });
+			.catch(() => {});
+		return c.json({ ok: true as const, entry });
 	})
 	// Add or remove your reaction on a comment, a review, or a description.
 	.post('/api/reactions', json<{ id: string; content: string; add: boolean }>(), async (c) => {

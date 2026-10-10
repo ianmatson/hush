@@ -41,9 +41,43 @@ Inside a section, the items that need you come first, the most urgent first (fai
 - **Pull requests:** CI failing · Changes requested · Merge conflict · 2 open threads · Ready to merge · @alice commented · Review requested · Re-review requested · Assigned to you · New commits since your review · Review for acme/web · CI running · Waiting for review · Waiting on author · You approved · Draft · Bot PR.
 - **Issues:** Assigned to you · @alice replied · Waiting for replies · No replies yet · Waiting for a reply.
 
-The same rules decide the inbox's [Needs you](/docs/inbox#what-needs-you).
+### Whose turn it is
 
-A row also lists what changed since you last looked at the item (“+2 commits”, “CI fails”), the same as in the inbox: see [Since you looked](/docs/inbox#since-you-looked).
+Hush decides whose turn it is from the facts of each item: CI, reviews, review requests, conflicts, and comments. It is **your turn** when one of these is true.
+
+**Your pull requests** (not drafts):
+
+- CI fails.
+- Someone requested changes.
+- It has merge conflicts.
+- It is approved, but review threads are still open.
+- It is approved and CI is not running: it is ready to merge.
+- A person commented after your newest push.
+
+**Other people's pull requests:**
+
+- Your review is requested from you by name, also again after your review.
+- It is assigned to you.
+- New commits arrived since your review.
+
+**Issues:** it is assigned to you, or a person replied on an issue that is assigned to you or that you opened.
+
+A review request to one of your teams is **your team's turn**: the row says “Review for acme/web”. Other items wait on someone else (“Waiting for review”, “You approved”), or on nobody (“Draft”, “Bot PR”).
+
+- **Bots:** a pull request that a bot opened is not your turn, unless it asks for your review by name. A comment by a bot is not a reply.
+- **Review requests** end only when GitHub no longer asks you. A review by someone else does not end your request.
+- **Smart decisions:** with [smart decisions](/docs/settings#smartdecisions) on (the default), Jev reads the newest comments. When they need nothing from you (thanks, approval, a status update, +1), they are not your turn. The row then says “no reply needed”.
+- [Categories](/docs/categories) do not change whose turn it is.
+
+### Since you looked
+
+A row also lists what changed since you last looked at the item: “+2 commits”, “CI fails”, “@alice approved”, “3 new comments”. Hush remembers what the item looked like when you opened it in the peek or on its full page, or opened it on GitHub from Hush. The row and the peek list:
+
+- New commits, new comments, and new reviews (“@alice approved”, “@bob requested changes”).
+- CI: “CI fails”, “CI passes now”, “CI running”.
+- Your review requested again; merged, closed, or reopened; ready for review or back to draft; new labels.
+
+Before your first look, nothing is listed. Your own changes do not count. To hide this list on rows, turn off **Changes since you looked** in **Settings → General → Row contents**.
 
 ### Stale
 
@@ -90,6 +124,8 @@ A view has no filter box: its searches decide what is in it. To find a pull requ
 | Copy link                    | {{key:list.copy}}           | Copies the links of the item or the selection.                                     |
 | Refresh                      | {{key:list.refresh}}        | Searches GitHub again now.                                                         |
 
+Right-click an item (or choose **⋯** on a phone) for these actions and more, such as its categories. To change the items of this menu, see [Menus](/docs/appearance-and-menus#menus).
+
 ## Snooze
 
 Snooze takes an item out of the list for a while. Choose **Snooze** in the item's menu (right-click, or **⋯** on a phone), in the bar at the bottom of the [peek](/docs/peek), or in the bar for a selection. The choices:
@@ -102,7 +138,9 @@ Snooze takes an item out of the list for a while. Choose **Snooze** in the item'
 
 The **Snoozed** button at the top shows the number of snoozed and muted items. Choose it to list them, with until when each one sleeps. **Wake up** ({{key:dash.snooze}}) puts an item back in the list now; **Unmute** ({{key:dash.mute}}) ends a mute.
 
-Snooze and Mute stay in Hush. They do not change your notifications on GitHub, and they do not change the inbox.
+When a snooze ends because the thing happened, Hush pushes, for example “Snooze over: CI passed”. See [What gets pushed](/docs/notifications#what-gets-pushed).
+
+Snooze and Mute stay in Hush. They do not change your notifications on GitHub.
 
 ## Unread
 
@@ -112,9 +150,14 @@ You look at an item when you open it in the peek, open its full page, or open it
 
 The number on each view in the top bar is the number of its unread items that are not snoozed or muted.
 
-### Select many
+## Select many
 
-Select many items to snooze, mute, mark as read, or copy them together, the same as in the [inbox](/docs/inbox#select-many).
+Select many items to snooze, mute, mark as read, or copy them together.
+
+- {{key:list.select}} selects or deselects the item under the cursor. {{key:list.extendNext}} and {{key:list.extendPrev}} extend the selection.
+- ⌘-click (Ctrl-click) adds an item. Shift-click selects a range. {{key:list.selectAll}} selects all.
+- With a selection, a bar at the bottom has **Snooze**, **Read**, and **Copy links**. The keys and the right-click menu act on all selected items.
+- {{key:list.escape}} clears the selection.
 
 ## Refresh
 

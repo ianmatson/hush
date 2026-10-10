@@ -8,7 +8,6 @@
 	import { keys, refetchUnlessLive } from '$lib/queries';
 	import { externalContributor } from '$lib/shared/contributors';
 	import { rowShows } from '$lib/shared/row-parts';
-	import { reportResolved } from '$lib/recheck';
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -48,16 +47,15 @@
 			? externalContributor(q.data.authorAssociation, q.data.author.bot)
 			: null
 	);
-	// The server stored what this peek read. If that changed the inbox or dashboards, refetch
-	// them now (once per fetch), so every view agrees with the peek.
+	// The server stored what this peek read. If that changed the dashboards, refetch them now
+	// (once per fetch), so every view agrees with the peek.
 	let synced = 0;
 	$effect(() => {
 		const at = q.dataUpdatedAt;
 		const sync = q.data?.sync;
 		if (!sync?.changed || at === synced) return;
 		synced = at;
-		reportResolved(sync.resolved);
-		refetchUnlessLive(keys.threadsAll, keys.dashAll, keys.alerts);
+		refetchUnlessLive(keys.dashAll, keys.alerts);
 	});
 	let composerEnd = $state<HTMLElement | null>(null);
 	let shownEntryCount: number | null = null;

@@ -12,7 +12,7 @@
 		value = $bindable(''),
 		id,
 		label = 'As text',
-		placeholder = 'repo:acme/* needs:review -author:bots'
+		placeholder = 'repo:acme/* label:bug -author:bots'
 	}: { value: string; id: string; label?: string; placeholder?: string } = $props();
 
 	let el = $state<HTMLInputElement | null>(null);

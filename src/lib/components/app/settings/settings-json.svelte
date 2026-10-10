@@ -41,8 +41,8 @@
 		}
 		saving = true;
 		try {
-			const note = await applySettings(patch, true);
-			toast.success(`settings.json saved.${note}`);
+			await applySettings(patch, true);
+			toast.success('settings.json saved.');
 			text = null;
 			error = null;
 		} catch (err) {
@@ -53,7 +53,6 @@
 	}
 
 	const PAGE_LABEL: Record<string, string> = {
-		inbox: 'Inbox',
 		views: 'Views',
 		notifications: 'Notifications',
 		general: 'General',

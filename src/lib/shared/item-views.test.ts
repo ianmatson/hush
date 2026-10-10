@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify, queryMatches } from './classify';
-import { DEFAULT_SETTINGS } from './settings';
+import { queryMatches } from './rules';
 import {
 	DEFAULT_VIEWS,
 	MAX_VIEW_SEARCHES,
@@ -12,7 +11,7 @@ import {
 	validateViews,
 	viewKinds
 } from './item-views';
-import type { ItemView, ThreadFacts } from './types';
+import type { ItemView, RuleFacts } from './types';
 
 const view = (over: Partial<ItemView> = {}): ItemView => ({
 	id: 'web',
@@ -103,18 +102,15 @@ describe('validateViews', () => {
 });
 
 describe('view: in rules', () => {
-	const t = (views: string[]): ThreadFacts => ({
+	const t = (views: string[]): RuleFacts => ({
 		repo: 'acme/web',
 		subjectType: 'PullRequest',
 		title: 'Fix',
-		reason: 'subscribed',
-		htmlUrl: 'https://github.com/acme/web/pull/1',
 		me: 'ian',
 		enrichment: { kind: 'pr' },
 		views
 	});
-	const matches = (q: string, facts: ThreadFacts) =>
-		queryMatches(q, facts, classify(facts, DEFAULT_SETTINGS));
+	const matches = (q: string, facts: RuleFacts) => queryMatches(q, facts);
 	it('matches the name of a view that has the item', () => {
 		expect(matches('view:Mine', t(['Mine']))).toBe(true);
 		expect(matches('view:"web*"', t(['Website']))).toBe(true);

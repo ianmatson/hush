@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classify, ruleMatches } from './classify';
-import { computeTurn, sortItems, turnFactsFromEnrichment } from './dashboard';
+import { ruleMatches } from './rules';
+import { computeTurn, sortItems } from './dashboard';
 import {
 	BODY_EXCERPT_CHARS,
 	MAX_SMART_CONDITIONS,
@@ -23,8 +23,8 @@ import { parseQuery } from './query';
 import { DEFAULT_SETTINGS } from './settings';
 import { MAX_CATEGORIES } from './categories';
 import { validateSettings } from './settings-schema';
-import { enrichmentOf, type SubjectFacts } from './subject';
-import type { CategoryGroup, LastComment, Settings, ThreadFacts } from './types';
+import { dashFactsOf, type SubjectFacts } from './subject';
+import type { CategoryGroup, LastComment, RuleFacts, Settings } from './types';
 
 const ME = 'ian';
 const T0 = '2026-09-10T00:00:00Z';
@@ -359,9 +359,7 @@ const needsReply = { commentsNeedMe: true, urgent: false, smart: [], choices: {}
 
 describe('turns with comment answers', () => {
 	const turnOf = (s: SubjectFacts, d = NO_DECISIONS) =>
-		computeTurn(turnFactsFromEnrichment(enrichmentOf(s, ME, d), s.repo, ME), ME, [], {
-			botsAreFyi: true
-		});
+		computeTurn(dashFactsOf(s, ME, new Set(), d), ME, []);
 
 	it('a comment on your PR that needs nothing from you is not your turn', () => {
 		expect(turnOf(pr()).turn).toBe('you');
@@ -391,58 +389,26 @@ describe('turns with comment answers', () => {
 	});
 });
 
-describe('inbox classification with comment answers', () => {
-	const facts = (reason: string, s: SubjectFacts, d = NO_DECISIONS): ThreadFacts => ({
-		repo: s.repo,
-		subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
-		title: s.title,
-		reason,
-		htmlUrl: s.url,
-		enrichment: enrichmentOf(s, ME, d),
-		me: ME
-	});
-	const theirs = pr({ author: 'alice', lastComment: comment('bob', 'cc @ian', T2) });
-
-	it('a mention that needs nothing from you is FYI', () => {
-		expect(classify(facts('mention', theirs), DEFAULT_SETTINGS).category).toBe('action');
-		expect(classify(facts('mention', theirs, noComment), DEFAULT_SETTINGS)).toMatchObject({
-			category: 'fyi',
-			summary: '@bob mentioned you (no reply needed)'
-		});
-	});
-	it('a reply in a thread you are in that needs nothing from you is FYI', () => {
-		expect(classify(facts('comment', theirs), DEFAULT_SETTINGS).category).toBe('action');
-		expect(classify(facts('comment', theirs, noComment), DEFAULT_SETTINGS).category).toBe('fyi');
-	});
-	it('unknown answers change nothing', () => {
-		const unknown = { commentsNeedMe: null, urgent: false, smart: [], choices: {} };
-		expect(classify(facts('comment', theirs, unknown), DEFAULT_SETTINGS).category).toBe('action');
-	});
-});
-
 describe('about: in rules', () => {
-	const t = (smart: string[]): ThreadFacts => ({
+	const t = (smart: string[]): RuleFacts => ({
 		repo: 'acme/web',
 		subjectType: 'PullRequest',
 		title: 'Add a column',
-		reason: 'subscribed',
-		htmlUrl: 'https://github.com/acme/web/pull/1',
 		enrichment: { kind: 'pr', smart },
 		me: ME
 	});
-	const base = classify(t([]), DEFAULT_SETTINGS);
 	const when = parseQuery('repo:acme/* about:"database migrations"').when;
 
 	it('matches when Jev said yes to the condition', () => {
-		expect(ruleMatches(when, t([MIGRATIONS.id]), base)).toBe(true);
-		expect(ruleMatches(when, t([]), base)).toBe(false);
+		expect(ruleMatches(when, t([MIGRATIONS.id]))).toBe(true);
+		expect(ruleMatches(when, t([]))).toBe(false);
 	});
 	it('matches any of several conditions', () => {
 		const either = parseQuery('about:docs,"database migrations"').when;
 		expect(either.about).toEqual(['docs', 'database migrations']);
-		expect(ruleMatches(either, t([MIGRATIONS.id]), base)).toBe(true);
-		expect(ruleMatches(either, t([conditionId('docs')]), base)).toBe(true);
-		expect(ruleMatches(either, t([conditionId('deps')]), base)).toBe(false);
+		expect(ruleMatches(either, t([MIGRATIONS.id]))).toBe(true);
+		expect(ruleMatches(either, t([conditionId('docs')]))).toBe(true);
+		expect(ruleMatches(either, t([conditionId('deps')]))).toBe(false);
 	});
 });
 

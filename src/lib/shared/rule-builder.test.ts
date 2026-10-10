@@ -23,7 +23,7 @@ describe('rule builder', () => {
 		'-author:bots label:docs',
 		'is:draft size:<50',
 		'about:"database migrations"',
-		'type:pr needs:review',
+		'type:pr label:bug',
 		'label:bug,crash',
 		'login flow'
 	])('keeps the meaning of %s', (query) => {

@@ -38,8 +38,6 @@ const base = (over: Partial<DashFacts> = {}): DashFacts => ({
 	requestedMe: false,
 	requestedTeams: [],
 	openThreads: 0,
-	lastVerdictBy: null,
-	lastVerdictAt: null,
 	requestedAt: null,
 	reviewRequestCount: 0,
 	reviewed: false,
@@ -54,9 +52,8 @@ const turn = (f: Partial<DashFacts>) => computeTurn(base(f), 'ian', []);
 describe('computeTurn: pull requests', () => {
 	it("a bot's PR is FYI, unless it asks for your review by name", () => {
 		const bot = { author: 'dependabot[bot]', authorIsBot: true };
-		const opts = { botsAreFyi: true };
-		expect(computeTurn(base(bot), 'ian', [], opts).turnReason).toBe('Bot PR');
-		expect(computeTurn(base({ ...bot, requestedMe: true }), 'ian', [], opts)).toMatchObject({
+		expect(computeTurn(base(bot), 'ian', []).turnReason).toBe('Bot PR');
+		expect(computeTurn(base({ ...bot, requestedMe: true }), 'ian', [])).toMatchObject({
 			turn: 'you',
 			turnReason: 'Review requested'
 		});

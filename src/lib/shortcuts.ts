@@ -6,7 +6,6 @@ export type Shortcut = [keys: string, does: string];
 
 /** Numbered commands (views, sections) show as one line: "1 – 9". */
 const NUMBERED: Record<string, string> = {
-	'inbox.view': 'Change inbox list',
 	'dash.view': 'Open a view'
 };
 
@@ -21,7 +20,7 @@ export function shortcutsFor(scopes: KeyScope[], extra: Shortcut[] = []): Shortc
 	const done = new Set<string>();
 	for (const c of COMMANDS) {
 		if (!scopes.includes(c.scope)) continue;
-		const group = c.id.match(/^(inbox\.view|dash\.section)\.\d+$/)?.[1];
+		const group = c.id.match(/^(dash\.view)\.\d+$/)?.[1];
 		if (group) {
 			if (done.has(group)) continue;
 			done.add(group);

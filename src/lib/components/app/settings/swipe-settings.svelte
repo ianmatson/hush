@@ -12,7 +12,6 @@
 	const swipe = $derived(me.data?.settings.swipe);
 
 	const LISTS: { kind: SwipeKind; label: string }[] = [
-		{ kind: 'inbox', label: 'Inbox' },
 		{ kind: 'dash', label: 'Pull requests and issues' }
 	];
 	const SIDES = [

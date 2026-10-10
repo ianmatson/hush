@@ -1,13 +1,13 @@
 ---
 title: Hush docs
-description: How Hush sorts your GitHub notifications, and how to make it work your way.
+description: How Hush tracks your GitHub pull requests and issues, and how to make it work your way.
 ---
 
-Hush tracks the pull requests and issues that your saved GitHub searches find, reads your GitHub notifications about them, and sorts them into what **needs you** and what is only **FYI**. It follows whose turn it is on every pull request and issue that involves you, sends a push only when something waits on you, and lets you act on GitHub (approve, comment, merge, mark Done) without leaving your inbox.
+Hush tracks the pull requests and issues that your saved GitHub searches find. It shows them in **views**, with whose turn it is on each one. It reads your GitHub notifications to learn quickly when something changes, and sends a push only for the facts that you choose. You can act on GitHub (approve, comment, merge) without leaving Hush.
 
 ## What Hush is
 
-Hush is a web app for your GitHub notifications. It replaces the notifications page on github.com. It is open source, and it runs at [app.hush-gh.com](https://app.hush-gh.com).
+Hush is a web app for your GitHub pull requests and issues. It is open source, and it runs at [app.hush-gh.com](https://app.hush-gh.com).
 
 - **Who it is for:** developers who get more GitHub notifications than they can read. For example, people who review pull requests for a team, people who work in large orgs or busy repositories, and maintainers of open-source projects.
 - **What you need:** a GitHub account. Any GitHub user can sign in. An org that limits OAuth apps hides its private repositories until an owner approves Hush (see [GitHub access](/docs/github-access)).
@@ -17,18 +17,20 @@ Hush is a web app for your GitHub notifications. It replaces the notifications p
 
 ## The idea in one minute
 
-- **Needs you** is short on purpose. A thread is there only when you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you, your approved PR is ready to merge. See [what needs you](/docs/inbox#what-needs-you).
-- **FYI** is everything else: team mentions, watched repositories, bots, merged and closed work.
-- **Views** are tabs of open pull requests and issues from your GitHub searches, in sections by your role, review status, or category. See [Views](/docs/views).
-- **Hush follows up by itself.** When you approve, push a fix, or reply, the thread leaves Needs you with a note such as “✓ You approved”. When it needs you again, it comes back.
-- **Categories sort your work.** [Category groups](/docs/categories) mark each PR and issue, such as its effort, by your rules or with Jev. Its notifications show the same categories.
+- **Views** are tabs of open pull requests and issues from your GitHub searches. Each view puts its items into sections, for example by your role, review status, or category. See [Views](/docs/views).
+- **Each item says whose turn it is.** Your review is requested, CI fails on your PR, someone replied to you: these are your turn, and they come first. See [whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is).
+- **Hush follows up by itself.** When you approve, push a fix, or reply, the item stops being your turn. When it needs you again, it is your turn again.
+- **Push only for facts.** You choose the facts that push, such as a review request or failed CI on your PR. See [What gets pushed](/docs/notifications#what-gets-pushed).
+- **Snooze, mute, and unread stay in Hush.** They never change your notifications on GitHub. See [Snooze](/docs/pull-requests-and-issues#snooze).
+- **Categories sort your work.** [Category groups](/docs/categories) mark each PR and issue, such as its effort, by your rules or with Jev.
 - **Everything is a setting.** Views, categories, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.
 
 ## Where to start
 
 - New to Hush: [Getting started](/docs/getting-started).
 - An org's repositories are missing: [GitHub access](/docs/github-access).
-- Too much noise, or not enough: [What needs you](/docs/inbox#what-needs-you) and [Notifications](/docs/notifications).
+- Too many pushes, or not enough: [Notifications](/docs/notifications).
+- An item is missing, or in the wrong section: [Troubleshooting](/docs/troubleshooting).
 - You like the keyboard: [Keybinds](/docs/keybinds).
 - You want every option: [settings.json](/docs/settings).
 

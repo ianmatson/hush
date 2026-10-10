@@ -1,10 +1,9 @@
-import { toast } from 'svelte-sonner';
 import { api } from '$lib/api';
 import { keys, refetchUnlessLive } from '$lib/queries';
 
 /**
  * "Did it work?" You open a PR or issue on GitHub from Hush (to review, reply, fix CI…). When you
- * come back to the tab, Hush checks those items at once, so an approved PR leaves "Needs you"
+ * come back to the tab, Hush checks those items at once, so an approved PR shows its new state
  * now and not at the next 15-minute check.
  */
 const opened = new Map<string, { repo: string; number: number; at: number }>();
@@ -28,20 +27,10 @@ async function checkReturned() {
 	const due = [...opened.entries()].filter(([, o]) => Date.now() - o.at > MIN_AWAY_MS);
 	if (!due.length) return;
 	for (const [key] of due) opened.delete(key);
-	const results = await Promise.all(
+	await Promise.all(
 		due.slice(-MAX_PER_RETURN).map(([, o]) => api.recheck(o.repo, o.number).catch(() => null))
 	);
-	reportResolved(results.flatMap((r) => r?.resolved ?? []));
-	await refetchUnlessLive(keys.threadsAll, keys.dashAll);
-}
-
-/** A toast for threads a check moved to Done. */
-export function reportResolved(resolved: { title: string; note: string }[]) {
-	if (resolved.length === 1) toast.success(resolved[0].note, { description: resolved[0].title });
-	else if (resolved.length > 1)
-		toast.success(`${resolved.length} items moved to Done`, {
-			description: resolved.map((r) => `${r.note}: ${r.title}`).join('\n')
-		});
+	await refetchUnlessLive(keys.dashAll);
 }
 
 /** Start listening; returns the cleanup. Call once, from the app shell. */

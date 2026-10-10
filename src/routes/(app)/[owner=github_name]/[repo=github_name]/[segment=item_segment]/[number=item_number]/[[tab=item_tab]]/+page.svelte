@@ -57,7 +57,7 @@
 
 	function back() {
 		if (cameFromApp) history.back();
-		else goto(`/inbox?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
+		else goto(`/v?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
 	}
 
 	$effect(() => {

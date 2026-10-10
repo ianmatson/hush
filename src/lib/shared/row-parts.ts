@@ -1,4 +1,4 @@
-export type RowKind = 'pr' | 'issue' | 'thread';
+export type RowKind = 'pr' | 'issue';
 
 export interface RowPart {
 	id: string;
@@ -30,32 +30,19 @@ const PR_ONLY_PARTS: RowPart[] = [
 
 export const ROW_PARTS: Record<RowKind, RowPart[]> = {
 	pr: [...ITEM_PARTS.slice(0, 4), ...PR_ONLY_PARTS, ...ITEM_PARTS.slice(4)],
-	issue: ITEM_PARTS,
-	thread: [
-		{ id: 'time', label: 'Updated time' },
-		{ id: 'why', label: 'Why you got it' },
-		{ id: 'changes', label: 'Changes since you looked' },
-		{ id: 'override', label: '“Doesn’t need me” note' },
-		{ id: 'categories', label: 'Categories' },
-		{ id: 'categoryNames', label: 'Category names' },
-		{ id: 'resolved', label: 'Why Hush moved it' },
-		{ id: 'draft', label: 'Draft' },
-		{ id: 'snooze', label: 'Snoozed until' }
-	]
+	issue: ITEM_PARTS
 };
 
 export const ROW_KINDS: { id: RowKind; label: string }[] = [
 	{ id: 'pr', label: 'Pull requests' },
-	{ id: 'issue', label: 'Issues' },
-	{ id: 'thread', label: 'Notifications' }
+	{ id: 'issue', label: 'Issues' }
 ];
 
 export const MAX_ROW_LABELS = 2;
 
 export const DEFAULT_ROWS: RowSettings = {
 	pr: ['threads', 'categoryNames', 'labels'],
-	issue: ['categoryNames', 'labels'],
-	thread: ['why', 'changes', 'categoryNames']
+	issue: ['categoryNames', 'labels']
 };
 
 export const knownRowParts = (rows: Partial<RowSettings>): RowSettings =>

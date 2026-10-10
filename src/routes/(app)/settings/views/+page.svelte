@@ -213,7 +213,7 @@
 				<SettingRow
 					id="hide-bots"
 					label="Hide PRs and issues that bots opened"
-					description="For example dependabot, renovate, and GitHub Apps. Hush does not track them, so their notifications do not come in to the inbox either. An item that requests your review by name, or that is assigned to you, always shows."
+					description="For example dependabot, renovate, and GitHub Apps. Hush does not track them. An item that requests your review by name, or that is assigned to you, always shows."
 				>
 					<Switch id="hide-bots" bind:checked={draft.dash.hideBots} />
 				</SettingRow>

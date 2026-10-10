@@ -19,7 +19,7 @@ import attachments from './routes/attachments';
 import projects from './routes/projects';
 import diff from './routes/diff';
 import suggest from './routes/suggest';
-import threads from './routes/threads';
+import seen from './routes/seen';
 
 export { Poller } from './poller';
 
@@ -90,7 +90,7 @@ app.get('/api/health', (c) => c.json({ ok: true }));
 // `AppType` carries every route's input and output types (the browser's typed client uses it).
 const api = app
 	.route('/', auth)
-	.route('/', threads)
+	.route('/', seen)
 	.route('/', settings)
 	.route('/', push)
 	.route('/', slack)

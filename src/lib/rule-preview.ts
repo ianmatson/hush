@@ -1,21 +1,12 @@
 import { keys, queryClient } from './queries';
-import { allCategories, itemQueryFacts } from './shared/categories';
-import { ruleMatches } from './shared/classify';
+import { itemQueryFacts } from './shared/categories';
+import { ruleMatches } from './shared/rules';
 import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
-import type {
-	Classification,
-	DashItem,
-	DashResponse,
-	RuleMatch,
-	Settings,
-	ThreadDTO
-} from './shared/types';
-import { threadMatches, type MarkNames } from './shared/views';
+import type { DashItem, DashResponse, RuleMatch, Settings } from './shared/types';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { BuilderField } from './shared/rule-builder';
 
 const MAX_EXAMPLES = 20;
-const NO_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
 
 function withoutAbout(when: RuleMatch): RuleMatch {
 	const { about: _about, ...rest } = when;
@@ -35,26 +26,17 @@ export function cachedItems(): DashItem[] {
 	);
 }
 
-export function cachedThreads(): ThreadDTO[] {
-	const byId = new Map<string, ThreadDTO>();
-	for (const [, data] of queryClient.getQueriesData<{ threads: ThreadDTO[] }>({
-		queryKey: keys.threadsAll
-	}))
-		for (const t of data?.threads ?? []) byId.set(t.id, t);
-	return [...byId.values()];
-}
-
 export function previewItems(
 	query: string,
 	me: string,
-	settings: Pick<Settings, 'categoryGroups' | 'views'>,
+	settings: Pick<Settings, 'views'>,
 	items: DashItem[] = cachedItems()
 ): RulePreview | null {
 	if (!query.trim() || parseExpr(query).errors.length || !items.length) return null;
 	const expr = compileExpr(query);
 	const matched = items.filter((i) => {
 		const facts = itemQueryFacts(i, me, settings);
-		return exprMatches(expr, (when) => ruleMatches(withoutAbout(when), facts, NO_CLASSIFICATION));
+		return exprMatches(expr, (when) => ruleMatches(withoutAbout(when), facts));
 	});
 	return {
 		matched: matched.length,
@@ -67,49 +49,18 @@ export function previewItems(
 	};
 }
 
-export function previewThreads(
-	query: string,
-	me: string,
-	threads: ThreadDTO[] = cachedThreads(),
-	marks?: MarkNames
-): RulePreview | null {
-	if (!query.trim() || parseExpr(query).errors.length || !threads.length) return null;
-	const expr = compileExpr(query);
-	const matched = threads.filter((t) =>
-		exprMatches(expr, (when) => threadMatches(withoutAbout(when), t, me, marks))
-	);
-	return {
-		matched: matched.length,
-		total: threads.length,
-		noun: 'notifications',
-		examples: matched
-			.slice(0, MAX_EXAMPLES)
-			.map((t) => ({ title: t.summary, detail: t.title, url: t.htmlUrl })),
-		jevDecides: usesAbout(expr)
-	};
-}
-
 const uniq = (xs: (string | null | undefined)[]) =>
 	[...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
 
 export function ruleSuggestions(
-	settings: Pick<Settings, 'categoryGroups' | 'views'> | undefined
+	settings: Pick<Settings, 'views'> | undefined
 ): Partial<Record<NonNullable<BuilderField['suggest']>, string[]>> {
 	const items = cachedItems();
-	const threads = cachedThreads();
-	const repos = uniq([...items.map((i) => i.repo), ...threads.map((t) => t.repo)]);
+	const repos = uniq(items.map((i) => i.repo));
 	return {
 		repo: [...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos],
-		person: [
-			'@me',
-			'bots',
-			...uniq([...items.map((i) => i.author), ...threads.map((t) => t.author)])
-		],
-		label: uniq([
-			...items.flatMap((i) => i.labels.map((l) => l.name)),
-			...threads.flatMap((t) => t.labels)
-		]),
-		view: uniq(settings?.views.map((v) => v.name) ?? []),
-		category: uniq(allCategories(settings?.categoryGroups ?? []).map((c) => c.name))
+		person: ['@me', 'bots', ...uniq(items.map((i) => i.author))],
+		label: uniq(items.flatMap((i) => i.labels.map((l) => l.name))),
+		view: uniq(settings?.views.map((v) => v.name) ?? [])
 	};
 }

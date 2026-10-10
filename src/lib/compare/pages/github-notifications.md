@@ -33,7 +33,7 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 
 The reason that GitHub gives is fixed when the notification arrives. A thread with `reason:review-requested` keeps that reason after you review, and a thread with `reason:subscribed` does not say that CI failed on your pull request.
 
-**Hush** reads the same notifications, but keeps only the ones about the pull requests and issues that your saved searches find. Releases, CI runs, discussions, and security alerts stay on GitHub. Hush reads the pull request or issue behind each notification: CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. Those threads go to **Needs you**; the rest go to **FYI**. When you approve, push a fix, or reply, Hush moves the thread to Done by itself, and brings it back if it needs you again. See [what needs you](/docs/inbox#what-needs-you).
+**Hush** shows the pull requests and issues that your saved searches find. It reads your notifications only as a signal to look again, and it never changes them on GitHub. Releases, CI runs, discussions, and security alerts stay on GitHub. For each pull request or issue, Hush reads CI, reviews, review requests, conflicts, and the newest comment. From that it decides if you are the next person who must act. When you approve, push a fix, or reply, the item stops being your turn by itself. See [whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is).
 
 You can change the defaults with settings, for example whether bots are FYI, and with **Doesn't need me** on a thread. [Categories](/docs/categories) sort your pull requests and issues, for example by review effort or impact.
 

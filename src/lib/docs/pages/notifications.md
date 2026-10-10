@@ -57,15 +57,15 @@ Hush pushes facts, not guesses. Each time Hush reads a pull request or issue fro
 
 To get fewer pushes, turn off facts, [mute](/docs/pull-requests-and-issues#snooze) items that you do not want to hear about, or use the digest and the limit below.
 
-Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 items arrive in one check, they come as one push: “5 things need you”.
+Hush checks GitHub every 5 minutes while push is on, so an alert can come a few minutes after the event. When more than 3 items arrive in one check, they come as one push: “5 alerts”.
 
-A push opens the item's main action (the PR's files to review, its checks…). In Chrome, Edge, and on Android, the alert also has **Done** and **Snooze 3h** buttons, which act on the item's threads without opening Hush. If the action fails, Hush opens the item. Other browsers do not show buttons on alerts.
+A push opens its pull request or issue on GitHub. A push that lists many alerts opens Hush. Pushes have no buttons: to snooze or mute the item, open it in Hush.
 
 ## How often
 
 Busy PRs change many times a day. These settings, in **Settings → Notifications → How often**, keep that from buzzing your phone each time.
 
-- **One alert for each PR or issue.** All its threads (a review request, a CI failure, a reply) share one alert, and a later push replaces it.
+- **One alert for each PR or issue.** All its facts (a review request, a CI failure, a reply) share one alert, and a later push replaces it.
 - **Push the same item again** ([`pushRepeat`](/docs/settings#pushrepeat)): by default, an item pushes once, and then not again until you open Hush, read it on GitHub, or act on it. **Again when the reason changes** also pushes when, for example, “Review requested” becomes “Changes requested”. **Each update** pushes every time. A snooze that ends always pushes.
 - **Digest** ([`pushDigestMinutes`](/docs/settings#pushdigestminutes)): pushes wait, and one push lists them every 5 to 240 minutes.
 - **Limit** ([`pushLimit`](/docs/settings#pushlimit)): after this many pushes in this many minutes, the rest wait and go as one push.
@@ -87,7 +87,10 @@ In settings.json this is [`quietHours`](/docs/settings#quiethours).
 
 ## Alert history
 
-The bell in the header lists every push alert from the last 30 days, newest first, also those that waited during quiet hours. Click an alert to peek at its thread, or open it on GitHub. An alert shows what happened to its thread since: Done, Muted, Snoozed, or the note such as “You approved”.
+The bell in the header lists every push alert from the last 30 days, newest first, also those that waited during quiet hours. A dot marks the alerts that are new since you last opened the list.
+
+- Click an alert about a pull request or issue to read it in a [peek](/docs/peek), in the same panel. The button at the top right opens it on GitHub, and **Alerts** goes back to the list.
+- Other alerts, such as a digest, open where the push went.
 
 ## Tab title and icon
 
@@ -97,4 +100,4 @@ The bell in the header lists every push alert from the last 30 days, newest firs
 - **Dot on the tab icon**: a colored dot, with the number or only a dot. Safari may ignore icon changes after the page loads.
 - **Badge on the app icon**: only when Hush is installed as an app (Chrome, Edge, Safari on macOS).
 
-For each one, **Count** picks what counts: unread alerts (the default), Inbox: Needs you, Inbox: FYI, Pull requests: your turn, Pull requests: your team's turn, and Issues: your turn. Nothing is added when the count is 0.
+For each one, **Count** picks what counts: unread alerts (the default), unread pull requests and issues, Pull requests: your turn, Pull requests: your team's turn, and Issues: your turn. Nothing is added when the count is 0.

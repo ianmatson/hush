@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { describeBuilder, queryToBuilder } from '$lib/shared/rule-builder';
-	import { NOTIFICATION_WORDS } from '$lib/shared/query';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
@@ -12,6 +11,8 @@
 	import FeedButton from '$lib/components/app/feed-button.svelte';
 	import IconPicker from '$lib/components/app/marks/icon-picker.svelte';
 	import { saveSettings } from '$lib/save-settings';
+	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
+	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import {
 		DEFAULT_CATEGORY_GROUPS,
 		MAX_CATEGORIES,
@@ -40,8 +41,14 @@
 	import { cubicOut } from 'svelte/easing';
 
 	const me = createQuery(meQuery);
+	const smartStatus = $derived(
+		me.data?.smartDecisionsPaused
+			? 'Smart decisions are paused until 00:00 UTC: your account used its tokens for today.'
+			: me.data?.smartDecisionsChecking
+				? 'Checking your open pull requests and issues… Their categories update when this ends.'
+				: ''
+	);
 	const feeds = createQuery(feedsQuery);
-	const MARK_WORDS = ['category'];
 	const NO_RULE = 'No rule: only Jev, or your own choice, puts items here.';
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
 
@@ -222,7 +229,6 @@
 					bind:value={c.rule}
 					id="category-{c.id}-rule"
 					label="Rule (optional)"
-					exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
 					emptyText={NO_RULE}
 					{suggestions}
 					preview={(q) => (me.data ? previewItems(q, me.data.login, me.data.settings) : null)}
@@ -339,6 +345,27 @@
 				<RotateCcw /> Defaults
 			</Button>
 		</div>
+
+		<Card.Root id="smart-decisions">
+			<Card.Content>
+				<SettingRow
+					id="smart-decisions-switch"
+					label="Smart decisions"
+					description="Jev, a decision model, picks categories from their descriptions, checks your about: conditions, and reads the newest comments: comments that need nothing from you (thanks, +1) stop being your turn. It sends titles, descriptions, and comments to TypeSafe."
+				>
+					{#if me.data}
+						<SavedSwitch
+							id="smart-decisions-switch"
+							checked={me.data.settings.smartDecisions}
+							onsave={(v) => saveSettings({ smartDecisions: v })}
+						/>
+					{/if}
+				</SettingRow>
+				{#if me.data?.settings.smartDecisions && smartStatus}
+					<p class="py-2 text-xs text-muted-foreground" role="status">{smartStatus}</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 
 		<Card.Root>
 			<Card.Header>

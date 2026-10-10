@@ -15,13 +15,13 @@ import { sendSlackAlerts } from '../slack-alerts';
 import { slackConnection } from '../slack-store';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import { PollerBase } from './base';
-import { MAX_INDIVIDUAL_PUSHES, ALERT_LOG_KEEP, NON_THREAD_TAGS, PUSH_MARK_KEEP } from './shared';
+import { MAX_INDIVIDUAL_PUSHES, ALERT_LOG_KEEP, PUSH_MARK_KEEP } from './shared';
 
 const marks = (n: number) => Array(n).fill('?').join(',');
 const SQL_BATCH = 90;
 const MAX_HELD_MESSAGES = 10;
 const DIGEST_LINES = 4;
-const MAX_ACTION_THREADS = 20;
+const isItemKey = (tag: string | undefined): tag is string => !!tag?.includes('#');
 
 export const SNOOZE_OVER_REASON = 'snooze-over';
 
@@ -65,11 +65,7 @@ export abstract class PollerAlerts extends PollerBase {
 				mayBuzzAgain(settings.pushRepeat, previous.get(c.itemKey) ?? null, c.reason, appSeenAt)
 		);
 		if (!due.length) return;
-		const messages = due.map((c): PushMessage => ({
-			...c.message,
-			tag: c.itemKey,
-			threadIds: this.openThreadIds(c.itemKey)
-		}));
+		const messages = due.map((c): PushMessage => ({ ...c.message, tag: c.itemKey }));
 		if (!settings.pushWhileOpen && this.appInFocus(now)) return this.logAlerts(messages);
 		this.logAlerts(messages);
 		const state = await this.deliveryState();
@@ -123,19 +119,6 @@ export abstract class PollerAlerts extends PollerBase {
 			const batch = itemKeys.slice(i, i + SQL_BATCH);
 			this.run(`DELETE FROM push_marks WHERE key IN (${marks(batch.length)})`, ...batch);
 		}
-	}
-
-	protected itemKeysOf(threadIds: string[]): string[] {
-		const keys = new Set<string>();
-		for (let i = 0; i < threadIds.length; i += SQL_BATCH) {
-			const batch = threadIds.slice(i, i + SQL_BATCH);
-			for (const r of this.all<{ item_key: string }>(
-				`SELECT COALESCE(subject_key, id) AS item_key FROM threads WHERE id IN (${marks(batch.length)})`,
-				...batch
-			))
-				keys.add(r.item_key);
-		}
-		return [...keys];
 	}
 
 	protected forgetOldPushMarks(now: number) {
@@ -193,15 +176,6 @@ export abstract class PollerAlerts extends PollerBase {
 		});
 	}
 
-	private openThreadIds(itemKey: string): string[] {
-		return this.all<{ id: string }>(
-			`SELECT id FROM threads WHERE (subject_key = ? OR id = ?) AND triage IN ('inbox', 'snoozed')
-       LIMIT ${MAX_ACTION_THREADS}`,
-			itemKey,
-			itemKey
-		).map((r) => r.id);
-	}
-
 	private async deliveryState(): Promise<DeliveryState> {
 		const s = await this.ctx.storage.get(['recentSends', 'lastDigestAt']);
 		return {
@@ -230,10 +204,10 @@ export abstract class PollerAlerts extends PollerBase {
 		if (held) return held;
 		const legacy = s.get('quietHeld') as LegacyQuietHeld | undefined;
 		if (!legacy) return { count: 0, messages: [], duringQuiet: false };
-		const inbox = `${await this.origin()}/inbox`;
+		const home = `${await this.origin()}/`;
 		return {
 			count: legacy.count,
-			messages: legacy.lines.map((title) => ({ title, body: '', url: inbox })),
+			messages: legacy.lines.map((title) => ({ title, body: '', url: home })),
 			duringQuiet: true
 		};
 	}
@@ -309,12 +283,12 @@ export abstract class PollerAlerts extends PollerBase {
 		this.transaction(() => {
 			for (const m of logged)
 				this.run(
-					'INSERT INTO alerts (sent_at, title, body, url, thread_id) VALUES (?, ?, ?, ?, ?)',
+					'INSERT INTO alerts (sent_at, title, body, url, item_key) VALUES (?, ?, ?, ?, ?)',
 					now,
 					m.title,
 					m.body,
 					m.url,
-					m.tag && !NON_THREAD_TAGS.has(m.tag) ? (m.threadIds?.[0] ?? null) : null
+					isItemKey(m.tag) ? m.tag : null
 				);
 			this.run('DELETE FROM alerts WHERE sent_at < ?', now - ALERT_LOG_KEEP);
 		});
@@ -330,12 +304,12 @@ function digestOf(
 ): PushMessage {
 	const noun = count === 1 ? 'alert' : 'alerts';
 	return {
-		title: duringQuiet ? `${count} ${noun} while quiet` : `${count} things need you`,
+		title: duringQuiet ? `${count} ${noun} while quiet` : `${count} ${noun}`,
 		body: messages
 			.slice(-DIGEST_LINES)
 			.map((m) => m.title)
 			.join('\n'),
-		url: `${origin}/inbox`,
+		url: `${origin}/`,
 		tag: 'digest'
 	};
 }

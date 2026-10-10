@@ -87,6 +87,6 @@ Both apps bring a finished thread back when there is new activity, and in both, 
 - [octobox/octobox on GitHub](https://github.com/octobox/octobox): README, AGPL-3.0 license, thread view, desktop use
 - [Octobox installation guide](https://github.com/octobox/octobox/blob/main/docs/INSTALLATION.md): self-hosting, GitHub App, GitHub Enterprise, live updates
 - [Octobox releases](https://github.com/octobox/octobox/releases): "october-2026", 1 October 2026
-- Hush: [inbox](/docs/inbox), [peek](/docs/peek), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
+- Hush: [views](/docs/views), [peek](/docs/peek), [notifications](/docs/notifications), [privacy](/privacy), [pricing](/pricing)
 
 _Last checked: 3 October 2026._

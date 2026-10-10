@@ -83,9 +83,9 @@ describe('settings schema', () => {
 		expect(check({ nope: 1 })).toMatch(/Unknown setting "nope"/);
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);
-		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
-		expect(check({ newCommitsAfterReview: 'changes_requested' })).toBeNull();
-		expect(check({ newCommitsAfterReview: 'x' })).toMatch(/changes_requested/);
+		expect(check({ reviewResolution: 'strict' } as never)).toMatch(
+			/Unknown setting "reviewResolution"/
+		);
 		expect(check({ views: [{ id: 'a', name: 'A', searches: [] }] })).toMatch(/"A"/);
 		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
 		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toBeNull();
@@ -111,20 +111,23 @@ describe('category groups', () => {
 });
 
 describe('swipe settings', () => {
-	it('keeps the other side and list when you change one', () => {
-		const s = mergeSettings(DEFAULT_SETTINGS, { swipe: { inbox: { left: 'mute' } } } as never);
-		expect(s.swipe.dash).toEqual(DEFAULT_SETTINGS.swipe.dash);
+	it('keeps the other side when you change one, and drops the inbox swipes', () => {
+		const s = mergeSettings(DEFAULT_SETTINGS, { swipe: { dash: { left: 'read' } } } as never);
 		expect(validateSettings(s, ['swipe'])).toBeNull();
+		expect(parseSettings(JSON.stringify({ swipe: s.swipe })).swipe.dash).toEqual({
+			right: 'snooze',
+			left: 'read'
+		});
 		const parsed = parseSettings(JSON.stringify({ swipe: { inbox: { left: 'mute' } } }));
-		expect(parsed.swipe.inbox).toEqual({ right: 'done', left: 'mute' });
+		expect(parsed.swipe).toEqual(DEFAULT_SETTINGS.swipe);
 	});
 
 	it('refuses unknown actions and sides', () => {
 		const check = (swipe: unknown) =>
 			validateSettings({ ...DEFAULT_SETTINGS, swipe } as never, ['swipe']);
-		expect(check({ inbox: { left: 'mute', right: 'done' } })).toBeNull();
-		expect(check({ inbox: { left: 'merge', right: 'done' } })).toMatch(/swipe.inbox.left/);
-		expect(check({ inbox: { up: 'done' } })).toMatch(/left.*right/);
-		expect(check({ nope: {} })).toMatch(/swipe.nope/);
+		expect(check({ dash: { left: 'mute', right: 'snooze' } })).toBeNull();
+		expect(check({ dash: { left: 'merge', right: 'snooze' } })).toMatch(/swipe.dash.left/);
+		expect(check({ dash: { up: 'snooze' } })).toMatch(/left.*right/);
+		expect(check({ inbox: {} })).toMatch(/swipe.inbox/);
 	});
 });

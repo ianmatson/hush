@@ -9,7 +9,7 @@ import type {
 	TeamDTO
 } from '../src/lib/shared/types';
 import { newestFirst, SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
-import { isBot } from '../src/lib/shared/classify';
+import { isBot } from '../src/lib/shared/bots';
 import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
@@ -177,20 +177,8 @@ export async function listNotifications(
 	};
 }
 
-export const markThreadRead = (token: string, id: string) =>
-	gh(token, `/notifications/threads/${encodeURIComponent(id)}`, { method: 'PATCH' });
-
-export const markThreadDone = (token: string, id: string) =>
-	gh(token, `/notifications/threads/${encodeURIComponent(id)}`, { method: 'DELETE' });
-
-export const muteThread = (token: string, id: string) =>
-	gh(token, `/notifications/threads/${encodeURIComponent(id)}/subscription`, {
-		method: 'PUT',
-		body: JSON.stringify({ ignored: true })
-	});
-
 // ---------------------------------------------------------------------------
-// PR and issue facts: one fragment set and one parser for every read (inbox enrichment, watcher,
+// PR and issue facts: one fragment set and one parser for every read (notification poll,
 // dashboard search, quick check, peek), so every view sees the same facts (see SubjectFacts).
 
 const CHUNK = 40;

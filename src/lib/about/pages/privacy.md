@@ -3,13 +3,13 @@ title: Privacy
 description: What Hush stores about you, where it keeps it, who else sees it, and how to delete all of it.
 ---
 
-Hush is a small open-source app. It reads your GitHub notifications so that it can sort them for you, and that is all it uses your data for. It has no ads and no analytics, and it does not sell or share your data. Everything below is also in [the source code](https://github.com/ianmatson/hush).
+Hush is a small open-source app. It runs your GitHub searches and reads your GitHub notifications so that it can show your lists and push what changed, and that is all it uses your data for. It has no ads and no analytics, and it does not sell or share your data. Everything below is also in [the source code](https://github.com/ianmatson/hush).
 
-_Last updated: 7 October 2026._
+_Last updated: 9 October 2026._
 
 ## The short version
 
-- Hush stores only what it needs to sort your notifications and show your lists.
+- Hush stores only what it needs to show your lists and push what changed.
 - Your GitHub token is encrypted. It never goes to your browser.
 - Nobody else gets your data, except the services that Hush runs on, and TypeSafe unless you turn off smart decisions (below).
 - **Delete account** deletes all of it at once.
@@ -22,13 +22,13 @@ _Last updated: 7 October 2026._
 - Your GitHub token, encrypted, and its scopes. If you add a [custom token](/docs/github-access#custom-token), that one too.
 - Your [settings](/docs/settings).
 
-**What it needs to sort your notifications:**
+**What it needs to show your lists:**
 
-- Your notification threads: the repository, the title, the link, why GitHub notified you, read or unread, and what you did with it (Done, Snoozed, Muted).
-- For each pull request and issue behind them: its state, author, labels, CI result, reviews and review requests, size, the first 500 characters of its description, and the 2 newest comments (their author, time, and text).
+- For each GitHub notification: its id and when it last changed, for 30 days. Hush uses this to find the new ones.
+- For each pull request and issue in your lists or notifications: its state, author, labels, CI result, reviews and review requests, size, the first 500 characters of its description, and the 2 newest comments (their author, time, and text).
 - Unless you turn off [smart decisions](/docs/settings#smartdecisions): Jev's answers for each pull request and issue (whether the newest comments need a reply from you, how urgent it is, which categories fit it, and which of your `about:` conditions it matches), and how many tokens your account used today.
 - The categories of your pull requests and issues, and the ones that you chose by hand.
-- The results of your Pull requests and Issues searches, and the items that you hid or moved there.
+- The results of your searches, and the items that you snoozed or muted.
 - Your teams (their names), for team review requests.
 
 Hush does not read code. The [peek](/docs/peek) shows a PR's whole description and all its comments when you open it; Hush gets them from GitHub at that moment and does not keep them.
@@ -65,7 +65,7 @@ Hush deletes this when:
 
 ## Where it is kept
 
-Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your notifications, lists, settings, alerts, and devices are in a database of their own for your account (a Cloudflare Durable Object). Your account, sessions, and feeds are in one shared database (Cloudflare D1).
+Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your lists, settings, alerts, and devices are in a database of their own for your account (a Cloudflare Durable Object). Your account, sessions, and feeds are in one shared database (Cloudflare D1).
 
 ## Who else sees it
 
@@ -73,7 +73,7 @@ Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your notification
 - **Cloudflare**, which runs Hush and stores its data. Cloudflare also keeps request logs (addresses, status codes, and errors) for a few days, which Hush uses to find bugs.
 - **Slack**, if you connect it. Hush sends it your alerts, and, for mentions in the peek, a search for the PR or issue that you open.
 - **Your browser's push service** (Apple, Google, Mozilla, or Microsoft) carries each push to your device. The message is encrypted for your device, so the push service cannot read it; it sees only that a message went to it.
-- **TypeSafe**, unless you turn off [smart decisions](/docs/settings#smartdecisions) (on by default; turn it off in **Settings → Inbox → Defaults**). Hush sends TypeSafe's Jev model, through Cloudflare Workers AI, the title, repository, author, labels, first 500 characters of the description, and 2 newest comments of your pull requests and issues, your GitHub login, the text of your `about:` conditions, and the names and descriptions of your categories that have a description. Cloudflare lists Jev with zero data retention: TypeSafe does not keep what it reads. Turn smart decisions off to stop this; Hush then deletes Jev's answers.
+- **TypeSafe**, unless you turn off [smart decisions](/docs/settings#smartdecisions) (on by default; turn it off in **Settings → Categories → Smart decisions**). Hush sends TypeSafe's Jev model, through Cloudflare Workers AI, the title, repository, author, labels, first 500 characters of the description, and 2 newest comments of your pull requests and issues, your GitHub login, the text of your `about:` conditions, and the names and descriptions of your categories that have a description. Cloudflare lists Jev with zero data retention: TypeSafe does not keep what it reads. Turn smart decisions off to stop this; Hush then deletes Jev's answers.
 
 That is all. There are no analytics, tracking, or advertising services, and no third-party scripts on the site or in the app.
 
@@ -84,7 +84,7 @@ That is all. There are no analytics, tracking, or advertising services, and no t
 
 ## How long it is kept
 
-- Done threads with no activity for 30 days, and the PR and issue facts that nothing uses for 30 days, are deleted by themselves.
+- Notification records after 30 days, and the PR and issue facts that nothing uses for 30 days, are deleted by themselves.
 - Alerts, and the record of when each item pushed, are deleted after 30 days.
 - Everything else is kept until you delete your account. If you stop using Hush, it stops checking GitHub after 14 days (90 with push on), but it keeps your data until you delete it.
 
@@ -94,7 +94,7 @@ That is all. There are no analytics, tracking, or advertising services, and no t
 - To take back Hush's access to GitHub too, revoke Hush on GitHub: **Settings → Applications → Authorized OAuth Apps**.
 - **Export** in **Settings → General → Settings file** gives you your settings as a file.
 - Turn off push for a device, disconnect Slack, or turn off a feed, at any time.
-- Turn off [smart decisions](/docs/settings#smartdecisions) in **Settings → Inbox → Defaults** at any time. Hush then sends nothing more to TypeSafe, and deletes Jev's answers.
+- Turn off [smart decisions](/docs/settings#smartdecisions) in **Settings → Categories → Smart decisions** at any time. Hush then sends nothing more to TypeSafe, and deletes Jev's answers.
 
 ## Changes
 

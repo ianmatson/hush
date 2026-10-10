@@ -50,12 +50,12 @@ renameSync(join(app, shell), join(app, 'index.html'));
 writeFileSync(
 	join(app, '_redirects'),
 	[
-		'# The app starts at the inbox; every other path gets the app shell (SPA fallback).',
-		'/ /inbox 302',
-		'# Pages of the reverted "lanes" layout.',
-		'/turn /inbox 301',
-		'/waiting /inbox 301',
-		'/updates /inbox 301',
+		'# The app starts at your start view; every other path gets the app shell (SPA fallback).',
+		'/ /v 302',
+		'/inbox /v 301',
+		'/turn /v 301',
+		'/waiting /v 301',
+		'/updates /v 301',
 		''
 	].join('\n')
 );
@@ -122,8 +122,10 @@ writeFileSync(join(site, '_headers'), `/*\n${SECURITY(csp)}${IMMUTABLE}`);
 writeFileSync(
 	join(site, '_redirects'),
 	[
-		'/docs/your-turn /docs/inbox 301',
-		'/docs/your-turn.md /docs/inbox.md 301',
+		'/docs/your-turn /docs/pull-requests-and-issues 301',
+		'/docs/your-turn.md /docs/pull-requests-and-issues.md 301',
+		'/docs/inbox /docs/views 301',
+		'/docs/inbox.md /docs/views.md 301',
 		'/docs/where-hush-looks /docs/pull-requests-and-issues 301',
 		'/docs/where-hush-looks.md /docs/pull-requests-and-issues.md 301',
 		''

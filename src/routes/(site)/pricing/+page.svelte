@@ -50,7 +50,7 @@
 		</section>
 
 		<p class="now">
-			<a class="open" href="{APP_URL}/inbox">Open Hush, free during the beta</a>
+			<a class="open" href="{APP_URL}/v">Open Hush, free during the beta</a>
 		</p>
 
 		<section class="faq">

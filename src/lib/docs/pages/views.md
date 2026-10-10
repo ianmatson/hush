@@ -3,7 +3,7 @@ title: Views
 description: The tabs in the top bar. Each view shows the open pull requests and issues that its GitHub searches find.
 ---
 
-A **view** is a tab in the top bar. It shows the open pull requests and issues that its [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests) find. Hush starts with one view, **Mine**: the work that involves you.
+A **view** is a tab in the top bar, at `/v/<id>`. It shows the open pull requests and issues that its [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests) find. Hush starts with one view, **Mine**: the work that involves you.
 
 {{ref:views}}
 
@@ -53,7 +53,7 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 
 ## In a view
 
-- At the top, a switch shows **Pull requests** or **Issues**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
+- At the top, a switch shows **Pull requests**, **Issues**, or **Both**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
 - The list puts the items into sections, by the view's Group by. See [Pull requests and issues](/docs/pull-requests-and-issues#group-by).
 - The pencil button next to the switch opens the view in **Settings → Views**.
 - A view has no filter box. To find an item, press {{key:palette}} or {{key:list.search}} to search.
@@ -61,9 +61,21 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 - {{key:dash.view.1}} to {{key:dash.view.9}} open your first nine views.
 - On a narrow window, views that do not fit go in **More**. On a phone, the top bar is one menu.
 
-## Views and the inbox
+## Your start view
 
-The [inbox](/docs/inbox#what-comes-in) gets only the notifications about the pull requests and issues of your views. When the searches of all your views stop finding an item (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more, so its last notifications still come in. When you change your views, Hush stops at once to track the items that no view finds now, and removes their notifications.
+Hush opens your start view when you open the app (`app.hush-gh.com` or `/v`). By default, this is your first view. To change it, go to **Settings → General → Appearance → Start page**, and choose a view. This browser remembers the choice.
+
+## Views and GitHub notifications
+
+Hush tracks the pull requests and issues that your views find. Your GitHub notifications are only a signal: they tell Hush quickly that a tracked item changed, and Hush then reads that item again.
+
+- Hush checks your notifications every few minutes. A notification about an item that no view finds is ignored.
+- A notification about an item that Hush does not track yet runs the searches of your views again, at most every 5 minutes. If a search finds the item now, Hush tracks it.
+- Some changes come with no notification, such as CI results or your own review. The next search of your views finds them, within about 15 minutes.
+- When the searches of all your views stop finding an item (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more.
+- When you change your views, Hush stops at once to track the items that no view finds now.
+
+Hush never changes your notifications on GitHub: it does not mark them as read or done, and it does not unsubscribe you.
 
 ## Change or delete a view
 

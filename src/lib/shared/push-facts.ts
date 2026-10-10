@@ -153,7 +153,8 @@ export function itemPush(
 	me: string,
 	myTeams: Set<string>,
 	since: number,
-	now: number
+	now: number,
+	extra: FactEvent[] = []
 ): ItemPush | null {
 	if (mark?.updatedAt === MUTED_AT) return null;
 	if (mark?.snoozeEvent) {
@@ -175,7 +176,9 @@ export function itemPush(
 			};
 		}
 	} else if (mark && mark.snoozedUntil !== null && now < mark.snoozedUntil) return null;
-	const events = factEvents(before, after, me, myTeams, since).filter((e) => wanted.has(e.fact));
+	const events = [...factEvents(before, after, me, myTeams, since), ...extra].filter((e) =>
+		wanted.has(e.fact)
+	);
 	if (!events.length) return null;
 	return { reason: events[0].fact, title: events.map((e) => e.title).join(' · ') };
 }

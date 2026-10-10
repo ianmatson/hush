@@ -14,21 +14,16 @@
 	} from '$lib/shared/menus';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
-	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Command from '$lib/components/ui/command';
 	import SortableList from '$lib/components/app/sortable-list.svelte';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
-	import Check from '@lucide/svelte/icons/check';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
-	import Undo from '@lucide/svelte/icons/undo-2';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import Link from '@lucide/svelte/icons/link';
 	import SquareCheck from '@lucide/svelte/icons/square-check';
-	import Zap from '@lucide/svelte/icons/zap';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
-	import ListFilter from '@lucide/svelte/icons/list-filter';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -44,13 +39,12 @@
 	const toRows = (ids: string[]): Row[] =>
 		ids.map((id) => ({ id, key: id === SEP ? `sep-${nextKey++}` : id }));
 
-	let kind = $state<MenuKind>('inbox');
-	let draft = $state<Record<MenuKind, Row[]>>({ inbox: [], dash: [] });
+	const kind: MenuKind = 'dash';
+	let draft = $state<Record<MenuKind, Row[]>>({ dash: [] });
 	const ids = (k: MenuKind) => draft[k].map((r) => r.id);
 	let dirty = $state(false);
 	let saving = $state(false);
-	const load = (s: { inbox: string[]; dash: string[] }) =>
-		(draft = { inbox: toRows(s.inbox), dash: toRows(s.dash) });
+	const load = (s: { dash: string[] }) => (draft = { dash: toRows(s.dash) });
 	// Fill the editor once the settings arrive, and after each save.
 	$effect(() => {
 		const s = saved;
@@ -63,39 +57,26 @@
 		peek: PanelRightOpen,
 		main: ExternalLink,
 		github: ExternalLink,
-		done: Check,
 		snooze: AlarmClock,
 		mute: BellOff,
-		restore: Undo,
 		read: MailOpen,
 		copy: Link,
 		select: SquareCheck,
-		selectAll: SquareCheck,
-		rule: ListFilter
+		selectAll: SquareCheck
 	};
-	const iconOf = (id: string) =>
-		ICONS[id] ??
-		(id.startsWith('snooze:') ? AlarmClock : id.startsWith('until:') ? Zap : ArrowRightLeft);
+	const iconOf = (id: string) => ICONS[id] ?? ArrowRightLeft;
 	const info = (id: string) => MENU_ITEMS[kind].find((i) => i.id === id);
 	/** Preview labels: what the menu says for a typical item. */
 	const PREVIEW: Record<string, string> = {
 		main: 'Review',
 		snooze: 'Snooze',
-		restore: 'Move to inbox',
 		read: 'Mark as read',
 		select: 'Select'
 	};
 	const SUBMENUS = new Set(['snooze']);
 
 	const unused = $derived(MENU_ITEMS[kind].filter((i) => !ids(kind).includes(i.id)));
-	// The preview shows a typical open thread: "Needs you" in the inbox.
-	const NOT_TYPICAL = new Set(['restore']);
-	const preview = $derived(
-		tidySeparators(
-			ids(kind).filter((id) => !NOT_TYPICAL.has(id)),
-			(id) => id === SEP
-		)
-	);
+	const preview = $derived(tidySeparators(ids(kind), (id) => id === SEP));
 
 	function set(list: Row[]) {
 		draft[kind] = list;
@@ -108,7 +89,6 @@
 		saving = true;
 		// Separators at the ends or next to each other do nothing; save the tidy list.
 		const menus = {
-			inbox: tidySeparators(ids('inbox'), (id) => id === SEP),
 			dash: tidySeparators(ids('dash'), (id) => id === SEP),
 			v: MENUS_VERSION
 		};
@@ -192,20 +172,13 @@
 	</div>
 
 	{#if saved}
-		<Tabs.Root bind:value={kind}>
-			<Tabs.List>
-				<Tabs.Trigger value="inbox">Inbox</Tabs.Trigger>
-				<Tabs.Trigger value="dash">PRs & issues</Tabs.Trigger>
-			</Tabs.List>
-		</Tabs.Root>
-
 		<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>In the menu</Card.Title>
 					<Card.Description
-						>Drag a row, or press ↑ ↓ on its grip. Items that do not apply to a thread still stay
-						out of its menu, for example Done in the Done view.</Card.Description
+						>Drag a row, or press ↑ ↓ on its grip. Items that do not apply to an item still stay out
+						of its menu, for example “Open on GitHub” when it is the main action.</Card.Description
 					>
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-4">
@@ -274,7 +247,7 @@
 					{/each}
 				</div>
 				<p class="text-xs text-muted-foreground">
-					For one open thread. With a selection, most items act on all of it.
+					For one pull request. With a selection, most items act on all of it.
 				</p>
 			</div>
 		</div>

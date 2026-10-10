@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newChanges, saidBy, whyAddsInfo } from './badges';
+import { newChanges, saidBy } from './badges';
 import type { Change } from './types';
 
 const c = (kind: Change['kind'], text: string): Change => ({ kind, text, tone: null });
@@ -40,19 +40,5 @@ describe('newChanges', () => {
 	});
 	it('leaves out a change with the same text', () => {
 		expect(newChanges([c('state', 'Merged')], new Set(), ['merged'])).toEqual([]);
-	});
-});
-
-describe('whyAddsInfo', () => {
-	it('hides a why tag the summary already says', () => {
-		expect(whyAddsInfo('Review requested', '@alice requests your review')).toBe(false);
-		expect(whyAddsInfo('You were mentioned', '@alice mentioned you')).toBe(false);
-		expect(whyAddsInfo('You opened this', 'CI failed on your PR')).toBe(false);
-		expect(whyAddsInfo('Assigned to you', 'An issue was assigned to you')).toBe(false);
-	});
-	it('keeps a why tag that says more', () => {
-		expect(whyAddsInfo('Watching repo', 'New release')).toBe(true);
-		expect(whyAddsInfo('You commented', '@bob replied')).toBe(true);
-		expect(whyAddsInfo('Team mentioned', 'PR activity')).toBe(true);
 	});
 });
