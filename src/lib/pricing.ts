@@ -24,10 +24,10 @@ export const PLANS: Plan[] = [
 
 /** What every plan has: all of Hush. */
 export const INCLUDED = [
-	'Your inbox, sorted into Needs you and FYI',
-	'Pull requests and issues by whose turn it is',
-	'Push on every device, with quiet hours',
-	'Rules, notification views, and feeds',
+	'Views of your pull requests and issues, from your own searches',
+	'Group by role, status, project, category, or your own sections',
+	'Push for the facts that you choose, with quiet hours and digests',
+	'Categories by rule or by Jev, and feeds',
 	'Approve, comment, and merge from Hush',
 	'Every setting in one settings.json'
 ];

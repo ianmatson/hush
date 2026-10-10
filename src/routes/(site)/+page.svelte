@@ -1,20 +1,17 @@
-<script module lang="ts">
-	const GITHUB_MARK =
-		'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z';
-</script>
-
 <script lang="ts">
+	import { GITHUB_MARK } from '$lib/components/site/github-mark';
 	import '@fontsource-variable/newsreader/opsz-italic.css';
 	import Layers from '@lucide/svelte/icons/layers';
-	import BellOff from '@lucide/svelte/icons/bell-off';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import Timer from '@lucide/svelte/icons/timer';
 	import Moon from '@lucide/svelte/icons/moon';
+	import Check from '@lucide/svelte/icons/check';
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
 	import HeroDemo from '$lib/components/site/landing/hero-demo.svelte';
-	import NoiseSort from '$lib/components/site/landing/noise-sort.svelte';
+	import QueryStage from '$lib/components/site/landing/query-stage.svelte';
+	import GroupGallery from '$lib/components/site/landing/group-gallery.svelte';
 	import QuietPhone from '$lib/components/site/landing/quiet-phone.svelte';
 	import RuleStage from '$lib/components/site/landing/rule-stage.svelte';
-	import DashTurns from '$lib/components/site/landing/dash-turns.svelte';
 	import KeysSwipe from '$lib/components/site/landing/keys-swipe.svelte';
 	import PeekActions from '$lib/components/site/landing/peek-actions.svelte';
 	import { PRICING_NOTE } from '$lib/pricing';
@@ -23,18 +20,30 @@
 
 	const SIGN_IN_URL = `${APP_URL}/login`;
 	const DESCRIPTION =
-		'Hush for GitHub is an open-source web app that keeps the clutter out of your GitHub notifications: a short Needs you list sorted by whose turn it is, categories and views that you control, and approve, comment, and merge from the inbox.';
+		'Hush for GitHub is an open-source web app for the pull requests and issues that you work on: GitHub searches that stay live as views, grouped your way, with pushes for the facts that you choose, and a side panel to approve, comment, and merge.';
+
+	const FACTS = [
+		{ name: 'Review requested', on: true },
+		{ name: 'Mentioned', on: true },
+		{ name: 'Replied', on: true },
+		{ name: 'Approved', on: true },
+		{ name: 'Changes requested', on: true },
+		{ name: 'CI failed', on: true },
+		{ name: 'Assigned', on: true },
+		{ name: 'CI passed', on: false },
+		{ name: 'New in a view', on: false }
+	];
 
 	const CALM = [
 		{
 			icon: Layers,
-			title: 'One alert for each PR',
-			text: 'A review request, a CI failure, and a reply on the same PR share one alert.'
+			title: 'One push for each item',
+			text: 'An item pushes once, then waits until you open it.'
 		},
 		{
-			icon: BellOff,
-			title: 'No repeats until you look',
-			text: 'An item pushes once, then waits until you open Hush or act on it.'
+			icon: AlarmClock,
+			title: 'Snooze until it happens',
+			text: 'Snooze until CI passes or a review comes in. Hush pushes when it does.'
 		},
 		{
 			icon: Timer,
@@ -51,7 +60,7 @@
 	const FAQ: FaqItem[] = [
 		{
 			question: 'What is Hush for GitHub?',
-			answerHtml: `Hush is a web app for your GitHub notifications. It reads the pull request or issue behind each one, decides whose turn it is, and keeps a short <b>Needs you</b> list. You can read, approve, comment, and merge from it, and get a push only for what waits on you.`
+			answerHtml: `Hush is a web app for the pull requests and issues that you work on. Each <a href="/docs/views">view</a> is a GitHub search that stays live, grouped your way. Hush shows whose turn it is on each item, pushes only the facts that you choose, and lets you read, approve, comment, and merge in a side panel.`
 		},
 		{
 			question: 'Is it free?',
@@ -62,12 +71,16 @@
 			answerHtml: `You sign in with GitHub. Hush asks for the <code>notifications</code>, <code>repo</code>, <code>read:org</code>, and <code>project</code> scopes, because GitHub’s Notifications API accepts only classic scopes. Hush stores the token encrypted, and it acts on GitHub only when you do. See <a href="/docs/github-access">GitHub access</a> and <a href="/security">security</a>.`
 		},
 		{
+			question: 'Does it change my GitHub notifications?',
+			answerHtml: `No. Hush reads your notifications only to see what changed, and it never marks them read or done. Snooze, mute, and unread stay in Hush. See <a href="/docs/views#views-and-github-notifications">views and GitHub notifications</a>.`
+		},
+		{
 			question: 'Does my org need to approve it?',
 			answerHtml: `Only if your org allows just the OAuth apps that an owner approved. Until an owner approves Hush, GitHub hides that org from it. Choose <b>Request approval</b> after you sign in, or, until then, give Hush a custom token, such as the one from <code>gh auth token</code>. See <a href="/docs/github-access#when-an-org-is-missing">when an org is missing</a>.`
 		},
 		{
 			question: 'Does it work on my phone?',
-			answerHtml: `Yes. Hush is a web app that you can install, with push alerts on each device where you turn them on. On iPhone and iPad, push works only after you add Hush to the Home Screen (iOS 16.4 or later): Share, then <b>Add to Home Screen</b>. See <a href="/docs/notifications">notifications</a>.`
+			answerHtml: `Yes. Hush is a web app that you can install, with push alerts on each device where you turn them on. On iPhone and iPad, push works only after you add Hush to the Home Screen (iOS 16.4 or later): <b>Share</b>, then <b>Add to Home Screen</b>. See <a href="/docs/notifications">notifications</a>.`
 		},
 		{
 			question: 'Is it open source? Can I host it myself?',
@@ -75,13 +88,13 @@
 		},
 		{
 			question: 'How is it different from GitHub’s own inbox?',
-			answerHtml: `GitHub lists every notification by time. Hush sorts them by who must act next, pushes only what needs you, and lets you act from a side panel. You can use both: Hush marks threads read and done on GitHub too. See <a href="/compare/github-notifications">Hush vs. GitHub notifications</a> and <a href="/compare">other tools</a>.`
+			answerHtml: `GitHub’s inbox lists notifications by time. Hush starts from your work instead: searches that you choose, grouped by your role, status, a project board, or your own sections, with whose turn it is on each item. It pushes only the facts that you turn on. Use both: Hush never changes GitHub’s inbox. See <a href="/compare/github-notifications">Hush vs. GitHub notifications</a> and <a href="/compare">other tools</a>.`
 		}
 	];
 </script>
 
 <SiteMeta
-	title="Hush for GitHub · Keep the clutter out of your GitHub notifications"
+	title="Hush for GitHub · Views of your PRs and issues, with pushes for what changed"
 	description={DESCRIPTION}
 	path="/"
 	structuredData={[websiteData(), softwareData(), faqData(FAQ)]}
@@ -90,11 +103,11 @@
 <div class="page">
 	<section class="hero" aria-labelledby="hero-title">
 		<div class="wrap hero-copy">
-			<h1 id="hero-title">See what needs you on GitHub. <em>Then get it done.</em></h1>
+			<h1 id="hero-title">Your GitHub work, <em>in views you define.</em></h1>
 			<p class="lede">
-				Hush for GitHub is an open-source web app that reads the pull request or issue behind each
-				GitHub notification, keeps a short list of what needs you, and lets you approve, comment,
-				and merge without leaving it.
+				Hush keeps your GitHub searches live as views. It groups them by your role, status, project,
+				or your own sections, and pushes only the facts that you choose: a review request, failing
+				CI, a reply.
 			</p>
 			<div class="ctas">
 				<a class="button" href={SIGN_IN_URL}>
@@ -112,33 +125,66 @@
 		</div>
 	</section>
 
-	<section class="band tint" aria-labelledby="noise-title">
-		<div class="wrap">
-			<div class="intro center">
-				<h2 id="noise-title">47 notifications. <em>Five need you.</em></h2>
+	<section class="band tint" aria-labelledby="query-title">
+		<div class="wrap split">
+			<div class="intro">
+				<h2 id="query-title">A view is a search <em>that stays live.</em></h2>
 				<p>
-					Hush reads the PR or issue behind each notification, and puts it where it belongs: <b
-						>Needs you</b
-					>
-					when you are next to act, <b>FYI</b> when you only want to know, and muted when you say so.
+					Write a search with GitHub’s words, such as <code>review-requested:@me</code>, and add
+					Hush’s own: <code>size:&lt;100</code>, <code>-author:bots</code>, or a category. GitHub
+					runs its part, and Hush checks the rest.
 				</p>
+				<p>
+					The view stays current. When GitHub sends a notification about an item, Hush reads it
+					again. Write <code>@today-14d</code> and the date moves with you.
+				</p>
+				<a class="link" href="/docs/query-language"
+					>The query language <span aria-hidden="true">→</span></a
+				>
 			</div>
-			<NoiseSort />
+			<QueryStage />
 		</div>
 	</section>
 
-	<section class="band" aria-labelledby="calm-title">
+	<section class="band" aria-labelledby="group-title">
+		<div class="wrap">
+			<div class="intro center">
+				<h2 id="group-title">Group it <em>your way.</em></h2>
+				<p>
+					Each view puts its list into sections: by your role, by where the review stands, by the
+					columns of a project board, by a category, or by sections that you write yourself. Each
+					row says whose turn it is, and work that waits too long turns amber.
+				</p>
+				<a class="link" href="/docs/pull-requests-and-issues#group-by"
+					>How Group by works <span aria-hidden="true">→</span></a
+				>
+			</div>
+			<GroupGallery />
+		</div>
+	</section>
+
+	<section class="band tint" aria-labelledby="calm-title">
 		<div class="wrap">
 			<div class="calm">
 				<div class="calm-phone">
 					<QuietPhone />
 				</div>
 				<div class="calm-copy">
-					<h3 id="calm-title">A push only when it is your turn.</h3>
+					<h3 id="calm-title">A push for the facts <em>that you choose.</em></h3>
 					<p class="sub">
-						Busy PRs change all day. Hush keeps them from buzzing your phone each time.
+						Turn on the facts that matter to you. A view can push its new items too. Everything else
+						stays quiet.
 					</p>
-					<ul>
+					<ul class="facts" aria-label="Facts that can push">
+						{#each FACTS as fact (fact.name)}
+							<li class:on={fact.on}>
+								{#if fact.on}<Check size={12} aria-hidden="true" />{/if}
+								{fact.name}
+								<span class="sr-only">{fact.on ? '(on)' : '(off)'}</span>
+							</li>
+						{/each}
+					</ul>
+					<ul class="calm-list">
 						{#each CALM as item (item.title)}
 							<li>
 								<item.icon size={18} aria-hidden="true" />
@@ -146,44 +192,10 @@
 							</li>
 						{/each}
 					</ul>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<section class="config tint" aria-labelledby="config-title">
-		<div class="wrap">
-			<div class="split">
-				<div class="intro">
-					<h2 id="config-title">Sorted <em>your way.</em></h2>
-					<p>
-						Give a category a one-line rule, such as <code>author:dependabot*</code>, or a few words
-						that Jev reads to sort your PRs and issues. Save any filter as its own tab. Change every
-						key, menu, and swipe. All of it lives in one <code>settings.json</code> that you can edit,
-						export, or hand to an agent.
-					</p>
-					<a class="link" href="/docs/categories"
-						>How categories work <span aria-hidden="true">→</span></a
+					<a class="link" href="/docs/notifications#what-gets-pushed"
+						>What gets pushed <span aria-hidden="true">→</span></a
 					>
 				</div>
-				<RuleStage />
-			</div>
-
-			<div class="duo">
-				<figure class="wide-fig">
-					<DashTurns />
-					<figcaption>
-						<b>Pull requests and issues, by whose turn it is.</b> Each section is a GitHub search that
-						you choose. Work that waits too long turns amber.
-					</figcaption>
-				</figure>
-				<figure>
-					<KeysSwipe />
-					<figcaption>
-						<b>Your keys, your swipes.</b> Every command has a key that you can change. On a phone, swipe
-						a row to finish it.
-					</figcaption>
-				</figure>
 			</div>
 		</div>
 	</section>
@@ -192,15 +204,15 @@
 		<div class="wrap split reverse">
 			<PeekActions />
 			<div class="intro">
-				<h2 id="act-title">Approve, reply, merge. <em>From the inbox.</em></h2>
+				<h2 id="act-title">Approve, reply, merge. <em>Without leaving.</em></h2>
 				<p>
-					Press <kbd>Space</kbd> to peek at a thread: the checks, the reviews, and the conversation. Approve,
-					request changes, comment with @mentions, # links, and :emoji, or merge. Your draft waits if
-					you close it.
+					Press <kbd>Space</kbd> to peek at a pull request or issue: the checks, the reviews, the files,
+					and the conversation. Approve, request changes, comment with @mentions, # links, and :emoji,
+					or merge. Your draft waits if you close it.
 				</p>
 				<p>
-					Finished? <kbd>E</kbd> for Done, <kbd>S</kbd> to snooze, <kbd>M</kbd> to mute. On Chrome, Edge,
-					and Android, push alerts have Done and Snooze buttons too.
+					Not now? <kbd>S</kbd> snoozes until there is new activity, <kbd>M</kbd> mutes, and
+					<kbd>U</kbd> marks it unread. They stay in Hush.
 				</p>
 				<p class="note">Hush writes to GitHub only when you do.</p>
 				<a class="link" href="/docs/peek"
@@ -210,7 +222,45 @@
 		</div>
 	</section>
 
-	<section class="open tint" aria-labelledby="open-title">
+	<section class="config tint" aria-labelledby="config-title">
+		<div class="wrap">
+			<div class="split">
+				<div class="intro">
+					<h2 id="config-title">Categories, <em>by rule or by Jev.</em></h2>
+					<p>
+						Give each item an effort and an impact, or any group of categories that you make. A
+						category takes a one-line rule, such as <code>author:dependabot*</code>, or a few words
+						that Jev, a decision model, reads to place your PRs and issues. Group a view by a
+						category, or use <code>category:</code> in a search.
+					</p>
+					<a class="link" href="/docs/categories"
+						>How categories work <span aria-hidden="true">→</span></a
+					>
+				</div>
+				<RuleStage />
+			</div>
+
+			<div class="duo">
+				<div class="intro">
+					<h3>Shape every part.</h3>
+					<p>
+						Every command has a key that you can change, and every menu and swipe is yours to order.
+						Views, categories, keys, and pushes all live in one <code>settings.json</code> that you can
+						edit, export, or hand to an agent.
+					</p>
+					<a class="link" href="/docs/settings">settings.json <span aria-hidden="true">→</span></a>
+				</div>
+				<figure>
+					<KeysSwipe />
+					<figcaption>
+						<b>Your keys, your swipes.</b> On a phone, swipe a row to snooze it.
+					</figcaption>
+				</figure>
+			</div>
+		</div>
+	</section>
+
+	<section class="open" aria-labelledby="open-title">
 		<div class="wrap open-grid">
 			<h2 id="open-title">Open source. <em>Free while in beta.</em></h2>
 			<div class="open-copy">
@@ -232,7 +282,7 @@
 		</div>
 	</section>
 
-	<section class="faq" aria-labelledby="faq-title">
+	<section class="faq tint" aria-labelledby="faq-title">
 		<div class="wrap faq-grid">
 			<h2 id="faq-title">Questions</h2>
 			<div class="qs">
@@ -246,9 +296,9 @@
 		</div>
 	</section>
 
-	<section class="final tint" aria-labelledby="final-title">
+	<section class="final" aria-labelledby="final-title">
 		<div class="wrap center">
-			<h2 id="final-title">Five things need you. <em>Start there.</em></h2>
+			<h2 id="final-title">Start with one view. <em>Make it yours.</em></h2>
 			<div class="ctas">
 				<a class="button" href={SIGN_IN_URL}>
 					<svg viewBox="0 0 16 16" aria-hidden="true"><path d={GITHUB_MARK} /></svg>
@@ -455,10 +505,6 @@
 		color: var(--muted-foreground);
 		text-wrap: pretty;
 	}
-	.intro b {
-		font-weight: 550;
-		color: var(--foreground);
-	}
 
 	.calm {
 		display: grid;
@@ -484,12 +530,12 @@
 		line-height: 1.55;
 		color: var(--muted-foreground);
 	}
-	.calm ul {
+	.calm-list {
 		display: grid;
 		gap: 1.1rem;
 		margin-top: 0.75rem;
 	}
-	.calm li {
+	.calm-list li {
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
 		gap: 0.875rem;
@@ -497,15 +543,51 @@
 		line-height: 1.55;
 		color: var(--muted-foreground);
 	}
-	.calm li :global(svg) {
+	.calm-list li :global(svg) {
 		margin-top: 0.15rem;
 		color: var(--signal-review);
 	}
-	.calm li b {
+	.calm-list li b {
 		font-weight: 550;
 		color: var(--foreground);
 	}
 
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-top: 0.25rem;
+	}
+	.facts li {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.3rem 0.65rem;
+		border-radius: 999px;
+		border: 1px dashed color-mix(in oklab, var(--foreground) 18%, transparent);
+		font-size: 0.8125rem;
+		color: var(--muted-foreground);
+	}
+	.facts li.on {
+		border-style: solid;
+		border-color: color-mix(in oklab, var(--signal-review) 35%, transparent);
+		background: color-mix(in oklab, var(--signal-review) 10%, transparent);
+		color: var(--foreground);
+	}
+	.facts li.on :global(svg) {
+		color: var(--signal-review);
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.calm h3 em {
+		font-size: 1.06em;
+	}
 	.config {
 		padding: clamp(5.5rem, 11vw, 9rem) 0 clamp(4rem, 8vw, 6rem);
 	}
@@ -523,10 +605,10 @@
 	}
 	.duo {
 		display: grid;
-		grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-		align-items: start;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		align-items: center;
 		gap: clamp(2rem, 5vw, 4rem);
-		margin-top: clamp(2rem, 4vw, 3rem);
+		margin-top: clamp(4rem, 8vw, 6rem);
 	}
 	figure {
 		display: grid;

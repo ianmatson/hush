@@ -19,8 +19,8 @@
       "searches": ["repo:PostHog/posthog.com is:open"], "groupBy": "status" }
   ],
   "dash": { "staleDays": 5 },
-  "keys": { "inbox.done": ["d"] },
-  "swipe": { "inbox": { "right": "done" } }
+  "keys": { "dash.snooze": ["z"] },
+  "swipe": { "dash": { "right": "snooze" } }
 }`;
 
 	type TokenKind = 'key' | 'str' | 'lit' | 'punct' | 'plain';

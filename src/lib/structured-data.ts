@@ -6,7 +6,7 @@ export type JsonLd = Record<string, unknown>;
 const SCHEMA_CONTEXT = 'https://schema.org';
 
 export const SOFTWARE_DESCRIPTION =
-	'Hush for GitHub is an open-source web app that sorts GitHub notifications into what needs you and what is only FYI, shows whose turn it is on every pull request and issue, and pushes only what waits on you.';
+	'Hush for GitHub is an open-source web app for the pull requests and issues that you work on. Each view is a GitHub search that stays live, grouped by your role, status, a project board, or your own sections. Hush shows whose turn it is on each item and pushes only the facts that you choose.';
 
 export function websiteData(): JsonLd {
 	return {

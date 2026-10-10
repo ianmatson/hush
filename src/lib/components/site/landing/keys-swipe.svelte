@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Check from '@lucide/svelte/icons/check';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import MockAvatar from './mock-avatar.svelte';
 	import { DEMO_GH } from './demo-data';
 
@@ -7,9 +7,9 @@
 		{ cap: 'J', does: 'Next' },
 		{ cap: 'K', does: 'Previous' },
 		{ cap: 'Space', does: 'Peek', wide: true },
-		{ cap: 'E', does: 'Done' },
 		{ cap: 'S', does: 'Snooze' },
 		{ cap: 'M', does: 'Mute' },
+		{ cap: 'U', does: 'Unread' },
 		{ cap: '⌘K', does: 'Search', wide: true }
 	];
 </script>
@@ -24,7 +24,7 @@
 		{/each}
 	</div>
 	<div class="swipe">
-		<span class="under"><Check size={15} /> Done</span>
+		<span class="under"><AlarmClock size={15} /> Snooze</span>
 		<span class="row">
 			<MockAvatar person={DEMO_GH.ivanagas} size={1.375} />
 			<span class="line">
@@ -76,7 +76,7 @@
 		position: relative;
 		overflow: hidden;
 		border-radius: 0.875rem;
-		background: var(--signal-merge);
+		background: var(--signal-warn);
 	}
 	.under {
 		position: absolute;
