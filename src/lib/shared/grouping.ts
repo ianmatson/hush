@@ -1,4 +1,6 @@
-import type { CategoryGroup, DashItem, DashProject, GroupBy } from './types';
+import { itemQueryFacts } from './categories';
+import { queryMatches } from './rules';
+import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSection } from './types';
 
 export interface Section {
 	key: string;
@@ -11,6 +13,7 @@ export interface GroupContext {
 	me: string;
 	categoryGroups: CategoryGroup[];
 	projects?: DashProject[];
+	sections?: ViewSection[];
 }
 
 interface FixedGrouping {
@@ -21,6 +24,8 @@ interface FixedGrouping {
 export const NOT_SORTED_SECTION = 'Not sorted';
 export const NO_STATUS_SECTION = 'No status';
 export const NOT_IN_PROJECT_SECTION = 'Not in project';
+export const EVERYTHING_ELSE_SECTION = 'Everything else';
+export const CUSTOM_GROUP_BY: GroupBy = 'custom';
 const CATEGORY_PREFIX = 'category:';
 const PROJECT_PREFIX = 'project:';
 const sameLogin = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -96,7 +101,7 @@ const categoryGroupOf = (by: GroupBy, groups: CategoryGroup[]) =>
 		? groups.find((g) => g.id === by.slice(CATEGORY_PREFIX.length))
 		: undefined;
 
-export type GroupByKind = 'basic' | 'field' | 'category' | 'project';
+export type GroupByKind = 'basic' | 'field' | 'category' | 'project' | 'custom';
 
 export interface GroupByOption {
 	id: GroupBy;
@@ -124,9 +129,13 @@ export function projectsHolding(
 
 export function groupByOptions(
 	groups: CategoryGroup[],
-	projects: DashProject[] = []
+	projects: DashProject[] = [],
+	withCustom = false
 ): GroupByOption[] {
 	return [
+		...(withCustom
+			? [{ id: CUSTOM_GROUP_BY, label: 'Custom sections', kind: 'custom' as const }]
+			: []),
 		{ id: 'none', label: 'None', kind: 'basic' },
 		{ id: 'role', label: 'Your role', kind: 'basic' },
 		{ id: 'status', label: 'Status', kind: 'basic' },
@@ -151,14 +160,14 @@ export function groupByLabel(
 	groups: CategoryGroup[],
 	projects: DashProject[] = []
 ): string {
-	const option = groupByOptions(groups, projects).find((o) => o.id === by);
+	const option = groupByOptions(groups, projects, true).find((o) => o.id === by);
 	if (option) return option.label;
 	const projectKey = projectKeyOf(by);
 	return projectKey ? projectLabel(projectKey) : 'Status';
 }
 
 const VALID_GROUP_BY =
-	/^(none|role|status|repo|author|label|assignee|category:[a-z0-9-]{1,40}|project:[A-Za-z0-9-]{1,39}\/[1-9][0-9]{0,8})$/;
+	/^(none|role|status|repo|author|label|assignee|custom|category:[a-z0-9-]{1,40}|project:[A-Za-z0-9-]{1,39}\/[1-9][0-9]{0,8})$/;
 export const groupByOk = (v: unknown): v is GroupBy =>
 	typeof v === 'string' && VALID_GROUP_BY.test(v);
 
@@ -231,8 +240,25 @@ function projectSections(items: DashItem[], projectKey: string, project?: DashPr
 	return [...statusSections.values(), noStatus, notInProject].filter((s) => s.items.length);
 }
 
+function customSections(items: DashItem[], ctx: GroupContext): Section[] {
+	const rules = ctx.sections ?? [];
+	const named: Section[] = rules.map((s) => ({
+		key: `custom:${s.name}`,
+		label: s.name,
+		items: []
+	}));
+	const rest: Section = { key: EVERYTHING_ELSE_SECTION, label: EVERYTHING_ELSE_SECTION, items: [] };
+	for (const i of items) {
+		const facts = itemQueryFacts(i, ctx.me, ctx);
+		const k = rules.findIndex((s) => queryMatches(s.rule, facts));
+		(k < 0 ? rest : named[k]).items.push(i);
+	}
+	return [...named, rest].filter((s) => s.items.length);
+}
+
 export function groupItems(items: DashItem[], by: GroupBy, ctx: GroupContext): Section[] {
 	if (by === 'none') return items.length ? [{ key: 'all', label: '', items }] : [];
+	if (by === CUSTOM_GROUP_BY) return customSections(items, ctx);
 	if (by === 'role') return fixedSections(items, ROLE, ctx.me);
 	if (by === 'status') return fixedSections(items, STATUS, ctx.me);
 	if (by in FIELD_VALUE) return valueSections(items, by as Field);

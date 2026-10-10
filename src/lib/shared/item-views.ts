@@ -1,4 +1,4 @@
-import { groupByOk } from './grouping';
+import { CUSTOM_GROUP_BY, EVERYTHING_ELSE_SECTION, groupByOk } from './grouping';
 import { queryError, resolveToday, splitSearch } from './query';
 import { queryMatches } from './rules';
 import type { DashKind, DashSection, ItemView, RuleFacts } from './types';
@@ -8,6 +8,8 @@ export const MAX_VIEW_SEARCHES = 5;
 export const MAX_VIEW_NAME_CHARS = 40;
 export const MAX_SEARCH_CHARS = 256;
 export const MAX_SOURCE_COUNT_SEARCHES = 10;
+export const MAX_VIEW_SECTIONS = 10;
+export const MAX_SECTION_NAME_CHARS = 40;
 export const SOURCE_RESULTS_MAX = 100;
 const SORTS = /(?:^|\s)sort:/i;
 export const newestFirst = (query: string) =>
@@ -83,6 +85,32 @@ export function viewsPassingFilters(
 	return new Set(viewIds.filter((id) => [...(filtersByView.get(id) ?? [''])].some(passes)));
 }
 
+function sectionsError(v: Partial<ItemView>, checkRules: boolean): string | null {
+	const needsSections = v.groupBy === CUSTOM_GROUP_BY;
+	if (v.sections === undefined)
+		return needsSections ? `"${v.name}": add a section, or choose another Group by.` : null;
+	if (!Array.isArray(v.sections)) return `"${v.name}": "sections" must be a list.`;
+	if (needsSections && !v.sections.length)
+		return `"${v.name}": add a section, or choose another Group by.`;
+	if (v.sections.length > MAX_VIEW_SECTIONS)
+		return `"${v.name}": up to ${MAX_VIEW_SECTIONS} sections are allowed.`;
+	const names = new Set<string>();
+	for (const s of v.sections) {
+		if (typeof s?.name !== 'string' || !s.name.trim() || s.name.length > MAX_SECTION_NAME_CHARS)
+			return `"${v.name}": each section needs a name (${MAX_SECTION_NAME_CHARS} characters or fewer).`;
+		const name = s.name.trim().toLowerCase();
+		if (name === EVERYTHING_ELSE_SECTION.toLowerCase())
+			return `"${v.name}": "${EVERYTHING_ELSE_SECTION}" is always the last section. Give this one another name.`;
+		if (names.has(name)) return `"${v.name}": two sections are named "${s.name}".`;
+		names.add(name);
+		if (typeof s.rule !== 'string' || !s.rule.trim())
+			return `"${v.name}": the section "${s.name}" needs a rule.`;
+		const err = checkRules ? queryError(s.rule, 'section') : null;
+		if (err) return `"${v.name}", section "${s.name}": ${err}`;
+	}
+	return null;
+}
+
 function validateView(
 	v: Partial<ItemView> | null,
 	ids: Set<string>,
@@ -104,7 +132,9 @@ function validateView(
 		if (err) return `"${v.name}": ${err}`;
 	}
 	if (!groupByOk(v.groupBy))
-		return `"${v.name}": "groupBy" must be none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number>.`;
+		return `"${v.name}": "groupBy" must be none, role, status, repo, author, label, assignee, custom, category:<group id>, or project:<owner>/<number>.`;
+	const sectionsErr = sectionsError(v, checkSearches);
+	if (sectionsErr) return sectionsErr;
 	if (v.pushNew !== undefined && typeof v.pushNew !== 'boolean')
 		return `"${v.name}": "pushNew" must be true or false.`;
 	return null;

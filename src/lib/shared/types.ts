@@ -189,8 +189,14 @@ export type GroupBy =
 	| 'author'
 	| 'label'
 	| 'assignee'
+	| 'custom'
 	| `category:${string}`
 	| `project:${string}`;
+
+export interface ViewSection {
+	name: string;
+	rule: string;
+}
 
 export interface ItemView {
 	id: string;
@@ -198,6 +204,7 @@ export interface ItemView {
 	searches: string[];
 	groupBy: GroupBy;
 	pushNew?: boolean;
+	sections?: ViewSection[];
 }
 
 export interface DashSettings {

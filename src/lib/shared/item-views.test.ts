@@ -100,3 +100,38 @@ describe('validateViews', () => {
 		).toMatch(/Up to/);
 	});
 });
+
+describe('view sections', () => {
+	const withSections = (over: Partial<ItemView>) => validateViews([view(over)]);
+	it('needs at least one section to group by custom sections', () => {
+		expect(withSections({ groupBy: 'custom' })).toMatch(/add a section/);
+		expect(withSections({ groupBy: 'custom', sections: [] })).toMatch(/add a section/);
+		expect(
+			withSections({ groupBy: 'custom', sections: [{ name: 'Small', rule: 'size:<50' }] })
+		).toBeNull();
+	});
+	it('keeps sections when the view groups another way', () => {
+		expect(withSections({ sections: [{ name: 'Small', rule: 'size:<50' }] })).toBeNull();
+	});
+	it('refuses sections that cannot work', () => {
+		const one = (name: string, rule: string) => withSections({ sections: [{ name, rule }] });
+		expect(one('', 'size:<50')).toMatch(/needs a name/);
+		expect(one('Everything else', 'size:<50')).toMatch(/always the last section/);
+		expect(one('Small', '')).toMatch(/needs a rule/);
+		expect(one('Small', 'about:"x"')).toMatch(/Sections cannot use about:/);
+		expect(one('Small', 'mentions:@me')).toMatch(/works only in a view's search/);
+		expect(
+			withSections({
+				sections: [
+					{ name: 'Small', rule: 'size:<50' },
+					{ name: 'small', rule: 'size:<10' }
+				]
+			})
+		).toMatch(/two sections are named/);
+		expect(
+			withSections({
+				sections: Array.from({ length: 11 }, (_, k) => ({ name: `S${k}`, rule: 'is:pr' }))
+			})
+		).toMatch(/up to 10 sections/);
+	});
+});

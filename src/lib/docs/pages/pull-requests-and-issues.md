@@ -18,12 +18,27 @@ The **Group by** button, at the top right, puts the list into sections. Each vie
 | **Label**, **Assignee**           | One section for each set of labels, or of assignees, such as “bug, docs”. An item with none is in **No labels** or **No assignee**.                    |
 | A category group, such as Effort  | One section for each category, then **Not sorted** for the items that have no category from the group. See [Categories](/docs/categories).             |
 | A project, such as Website status | One section for each Status of the project, in the board's order, then **No status**, then **Not in project**. See [Project status](#project-status).  |
+| **Custom sections**               | The sections that you made for this view, then **Everything else**. See [Custom sections](#custom-sections).                                           |
 
 An item is in exactly one section. Sections with no items do not show. Choose the name of a section to close it or open it; **Drafts** is closed at first. This browser remembers your choice for each view and each Group by.
 
 With **Both**, Status shows the pull request sections first, then the issue sections.
 
 {{key:palette}} finds the Group by choices too: type “group by”.
+
+### Custom sections
+
+A view can have its own sections. Each one is a name and a rule in the [query language](/docs/query-language), such as `status:failure` or `size:<50 OR category:low`:
+
+```query
+review-requested:@me review:none
+```
+
+- An item goes into the **first** section whose rule matches, top to bottom. **Everything else** holds the rest, and is always last.
+- Make them on the view's card in **Settings → Views**: set **Group by** to **Custom sections**, then add sections. **Edit custom sections…** at the end of the Group by menu goes there.
+- A view has up to 10 sections. Each name is unique, up to 40 characters.
+- A rule can use every word that Hush checks, such as `review:`, `status:`, `size:`, `updated:`, `from:`, and `category:`. It cannot use `about:`: make a category whose rule uses `about:`, then use `category:`. Words that only GitHub has, such as `mentions:`, do not work here.
+- The view keeps its sections when you choose another Group by.
 
 ### Project status
 

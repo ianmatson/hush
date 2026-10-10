@@ -251,3 +251,47 @@ describe('Group by choices', () => {
 			expect(groupByOk(bad)).toBe(false);
 	});
 });
+
+describe('custom sections', () => {
+	const sections = [
+		{ name: 'Failing', rule: 'status:failure' },
+		{ name: 'Quick', rule: 'size:<50 OR category:low' },
+		{ name: 'Mine', rule: 'author:@me' }
+	];
+	const custom = (items: DashItem[]) =>
+		groupItems(items, 'custom', { ...ctx, sections }).map((s) => [
+			s.label,
+			s.items.map((i) => i.id)
+		]);
+
+	it('puts each item in the first section whose rule matches, then everything else', () => {
+		expect(
+			custom([
+				item('a', { ci: 'FAILURE', additions: 10, deletions: 0 }),
+				item('b', { additions: 10, deletions: 5 }),
+				item('c', { additions: 400, deletions: 0, categories: ['low'] }),
+				item('d', { additions: 400, deletions: 0, author: 'ian' }),
+				item('e', { additions: 400, deletions: 0 })
+			])
+		).toEqual([
+			['Failing', ['a']],
+			['Quick', ['b', 'c']],
+			['Mine', ['d']],
+			['Everything else', ['e']]
+		]);
+	});
+	it('hides empty sections', () => {
+		expect(custom([item('e', { additions: 400, deletions: 0 })])).toEqual([
+			['Everything else', ['e']]
+		]);
+	});
+	it('is a Group by choice only for a view with sections', () => {
+		expect(groupByOptions([EFFORT]).map((o) => o.id)).not.toContain('custom');
+		expect(groupByOptions([EFFORT], [], true)[0]).toEqual({
+			id: 'custom',
+			label: 'Custom sections',
+			kind: 'custom'
+		});
+		expect(groupByOk('custom')).toBe(true);
+	});
+});

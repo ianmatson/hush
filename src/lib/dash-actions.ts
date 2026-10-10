@@ -46,6 +46,7 @@ export interface DashActionContext {
 	readonly showSnoozed: boolean;
 	readonly unreadCount: number;
 	readonly groupBy: GroupBy;
+	readonly hasSections: boolean;
 	setGroupBy(by: GroupBy): void;
 	/** The visible items' ids, in list order. */
 	readonly order: string[];
@@ -96,7 +97,7 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 					}
 				]
 			: []),
-		...groupByOptions(ctx.categoryGroups, ctx.projects)
+		...groupByOptions(ctx.categoryGroups, ctx.projects, ctx.hasSections)
 			.filter((o) => o.id !== ctx.groupBy)
 			.map((o) => ({
 				id: `act:group-by:${o.id}`,

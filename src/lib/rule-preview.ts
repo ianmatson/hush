@@ -2,7 +2,7 @@ import { keys, queryClient } from './queries';
 import { allCategories, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/rules';
 import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
-import type { DashItem, DashResponse, RuleMatch, Settings } from './shared/types';
+import type { DashItem, DashProject, DashResponse, RuleMatch, Settings } from './shared/types';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { BuilderField } from './shared/rule-builder';
 
@@ -24,6 +24,13 @@ export function cachedItems(): DashItem[] {
 	return (['pr', 'issue'] as const).flatMap(
 		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.items ?? []
 	);
+}
+
+export function cachedProjects(): DashProject[] {
+	const all = (['pr', 'issue'] as const).flatMap(
+		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.projects ?? []
+	);
+	return [...new Map(all.map((p) => [p.key, p])).values()];
 }
 
 export function previewItems(

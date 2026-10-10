@@ -253,7 +253,9 @@
 		projectsHolding(visibleItems, data?.projects ?? [], groupBy)
 	);
 	const noProjectAccess = $derived(!!me.data && projectAccessOf(me.data.scopes ?? []) === 'none');
-	const groupByChoices = $derived(groupByOptions(categoryGroups, projects));
+	const hasSections = $derived(!!view.sections?.length);
+	const groupByChoices = $derived(groupByOptions(categoryGroups, projects, hasSections));
+	const editSectionsPath = $derived(`/settings/views#view-${view.id}`);
 	const startsNewKind = (choices: GroupByOption[], k: number) =>
 		k > 0 && choices[k].kind !== choices[k - 1].kind;
 	const groupByName = $derived(groupByLabel(groupBy, categoryGroups, data?.projects ?? []));
@@ -261,7 +263,8 @@
 		groupItems(sortItems(filtered), groupBy, {
 			me: me.data?.login ?? '',
 			categoryGroups,
-			projects: data?.projects
+			projects: data?.projects,
+			sections: view.sections
 		})
 	);
 
@@ -876,6 +879,9 @@
 		get groupBy() {
 			return groupBy;
 		},
+		get hasSections() {
+			return hasSections;
+		},
 		setGroupBy,
 		get order() {
 			return order;
@@ -950,6 +956,11 @@
 							Project status needs project access
 						</DropdownMenu.Item>
 					{/if}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={() => goto(editSectionsPath)}>
+						<Pencil />
+						{hasSections ? 'Edit custom sections…' : 'Make custom sections…'}
+					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 			<Button

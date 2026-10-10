@@ -295,6 +295,10 @@ function sizeWords(spec: string): string {
 }
 
 const DATE_WORDS = new Set(['created', 'updated', 'closed', 'merged']);
+const PHRASE_WORDS = new Set(['status', 'review', 'draft', 'no']);
+
+const asPhrase = (label: string) =>
+	/^[A-Z]{2}/.test(label) ? label : `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 
 function dayWords(date: string): string {
 	const relative = /^@today(?:-(\d+)([dw]))?$/.exec(date);
@@ -335,6 +339,13 @@ export function describeCondition(c: BuilderCondition): string {
 	if (c.word === 'about') return `${not}about “${values.join('” or “')}”`;
 	if (c.word === 'size') return `${not}${values.map(sizeWords).join(' or ')} changed lines`;
 	if (field?.unit) return `${not}${values.map(sizeWords).join(' or ')} ${field.unit}`;
+	if (PHRASE_WORDS.has(c.word)) {
+		const phrases = values.map((v) => {
+			const option = field?.options?.find((o) => o.value === v);
+			return option ? asPhrase(option.label) : v;
+		});
+		return `${not}${phrases.join(' or ')}`;
+	}
 	if (DATE_WORDS.has(c.word))
 		return `${not}${label.toLowerCase()} ${values.map(dateWords).join(' or ')}`;
 	return `${label.toLowerCase()} ${c.negate ? 'is not' : 'is'} ${list}`;

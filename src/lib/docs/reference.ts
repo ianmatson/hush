@@ -4,7 +4,9 @@ import {
 	DEFAULT_VIEWS,
 	MAX_SEARCH_CHARS,
 	MAX_VIEW_NAME_CHARS,
+	MAX_SECTION_NAME_CHARS,
 	MAX_VIEW_SEARCHES,
+	MAX_VIEW_SECTIONS,
 	MAX_VIEWS
 } from '$lib/shared/item-views';
 import {
@@ -202,7 +204,8 @@ A one-time notice on your views says that this is on. When you turn it on, or ad
 - \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label.
 - \`searches\`: up to ${MAX_VIEW_SEARCHES} searches in the [query language](/docs/query-language#in-a-views-search), 1 to ${MAX_SEARCH_CHARS} characters each. Hush sends the GitHub words to GitHub and checks the Hush words on the results. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
 - \`pushNew\` (optional, \`false\` when left out): push when a pull request or issue shows up in the view for the first time. Items that you opened do not push.
-- \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
+- \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"custom"\` (the view's own \`sections\`), \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
+- \`sections\` (optional): up to ${MAX_VIEW_SECTIONS} custom sections, each \`{ "name", "rule" }\`: a unique name of up to ${MAX_SECTION_NAME_CHARS} characters, and a rule in the [query language](/docs/query-language). An item goes into the first section whose rule matches, then **Everything else**. \`"groupBy": "custom"\` needs at least one. See [Custom sections](/docs/pull-requests-and-issues#custom-sections).
 A view needs at least one search, and you keep at least one view.
 
 Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once.
@@ -217,7 +220,16 @@ A change to \`views\` replaces the whole list. To add a view, write the defaults
       "name": "Mine",
       "searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"], "groupBy": "role"
     },
-    { "id": "website", "name": "Website", "searches": ["repo:acme/website is:open"], "groupBy": "status" }
+    {
+      "id": "website",
+      "name": "Website",
+      "searches": ["repo:acme/website is:open"],
+      "groupBy": "custom",
+      "sections": [
+        { "name": "Failing CI", "rule": "status:failure" },
+        { "name": "Small", "rule": "size:<50" }
+      ]
+    }
   ]
 }
 \`\`\`
@@ -419,11 +431,14 @@ function keybindsReference(): string {
 
 function queryReference(): string {
 	const worksIn = (w: QueryWord) => {
-		const inSearch = wordWorksIn(w, 'search');
-		const inRules = wordWorksIn(w, 'rule');
 		const checker = w.runs === 'hush' ? 'Hush' : 'GitHub';
-		if (inSearch && inRules) return `Views (${checker}) and rules`;
-		return inSearch ? `Views (${checker})` : 'Rules';
+		const places = [
+			wordWorksIn(w, 'search') && `views (${checker})`,
+			wordWorksIn(w, 'rule') && 'rules',
+			wordWorksIn(w, 'section') && 'sections'
+		].filter(Boolean);
+		const text = places.join(', ');
+		return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 	};
 	const words = table(
 		['Word', 'Filters on', 'Works in'],
@@ -432,12 +447,12 @@ function queryReference(): string {
 			[
 				code('is:'),
 				`Pull request, issue, draft, open, closed, or merged: ${code('is:draft')}`,
-				'Views (GitHub) and rules'
+				'Views (GitHub), rules, sections'
 			],
 			[
 				'other words',
-				"In a view's search, GitHub's text search. In a rule, words that must all be in the title, repository, or author",
-				'Views (GitHub) and rules'
+				"In a view's search, GitHub's text search. In a rule or a section, words that must all be in the title, repository, or author",
+				'Views (GitHub), rules, sections'
 			]
 		]
 	);

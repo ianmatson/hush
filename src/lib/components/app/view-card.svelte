@@ -1,10 +1,22 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import type { FeedDTO, ItemView } from '$lib/shared/types';
+	import type { DashProject, FeedDTO, GroupBy, ItemView, ViewSection } from '$lib/shared/types';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { meQuery } from '$lib/queries';
+	import {
+		CUSTOM_GROUP_BY,
+		EVERYTHING_ELSE_SECTION,
+		groupByLabel,
+		groupByOptions
+	} from '$lib/shared/grouping';
+	import { cachedItems, cachedProjects, previewItems, ruleSuggestions } from '$lib/rule-preview';
+	import * as Select from '$lib/components/ui/select';
 	import {
 		githubSearchOf,
+		MAX_SECTION_NAME_CHARS,
 		MAX_VIEW_NAME_CHARS,
 		MAX_VIEW_SEARCHES,
+		MAX_VIEW_SECTIONS,
 		searchKinds
 	} from '$lib/shared/item-views';
 	import { viewFeedView } from '$lib/shared/views';
@@ -66,6 +78,55 @@
 				.querySelector<HTMLElement>(`[data-search="${view.id}-${index}"] :is(input, textarea)`)
 				?.focus()
 		);
+	}
+
+	const me = createQuery(meQuery);
+	const categoryGroups = $derived(me.data?.settings.categoryGroups ?? []);
+	const projects: DashProject[] = cachedProjects();
+	const groupChoices = $derived.by(() => {
+		const choices = groupByOptions(categoryGroups, projects, true);
+		return choices.some((o) => o.id === view.groupBy)
+			? choices
+			: [
+					...choices,
+					{
+						id: view.groupBy,
+						label: groupByLabel(view.groupBy, categoryGroups, projects),
+						kind: 'project' as const
+					}
+				];
+	});
+	const sections = $derived(view.sections ?? []);
+	const suggestions = $derived(ruleSuggestions(me.data?.settings));
+	const itemsInView = $derived(cachedItems().filter((i) => i.sections.includes(view.id)));
+
+	function setGroupBy(by: GroupBy) {
+		view.groupBy = by;
+		if (by === CUSTOM_GROUP_BY && !sections.length) addSection();
+	}
+
+	function addSection() {
+		const used = new Set(sections.map((s) => s.name.toLowerCase()));
+		let n = sections.length + 1;
+		while (used.has(`section ${n}`)) n++;
+		view.sections = [...sections, { name: `Section ${n}`, rule: '' }];
+	}
+
+	function moveSection(index: number, by: number) {
+		const list = [...sections];
+		const [s] = list.splice(index, 1);
+		list.splice(index + by, 0, s);
+		view.sections = list;
+	}
+
+	function setSection(index: number, patch: Partial<ViewSection>) {
+		view.sections = sections.map((s, k) => (k === index ? { ...s, ...patch } : s));
+	}
+
+	function removeSection(index: number) {
+		const rest = sections.filter((_, k) => k !== index);
+		view.sections = rest.length ? rest : undefined;
+		if (!rest.length && view.groupBy === CUSTOM_GROUP_BY) view.groupBy = 'none';
 	}
 
 	function onGitHub(query: string) {
@@ -186,6 +247,87 @@
 					disabled={view.searches.length >= MAX_VIEW_SEARCHES}><Plus /> Add search</Button
 				>
 			</div>
+		</div>
+		<div class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t pt-4">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span class="text-sm font-medium" id="view-{view.id}-group-by">Group by</span>
+				<Select.Root
+					type="single"
+					value={view.groupBy}
+					onValueChange={(v) => setGroupBy(v as GroupBy)}
+				>
+					<Select.Trigger size="sm" class="w-56" aria-labelledby="view-{view.id}-group-by"
+						><span class="truncate">{groupChoices.find((o) => o.id === view.groupBy)?.label}</span
+						></Select.Trigger
+					>
+					<Select.Content class="max-h-72">
+						{#each groupChoices as o (o.id)}
+							<Select.Item value={o.id} label={o.label} />
+						{/each}
+					</Select.Content>
+				</Select.Root>
+			</div>
+			{#if view.groupBy === CUSTOM_GROUP_BY}
+				<p class="text-xs text-muted-foreground">
+					Each item goes into the first section whose rule matches. {EVERYTHING_ELSE_SECTION} holds the
+					rest.
+				</p>
+				{#each sections as s, index (index)}
+					<div class="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border p-2.5">
+						<div class="flex items-center gap-1">
+							<Input
+								value={s.name}
+								oninput={(e) => setSection(index, { name: e.currentTarget.value })}
+								aria-label="Section name"
+								maxlength={MAX_SECTION_NAME_CHARS}
+								class="h-8 max-w-60 font-medium"
+							/>
+							<span class="flex-1"></span>
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								aria-label="Move {s.name} up"
+								disabled={index === 0}
+								onclick={() => moveSection(index, -1)}><ArrowUp /></Button
+							>
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								aria-label="Move {s.name} down"
+								disabled={index === sections.length - 1}
+								onclick={() => moveSection(index, 1)}><ArrowDown /></Button
+							>
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								class="text-destructive"
+								aria-label="Delete the section {s.name}"
+								onclick={() => removeSection(index)}><Trash /></Button
+							>
+						</div>
+						<RuleBuilder
+							bind:value={() => s.rule, (rule) => setSection(index, { rule })}
+							id="view-{view.id}-section-{index}"
+							place="section"
+							label="Rule"
+							templates={[]}
+							emptyText="Add a condition: a section needs a rule."
+							{suggestions}
+							preview={(q) =>
+								me.data ? previewItems(q, me.data.login, me.data.settings, itemsInView) : null}
+						/>
+					</div>
+				{/each}
+				<div class="flex flex-wrap items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={addSection}
+						disabled={sections.length >= MAX_VIEW_SECTIONS}><Plus /> Add section</Button
+					>
+					<span class="text-xs text-muted-foreground">{EVERYTHING_ELSE_SECTION} comes last.</span>
+				</div>
+			{/if}
 		</div>
 		<label class="flex items-start justify-between gap-4 border-t pt-4">
 			<span class="grid gap-0.5">

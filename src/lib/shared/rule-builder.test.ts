@@ -83,6 +83,9 @@ describe('rule builder', () => {
 		);
 		expect(describeBuilder(queryToBuilder('size:10..200')!)).toBe('10 to 200 changed lines.');
 		expect(describeBuilder(queryToBuilder('comments:>10')!)).toBe('Over 10 comments.');
+		expect(describeBuilder(queryToBuilder('status:failure review:none')!)).toBe(
+			'No review yet and CI failed.'
+		);
 		expect(describeBuilder(queryToBuilder('updated:<@today-14d')!)).toBe(
 			'Updated before 14 days ago.'
 		);

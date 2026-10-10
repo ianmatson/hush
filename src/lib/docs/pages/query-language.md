@@ -1,9 +1,9 @@
 ---
 title: Query language
-description: The one-line syntax of view searches and category rules, with every word, where it works, and its values.
+description: The one-line syntax of view searches, category rules, and custom sections, with every word, where it works, and its values.
 ---
 
-One syntax writes the searches of [views](/docs/views) and the rules of [categories](/docs/categories#rules). The words mean the same thing in both places:
+One syntax writes the searches of [views](/docs/views), the rules of [categories](/docs/categories#rules), and the rules of [custom sections](/docs/pull-requests-and-issues#custom-sections). The words mean the same thing in each place:
 
 ```query search
 is:open review-requested:@me size:<50 updated:>@today-7d
@@ -13,7 +13,7 @@ Write a query as text, or build it one condition at a time. Both make the same q
 
 ## Three kinds of words
 
-- **GitHub and Hush** words, such as `repo:`, `author:`, `label:`, `review:`, and `updated:`. In a view's search, GitHub runs them. In a category rule, Hush checks them on what it knows about the item.
+- **GitHub and Hush** words, such as `repo:`, `author:`, `label:`, `review:`, and `updated:`. In a view's search, GitHub runs them. In a category rule or a section, Hush checks them on what it knows about the item.
 - **GitHub only** words, such as `mentions:`, `involves:`, and `reviewed-by:`. They work only in a view's search, because Hush does not have these facts.
 - **Hush only** words: `size:`, `from:`, `category:`, `about:`, `author:bots`, and wildcards such as `repo:acme/*`. GitHub does not know them, so Hush checks them.
 
@@ -48,6 +48,14 @@ repo:acme/* type:pr -author:bots (label:bug OR label:crash)
 - Parentheses group conditions.
 - `word:a,b` (or the same word twice) matches **any** of the values: `repo:acme/web,acme/api`.
 - A rule cannot use GitHub only words, or `category:`: a rule cannot depend on another category.
+
+## In a custom section
+
+A section's rule works like a category rule, with `OR` and parentheses. It can also use `category:`, but not `about:` or the GitHub only words:
+
+```query
+status:failure OR (review:changes_requested -author:@me)
+```
 
 ## Syntax
 
