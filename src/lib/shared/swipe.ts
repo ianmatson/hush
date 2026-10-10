@@ -1,8 +1,8 @@
 /**
- * Swipe actions on phones and tablets (touch only: a mouse drags, it never swipes). Each list
- * has one action for a swipe to the right and one for a swipe to the left.
+ * Swipe actions on phones and tablets (touch only: a mouse drags, it never swipes): one action
+ * for a swipe to the right and one for a swipe to the left.
  */
-export type SwipeKind = 'inbox' | 'dash';
+export type SwipeKind = 'dash';
 export interface SwipePair {
 	left: string;
 	right: string;
@@ -10,26 +10,31 @@ export interface SwipePair {
 export type SwipeSettings = Record<SwipeKind, SwipePair>;
 
 export const SWIPE_ACTIONS: Record<SwipeKind, { id: string; label: string }[]> = {
-	inbox: [
-		{ id: 'none', label: 'Nothing' },
-		{ id: 'done', label: 'Done' },
-		{ id: 'snooze', label: 'Snooze…' },
-		{ id: 'mute', label: 'Mute' },
-		{ id: 'read', label: 'Read / unread' },
-		{ id: 'not-needed', label: 'Doesn’t need me…' }
-	],
 	dash: [
 		{ id: 'none', label: 'Nothing' },
-		{ id: 'hide', label: 'Hide until it changes' },
+		{ id: 'snooze', label: 'Snooze until new activity' },
 		{ id: 'mute', label: 'Mute' },
-		{ id: 'not-needed', label: 'Not my turn…' }
+		{ id: 'read', label: 'Read / unread' }
 	]
 };
 
 export const DEFAULT_SWIPE: SwipeSettings = {
-	inbox: { right: 'done', left: 'snooze' },
-	dash: { right: 'hide', left: 'mute' }
+	dash: { right: 'snooze', left: 'mute' }
 };
+
+export function knownSwipe(
+	saved: Partial<Record<SwipeKind, Partial<SwipePair>>> | undefined
+): SwipeSettings {
+	const pairOf = (kind: SwipeKind): SwipePair => {
+		const savedPair = saved?.[kind] ?? {};
+		const choose = (side: keyof SwipePair) => {
+			const id = savedPair[side];
+			return SWIPE_ACTIONS[kind].some((a) => a.id === id) ? id! : DEFAULT_SWIPE[kind][side];
+		};
+		return { ...DEFAULT_SWIPE[kind], left: choose('left'), right: choose('right') };
+	};
+	return { dash: pairOf('dash') };
+}
 
 export function validateSwipe(v: unknown): string | null {
 	if (typeof v !== 'object' || v === null) return '"swipe" must be an object.';

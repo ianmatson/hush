@@ -12,23 +12,21 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **It has only your changes.** A setting that you did not change is not in the file; it uses its default. A new default in Hush then applies to you too.
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
-- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also `rules`, `categories`, and `tags`, which Hush no longer has. Categories are in [`categoryGroups`](#categorygroups) now.
-- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categoryGroups` or `sources`, is always replaced as a whole.
-- **Changes apply at once**, on every device. A change to `botsAreFyi`, `teamReviewsAreAction`, `reviewResolution`, or `newCommitsAfterReview` sorts your stored threads and items again. A change to `categoryGroups` places your items in categories again.
+- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also settings that Hush no longer has, such as `botsAreFyi`, `peekMarksRead`, `rules`, and `tags`. Categories are in [`categoryGroups`](#categorygroups) now.
+- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categoryGroups` or `views`, is always replaced as a whole.
+- **Changes apply at once**, on every device. A change to `categoryGroups` places your items in categories again.
 
 A complete example:
 
 ```json settings
 {
-	"pushFyi": false,
+	"pushFacts": ["review-requested", "mentioned", "replied", "ci-failed"],
 	"quietHours": { "from": 1320, "to": 420, "weekends": true, "timeZone": "America/New_York" },
-	"reviewResolution": "any_review",
-	"teamReviewsAreAction": true,
+	"pushRepeat": "reason",
 	"categoryGroups": [
 		{
 			"id": "area",
 			"name": "Area",
-			"multiple": false,
 			"categories": [
 				{
 					"id": "website",
@@ -49,7 +47,6 @@ A complete example:
 		{
 			"id": "size",
 			"name": "Size",
-			"multiple": true,
 			"categories": [
 				{
 					"id": "quick",
@@ -61,13 +58,20 @@ A complete example:
 			]
 		}
 	],
-	"views": [{ "id": "web", "name": "Web", "base": "inbox", "query": "repo:acme/web-*" }],
+	"views": [
+		{
+			"id": "mine",
+			"name": "Mine",
+			"searches": ["is:open involves:@me org:acme", "is:pr is:open review-requested:@me org:acme"],
+			"groupBy": "role"
+		},
+		{ "id": "web", "name": "Web", "searches": ["repo:acme/web is:open"], "groupBy": "status" }
+	],
 	"dash": {
-		"scope": "org:acme archived:false",
 		"excludedTeams": ["acme/everyone"],
 		"staleDays": 5
 	},
-	"keys": { "inbox.done": ["d"] }
+	"keys": { "dash.snooze": ["d"] }
 }
 ```
 
@@ -75,8 +79,8 @@ A complete example:
 
 These are not settings of your account, so they are not in the file:
 
-- **This browser only:** the mode and theme, the start page, the tab title and icon counts, the closed groups on the Pull requests and Issues tabs, unsent comments, and notes that you chose “Don't show again” for.
-- **Your data:** push devices, feeds, and what you did to threads and items (Done, Snooze, Mute, hidden and moved items).
+- **This browser only:** the mode and theme, the start page, the tab title and icon counts, the closed sections of your views, unsent comments, and notes that you chose “Don't show again” for.
+- **Your data:** push devices, feeds, and what you did to items (Snooze, Mute, read and unread, categories that you chose).
 - **Your GitHub access:** the custom token, if any.
 
 ## Settings file
@@ -89,12 +93,12 @@ The file is your settings.json in a small wrapper:
 {
 	"hush": 2,
 	"exportedAt": "2026-09-28T09:00:00.000Z",
-	"settings": { "botsAreFyi": false, "dash": { "staleDays": 5 } }
+	"settings": { "pushRepeat": "reason", "dash": { "staleDays": 5 } }
 }
 ```
 
-- `hush` is the file format version: `2`. A version `1` file (conditions as JSON objects) still imports: Hush writes its conditions as queries.
+- `hush` is the file format version: `2`. Hush refuses a version `1` file (conditions as JSON objects): export it again.
 - `settings` has only the changes, the same as settings.json.
-- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many category groups and views the file has. Settings that Hush no longer has, such as `rules`, `categories`, and `tags`, are left out.
+- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many category groups and views the file has. Settings that Hush no longer has, such as `botsAreFyi`, `rules`, and `tags`, are left out.
 
 {{ref:settings}}

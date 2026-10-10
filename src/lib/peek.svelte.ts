@@ -3,8 +3,8 @@ import type { PeekTarget } from '$lib/components/app/peek.svelte';
 
 /**
  * The peek is one panel for the list pages (each renders PeekHost), so it stays open when you
- * change between them. The page that opened it "owns" it (for example "inbox:action" or "pulls"):
- * only the owner moves it with its cursor and adds its actions (Done, Snooze…). Another page
+ * change between them. The page that opened it "owns" it (for example "view:mine:pr"): only the
+ * owner moves it with its cursor and adds its actions (Snooze, Copy link…). Another page
  * takes it over when you peek something there (a click, Space, J/K while it is open).
  */
 export const peek = $state<{

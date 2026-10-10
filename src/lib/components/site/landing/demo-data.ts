@@ -1,8 +1,6 @@
 import type { MockPerson } from './mock';
 import type { RefSuggestion, UserSuggestion } from '$lib/shared/suggest';
 
-export type DemoKind = 'review' | 'fix_ci' | 'address_review' | 'merge' | 'reply' | 'none';
-export type DemoSubject = 'PullRequest' | 'Issue' | 'Release' | 'CheckSuite' | 'Discussion';
 export type DemoCheckState = 'success' | 'failure' | 'pending';
 export type DemoGhAction = 'approve' | 'rerun' | 'merge' | 'none';
 export type DemoTone = 'good' | 'bad';
@@ -46,38 +44,13 @@ export interface DemoPeek {
 	main: DemoGhAction;
 }
 
-export interface DemoChange {
-	text: string;
-	tone?: DemoTone;
-}
-
-export interface DemoThread {
-	id: string;
-	list: 'action' | 'fyi';
-	triage: 'inbox' | 'snoozed' | 'done';
-	muted: boolean;
-	subject: DemoSubject;
-	kind: DemoKind;
-	summary: string;
-	repo: string;
-	number: number | null;
-	title: string;
-	why?: string;
-	changes?: DemoChange[];
-	unread: boolean;
-	ago: string;
-	actionLabel: string;
-	opensTo: string;
-	rule?: string;
-	note?: string;
-	snoozedLabel?: string;
-	url: string;
-	peek: DemoPeek;
-}
+export type DemoRole = 'opened' | 'reviews' | 'assigned' | 'involved';
+export type DemoStatus =
+	'no-review' | 'in-review' | 'changes' | 'approved' | 'drafts' | 'unassigned' | 'assigned';
+export type DemoGroupBy = 'role' | 'status' | 'custom';
 
 export interface DemoDashItem {
 	id: string;
-	threadId?: string;
 	title: string;
 	repo: string;
 	number: number;
@@ -85,7 +58,8 @@ export interface DemoDashItem {
 	reason: string;
 	tone?: 'bad' | 'stale';
 	group: 'yours' | 'team' | 'waiting' | 'other';
-	sections: string[];
+	role: DemoRole;
+	status: DemoStatus;
 	ago: string;
 	actionLabel: string;
 	url: string;
@@ -257,311 +231,18 @@ function simplePeek(
 	return { kind, state, author, opened: 'today', body, timeline: [], main: 'none' };
 }
 
-export const DEMO_THREADS: DemoThread[] = [
-	{
-		id: 't-review',
-		list: 'action',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'review',
-		summary: '@joethreepwood requests your review',
-		repo: DEMO_REPO,
-		number: 20387,
-		title: 'Add Juno customer case study and cross-links',
-		why: 'Review requested',
-		changes: [{ text: '+2 commits' }],
-		unread: true,
-		ago: '3m',
-		actionLabel: 'Review',
-		opensTo: 'the files to review',
-		url: pull(20387, '/files'),
-		peek: JUNO_PEEK
-	},
-	{
-		id: 't-ci',
-		list: 'action',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'fix_ci',
-		summary: 'CI failed on your PR',
-		repo: DEMO_REPO,
-		number: 20508,
-		title: 'Add the Forum app at /forum',
-		changes: [{ text: '2 checks failed', tone: 'bad' }],
-		unread: true,
-		ago: '12m',
-		actionLabel: 'Fix CI',
-		opensTo: 'the failing checks',
-		url: pull(20508, '/checks'),
-		peek: FORUM_PEEK
-	},
-	{
-		id: 't-reply',
-		list: 'action',
-		triage: 'inbox',
-		muted: false,
-		subject: 'Issue',
-		kind: 'reply',
-		summary: '@ivanagas replied',
-		repo: DEMO_REPO,
-		number: 20700,
-		title:
-			'Website request - Add industry, region, company size, and use case filters to customer stories',
-		why: 'Assigned to you',
-		unread: false,
-		ago: '40m',
-		actionLabel: 'Reply',
-		opensTo: 'the new comment',
-		url: issue(20700),
-		peek: FILTERS_PEEK
-	},
-	{
-		id: 't-merge',
-		list: 'action',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'merge',
-		summary: 'Ready to merge',
-		repo: DEMO_REPO,
-		number: 20510,
-		title: 'Add an embeddable pricing calculator for blog posts',
-		changes: [{ text: '@natalia-amorim approved', tone: 'good' }],
-		unread: false,
-		ago: '25m',
-		actionLabel: 'Merge',
-		opensTo: 'the merge box',
-		url: pull(20510),
-		peek: CALCULATOR_PEEK
-	},
-	{
-		id: 't-changes',
-		list: 'action',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'address_review',
-		summary: '@charlescook-ph requested changes',
-		repo: DEMO_REPO,
-		number: 20524,
-		title: 'Keep community profile actions in the window bottom bar',
-		changes: [{ text: '2 new comments' }],
-		unread: false,
-		ago: '1h',
-		actionLabel: 'Address',
-		opensTo: 'the review comments',
-		url: pull(20524, '/files'),
-		peek: PROFILE_PEEK
-	},
-	{
-		id: 't-headline',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'none',
-		summary: '@charlescook-ph merged it',
-		repo: DEMO_REPO,
-		number: 20483,
-		title: 'feat(home): change hero headline to “Your product’s context layer”',
-		why: 'You approved',
-		unread: true,
-		ago: '2h',
-		actionLabel: 'Open',
-		opensTo: 'the pull request',
-		url: pull(20483),
-		peek: simplePeek(
-			'pr',
-			'merged',
-			DEMO_GH.charlescook,
-			'Changes the homepage hero headline from “Make your product self-driving” to “Your product’s context layer”.'
-		)
-	},
-	{
-		id: 't-team',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: false,
-		subject: 'Issue',
-		kind: 'none',
-		summary: 'Your team was mentioned',
-		repo: DEMO_REPO,
-		number: 19777,
-		title: 'Forum Facelift Meta Issue: Make /questions a place builders come back to',
-		why: 'Team mention',
-		unread: true,
-		ago: '3h',
-		actionLabel: 'Open',
-		opensTo: 'the issue',
-		url: issue(19777),
-		peek: simplePeek(
-			'issue',
-			'open',
-			DEMO_GH.brittanyjoiner,
-			'A restructure of the forum at posthog.com/questions, so that it stops behaving like a public inbox.'
-		)
-	},
-	{
-		id: 't-merged',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'none',
-		summary: '@Lizzieepton merged it',
-		repo: DEMO_REPO,
-		number: 20471,
-		title: 'Make the use cases headline visible in dark mode',
-		why: 'You approved',
-		unread: false,
-		ago: '4h',
-		actionLabel: 'Open',
-		opensTo: 'the pull request',
-		url: pull(20471),
-		peek: simplePeek(
-			'pr',
-			'merged',
-			DEMO_GH.lizzieepton,
-			'Adds text-primary to the headline on /context-warehouse/use-cases, so that its color follows the theme.'
-		)
-	},
-	{
-		id: 't-bot',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'none',
-		summary: '@posthog[bot] opened it',
-		repo: DEMO_REPO,
-		number: 20676,
-		title: 'fix(redirects): redirect /open-positions to /careers',
-		why: 'Subscribed',
-		unread: false,
-		ago: '5h',
-		actionLabel: 'Open',
-		opensTo: 'the pull request',
-		url: pull(20676),
-		peek: simplePeek(
-			'pr',
-			'open',
-			DEMO_GH.posthogBot,
-			'Visitors who open the old /open-positions URL get a 404 page. This sends them to /careers.'
-		)
-	},
-	{
-		id: 't-bug',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: false,
-		subject: 'Issue',
-		kind: 'none',
-		summary: 'New issue',
-		repo: DEMO_REPO,
-		number: 20709,
-		title:
-			'Bug Report: TanStack Router tile in product installation grids links to a missing docs page',
-		why: 'Watching repo',
-		unread: false,
-		ago: '6h',
-		actionLabel: 'Open',
-		opensTo: 'the issue',
-		url: issue(20709),
-		peek: simplePeek(
-			'issue',
-			'open',
-			DEMO_GH.posthogBot,
-			'The TanStack Router tile links to /docs/libraries/tanstack-router. That page does not exist.'
-		)
-	},
-	{
-		id: 't-snoozed',
-		list: 'action',
-		triage: 'snoozed',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'review',
-		summary: '@rubychilds requests your review',
-		repo: DEMO_REPO,
-		number: 20202,
-		title: 'docs(handbook): explain how to test the Ashby API, replace archived channel',
-		unread: false,
-		ago: '1d',
-		actionLabel: 'Review',
-		opensTo: 'the files to review',
-		snoozedLabel: 'until CI passes (or Mon 9:00)',
-		url: pull(20202, '/files'),
-		peek: simplePeek(
-			'pr',
-			'open',
-			DEMO_GH.rubychilds,
-			'Explains how to test the Ashby API key, and replaces a reference to an archived Slack channel.'
-		)
-	},
-	{
-		id: 't-done',
-		list: 'action',
-		triage: 'done',
-		muted: false,
-		subject: 'PullRequest',
-		kind: 'review',
-		summary: '@rafaeelaudibert requests your review',
-		repo: DEMO_REPO,
-		number: 20579,
-		title: 'Remove the Korean landing page and newsletter translations',
-		note: 'You approved',
-		unread: false,
-		ago: '1d',
-		actionLabel: 'Open',
-		opensTo: 'the pull request',
-		url: pull(20579),
-		peek: simplePeek(
-			'pr',
-			'merged',
-			DEMO_GH.rafaeelaudibert,
-			'Removes the Korean landing page at /ko and the three Korean newsletter translations.'
-		)
-	},
-	{
-		id: 't-muted',
-		list: 'fyi',
-		triage: 'inbox',
-		muted: true,
-		subject: 'PullRequest',
-		kind: 'none',
-		summary: '@dependabot opened it',
-		repo: DEMO_REPO,
-		number: 20631,
-		title: 'chore(deps): bump urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm',
-		rule: 'Muted by you',
-		unread: false,
-		ago: '2h',
-		actionLabel: 'Open',
-		opensTo: 'the pull request',
-		url: pull(20631),
-		peek: simplePeek(
-			'pr',
-			'open',
-			DEMO_GH.dependabot,
-			'Bumps urllib3 from 2.5.0 to 2.8.0 in /scripts/hogfm.'
-		)
-	}
-];
-
 export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 	pulls: [
 		{
 			id: 'p-20387',
-			threadId: 't-review',
 			title: 'Add Juno customer case study and cross-links',
 			repo: DEMO_REPO,
 			number: 20387,
 			person: DEMO_GH.joethreepwood,
 			reason: 'Review requested',
 			group: 'yours',
-			sections: ['Review requests'],
+			role: 'reviews',
+			status: 'in-review',
 			ago: '3m',
 			actionLabel: 'Review',
 			url: pull(20387, '/files'),
@@ -572,7 +253,6 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 		},
 		{
 			id: 'p-20508',
-			threadId: 't-ci',
 			title: 'Add the Forum app at /forum',
 			repo: DEMO_REPO,
 			number: 20508,
@@ -580,7 +260,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			reason: 'CI failing',
 			tone: 'bad',
 			group: 'yours',
-			sections: ['Involves you'],
+			role: 'opened',
+			status: 'in-review',
 			ago: '12m',
 			actionLabel: 'Fix CI',
 			url: pull(20508, '/checks'),
@@ -591,14 +272,14 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 		},
 		{
 			id: 'p-20510',
-			threadId: 't-merge',
 			title: 'Add an embeddable pricing calculator for blog posts',
 			repo: DEMO_REPO,
 			number: 20510,
 			person: DEMO_ME,
 			reason: 'Ready to merge',
 			group: 'yours',
-			sections: ['Involves you'],
+			role: 'opened',
+			status: 'approved',
 			ago: '25m',
 			actionLabel: 'Merge',
 			url: pull(20510),
@@ -610,14 +291,14 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 		},
 		{
 			id: 'p-20524',
-			threadId: 't-changes',
 			title: 'Keep community profile actions in the window bottom bar',
 			repo: DEMO_REPO,
 			number: 20524,
 			person: DEMO_ME,
 			reason: 'Changes requested',
 			group: 'yours',
-			sections: ['Involves you'],
+			role: 'opened',
+			status: 'changes',
 			ago: '1h',
 			actionLabel: 'Address',
 			url: pull(20524, '/files'),
@@ -636,7 +317,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.cleoPleurodon,
 			reason: 'Review for your team',
 			group: 'team',
-			sections: ['Review requests'],
+			role: 'reviews',
+			status: 'in-review',
 			ago: '2h',
 			actionLabel: 'Review',
 			url: pull(20454, '/files'),
@@ -660,7 +342,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			reason: 'Waiting for review',
 			tone: 'stale',
 			group: 'waiting',
-			sections: ['Involves you'],
+			role: 'opened',
+			status: 'no-review',
 			ago: '5d',
 			actionLabel: 'Open',
 			url: pull(20571),
@@ -682,7 +365,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.sarahxsanders,
 			reason: 'You approved',
 			group: 'waiting',
-			sections: ['You reviewed'],
+			role: 'reviews',
+			status: 'approved',
 			ago: '1d',
 			actionLabel: 'Open',
 			url: pull(20438),
@@ -702,7 +386,6 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 	issues: [
 		{
 			id: 'i-20700',
-			threadId: 't-reply',
 			title:
 				'Website request - Add industry, region, company size, and use case filters to customer stories',
 			repo: DEMO_REPO,
@@ -710,7 +393,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.ivanagas,
 			reason: '@ivanagas replied',
 			group: 'yours',
-			sections: ['Involves you'],
+			role: 'assigned',
+			status: 'assigned',
 			ago: '40m',
 			actionLabel: 'Reply',
 			url: issue(20700),
@@ -726,7 +410,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_ME,
 			reason: 'Waiting for a reply',
 			group: 'waiting',
-			sections: ['Involves you'],
+			role: 'opened',
+			status: 'unassigned',
 			ago: '2d',
 			actionLabel: 'Open',
 			url: issue(19783),
@@ -746,7 +431,8 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			person: DEMO_GH.ivanagas,
 			reason: 'Mentions you',
 			group: 'other',
-			sections: ['Involves you'],
+			role: 'involved',
+			status: 'unassigned',
 			ago: '3d',
 			actionLabel: 'Open',
 			url: issue(20423),
@@ -762,17 +448,56 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 	]
 };
 
-export const DASH_SECTIONS: Record<'pulls' | 'issues', string[]> = {
-	pulls: ['Review requests', 'Involves you', 'You reviewed'],
-	issues: ['Involves you']
-};
+export const DEMO_VIEWS = [
+	{ id: 'mine', name: 'Mine', groupBy: 'role' },
+	{ id: 'website', name: 'Website', groupBy: 'status' }
+] as const satisfies readonly { id: string; name: string; groupBy: DemoGroupBy }[];
 
-export const DASH_GROUPS = [
-	{ id: 'yours', label: 'Your turn' },
-	{ id: 'team', label: 'Your team’s turn' },
-	{ id: 'waiting', label: 'Waiting on others' },
-	{ id: 'other', label: 'Other' }
-] as const;
+export type DemoViewId = (typeof DEMO_VIEWS)[number]['id'];
+
+export const inDemoView = (item: DemoDashItem, view: DemoViewId) =>
+	view === 'mine' || !!item.labels?.some((l) => l.name === LABEL.website.name);
+
+export const GROUP_BY_CHOICES: { id: DemoGroupBy; label: string }[] = [
+	{ id: 'role', label: 'Your role' },
+	{ id: 'status', label: 'Status' },
+	{ id: 'custom', label: 'Custom sections' }
+];
+
+export const ROLE_SECTIONS: { id: DemoRole; label: string }[] = [
+	{ id: 'opened', label: 'You opened' },
+	{ id: 'reviews', label: 'Reviews' },
+	{ id: 'assigned', label: 'Assigned to you' },
+	{ id: 'involved', label: 'Involved' }
+];
+
+export const STATUS_SECTIONS: { id: DemoStatus; label: string }[] = [
+	{ id: 'no-review', label: 'No review yet' },
+	{ id: 'in-review', label: 'In review' },
+	{ id: 'changes', label: 'Changes requested' },
+	{ id: 'approved', label: 'Approved' },
+	{ id: 'drafts', label: 'Drafts' },
+	{ id: 'unassigned', label: 'Unassigned' },
+	{ id: 'assigned', label: 'Assigned' }
+];
+
+const SMALL_LINES = 100;
+const linesOf = (item: DemoDashItem) => (item.diff ? item.diff.additions + item.diff.deletions : 0);
+
+export const CUSTOM_SECTIONS: {
+	name: string;
+	rule: string;
+	matches: (i: DemoDashItem) => boolean;
+}[] = [
+	{ name: 'Failing CI', rule: 'status:failure', matches: (i) => i.ci === 'fail' },
+	{
+		name: 'Small',
+		rule: `size:<${SMALL_LINES}`,
+		matches: (i) => !!i.diff && linesOf(i) < SMALL_LINES
+	}
+];
+
+export const EVERYTHING_ELSE = 'Everything else';
 
 const REF_STATE: Partial<Record<DemoPeek['state'], RefSuggestion['state']>> = {
 	open: 'open',
@@ -781,23 +506,20 @@ const REF_STATE: Partial<Record<DemoPeek['state'], RefSuggestion['state']>> = {
 	closed: 'closed'
 };
 
-export const DEMO_REFS: RefSuggestion[] = [
-	...DEMO_THREADS,
-	...DEMO_DASH.pulls,
-	...DEMO_DASH.issues
-].flatMap((item) =>
-	item.number === null || (item.peek.kind !== 'pr' && item.peek.kind !== 'issue')
-		? []
-		: [
-				{
-					kind: 'ref' as const,
-					number: item.number,
-					title: item.title,
-					type: item.peek.kind,
-					state: REF_STATE[item.peek.state] ?? 'open',
-					repo: null
-				}
-			]
+export const DEMO_REFS: RefSuggestion[] = [...DEMO_DASH.pulls, ...DEMO_DASH.issues].flatMap(
+	(item) =>
+		item.peek.kind !== 'pr' && item.peek.kind !== 'issue'
+			? []
+			: [
+					{
+						kind: 'ref' as const,
+						number: item.number,
+						title: item.title,
+						type: item.peek.kind,
+						state: REF_STATE[item.peek.state] ?? 'open',
+						repo: null
+					}
+				]
 );
 
 export const DEMO_PEOPLE: UserSuggestion[] = [DEMO_ME, ...Object.values(DEMO_GH)].map((who) => ({
@@ -807,3 +529,32 @@ export const DEMO_PEOPLE: UserSuggestion[] = [DEMO_ME, ...Object.values(DEMO_GH)
 	avatar: who.avatar ?? null,
 	team: false
 }));
+
+export interface DemoSection {
+	key: string;
+	label: string;
+	rule?: string;
+	items: DemoDashItem[];
+}
+
+export function demoSections(items: DemoDashItem[], by: DemoGroupBy): DemoSection[] {
+	if (by === 'custom') {
+		const named: DemoSection[] = CUSTOM_SECTIONS.map((s) => ({
+			key: s.name,
+			label: s.name,
+			rule: s.rule,
+			items: []
+		}));
+		const rest: DemoSection = { key: EVERYTHING_ELSE, label: EVERYTHING_ELSE, items: [] };
+		for (const i of items) {
+			const k = CUSTOM_SECTIONS.findIndex((s) => s.matches(i));
+			(k < 0 ? rest : named[k]).items.push(i);
+		}
+		return [...named, rest].filter((s) => s.items.length);
+	}
+	const fixed = by === 'role' ? ROLE_SECTIONS : STATUS_SECTIONS;
+	const valueOf = (i: DemoDashItem) => (by === 'role' ? i.role : i.status);
+	return fixed
+		.map((s) => ({ key: s.id, label: s.label, items: items.filter((i) => valueOf(i) === s.id) }))
+		.filter((s) => s.items.length);
+}

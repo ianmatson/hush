@@ -6,7 +6,7 @@ import { sendSlackAlerts, slackAlertOf } from '../slack-alerts';
 
 const TEAM_ID = 'T1';
 const USER_ID = 7;
-const ALERT = { title: 'Review requested', body: 'acme/api#12', url: 'https://hush.test/inbox' };
+const ALERT = { title: 'Review requested', body: 'acme/api#12', url: 'https://hush.test/v/mine' };
 
 type Statement = { sql: string; args: unknown[] };
 
@@ -63,7 +63,7 @@ describe('slackAlertOf', () => {
 					{
 						type: 'button',
 						text: { type: 'plain_text', text: 'Open in Hush' },
-						url: 'https://hush.test/inbox'
+						url: 'https://hush.test/v/mine'
 					}
 				]
 			}
@@ -89,7 +89,7 @@ describe('slackAlertOf', () => {
 	});
 
 	it('leaves out the button for a link that is not absolute', () => {
-		expect(slackAlertOf({ ...ALERT, url: '/inbox' }).blocks).toHaveLength(1);
+		expect(slackAlertOf({ ...ALERT, url: '/v/mine' }).blocks).toHaveLength(1);
 	});
 });
 

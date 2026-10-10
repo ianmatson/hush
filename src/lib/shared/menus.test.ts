@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_MENUS,
 	MENU_ITEMS,
+	MENUS_VERSION,
 	SEP,
 	tidySeparators,
 	upgradeMenus,
@@ -18,64 +19,54 @@ describe('menus', () => {
 
 	it('accepts the defaults and every known item once', () => {
 		expect(validateMenus(DEFAULT_MENUS)).toBeNull();
-		expect(
-			validateMenus({
-				inbox: MENU_ITEMS.inbox.map((i) => i.id),
-				dash: MENU_ITEMS.dash.map((i) => i.id)
-			})
-		).toBeNull();
-		expect(validateMenus({ inbox: [] })).toBeNull();
+		expect(validateMenus({ dash: MENU_ITEMS.dash.map((i) => i.id) })).toBeNull();
+		expect(validateMenus({ dash: [] })).toBeNull();
 	});
 
-	it('refuses unknown items, doubles, and items of the other menu', () => {
-		expect(validateMenus({ inbox: ['peek', 'nope'] })).toMatch(/Unknown/);
-		expect(validateMenus({ inbox: ['peek', 'peek'] })).toMatch(/twice/);
-		expect(validateMenus({ inbox: ['move'] })).toMatch(/Unknown/);
+	it('refuses unknown items, doubles, and items of the removed inbox', () => {
+		expect(validateMenus({ dash: ['peek', 'nope'] })).toMatch(/Unknown/);
+		expect(validateMenus({ dash: ['peek', 'peek'] })).toMatch(/twice/);
 		expect(validateMenus({ dash: ['done'] })).toMatch(/Unknown/);
-		expect(validateMenus({ inbox: 'peek' })).toMatch(/list/);
+		expect(validateMenus({ dash: 'peek' })).toMatch(/list/);
 	});
 
 	it('defaults use only known items', () => {
-		for (const kind of ['inbox', 'dash'] as const)
-			for (const id of DEFAULT_MENUS[kind])
-				if (id !== SEP) expect(MENU_ITEMS[kind].some((i) => i.id === id)).toBe(true);
+		for (const id of DEFAULT_MENUS.dash)
+			if (id !== SEP) expect(MENU_ITEMS.dash.some((i) => i.id === id)).toBe(true);
 	});
 
-	it('adds a new item once to menus saved before it, and keeps later choices', () => {
+	it('adds a new item once to menus saved before it, and drops the inbox menu', () => {
 		const old = { inbox: ['peek', 'copy', 'read', 'done'], dash: ['peek', 'hide'] };
-		expect(upgradeMenus(old).inbox).toEqual([
+		expect(upgradeMenus(old)).toEqual({
+			dash: ['peek', 'page', 'mute', 'read', 'categories', 'snooze'],
+			v: MENUS_VERSION
+		});
+		expect(upgradeMenus({ dash: ['peek'], v: 8 }).dash).toEqual(['peek']);
+	});
+
+	it('drops items that are gone, and adds the new ones', () => {
+		const saved = {
+			dash: ['move', 'category', 'tags', 'undoMove', 'hide', 'not-needed'],
+			v: 6
+		};
+		expect(upgradeMenus(saved).dash).toEqual(['categories', 'snooze', 'read']);
+	});
+
+	it('turns the last default dashboard menu into the new default', () => {
+		const lastDefault = [
 			'peek',
 			'page',
-			'copy',
-			'rule',
-			'read',
-			'not-needed',
-			'done'
-		]);
-		expect(upgradeMenus(old).dash).toEqual([
-			'peek',
-			'page',
+			'main',
+			'github',
+			SEP,
+			'categories',
 			'hide',
 			'mute',
-			'not-needed',
-			'categories'
-		]);
-		// Saved after an item existed and without it: you removed it, so it stays out.
-		expect(upgradeMenus({ ...old, v: 2 }).inbox).toEqual([
-			'peek',
-			'page',
 			'copy',
-			'read',
-			'not-needed',
-			'done'
-		]);
-		expect(upgradeMenus({ ...old, v: 3 }).inbox).toEqual(['peek', 'page', 'copy', 'read', 'done']);
-		expect(upgradeMenus({ ...old, v: 6 }).inbox).toEqual(['peek', 'copy', 'read', 'done']);
-		expect(upgradeMenus({ inbox: ['done'] }).inbox).toEqual(['done', 'rule', 'not-needed', 'page']);
-	});
-
-	it('drops items that are gone, and adds Categories in place of the old category and tags', () => {
-		const saved = { inbox: ['done'], dash: ['move', 'category', 'tags', 'hide'], v: 6 };
-		expect(upgradeMenus(saved).dash).toEqual(['move', 'categories', 'hide']);
+			SEP,
+			'select',
+			'selectAll'
+		];
+		expect(upgradeMenus({ dash: lastDefault, v: 7 }).dash).toEqual(DEFAULT_MENUS.dash);
 	});
 });

@@ -19,8 +19,8 @@ export const HUSH_OVERVIEW: CompareOverview = {
 	name: 'Hush',
 	kind: 'Web app (installable), hosted',
 	price: 'Free in beta; planned $3 a month',
-	openSource: 'Yes',
-	chooseItFor: 'A “Needs you” list sorted by whose turn it is, with push alerts'
+	openSource: 'Yes (AGPL-3.0)',
+	chooseItFor: 'Your PRs and issues in views you define, with pushes for the facts you choose'
 };
 
 export const COMPARE_OVERVIEW: Record<string, CompareOverview> = {

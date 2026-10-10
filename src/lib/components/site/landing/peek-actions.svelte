@@ -67,7 +67,6 @@
 		</div>
 
 		<div class="bar">
-			<span class="ghost">Done <kbd>E</kbd></span>
 			<span class="ghost">Snooze <kbd>S</kbd></span>
 			<span class="ghost mute">Mute <kbd>M</kbd></span>
 			<span class="primary">Approve <kbd>A</kbd></span>

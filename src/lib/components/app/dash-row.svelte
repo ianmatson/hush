@@ -4,7 +4,6 @@
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import { newChanges, saidBy } from '$lib/shared/badges';
-	import { DEFAULT_SOURCE_IDS } from '$lib/shared/sources';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -15,16 +14,15 @@
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
 	import Bell from '@lucide/svelte/icons/bell';
 	import BellOff from '@lucide/svelte/icons/bell-off';
-	import Eye from '@lucide/svelte/icons/eye';
+	import { snoozeLabel } from '$lib/shared/item-snooze';
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import GripVertical from '@lucide/svelte/icons/grip-vertical';
-	import X from '@lucide/svelte/icons/x';
 	import Layers from '@lucide/svelte/icons/layers';
 	import SelectMark from './select-mark.svelte';
 	import AppMenu from './app-menu.svelte';
@@ -40,18 +38,14 @@
 		selected = false,
 		checked = false,
 		selecting = false,
-		draggable = true,
-		showSections = false,
-		sectionNames,
 		marks = [],
 		hidden = [],
 		onopen,
-		onhide,
+		onsnooze,
 		onmute,
 		oncopy,
 		onrowclick,
 		ontoggle,
-		onundomove,
 		menu,
 		stack
 	}: {
@@ -62,19 +56,14 @@
 		checked?: boolean;
 		/** Some row is checked: show checkboxes on every row. */
 		selecting?: boolean;
-		draggable?: boolean;
-		showSections?: boolean;
-		sectionNames: Record<string, string>;
 		marks?: RowMark[];
 		hidden?: string[];
 		onopen: (i: DashItem, url: string) => void;
-		onhide: (i: DashItem) => void;
-		/** Mute (hidden until unmuted, and its threads muted), or unmute. */
+		onsnooze: (i: DashItem) => void;
 		onmute: (i: DashItem) => void;
 		oncopy: (i: DashItem) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
-		onundomove: (i: DashItem) => void;
 		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
 		menu?: () => MenuEntry[];
 		stack?: { position: number; size: number };
@@ -134,12 +123,6 @@
 			[i.turnReason]
 		)
 	);
-	/** Your own searches say something the reason does not; the built-in ones only repeat it. */
-	const sections = $derived(
-		showSections
-			? i.sections.filter((s) => !DEFAULT_SOURCE_IDS.has(s) && sectionNames[s] !== i.turnReason)
-			: []
-	);
 
 	const review = $derived(
 		i.reviewDecision === 'APPROVED'
@@ -171,7 +154,7 @@
 	data-selected={selected || undefined}
 	data-checked={checked || undefined}
 	class={cn(
-		'group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
+		'row group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
 		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]',
 		i.dismissed && 'opacity-60'
@@ -181,20 +164,21 @@
 	tabindex="-1"
 	aria-selected={selected || checked}
 >
-	{#if draggable}
-		<!-- A hint only: the whole card drags. Mouse hover on wide screens; touch has no drag. -->
-		<span
-			aria-hidden="true"
-			class="sm:[@media(hover:hover)]:flex\ pointer-events-none absolute top-1/2 -left-5 hidden h-8 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/50 opacity-0 transition-opacity group-hover:opacity-100"
-		>
-			<GripVertical class="size-4" />
-		</span>
-	{/if}
 	<SelectMark {checked} {selecting} label="Select {i.title}" {ontoggle}>
-		<Avatar.Root class="size-7 sm:size-8">
-			<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
-			<Avatar.Fallback class="text-[0.65rem]">{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback>
-		</Avatar.Root>
+		<span class="relative block size-7 sm:size-8">
+			<Avatar.Root class="size-7 sm:size-8">
+				<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
+				<Avatar.Fallback class="text-[0.65rem]"
+					>{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback
+				>
+			</Avatar.Root>
+			{#if i.unread}
+				<span
+					class="absolute top-0 right-0 size-2.5 rounded-full bg-signal-review ring-2 ring-(--row-bg)"
+					aria-label="Unread"
+				></span>
+			{/if}
+		</span>
 	</SelectMark>
 
 	<div class="min-w-0 flex-1">
@@ -204,9 +188,21 @@
 				target="_blank"
 				rel="noreferrer"
 				draggable="false"
-				class="line-clamp-2 text-[0.8125rem] font-medium sm:truncate sm:text-sm"
+				class={cn(
+					'line-clamp-2 text-[0.8125rem] sm:truncate sm:text-sm',
+					i.unread ? 'font-semibold' : 'font-medium'
+				)}
 				onclick={(e) => e.preventDefault()}>{i.title}</a
 			>
+			{#if i.muted}
+				<span class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+					><BellOff class="size-3" />Muted</span
+				>
+			{:else if i.snooze}
+				<span class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+					><AlarmClock class="size-3" />{snoozeLabel(i.snooze)}</span
+				>
+			{/if}
 			{#if show('time') && i.stale}
 				<span class="shrink-0 text-xs font-medium text-signal-warn tabular-nums"
 					>waiting {since(i.waitingSince)}</span
@@ -277,21 +273,6 @@
 					>
 				</Tooltip.Root>
 			{/if}
-			{#if i.movedByYou && show('moved')}
-				<span
-					class="flex items-center gap-0.5 rounded-md border border-dashed py-0.5 pr-0.5 pl-1.5 text-muted-foreground"
-				>
-					Moved by you
-					<button
-						class="rounded p-0.5 hover:bg-muted hover:text-foreground"
-						aria-label="Undo move"
-						onclick={(e) => {
-							e.stopPropagation();
-							onundomove(i);
-						}}><X class="size-3" /></button
-					>
-				</span>
-			{/if}
 			{#if changes.length && show('changes')}<ChangeChips {changes} />{/if}
 			{#if ci && !said.has('ci') && show('ci')}
 				<span
@@ -327,12 +308,6 @@
 					)}
 					style="background:#{l.color}; color:{ink(l.color)}"
 					title={added ? 'Added since you last looked' : undefined}>{l.name}</span
-				>
-			{/each}
-			{#each show('sources') ? sections : [] as s (s)}
-				<span
-					class="hidden rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground sm:inline"
-					>{sectionNames[s] ?? s}</span
 				>
 			{/each}
 		</div>
@@ -371,19 +346,19 @@
 							{...props}
 							variant="ghost"
 							size="icon-sm"
-							aria-label={i.dismissed ? 'Show again' : 'Hide until it changes'}
+							aria-label={i.dismissed ? 'Wake up' : 'Snooze until new activity'}
 							onclick={(e) => {
 								e.stopPropagation();
-								onhide(i);
+								onsnooze(i);
 							}}
 						>
-							{#if i.dismissed}<Eye />{:else}<EyeOff />{/if}
+							{#if i.dismissed}<AlarmClockOff />{:else}<AlarmClock />{/if}
 						</Button>
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content
-					>{i.dismissed ? 'Show again' : 'Hide until it changes'}
-					<kbd class="ml-1 opacity-60">{keysOf('dash.hide')[0] ?? ''}</kbd></Tooltip.Content
+					>{i.dismissed ? 'Wake up' : 'Snooze until new activity'}
+					<kbd class="ml-1 opacity-60">{keysOf('dash.snooze')[0] ?? ''}</kbd></Tooltip.Content
 				>
 			</Tooltip.Root>
 			<Tooltip.Root>
@@ -404,7 +379,7 @@
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content
-					>{i.muted ? 'Unmute' : 'Mute: hide until you unmute it'}
+					>{i.muted ? 'Unmute' : 'Mute: out of the list until you unmute it'}
 					<kbd class="ml-1 opacity-60">{keysOf('dash.mute')[0] ?? ''}</kbd></Tooltip.Content
 				>
 			</Tooltip.Root>
@@ -443,3 +418,18 @@
 		</Button>
 	</div>
 </div>
+
+<style>
+	.row {
+		--row-bg: var(--background);
+	}
+	.row:hover {
+		--row-bg: color-mix(in oklch, var(--muted) 50%, var(--background));
+	}
+	.row[data-selected] {
+		--row-bg: color-mix(in oklch, var(--muted) 60%, var(--background));
+	}
+	.row[data-checked] {
+		--row-bg: color-mix(in oklch, var(--primary) 6%, var(--background));
+	}
+</style>

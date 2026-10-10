@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	arrangeGroup,
-	orderAfterDrop,
 	computeTurn,
 	DEFAULT_DASH,
 	expandSections,
@@ -10,7 +8,7 @@ import {
 	validateDash,
 	type DashFacts
 } from './dashboard';
-import { DEFAULT_SOURCES, sectionsFor } from './sources';
+import { DEFAULT_VIEWS, sectionsFor } from './item-views';
 
 const base = (over: Partial<DashFacts> = {}): DashFacts => ({
 	id: 'n1',
@@ -40,9 +38,9 @@ const base = (over: Partial<DashFacts> = {}): DashFacts => ({
 	requestedMe: false,
 	requestedTeams: [],
 	openThreads: 0,
-	lastVerdictBy: null,
-	lastVerdictAt: null,
 	requestedAt: null,
+	reviewRequestCount: 0,
+	reviewed: false,
 	myLastReviewAt: null,
 	myLastReviewState: null,
 	lastCommitAt: '2026-09-02T00:00:00Z',
@@ -54,9 +52,8 @@ const turn = (f: Partial<DashFacts>) => computeTurn(base(f), 'ian', []);
 describe('computeTurn: pull requests', () => {
 	it("a bot's PR is FYI, unless it asks for your review by name", () => {
 		const bot = { author: 'dependabot[bot]', authorIsBot: true };
-		const opts = { botsAreFyi: true };
-		expect(computeTurn(base(bot), 'ian', [], opts).turnReason).toBe('Bot PR');
-		expect(computeTurn(base({ ...bot, requestedMe: true }), 'ian', [], opts)).toMatchObject({
+		expect(computeTurn(base(bot), 'ian', []).turnReason).toBe('Bot PR');
+		expect(computeTurn(base({ ...bot, requestedMe: true }), 'ian', [])).toMatchObject({
 			turn: 'you',
 			turnReason: 'Review requested'
 		});
@@ -130,34 +127,41 @@ describe('expandSections', () => {
 		{ slug: 'o/web', name: 'Web', org: 'o' },
 		{ slug: 'o/infra', name: 'Infra', org: 'o' }
 	];
-	it('runs @team once per tracked team and appends the scope', () => {
+	it('runs @team once per tracked team, and leaves out archived repositories', () => {
 		const { queries } = expandSections(
-			[{ id: 't', name: 'T', query: 'is:pr team:@team', enabled: true }],
-			{ scope: 'org:o', excludedTeams: ['o/infra'] },
+			[{ id: 't', name: 'T', query: 'is:pr team:@team' }],
+			{ excludedTeams: ['o/infra'] },
 			teams
 		);
-		expect(queries).toEqual([{ section: 't', team: 'o/web', q: 'is:pr team:o/web org:o' }]);
+		expect(queries).toEqual([
+			{ section: 't', team: 'o/web', q: 'is:pr team:o/web archived:false' }
+		]);
+	});
+	it('keeps a search that says archived:, and a project board search, as they are', () => {
+		const sections = [
+			{ id: 'a', name: 'A', query: 'is:pr repo:o/r archived:true' },
+			{ id: 'b', name: 'B', query: 'project:o/1 status:Todo' }
+		];
+		expect(expandSections(sections, DEFAULT_DASH, teams).queries.map((q) => q.q)).toEqual([
+			'is:pr repo:o/r archived:true',
+			'project:o/1 status:Todo'
+		]);
 	});
 	it('runs team review requests as one search, filtered by the tracked teams', () => {
 		const { queries, skipped } = expandSections(
-			[{ id: 't', name: 'T', query: 'is:pr team-review-requested:@team', enabled: true }],
-			{ scope: 'org:o', excludedTeams: ['o/infra'] },
+			[{ id: 't', name: 'T', query: 'is:pr team-review-requested:@team' }],
+			{ excludedTeams: ['o/infra'] },
 			[...teams, ...Array.from({ length: 20 }, (_, i) => ({ slug: `o/t${i}`, name: '', org: 'o' }))]
 		);
 		expect(queries).toHaveLength(1);
-		expect(queries[0].q).toBe('is:pr review-requested:@me org:o');
+		expect(queries[0].q).toBe('is:pr review-requested:@me archived:false');
 		expect(queries[0].teams).toHaveLength(21);
 		expect(skipped).toEqual({});
 	});
-	it('skips disabled sections and explains team sections without teams', () => {
-		const { queries, skipped } = expandSections(
-			sectionsFor('pr', DEFAULT_SOURCES),
-			DEFAULT_DASH,
-			[]
-		);
-		expect(queries.some((q) => q.section === 'team-mentioned')).toBe(false);
+	it('explains team searches without teams', () => {
+		const { skipped } = expandSections(sectionsFor('pr', DEFAULT_VIEWS), DEFAULT_DASH, []);
 		const { skipped: teamSkipped } = expandSections(
-			[{ id: 'tm', name: 'TM', query: 'is:open team:@team', enabled: true }],
+			[{ id: 'tm', name: 'TM', query: 'is:open team:@team' }],
 			DEFAULT_DASH,
 			[]
 		);
@@ -165,18 +169,21 @@ describe('expandSections', () => {
 		expect(teamSkipped.tm).toMatch(/team/);
 	});
 	it('filters your review requests by the tracked teams only when you leave a team out', () => {
-		const source = [{ id: 'r', name: 'R', query: 'is:pr review-requested:@me', enabled: true }];
-		expect(expandSections(source, { scope: '', excludedTeams: [] }, teams).queries).toEqual([
-			{ section: 'r', q: 'is:pr review-requested:@me' }
+		const search = [{ id: 'r', name: 'R', query: 'is:pr review-requested:@me' }];
+		expect(expandSections(search, { excludedTeams: [] }, teams).queries).toEqual([
+			{ section: 'r', q: 'is:pr review-requested:@me archived:false' }
 		]);
-		expect(
-			expandSections(source, { scope: '', excludedTeams: ['o/infra'] }, teams).queries
-		).toEqual([
-			{ section: 'r', q: 'is:pr review-requested:@me', teams: ['o/web'], orDirect: true }
+		expect(expandSections(search, { excludedTeams: ['o/infra'] }, teams).queries).toEqual([
+			{
+				section: 'r',
+				q: 'is:pr review-requested:@me archived:false',
+				teams: ['o/web'],
+				orDirect: true
+			}
 		]);
-		const direct = [{ id: 'u', name: 'U', query: 'user-review-requested:@me', enabled: true }];
+		const direct = [{ id: 'u', name: 'U', query: 'user-review-requested:@me' }];
 		expect(
-			expandSections(direct, { scope: '', excludedTeams: ['o/infra'] }, teams).queries[0].teams
+			expandSections(direct, { excludedTeams: ['o/infra'] }, teams).queries[0].teams
 		).toBeUndefined();
 	});
 });
@@ -210,49 +217,5 @@ describe('filters, sorting, validation', () => {
 	it('validates dashboard settings', () => {
 		expect(validateDash(DEFAULT_DASH)).toBeNull();
 		expect(validateDash({ ...DEFAULT_DASH, staleDays: 0 })).toMatch(/Stale/);
-	});
-});
-
-describe('arrangeGroup and orderAfterDrop', () => {
-	it('puts new (unranked) items first, then the manual order', () => {
-		const items = [
-			{ id: 'a', rank: 2 },
-			{ id: 'b', rank: null },
-			{ id: 'c', rank: 0 },
-			{ id: 'd', rank: null }
-		];
-		expect(arrangeGroup(items).map((i) => i.id)).toEqual(['b', 'd', 'c', 'a']);
-	});
-
-	it('places one moved item next to its visible neighbours', () => {
-		// Full group a b c d e; filter shows only a c e; user drags e between a and c.
-		expect(orderAfterDrop(['a', 'b', 'c', 'd', 'e'], ['a', 'e', 'c'], ['e'])).toEqual([
-			'a',
-			'e',
-			'b',
-			'c',
-			'd'
-		]);
-	});
-
-	it('moves a block of selected items together', () => {
-		expect(orderAfterDrop(['a', 'b', 'c', 'd'], ['x', 'y', 'a', 'b'], ['x', 'y'])).toEqual([
-			'x',
-			'y',
-			'a',
-			'b',
-			'c',
-			'd'
-		]);
-		expect(orderAfterDrop(['a', 'b'], ['a', 'b', 'x', 'y'], ['x', 'y'])).toEqual([
-			'a',
-			'b',
-			'x',
-			'y'
-		]);
-	});
-
-	it('drops into an empty group', () => {
-		expect(orderAfterDrop([], ['x'], ['x'])).toEqual(['x']);
 	});
 });

@@ -4,11 +4,9 @@
 
 <script lang="ts">
 	import { buttonClass, cx } from './demo-ui';
-	import Check from '@lucide/svelte/icons/check';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
-	import Undo from '@lucide/svelte/icons/undo-2';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import X from '@lucide/svelte/icons/x';
@@ -40,30 +38,19 @@
 		type Trigger,
 		type UserSuggestion
 	} from '$lib/shared/suggest';
-	import {
-		DEMO_ME,
-		DEMO_PEOPLE,
-		DEMO_REFS,
-		type DemoChange,
-		type DemoCheckState,
-		type DemoPeek
-	} from './demo-data';
+	import { DEMO_ME, DEMO_PEOPLE, DEMO_REFS, type DemoCheckState, type DemoPeek } from './demo-data';
 
 	let {
 		lead,
 		text,
-		changes = [],
 		title,
 		reference,
 		peek,
-		place,
 		confirmingMerge = false,
 		rerunning = false,
-		ondone,
 		onsnooze,
 		onmute,
-		onrestore,
-		onhide,
+		oncopy,
 		onapprove,
 		onrerun,
 		onmerge,
@@ -73,18 +60,14 @@
 	}: {
 		lead: string;
 		text: string;
-		changes?: DemoChange[];
 		title: string;
 		reference: string;
 		peek: DemoPeek;
-		place: 'inbox' | 'away' | 'dash';
 		confirmingMerge?: boolean;
 		rerunning?: boolean;
-		ondone: () => void;
 		onsnooze: () => void;
 		onmute: () => void;
-		onrestore: () => void;
-		onhide: () => void;
+		oncopy: () => void;
 		onapprove: () => void;
 		onrerun: () => void;
 		onmerge: () => void;
@@ -293,8 +276,8 @@
 
 <div class="flex h-11 shrink-0 items-center gap-1 border-b px-2">
 	<span class="hidden px-2 text-xs text-muted-foreground lg:inline"
-		><kbd class="font-sans">J</kbd>/<kbd class="font-sans">K</kbd> to move{#if place === 'inbox'}{' '}·
-			<kbd class="font-sans">E</kbd> done · <kbd class="font-sans">S</kbd> snooze{/if}</span
+		><kbd class="font-sans">J</kbd>/<kbd class="font-sans">K</kbd> to move ·
+		<kbd class="font-sans">S</kbd> snooze · <kbd class="font-sans">M</kbd> mute</span
 	>
 	<span class="ml-auto flex items-center gap-1">
 		<button
@@ -319,19 +302,6 @@
 			{text}
 		</p>
 	</div>
-	{#if changes.length}
-		<div class="flex flex-wrap items-center gap-1.5 border-b px-4 py-2 text-xs">
-			<span class="text-muted-foreground">Since you looked:</span>
-			{#each changes as change (change.text)}
-				<span
-					class={cx(
-						'rounded-md px-1.5 py-0.5',
-						change.tone === 'good' ? 'bg-signal-merge/10 text-signal-merge' : 'bg-muted'
-					)}>{change.text}</span
-				>
-			{/each}
-		</div>
-	{/if}
 
 	<article class="grid gap-5 p-4 pb-6">
 		<header class="grid gap-2">
@@ -486,28 +456,18 @@
 </div>
 
 <div class="relative flex shrink-0 flex-wrap items-center gap-1 border-t p-2">
-	{#if place === 'inbox'}
-		<button type="button" class={buttonClass('ghost', 'sm')} aria-label="Done" onclick={ondone}
-			><Check /><span class="max-sm:sr-only">Done</span></button
-		>
-		<button
-			type="button"
-			class={buttonClass('ghost', 'sm')}
-			aria-label="Snooze until tomorrow 9:00"
-			onclick={onsnooze}><AlarmClock /><span class="max-sm:sr-only">Snooze</span></button
-		>
-		<button type="button" class={buttonClass('ghost', 'sm')} aria-label="Mute" onclick={onmute}
-			><BellOff /><span class="max-sm:sr-only">Mute</span></button
-		>
-	{:else if place === 'away'}
-		<button type="button" class={buttonClass('ghost', 'sm')} onclick={onrestore}
-			><Undo />Move to inbox</button
-		>
-	{:else}
-		<button type="button" class={buttonClass('ghost', 'sm')} onclick={onhide}
-			><EyeOff /><span class="max-sm:sr-only">Hide until it changes</span></button
-		>
-	{/if}
+	<button
+		type="button"
+		class={buttonClass('ghost', 'sm')}
+		aria-label="Snooze until new activity"
+		onclick={onsnooze}><AlarmClock /><span class="max-sm:sr-only">Snooze</span></button
+	>
+	<button type="button" class={buttonClass('ghost', 'sm')} aria-label="Mute" onclick={onmute}
+		><BellOff /><span class="max-sm:sr-only">Mute</span></button
+	>
+	<button type="button" class={buttonClass('ghost', 'sm')} aria-label="Copy link" onclick={oncopy}
+		><Link /><span class="max-sm:sr-only">Copy link</span></button
+	>
 
 	{#if canComment && isOpen}
 		<div class="ml-auto flex items-center gap-1.5" role="group" aria-label="Actions on GitHub">

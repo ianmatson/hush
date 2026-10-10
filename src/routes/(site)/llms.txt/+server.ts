@@ -20,7 +20,7 @@ export function GET() {
 	});
 	const text = `# Hush
 
-> Hush sorts GitHub notifications into what needs you and what is only FYI, follows whose turn it is on every pull request and issue that involves you, and pushes only what waits on you. The app is at https://app.hush-gh.com. Every setting is one JSON object (settings.json); the settings page documents all of it.
+> Hush shows the pull requests and issues that you work on as views: GitHub searches that stay live, with Hush-only words such as size: and category:, grouped by your role, status, a project board, or your own sections. It shows whose turn it is on each item, pushes only the facts that you choose, and never changes your GitHub notifications. The app is at https://app.hush-gh.com. Every setting is one JSON object (settings.json); the settings page documents all of it.
 
 All pages in one file: ${SITE_URL}/llms-full.txt
 

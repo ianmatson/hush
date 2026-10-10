@@ -7,37 +7,36 @@ description: What Hush can read and do on GitHub, why an org can be missing, and
 
 You sign in with GitHub. Hush asks for four scopes:
 
-| Scope           | Why Hush needs it                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `notifications` | Read your notifications, and mark them read, done, or muted.                                                                               |
-| `repo`          | Read the pull requests and issues behind them (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close.       |
-| `read:org`      | Find your teams, for team review requests and `@team` sources.                                                                             |
-| `project`       | Read project boards for [board sources](/docs/pull-requests-and-issues#project-boards), and change an item's project status from the peek. |
+| Scope           | Why Hush needs it                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `notifications` | Read your notifications, to learn quickly when a pull request or issue of your views changes. Hush never changes them.    |
+| `repo`          | Read your pull requests and issues (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close. |
+| `read:org`      | Find your teams, for team review requests and `@team` searches.                                                           |
+| `project`       | Read project boards for [board searches](/docs/views#project-boards), and change an item's project status from the peek.  |
 
 GitHub's Notifications API accepts only classic scopes, and classic scopes cannot be narrower than these.
 
 ### Project boards
 
-Tokens from a sign-in before Hush read project boards do not have the `project` scope. Then a board source shows a note, and the peek shows no project status. Sign in with GitHub again: **Settings → General → GitHub access** has a link.
+Tokens from a sign-in before Hush read project boards do not have the `project` scope. Then a view with a board search shows a note, and the peek shows no project status. Sign in with GitHub again: **Settings → General → GitHub access** has a link.
 
 For a [custom token](#custom-token) from the GitHub CLI, run `gh auth refresh -s project`, and then replace the token with the output of `gh auth token`.
 
 ## What Hush does on GitHub
 
-| In Hush                             | On GitHub                                                                           |
-| ----------------------------------- | ----------------------------------------------------------------------------------- |
-| Done                                | Marks the notification as done.                                                     |
-| Mute                                | Unsubscribes you from the thread, and marks it as done.                             |
-| Read                                | Marks the notification as read.                                                     |
-| Unread                              | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
-| Snooze, Move to inbox, Unmute, Hide | Nothing. These stay in Hush.                                                        |
-| Actions in the peek                 | The action itself: a review, a comment, a merge, a re-run, a close.                 |
-| Project status in the peek          | Changes the item's status, moves it to another project, or removes it.              |
-| A reaction in the peek              | Adds your reaction, or removes it.                                                  |
+Hush reads your notifications, and never changes them. It does not mark them as read or done, and it does not unsubscribe you. Hush writes to GitHub only when you act:
+
+| In Hush                          | On GitHub                                                                  |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| Snooze, Mute, Read, Unread       | Nothing. These stay in Hush.                                               |
+| Actions in the peek              | The action itself: a review, a comment, a merge, a re-run, a close.        |
+| Review comments and Viewed files | Your comment or reply, a resolved thread, or GitHub's own **Viewed** mark. |
+| Project status in the peek       | Changes the item's status, moves it to another project, or removes it.     |
+| A reaction in the peek           | Adds your reaction, or removes it.                                         |
 
 ## When an org is missing
 
-Many orgs allow only the apps that an owner approved. **Until an owner approves Hush, GitHub hides that org completely**: its private repositories, its notifications, and even the fact that the org exists. So Hush cannot tell you which orgs are missing. It can only show the ones it sees.
+Many orgs allow only the apps that an owner approved. **Until an owner approves Hush, GitHub hides that org completely**: its private repositories, its pull requests and issues, and even the fact that the org exists. So Hush cannot tell you which orgs are missing. It can only show the ones it sees.
 
 After you sign in, a note lists the orgs that Hush can see. The same list is in **Settings → General → GitHub access**, under “Orgs your GitHub sign-in can see”. If one is missing:
 
@@ -48,7 +47,7 @@ After you sign in, a note lists the orgs that Hush can see. The same list is in 
 
 ### SAML single sign-on
 
-If an org uses SAML SSO, GitHub asks you to authorize Hush for it when you sign in. If you did not, the inbox shows “GitHub hides notifications from N orgs”. Sign in again and authorize the org. For a custom token, choose **Configure SSO** next to the token on github.com/settings/tokens.
+If an org uses SAML SSO, GitHub asks you to authorize Hush for it when you sign in. If you did not, GitHub hides the org's private repositories, and your views do not show their items. Sign in again and authorize the org. For a custom token, choose **Configure SSO** next to the token on github.com/settings/tokens.
 
 ## Custom token
 
@@ -69,7 +68,7 @@ While Hush uses a custom token, GitHub access shows a **Custom token** badge. Si
 Both are in **Settings → General → Account**, and **Sign out** is also in the account menu.
 
 - **Sign out** ends the session in this browser and clears the Hush data cached in it. Hush keeps polling for your other devices.
-- **Delete account** stops polling and deletes everything Hush stores about you: your token, threads, settings, alert history, push devices, and feeds. It does not change anything on GitHub. To remove Hush's access on GitHub too, revoke it in GitHub's settings (Applications → Authorized OAuth Apps).
+- **Delete account** stops polling and deletes everything Hush stores about you: your token, the facts of your pull requests and issues, your settings, alert history, push devices, and feeds. It does not change anything on GitHub. To remove Hush's access on GitHub too, revoke it in GitHub's settings (Applications → Authorized OAuth Apps).
 
 ### Where you are signed in
 

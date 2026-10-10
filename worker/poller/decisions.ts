@@ -1,4 +1,4 @@
-import { ruleMatches } from '../../src/lib/shared/classify';
+import { ruleMatches } from '../../src/lib/shared/rules';
 import {
 	conditionId,
 	estimateTokens,
@@ -14,9 +14,9 @@ import {
 	type SubjectDecisions
 } from '../../src/lib/shared/decisions';
 import { aboutTexts, compileExpr, type QueryExpr } from '../../src/lib/shared/query';
-import { categoryConditionTexts, groupChoices, markQueries } from '../../src/lib/shared/categories';
+import { groupChoices, markQueries } from '../../src/lib/shared/categories';
 import { enrichmentOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
-import type { Classification, RuleMatch, Settings } from '../../src/lib/shared/types';
+import type { RuleFacts, RuleMatch, Settings } from '../../src/lib/shared/types';
 import { dailyTokenBudget, decide, decisionsAvailable } from '../decide';
 import { PollerAlerts } from './alerts';
 import type { Who } from './shared';
@@ -37,35 +37,24 @@ interface DecisionUsage {
 type ConditionScope = {
 	condition: SmartCondition;
 	exprs: QueryExpr[];
-	everyItem: boolean;
-	always: boolean;
 };
 type Maybe = boolean | 'maybe';
 
-const NO_CLASSIFICATION = { category: 'fyi', kind: 'none' } as Classification;
 const utcDay = (now = Date.now()) => new Date(now).toISOString().slice(0, 10);
 
 function exactPartsOf(when: RuleMatch): RuleMatch {
-	const { about: _about, reason: _reason, kind: _kind, category: _category, ...exact } = when;
+	const { about: _about, ...exact } = when;
 	return exact;
 }
 
 function conditionScopes(settings: Settings): ConditionScope[] {
-	const inboxQueries = settings.views.map((v) => v.query ?? '');
 	const itemQueries = markQueries(settings);
-	const categoryTexts = categoryConditionTexts(settings.categoryGroups);
-	const always = new Set(categoryTexts.map(conditionId));
-	const using = (queries: string[], id: string) =>
-		queries.filter((q) => aboutTexts(q).some((text) => conditionId(text) === id));
-	return smartConditions(settings.views, itemQueries, categoryTexts).map((condition) => {
-		const forItems = using(itemQueries, condition.id);
-		return {
-			condition,
-			exprs: [...using(inboxQueries, condition.id), ...forItems].map(compileExpr),
-			everyItem: forItems.length > 0 || always.has(condition.id),
-			always: always.has(condition.id)
-		};
-	});
+	return smartConditions(itemQueries).map((condition) => ({
+		condition,
+		exprs: itemQueries
+			.filter((q) => aboutTexts(q).some((text) => conditionId(text) === condition.id))
+			.map(compileExpr)
+	}));
 }
 
 function couldMatch(expr: QueryExpr, exactMatches: (when: RuleMatch) => boolean): Maybe {
@@ -110,19 +99,6 @@ export abstract class PollerDecisions extends PollerAlerts {
 		return out;
 	}
 
-	private keysWithInboxThreads(keys: string[]): Set<string> {
-		const out = new Set<string>();
-		for (let i = 0; i < keys.length; i += SQL_BATCH) {
-			const batch = keys.slice(i, i + SQL_BATCH);
-			for (const r of this.all<{ subject_key: string }>(
-				`SELECT DISTINCT subject_key FROM threads WHERE category != 'muted' AND subject_key IN (${marks(batch.length)})`,
-				...batch
-			))
-				out.add(r.subject_key);
-		}
-		return out;
-	}
-
 	protected decisionsOf(who: Who, subjects: SubjectFacts[]): Map<string, SubjectDecisions> {
 		const out = new Map<string, SubjectDecisions>();
 		if (!who.settings.smartDecisions || !subjects.length) return out;
@@ -141,26 +117,16 @@ export abstract class PollerDecisions extends PollerAlerts {
 		return (await this.decisionUsage()).tokens >= dailyTokenBudget(this.env);
 	}
 
-	protected async decideSubjects(
-		who: Who,
-		subjects: SubjectFacts[],
-		opts: { allAreInboxThreads?: boolean } = {}
-	): Promise<void> {
+	protected async decideSubjects(who: Who, subjects: SubjectFacts[]): Promise<void> {
 		if (!this.decisionsOn(who.settings) || !subjects.length) return;
 		const keyed = new Map(subjects.map((s) => [subjectKey(s.repo, s.number), s]));
 		const keys = [...keyed.keys()];
 		const stored = this.storedDecisions(keys);
 		const scopes = conditionScopes(who.settings);
-		const inboxKeys: Set<string> = !scopes.some((sc) => !sc.everyItem)
-			? new Set()
-			: opts.allAreInboxThreads
-				? new Set(keys)
-				: this.keysWithInboxThreads(keys);
 		const choices = groupChoices(who.settings.categoryGroups);
 		const plans: { key: string; plan: DecisionPlan }[] = [];
 		for (const [key, s] of keyed) {
-			const usable = inboxKeys.has(key) ? scopes : scopes.filter((sc) => sc.everyItem);
-			const conditions = this.conditionsFor(s, who, usable);
+			const conditions = this.conditionsFor(s, who, scopes);
 			const plan = planDecisions(s, who.me, stored.get(key), conditions, choices);
 			if (plan) plans.push({ key, plan });
 		}
@@ -168,23 +134,16 @@ export abstract class PollerDecisions extends PollerAlerts {
 	}
 
 	private conditionsFor(s: SubjectFacts, who: Who, scopes: ConditionScope[]): SmartCondition[] {
-		const facts = {
+		const facts: RuleFacts = {
 			repo: s.repo,
 			subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
 			title: s.title,
-			reason: '',
-			htmlUrl: s.url,
 			enrichment: enrichmentOf(s, who.me),
 			me: who.me
 		};
 		return scopes
-			.filter(
-				({ exprs, always }) =>
-					always ||
-					exprs.some(
-						(expr) =>
-							couldMatch(expr, (when) => ruleMatches(when, facts, NO_CLASSIFICATION)) !== false
-					)
+			.filter(({ exprs }) =>
+				exprs.some((expr) => couldMatch(expr, (when) => ruleMatches(when, facts)) !== false)
 			)
 			.map(({ condition }) => condition);
 	}

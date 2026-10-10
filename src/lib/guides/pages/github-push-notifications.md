@@ -1,11 +1,11 @@
 ---
 title: How to get push notifications for GitHub review requests and CI failures on your phone
-description: GitHub Mobile pushes review requests, mentions, assignments, and failed runs that you started. Hush pushes what waits on you from any browser, including CI that fails on your pull requests. How to set up both, also on iPhone.
+description: GitHub Mobile pushes review requests, mentions, assignments, and failed runs that you started. Hush pushes the facts that you choose from any browser, including CI that fails on your pull requests. How to set up both, also on iPhone.
 ---
 
 ## Short answer
 
-**Install GitHub Mobile, and turn on push for review requests and for GitHub Actions, with "failed workflows only". GitHub then pushes review requests to you, and workflow runs that you started when they fail. To get one push for each pull request, only when it is your turn, use a web app such as Hush. On iPhone, first add it to the Home Screen (iOS 16.4 or later), then turn on push.**
+**Install GitHub Mobile, and turn on push for review requests and for GitHub Actions, with "failed workflows only". GitHub then pushes review requests to you, and workflow runs that you started when they fail. To get one push for each pull request, only for the facts that you choose, use a web app such as Hush. On iPhone, first add it to the Home Screen (iOS 16.4 or later), then turn on push.**
 
 ## Option 1: GitHub Mobile
 
@@ -29,7 +29,7 @@ Know what GitHub Mobile does not push:
 
 ## Option 2: Hush (web push)
 
-Hush sends standard Web Push to browsers and installed web apps. It pushes only what arrives in **Needs you**: review requests to you, failed CI on your pull requests, replies to you, and direct mentions. Hush reads the checks of your pull request, so it does not matter who started the run.
+Hush sends standard Web Push to browsers and installed web apps. It pushes the facts that you choose: by default, review requests to you, mentions, replies to you, approvals and change requests on your pull requests, failed CI on your pull requests, and assignments. Hush reads the checks of your pull request, so it does not matter who started the run.
 
 ### On a computer or Android
 
@@ -38,7 +38,7 @@ Hush sends standard Web Push to browsers and installed web apps. It pushes only 
 3. Under **Devices**, choose **Turn on**, and allow notifications when the browser asks.
 4. Choose **Send test**.
 
-In Chrome, Edge, and on Android, each alert has **Done** and **Snooze 3h** buttons.
+A push opens its pull request or issue on GitHub.
 
 ### On iPhone or iPad
 
@@ -68,12 +68,12 @@ Busy pull requests change many times a day. By default, Hush keeps **one alert f
 - [`quietHours`](/docs/settings#quiethours) holds pushes from 22:00 to 07:00 and on weekends. When quiet hours end, one push lists what waited.
 - [`pushLimit`](/docs/settings#pushlimit) sends at most 6 pushes in 30 minutes. The rest wait and go as one push.
 
-To push FYI threads too, turn on [`pushFyi`](/docs/settings#pushfyi). Most people leave it off: FYI is usually noisy. To push less, keep [`botsAreFyi`](/docs/settings#botsarefyi) on, and choose **Mute** on threads that you do not want to hear about.
+To choose what pushes, turn facts on or off in **Settings → Notifications → What to push** ([`pushFacts`](/docs/settings#pushfacts)): a review request, a mention, a reply, an approval, CI that fails on your pull request, and more. To push less, turn off facts, and choose **Mute** on items that you do not want to hear about.
 
 ## Which one to choose
 
 - **GitHub Mobile** is native, free, and fast. It also lets you read the diff and review on your phone. It pushes events, by type.
-- **Hush** checks GitHub every 5 minutes, so a push can come a few minutes late. It pushes by whose turn it is: CI that fails on your pull request, new commits after your review, a reply to you. It has no native app and no diff view.
+- **Hush** checks GitHub every 5 minutes, so a push can come a few minutes late. It pushes the facts that you choose: a review request, CI that fails on your pull request, an approval, a reply to you. Each view can also push its new items. It has no native app and no diff view.
 
 You can use both. See [Hush vs. GitHub notifications](/compare/github-notifications). For alerts on a desktop only, see [Gitify](/compare/gitify) and [Neat](/compare/neat).
 

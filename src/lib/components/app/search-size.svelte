@@ -1,30 +1,32 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { searchIsUnscoped, SOURCE_RESULTS_MAX, type SourceCount } from '$lib/shared/sources';
+	import { searchIsUnscoped, SOURCE_RESULTS_MAX, type SourceCount } from '$lib/shared/item-views';
+	import { splitSearch } from '$lib/shared/query';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
-	let { query, scope }: { query: string; scope: string } = $props();
+	let { query }: { query: string } = $props();
 
 	const TYPING_PAUSE_MS = 600;
 	const COUNT_FRESH_MS = 5 * 60_000;
 
-	let settled = $state({ query: '', scope: '' });
+	let settled = $state({ query: '' });
 	$effect(() => {
-		const next = { query: query.trim(), scope: scope.trim() };
+		const next = { query: query.trim() };
 		const timer = setTimeout(() => (settled = next), TYPING_PAUSE_MS);
 		return () => clearTimeout(timer);
 	});
 
 	const count = createQuery(() => ({
-		queryKey: ['source-count', settled.query, settled.scope],
-		queryFn: () => api.countSource(settled.query, settled.scope),
-		enabled: !!settled.query,
+		queryKey: ['search-count', settled.query],
+		queryFn: () => api.countSearch(settled.query),
+		enabled: !!settled.query && !splitSearch(settled.query).errors.length,
 		staleTime: COUNT_FRESH_MS,
 		retry: false
 	}));
 
-	const unscoped = $derived(!!query.trim() && searchIsUnscoped(query, scope));
+	const unscoped = $derived(!!query.trim() && searchIsUnscoped(query));
+	const hushWords = $derived(splitSearch(query).hush);
 	const fmt = (n: number) => n.toLocaleString();
 
 	function found(c: SourceCount): string {
@@ -70,4 +72,9 @@
 	{:else if count.data}
 		<p class="text-xs text-muted-foreground">GitHub finds {found(count.data)} now.</p>
 	{/if}
+{/if}
+{#if hushWords}
+	<p class="text-xs text-muted-foreground">
+		Then Hush keeps the results that match <code class="font-mono">{hushWords}</code>.
+	</p>
 {/if}

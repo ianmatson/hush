@@ -23,7 +23,7 @@ describe('rule builder', () => {
 		'-author:bots label:docs',
 		'is:draft size:<50',
 		'about:"database migrations"',
-		'type:pr needs:review',
+		'type:pr label:bug',
 		'label:bug,crash',
 		'login flow'
 	])('keeps the meaning of %s', (query) => {
@@ -79,9 +79,19 @@ describe('rule builder', () => {
 		);
 		expect(describeBuilder({ mode: 'all', items: [] })).toBe('Matches everything.');
 		expect(describeBuilder(queryToBuilder('type:pr size:<50')!)).toBe(
-			'Under 50 changed lines and type is pull request.'
+			'Type is pull request and under 50 changed lines.'
 		);
 		expect(describeBuilder(queryToBuilder('size:10..200')!)).toBe('10 to 200 changed lines.');
+		expect(describeBuilder(queryToBuilder('comments:>10')!)).toBe('Over 10 comments.');
+		expect(describeBuilder(queryToBuilder('status:failure review:none')!)).toBe(
+			'No review yet and CI failed.'
+		);
+		expect(describeBuilder(queryToBuilder('updated:<@today-14d')!)).toBe(
+			'Updated before 14 days ago.'
+		);
+		expect(describeBuilder(queryToBuilder('created:2026-01-01..@today')!)).toBe(
+			'Opened between 2026-01-01 and today.'
+		);
 		expect(describeBuilder(queryToBuilder('label:blocked OR about:"It waits"')!)).toBe(
 			'Label is blocked or about “It waits”.'
 		);

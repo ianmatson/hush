@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import { queryMatches } from './rules';
+import {
+	DEFAULT_VIEWS,
+	MAX_VIEW_SEARCHES,
+	MAX_VIEWS,
+	newestFirst,
+	searchIsUnscoped,
+	searchKinds,
+	sectionsFor,
+	validateViews,
+	viewKinds
+} from './item-views';
+import type { ItemView, RuleFacts } from './types';
+
+const view = (over: Partial<ItemView> = {}): ItemView => ({
+	id: 'web',
+	name: 'Web',
+	searches: ['repo:acme/web is:open'],
+	groupBy: 'status',
+	...over
+});
+
+describe('searchKinds', () => {
+	it('finds both kinds unless the search names one', () => {
+		expect(searchKinds('is:open author:@me')).toEqual(['pr', 'issue']);
+		expect(searchKinds('is:pr is:open')).toEqual(['pr']);
+		expect(searchKinds('is:issue label:bug')).toEqual(['issue']);
+	});
+	it('treats PR-only words as pull requests', () => {
+		expect(searchKinds('is:open review-requested:@me')).toEqual(['pr']);
+		expect(searchKinds('reviewed-by:@me')).toEqual(['pr']);
+		expect(searchKinds('is:open draft:false')).toEqual(['pr']);
+	});
+});
+
+describe('viewKinds', () => {
+	it('has the kinds that its searches can find', () => {
+		expect(viewKinds(view({ searches: ['is:pr is:open'] }))).toEqual(['pr']);
+		expect(viewKinds(view({ searches: ['is:issue', 'is:pr'] }))).toEqual(['pr', 'issue']);
+		expect(viewKinds(DEFAULT_VIEWS[0])).toEqual(['pr', 'issue']);
+	});
+});
+
+describe('sectionsFor', () => {
+	it('gives one section per search, with the view id, for the searches that find the kind', () => {
+		const views = [
+			view(),
+			view({ id: 'reviews', name: 'Reviews', searches: ['review-requested:@me'] })
+		];
+		expect(sectionsFor('pr', views)).toEqual([
+			{ id: 'web', name: 'Web', query: 'is:pr repo:acme/web is:open' },
+			{ id: 'reviews', name: 'Reviews', query: 'is:pr review-requested:@me' }
+		]);
+		expect(sectionsFor('issue', views)).toEqual([
+			{ id: 'web', name: 'Web', query: 'is:issue repo:acme/web is:open' }
+		]);
+	});
+	it('keeps a kind that the search names', () => {
+		expect(sectionsFor('pr', [view({ searches: ['type:pr label:bug'] })])[0].query).toBe(
+			'type:pr label:bug'
+		);
+	});
+});
+
+describe('searchIsUnscoped', () => {
+	it('is true for a search that looks at all of GitHub', () => {
+		expect(searchIsUnscoped('is:open is:issue')).toBe(true);
+		expect(searchIsUnscoped('is:open label:bug archived:false')).toBe(true);
+	});
+	it('is false when a person, team, repository, or organization narrows it', () => {
+		for (const q of DEFAULT_VIEWS[0].searches) expect(searchIsUnscoped(q)).toBe(false);
+		expect(searchIsUnscoped('is:open is:issue org:acme')).toBe(false);
+		expect(searchIsUnscoped('is:open repo:acme/web')).toBe(false);
+	});
+});
+
+describe('newestFirst', () => {
+	it('sorts by update time unless the search sorts', () => {
+		expect(newestFirst('is:open')).toBe('is:open sort:updated-desc');
+		expect(newestFirst('is:open sort:created-asc')).toBe('is:open sort:created-asc');
+	});
+});
+
+describe('validateViews', () => {
+	it('accepts the defaults', () => {
+		expect(validateViews(DEFAULT_VIEWS)).toBeNull();
+	});
+	it('refuses bad views', () => {
+		expect(validateViews([])).toMatch(/at least one/);
+		expect(validateViews([view(), view()])).toMatch(/Two views/);
+		expect(validateViews([view({ name: ' ' })])).toMatch(/name/);
+		expect(validateViews([view({ searches: [' '] })])).toMatch(/search/);
+		expect(validateViews([view({ searches: [] })])).toMatch(/add a search/);
+		expect(
+			validateViews([view({ searches: Array(MAX_VIEW_SEARCHES + 1).fill('is:open') })])
+		).toMatch(/Up to|up to/);
+		expect(
+			validateViews(Array.from({ length: MAX_VIEWS + 1 }, (_, i) => view({ id: `v${i}` })))
+		).toMatch(/Up to/);
+	});
+});
+
+describe('view sections', () => {
+	const withSections = (over: Partial<ItemView>) => validateViews([view(over)]);
+	it('needs at least one section to group by custom sections', () => {
+		expect(withSections({ groupBy: 'custom' })).toMatch(/add a section/);
+		expect(withSections({ groupBy: 'custom', sections: [] })).toMatch(/add a section/);
+		expect(
+			withSections({ groupBy: 'custom', sections: [{ name: 'Small', rule: 'size:<50' }] })
+		).toBeNull();
+	});
+	it('keeps sections when the view groups another way', () => {
+		expect(withSections({ sections: [{ name: 'Small', rule: 'size:<50' }] })).toBeNull();
+	});
+	it('refuses sections that cannot work', () => {
+		const one = (name: string, rule: string) => withSections({ sections: [{ name, rule }] });
+		expect(one('', 'size:<50')).toMatch(/needs a name/);
+		expect(one('Everything else', 'size:<50')).toMatch(/always the last section/);
+		expect(one('Small', '')).toMatch(/needs a rule/);
+		expect(one('Small', 'about:"x"')).toMatch(/Sections cannot use about:/);
+		expect(one('Small', 'mentions:@me')).toMatch(/works only in a view's search/);
+		expect(
+			withSections({
+				sections: [
+					{ name: 'Small', rule: 'size:<50' },
+					{ name: 'small', rule: 'size:<10' }
+				]
+			})
+		).toMatch(/two sections are named/);
+		expect(
+			withSections({
+				sections: Array.from({ length: 11 }, (_, k) => ({ name: `S${k}`, rule: 'is:pr' }))
+			})
+		).toMatch(/up to 10 sections/);
+	});
+});

@@ -104,7 +104,7 @@
 			></Card.Action
 		>
 		<Card.Description class="col-span-2"
-			>Show unread alerts (or what needs you) on the browser tab, and on the app icon when Hush is
+			>Show unread alerts (or unread items) on the browser tab, and on the app icon when Hush is
 			installed.</Card.Description
 		>
 	</Card.Header>

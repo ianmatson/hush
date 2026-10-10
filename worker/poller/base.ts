@@ -3,7 +3,8 @@ import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types'
 import { settingsOverrides } from '../../src/lib/shared/settings-schema';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
-import { MIGRATIONS, SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
+import { projectAccessOf } from '../../src/lib/shared/projects';
+import { MIGRATIONS, SCHEMA, SCHEMA_VERSION } from './schema';
 import {
 	APP_BLUR_MESSAGE,
 	APP_FOCUS_MESSAGE,
@@ -143,11 +144,6 @@ export abstract class PollerBase extends DurableObject<Env> {
 		return this.ctx.storage.transactionSync(fn);
 	}
 
-	/** Threads with their subject's facts, for a WHERE on thread columns. */
-	protected threads(where: string, ...args: SqlValue[]): ThreadWithFacts[] {
-		return this.all<ThreadWithFacts>(`${THREADS} WHERE ${where}`, ...args);
-	}
-
 	// --- The user -------------------------------------------------------------------------
 
 	/** The signed-in user's account (identity and token are global, in D1). */
@@ -176,15 +172,8 @@ export abstract class PollerBase extends DurableObject<Env> {
 			me: user.login,
 			token: await userToken(this.env, user),
 			settings,
-			inboxTeams: settings.teamReviewsAreAction ? (await this.teams()).teams.map((t) => t.slug) : []
+			projectAccess: projectAccessOf(user.scopes ? user.scopes.split(',') : [])
 		};
-	}
-
-	/** The inbox lists changed: the next request for them gets fresh data (see listThreads). */
-	protected async bumpVersion(): Promise<void> {
-		const v = (await this.ctx.storage.get<number>('threadsVersion')) ?? 0;
-		await this.ctx.storage.put('threadsVersion', v + 1);
-		this.broadcast({ type: 'threads' });
 	}
 
 	/** Write only the values that changed. Each written key counts against the daily row budget. */

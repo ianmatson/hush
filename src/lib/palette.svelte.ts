@@ -1,5 +1,5 @@
 import { untrack, type Component } from 'svelte';
-import type { View } from '$lib/shared/types';
+import type { DashKind } from '$lib/shared/types';
 
 export interface PaletteCommand {
 	/** Stable id, used for "Recent". */
@@ -14,9 +14,7 @@ export interface PaletteCommand {
 }
 
 /** Where a palette item lives, so the page can open it in the peek after navigation. */
-export type PeekRequest = { id: string } & (
-	{ page: 'inbox'; view: View } | { page: 'pulls' | 'issues' }
-);
+export type PeekRequest = { id: string; page: 'view'; view: string; kind: DashKind };
 
 const RECENT_KEY = 'hush:palette-recent';
 const RECENT_MAX = 6;

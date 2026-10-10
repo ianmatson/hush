@@ -3,18 +3,12 @@
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
 	import { DEFAULT_ROWS, ROW_KINDS, ROW_PARTS, type RowKind } from '$lib/shared/row-parts';
-	import {
-		PREVIEW_MARKS,
-		PREVIEW_SOURCE_NAMES,
-		PREVIEW_THREAD,
-		previewItem
-	} from '$lib/row-preview';
+	import { PREVIEW_MARKS, previewItem } from '$lib/row-preview';
 	import { Button } from '$lib/components/ui/button';
 	import SavedSwitch from './saved-switch.svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import DashRow from '$lib/components/app/dash-row.svelte';
-	import ThreadRow from '$lib/components/app/thread-row.svelte';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 
 	const me = createQuery(meQuery);
@@ -57,37 +51,20 @@
 		</Tabs.Root>
 
 		<div class="pointer-events-none overflow-hidden rounded-xl border select-none" inert>
-			{#if kind === 'thread'}
-				<ThreadRow
-					thread={PREVIEW_THREAD}
+			{#key kind}
+				<DashRow
+					item={previewItem(kind)}
 					marks={PREVIEW_MARKS}
-					hidden={rows.thread}
-					onaction={noop}
+					hidden={rows[kind]}
 					onopen={noop}
+					onsnooze={noop}
+					onmute={noop}
+					oncopy={noop}
 					onrowclick={noop}
 					ontoggle={noop}
 					menu={() => []}
 				/>
-			{:else}
-				{#key kind}
-					<DashRow
-						item={previewItem(kind)}
-						marks={PREVIEW_MARKS}
-						hidden={rows[kind]}
-						showSections
-						sectionNames={PREVIEW_SOURCE_NAMES}
-						draggable={false}
-						onopen={noop}
-						onhide={noop}
-						onmute={noop}
-						oncopy={noop}
-						onrowclick={noop}
-						ontoggle={noop}
-						onundomove={noop}
-						menu={() => []}
-					/>
-				{/key}
-			{/if}
+			{/key}
 		</div>
 
 		<div class="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">

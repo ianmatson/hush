@@ -36,12 +36,3 @@ export function itemPagePathFromGitHubUrl(url: string): string | null {
 	const kind = segment.toLowerCase() === ITEM_PATH_SEGMENTS.pr ? 'pr' : 'issue';
 	return itemPagePath(`${owner}/${name}`, Number(number), kind);
 }
-
-export function threadPagePath(thread: {
-	repo: string;
-	number: number | null;
-	subjectType: string;
-}): string | null {
-	const kind = subjectKind(thread.subjectType);
-	return thread.number && kind !== 'other' ? itemPagePath(thread.repo, thread.number, kind) : null;
-}

@@ -63,9 +63,10 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import type { QueryPlace } from '$lib/shared/query';
 	import {
-		BUILDER_FIELDS,
 		builderToQuery,
+		fieldsFor,
 		describeBuilder,
 		MATCHES_EVERYTHING,
 		emptyCondition,
@@ -93,8 +94,7 @@
 		value = $bindable(''),
 		id,
 		label = 'Rule',
-		exclude = [],
-		allowGroups = true,
+		place = 'rule',
 		suggestions = {},
 		preview,
 		templates = RULE_TEMPLATES,
@@ -103,24 +103,24 @@
 		value: string;
 		id: string;
 		label?: string;
-		exclude?: string[];
-		allowGroups?: boolean;
+		place?: QueryPlace;
 		suggestions?: Partial<Record<NonNullable<BuilderField['suggest']>, string[]>>;
 		preview?: (query: string) => RulePreview | null;
 		templates?: RuleTemplate[];
 		emptyText?: string;
 	} = $props();
 
-	const fields = $derived(BUILDER_FIELDS.filter((f) => !exclude.includes(f.word)));
+	const fields = $derived(fieldsFor(place));
+	const onlyAll = $derived(place === 'search');
 	const MODES: { value: BuilderMode; label: string }[] = [
 		{ value: 'all', label: 'all' },
 		{ value: 'any', label: 'any' }
 	];
 
 	let builder = $state<BuilderState>(
-		untrack(() => queryToBuilder(value) ?? { mode: 'all', items: [] })
+		untrack(() => queryToBuilder(value, place) ?? { mode: 'all', items: [] })
 	);
-	let textMode = $state(untrack(() => queryToBuilder(value) === null));
+	let textMode = $state(untrack(() => queryToBuilder(value, place) === null));
 	let emitted = untrack(() => value);
 
 	$effect(() => {
@@ -128,7 +128,7 @@
 		untrack(() => {
 			if (next === emitted) return;
 			emitted = next;
-			const parsed = queryToBuilder(next);
+			const parsed = queryToBuilder(next, place);
 			if (parsed) builder = parsed;
 			else textMode = true;
 		});
@@ -140,7 +140,7 @@
 		value = emitted;
 	}
 
-	const canShowVisually = $derived(queryToBuilder(value) !== null);
+	const canShowVisually = $derived(queryToBuilder(value, place) !== null);
 	const summary = $derived.by(() => {
 		const text = describeBuilder(builder);
 		return emptyText && text === MATCHES_EVERYTHING ? emptyText : text;
@@ -185,7 +185,7 @@
 	}
 
 	function useTemplate(query: string) {
-		const parsed = queryToBuilder(query);
+		const parsed = queryToBuilder(query, place);
 		if (!parsed) return;
 		textMode = false;
 		commit(parsed);
@@ -245,7 +245,7 @@
 						? undefined
 						: 'This query has more nesting than the builder shows.'}
 					onclick={() => {
-						builder = queryToBuilder(value) ?? builder;
+						builder = queryToBuilder(value, place) ?? builder;
 						textMode = false;
 					}}><ListChecks /> Visual</Button
 				>
@@ -256,7 +256,7 @@
 	</div>
 
 	{#if textMode}
-		<QueryInput bind:value {id} label="Query" />
+		<QueryInput bind:value {id} {place} label="Query" />
 		{#if !canShowVisually && value.trim()}
 			<p class="text-xs text-muted-foreground">
 				The visual builder shows one level of groups. This query stays in text.
@@ -266,7 +266,7 @@
 		<div
 			class="grid grid-cols-[minmax(0,1fr)] gap-2 sm:rounded-lg sm:border sm:border-dashed sm:p-2.5"
 		>
-			{#if builder.items.length > 1}
+			{#if builder.items.length > 1 && !onlyAll}
 				<div class="flex items-center gap-1.5 text-xs text-muted-foreground">
 					Match {@render modeSelect(
 						builder.mode,
@@ -333,7 +333,7 @@
 			{/each}
 			<div class="flex flex-wrap gap-1">
 				<Button variant="outline" size="xs" onclick={addCondition}><Plus /> Condition</Button>
-				{#if allowGroups}
+				{#if !onlyAll}
 					<Button variant="ghost" size="xs" onclick={addGroup}><Brackets /> Group</Button>
 				{/if}
 			</div>

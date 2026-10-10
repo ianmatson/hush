@@ -8,7 +8,7 @@
 		title,
 		body,
 		when = 'now',
-		actions = [{ label: 'Done' }, { label: 'Snooze 3h' }],
+		actions = [],
 		onopen
 	}: {
 		title: string;

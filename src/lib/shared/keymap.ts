@@ -10,7 +10,7 @@
  */
 
 /** Where a command works. Scopes that are active together must not share a key. */
-export type KeyScope = 'global' | 'list' | 'inbox' | 'dash' | 'peek' | 'page' | 'editor';
+export type KeyScope = 'global' | 'list' | 'dash' | 'peek' | 'page' | 'editor';
 
 export interface KeyCommand {
 	id: string;
@@ -21,8 +21,7 @@ export interface KeyCommand {
 
 export const SCOPE_LABEL: Record<KeyScope, string> = {
 	global: 'Everywhere',
-	list: 'Lists (inbox and dashboards)',
-	inbox: 'Inbox',
+	list: 'Lists',
 	dash: 'Pull requests and issues',
 	peek: 'Peek: actions on GitHub',
 	page: 'Full page',
@@ -31,11 +30,10 @@ export const SCOPE_LABEL: Record<KeyScope, string> = {
 
 /** The scopes that are active at the same time as each scope (a key must be unique there). */
 const TOGETHER: Record<KeyScope, KeyScope[]> = {
-	global: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
-	list: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
-	inbox: ['global', 'list', 'inbox', 'peek'],
+	global: ['global', 'list', 'dash', 'peek', 'page'],
+	list: ['global', 'list', 'dash', 'peek', 'page'],
 	dash: ['global', 'list', 'dash', 'peek'],
-	peek: ['global', 'list', 'inbox', 'dash', 'peek', 'page'],
+	peek: ['global', 'list', 'dash', 'peek', 'page'],
 	page: ['global', 'list', 'peek', 'page'],
 	editor: ['editor']
 };
@@ -72,30 +70,25 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'list.search', label: 'Search', scope: 'list', keys: ['/'] },
 	{ id: 'list.help', label: 'Show shortcuts', scope: 'list', keys: ['?'] },
 
-	{ id: 'inbox.done', label: 'Done', scope: 'inbox', keys: ['e'] },
-	{ id: 'inbox.snooze', label: 'Snooze until tomorrow 9:00', scope: 'inbox', keys: ['s'] },
-	{ id: 'inbox.mute', label: 'Mute the thread', scope: 'inbox', keys: ['m'] },
-	{ id: 'inbox.read', label: 'Mark as read / unread', scope: 'inbox', keys: ['u'] },
-	{ id: 'inbox.notNeeded', label: 'Doesn’t need me…', scope: 'inbox', keys: ['n'] },
-	...range(1, 9).map((n) => ({
-		id: `inbox.view.${n}`,
-		label: `View ${n} (${n <= 5 ? 'built-in' : 'your notification views'})`,
-		scope: 'inbox' as const,
-		keys: [String(n)]
-	})),
-
-	{ id: 'dash.hide', label: 'Hide until it changes (or show again)', scope: 'dash', keys: ['e'] },
-	{ id: 'dash.showHidden', label: 'Show hidden items', scope: 'dash', keys: ['h'] },
+	{
+		id: 'dash.snooze',
+		label: 'Snooze until new activity (or wake it up)',
+		scope: 'dash',
+		keys: ['e']
+	},
+	{ id: 'dash.snoozeTomorrow', label: 'Snooze until tomorrow 9:00', scope: 'dash', keys: ['s'] },
+	{ id: 'dash.showSnoozed', label: 'Show snoozed and muted items', scope: 'dash', keys: ['h'] },
 	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'dash', keys: ['m'] },
-	{ id: 'dash.notNeeded', label: 'Not my turn…', scope: 'dash', keys: ['n'] },
+	{ id: 'dash.read', label: 'Mark as read / unread', scope: 'dash', keys: ['u'] },
 	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'dash', keys: [']'] },
 	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'dash', keys: ['['] },
-	...range(0, 9).map((n) => ({
-		id: `dash.section.${n}`,
-		label: n === 0 ? 'Section: all' : `Section ${n}`,
+	...range(1, 9).map((n) => ({
+		id: `dash.view.${n}`,
+		label: `View ${n}`,
 		scope: 'dash' as const,
 		keys: [String(n)]
 	})),
+	{ id: 'dash.kind', label: 'Pull requests or issues', scope: 'dash', keys: ['t'] },
 
 	{ id: 'peek.approve', label: 'Approve', scope: 'peek', keys: ['a'] },
 	{ id: 'peek.requestChanges', label: 'Request changes', scope: 'peek', keys: ['Shift+a'] },
@@ -237,6 +230,9 @@ export function keyText(chord: string, mac: boolean): string {
 		: { Mod: 'Ctrl', Alt: 'Alt', Shift: 'Shift' };
 	return [...parts.map((m) => mod[m]), shown].join(mac ? ' ' : ' + ');
 }
+
+export const knownKeys = (saved: Record<string, string[]> | undefined): Record<string, string[]> =>
+	Object.fromEntries(Object.entries(saved ?? {}).filter(([id]) => COMMAND.has(id)));
 
 /** Check the `keys` setting. Returns an error message, or null. */
 export function validateKeys(v: unknown): string | null {

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { describeBuilder, queryToBuilder } from '$lib/shared/rule-builder';
-	import { NOTIFICATION_WORDS } from '$lib/shared/query';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
@@ -12,6 +11,8 @@
 	import FeedButton from '$lib/components/app/feed-button.svelte';
 	import IconPicker from '$lib/components/app/marks/icon-picker.svelte';
 	import { saveSettings } from '$lib/save-settings';
+	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
+	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import {
 		DEFAULT_CATEGORY_GROUPS,
 		MAX_CATEGORIES,
@@ -25,7 +26,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
 	import RuleBuilder from '$lib/components/app/rules/rule-builder.svelte';
 	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
@@ -41,15 +41,16 @@
 	import { cubicOut } from 'svelte/easing';
 
 	const me = createQuery(meQuery);
+	const smartStatus = $derived(
+		me.data?.smartDecisionsPaused
+			? 'Smart decisions are paused until 00:00 UTC: your account used its tokens for today.'
+			: me.data?.smartDecisionsChecking
+				? 'Checking your open pull requests and issues… Their categories update when this ends.'
+				: ''
+	);
 	const feeds = createQuery(feedsQuery);
-	const MARK_WORDS = ['category'];
 	const NO_RULE = 'No rule: only Jev, or your own choice, puts items here.';
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
-
-	const PER_ITEM_OPTIONS = [
-		{ id: 'one', label: 'One category per item' },
-		{ id: 'multiple', label: 'Any number per item' }
-	];
 
 	let groups = $state<CategoryGroup[] | null>(null);
 	let saved = $state('');
@@ -80,7 +81,6 @@
 		const fresh: CategoryGroup = {
 			id: newId('group'),
 			name: 'New group',
-			multiple: false,
 			categories: []
 		};
 		groups = [...(groups ?? []), fresh];
@@ -128,12 +128,6 @@
 			c.description.trim() && `Jev: ${c.description.trim()}`
 		].filter(Boolean);
 		return parts.length ? parts.join(' · ') : 'No rule or description yet';
-	}
-
-	function groupHelp(g: CategoryGroup): string {
-		return g.multiple
-			? 'Each category is checked on its own: an item gets every category whose rule matches, or whose description Jev says fits.'
-			: 'The first rule that matches wins, so drag specific categories above broad ones. With no match, Jev picks one that has a description. When Jev is off or unavailable, the item has no category from this group.';
 	}
 
 	function setIcon(c: ItemCategory, icon: string | undefined) {
@@ -235,7 +229,6 @@
 					bind:value={c.rule}
 					id="category-{c.id}-rule"
 					label="Rule (optional)"
-					exclude={[...MARK_WORDS, ...NOTIFICATION_WORDS]}
 					emptyText={NO_RULE}
 					{suggestions}
 					preview={(q) => (me.data ? previewItems(q, me.data.login, me.data.settings) : null)}
@@ -261,11 +254,12 @@
 	<div>
 		<h1 class="hidden text-lg font-semibold tracking-tight md:block">Categories</h1>
 		<p class="text-sm text-muted-foreground">
-			Sort your PRs and issues into groups of categories. A group gives each item one category, or
-			any number of them. Rules use the
+			Sort your PRs and issues into groups. Each item gets one category from each group: the first
+			one whose rule matches, top to bottom, or else the one that Jev picks from the descriptions.
+			If neither works, the item is “Not sorted” in that group. Rules use the
 			<a class="underline" href="/docs/query-language" target="_blank" rel="noreferrer"
 				>query language</a
-			>; a description lets Jev decide.
+			>.
 		</p>
 	</div>
 
@@ -306,24 +300,6 @@
 							><Trash /></Button
 						>
 					</Card.Action>
-					<Card.Description class="col-span-2 grid gap-2">
-						<Select.Root
-							type="single"
-							value={g.multiple ? 'multiple' : 'one'}
-							onValueChange={(v) => (g.multiple = v === 'multiple')}
-						>
-							<Select.Trigger size="sm" class="w-full sm:w-56" aria-label="{g.name}: per item"
-								>{PER_ITEM_OPTIONS.find((o) => o.id === (g.multiple ? 'multiple' : 'one'))
-									?.label}</Select.Trigger
-							>
-							<Select.Content>
-								{#each PER_ITEM_OPTIONS as o (o.id)}
-									<Select.Item value={o.id} label={o.label} />
-								{/each}
-							</Select.Content>
-						</Select.Root>
-						<span>{groupHelp(g)}</span>
-					</Card.Description>
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
 					<ReorderList
@@ -369,6 +345,27 @@
 				<RotateCcw /> Defaults
 			</Button>
 		</div>
+
+		<Card.Root id="smart-decisions">
+			<Card.Content>
+				<SettingRow
+					id="smart-decisions-switch"
+					label="Smart decisions"
+					description="Jev, a decision model, picks categories from their descriptions, checks your about: conditions, and reads the newest comments: comments that need nothing from you (thanks, +1) stop being your turn. It sends titles, descriptions, and comments to TypeSafe."
+				>
+					{#if me.data}
+						<SavedSwitch
+							id="smart-decisions-switch"
+							checked={me.data.settings.smartDecisions}
+							onsave={(v) => saveSettings({ smartDecisions: v })}
+						/>
+					{/if}
+				</SettingRow>
+				{#if me.data?.settings.smartDecisions && smartStatus}
+					<p class="py-2 text-xs text-muted-foreground" role="status">{smartStatus}</p>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 
 		<Card.Root>
 			<Card.Header>

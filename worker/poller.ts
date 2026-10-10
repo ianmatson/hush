@@ -2,7 +2,6 @@ import { listNotifications } from './github';
 import {
 	MIN,
 	ACTIVE_WINDOW,
-	FIRST_SYNC_DAYS,
 	PAUSE_AFTER_NO_PUSH,
 	PAUSE_AFTER_WITH_PUSH,
 	POLL_ACTIVE,
@@ -11,7 +10,7 @@ import {
 } from './poller/shared';
 import { PollerData } from './poller/data';
 
-export { MUTED_BY_USER, type PollStatus } from './poller/shared';
+export type { PollStatus } from './poller/shared';
 
 export class Poller extends PollerData {
 	private running: Promise<void> | null = null;
@@ -19,9 +18,8 @@ export class Poller extends PollerData {
 	private lastGoodPoll = 0;
 
 	async start(userId: number, origin: string): Promise<void> {
-		// A new token (signing in, or a custom token) can see what the old one could not: redo the
-		// first sync (the last 14 days; existing threads keep their triage state), and build the
-		// dashboards and the team list again.
+		// A new token (signing in, or a custom token) can see what the old one could not: start the
+		// notification poll again, and build the dashboards and the team list again.
 		await this.ctx.storage.delete([
 			'initialized',
 			'lastModified',
@@ -75,23 +73,14 @@ export class Poller extends PollerData {
 		await this.flushHeld();
 		await this.schedule();
 		await this.broadcastStatus();
-		const resolved = await this.checkInbox().catch((err) => {
-			console.error('inbox check failed', err);
-			return [];
-		});
-		return { ...(await this.status()), resolved };
+		return this.status();
 	}
 
 	async status(): Promise<PollStatus> {
-		const s = await this.ctx.storage.get(['lastError', 'ssoHiddenOrgs', 'initialized', 'stopped']);
-		const lastError = (s.get('lastError') as string) ?? null;
 		return {
 			lastPollAt: await this.lastPollAt(),
-			lastError,
-			ssoHiddenOrgs: ((s.get('ssoHiddenOrgs') as string[] | undefined) ?? []).length,
+			lastError: (await this.ctx.storage.get<string>('lastError')) ?? null,
 			nextPollAt: await this.ctx.storage.getAlarm(),
-			// A first sync that failed is not "still filling": the error says what is wrong.
-			firstSync: !s.get('initialized') && !s.get('stopped') && !lastError,
 			smartDecisionsPaused: await this.decisionsPaused(),
 			smartDecisionsChecking: await this.decisionFillPending()
 		};
@@ -136,9 +125,7 @@ export class Poller extends PollerData {
 			type: 'status',
 			lastPollAt: s.lastPollAt,
 			nextPollAt: s.nextPollAt,
-			lastPollError: s.lastError,
-			ssoHiddenOrgs: s.ssoHiddenOrgs,
-			firstSync: s.firstSync
+			lastPollError: s.lastError
 		});
 	}
 
@@ -223,13 +210,7 @@ export class Poller extends PollerData {
 		try {
 			page = await listNotifications(
 				who.token,
-				initialized
-					? { ifModifiedSince: lastModified }
-					: {
-							all: true,
-							since: new Date(Date.now() - FIRST_SYNC_DAYS * 24 * 60 * MIN).toISOString(),
-							maxPages: 3
-						}
+				initialized ? { ifModifiedSince: lastModified } : {}
 			);
 		} catch (err) {
 			return this.fail(`Network error: ${(err as Error).message}`);
@@ -257,20 +238,17 @@ export class Poller extends PollerData {
 			retryAt: 0
 		});
 		if (page.status === 304) {
-			await this.wakeSnoozed();
-			await this.watch(who);
+			await this.keepTrackedFresh();
 			return this.cleanup();
 		}
-		await this.putChanged({ ssoHiddenOrgs: page.ssoHiddenOrgs });
-		const ingested = await this.ingest(who, page.items, initialized);
-		// Save Last-Modified only after the threads are stored. If ingest fails, the next poll
-		// asks GitHub again instead of getting a 304 and losing those notifications.
+		await this.ingest(who, page.items, initialized);
+		// Save Last-Modified only after the notifications are handled. If ingest fails, the next
+		// poll asks GitHub again instead of getting a 304 and losing those notifications.
 		await this.ctx.storage.put({
 			initialized: true,
 			...(page.lastModified ? { lastModified: page.lastModified } : {})
 		});
-		await this.wakeSnoozed();
-		await this.watch(who, ingested);
+		await this.keepTrackedFresh();
 		await this.cleanup();
 	}
 }

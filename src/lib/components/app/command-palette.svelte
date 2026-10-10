@@ -7,28 +7,14 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import {
-		dashQuery,
-		keys,
-		leaveTo,
-		meQuery,
-		queryClient,
-		refetchUnlessLive,
-		threadsQuery
-	} from '$lib/queries';
-	import Bookmark from '@lucide/svelte/icons/bookmark';
+	import { dashQuery, keys, leaveTo, meQuery, queryClient, refetchUnlessLive } from '$lib/queries';
+	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
 	import Palette from '@lucide/svelte/icons/palette';
-	import type { View } from '$lib/shared/types';
 	import * as Command from '$lib/components/ui/command';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import Inbox from '@lucide/svelte/icons/inbox';
-	import Bell from '@lucide/svelte/icons/bell';
-	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
-	import Check from '@lucide/svelte/icons/check';
-	import BellOff from '@lucide/svelte/icons/bell-off';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import CircleDot from '@lucide/svelte/icons/circle-dot';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -43,8 +29,8 @@
 	import { SETTING_TOGGLES } from '$lib/setting-toggles';
 
 	/**
-	 * ⌘K / Ctrl+K: find a thread, PR, or issue (Enter peeks, ⌘Enter opens GitHub), run an action on
-	 * the current row, go to a page, or run a command. Searches only data Hush already has.
+	 * ⌘K / Ctrl+K: find a PR or issue (Enter peeks, ⌘Enter opens GitHub), run an action on the
+	 * current row, go to a page, or run a command. Searches only data Hush already has.
 	 */
 	interface Entry extends PaletteCommand {
 		/** github.com URL, for ⌘Enter. */
@@ -54,19 +40,7 @@
 	}
 
 	const touchOnly = new MediaQuery('pointer: coarse');
-	const VIEWS: { id: View; label: string }[] = [
-		{ id: 'action', label: 'Needs you' },
-		{ id: 'fyi', label: 'FYI' },
-		{ id: 'snoozed', label: 'Snoozed' },
-		{ id: 'done', label: 'Done' },
-		{ id: 'muted', label: 'Muted' }
-	];
-	// Lists Hush keeps fresh anyway are fetched when the palette opens; Done and Muted come from
-	// the cache only (they can be long, and you seldom look for them).
-	const FETCH: View[] = ['action', 'fyi', 'snoozed'];
-	const lists = VIEWS.map((v) =>
-		createQuery(() => ({ ...threadsQuery(v.id), enabled: palette.open && FETCH.includes(v.id) }))
-	);
+	const me = createQuery(meQuery);
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
 
@@ -78,46 +52,17 @@
 		goto(href);
 	}
 
-	const threadEntries = $derived.by((): Entry[] => {
-		if (!palette.open) return [];
-		const seen = new Set<string>();
-		return VIEWS.flatMap((v, k) =>
-			(lists[k].data?.threads ?? [])
-				.filter((t) => !seen.has(t.id) && seen.add(t.id))
-				.map((t) => ({
-					id: `thread:${t.id}`,
-					label: t.title,
-					detail: t.number ? `${t.repo}#${t.number}` : t.repo,
-					icon: (t.subjectType === 'PullRequest'
-						? GitPullRequest
-						: t.subjectType === 'Issue'
-							? CircleDot
-							: Bell) as Component,
-					keywords: [t.repo, t.number ? `#${t.number}` : '', t.author ?? '', t.summary, t.why],
-					url: t.htmlUrl,
-					where: v.label,
-					run: () =>
-						t.number
-							? peek({ page: 'inbox', view: v.id, id: t.id }, `/inbox?view=${v.id}`)
-							: window.open(t.htmlUrl, '_blank', 'noopener')
-				}))
-		);
-	});
-
-	const inboxUrls = $derived(new Set(threadEntries.map((e) => e.url)));
 	const dashEntries = $derived.by((): Entry[] => {
 		if (!palette.open) return [];
 		const turn = { you: 'Your turn', team: "Team's turn", them: 'Waiting', none: 'Other' };
-		return (
-			[
-				['pulls', prs.data],
-				['issues', issues.data]
-			] as const
-		).flatMap(([page, d]) =>
+		const views = me.data?.settings.views ?? [];
+		return [prs.data, issues.data].flatMap((d) =>
 			(d?.items ?? [])
-				// A PR that is also an inbox thread shows once, as the thread.
-				.filter((i) => !inboxUrls.has(i.url))
-				.map((i) => ({
+				.flatMap((i) => {
+					const home = views.find((v) => i.sections.includes(v.id));
+					return home ? [{ i, home }] : [];
+				})
+				.map(({ i, home }) => ({
 					id: `dash:${i.id}`,
 					label: i.title,
 					detail: `${i.repo}#${i.number}`,
@@ -130,57 +75,36 @@
 						...i.labels.map((l) => l.name)
 					],
 					url: i.url,
-					where: `${page === 'pulls' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
-					run: () => peek({ page, id: i.id }, `/${page}`)
+					where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
+					run: () =>
+						peek(
+							{ page: 'view', view: home.id, kind: i.kind, id: i.id },
+							`/v/${home.id}?show=${i.kind}`
+						)
 				}))
 		);
 	});
 
-	const me = createQuery(meQuery);
 	const goEntries = $derived<Entry[]>([
-		...VIEWS.map((v) => ({
-			id: `go:${v.id}`,
-			label: v.label,
-			icon: (v.id === 'snoozed'
-				? AlarmClock
-				: v.id === 'done'
-					? Check
-					: v.id === 'muted'
-						? BellOff
-						: Inbox) as Component,
-			keywords: ['inbox', 'view'],
-			run: () => goto(`/inbox?view=${v.id}`)
-		})),
 		...(me.data?.settings.views ?? []).map((v) => ({
 			id: `go:view:${v.id}`,
 			label: v.name,
-			where: 'Notification view',
-			icon: Bookmark as Component,
-			keywords: ['view', 'saved', v.query],
-			run: () => goto(`/inbox?view=v:${v.id}`)
+			where: 'View',
+			icon: LayoutList as Component,
+			keywords: ['view', 'prs', 'issues', ...v.searches],
+			run: () => goto(`/v/${v.id}`)
 		})),
-		{
-			id: 'go:pulls',
-			label: 'Pull requests',
-			icon: GitPullRequest,
-			keywords: ['prs', 'dashboard'],
-			run: () => goto('/pulls')
-		},
-		{
-			id: 'go:issues',
-			label: 'Issues',
-			icon: CircleDot,
-			keywords: ['dashboard'],
-			run: () => goto('/issues')
-		},
 		...(
 			[
 				['general', 'General', 'appearance menus account export import'],
 				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
-				['inbox', 'Inbox, views, and feeds', 'feeds defaults'],
-				['dashboards', 'Sources', 'sections searches tracked teams dashboards'],
-				['categories', 'Categories', 'categories groups tags rules labels effort impact feeds'],
+				['views', 'Views', 'views searches sources tracked teams dashboards'],
+				[
+					'categories',
+					'Categories',
+					'categories groups rules labels effort impact feeds smart jev'
+				],
 				['notifications', 'Notifications', 'push quiet']
 			] as const
 		)
@@ -198,7 +122,7 @@
 		const t = toast.loading('Syncing with GitHub…');
 		try {
 			const status = await api.sync();
-			await refetchUnlessLive(keys.threadsAll);
+			await refetchUnlessLive(keys.dashAll);
 			await queryClient.invalidateQueries({ queryKey: keys.me });
 			if (status.lastError) toast.error(status.lastError, { id: t });
 			else toast.success('Synced', { id: t });
@@ -260,7 +184,6 @@
 	const pageCommands = $derived<Entry[]>(palette.open ? palette.pageCommands : []);
 	const all = $derived([
 		...pageCommands,
-		...threadEntries,
 		...dashEntries,
 		...goEntries,
 		...settingEntries,
@@ -337,9 +260,8 @@
 				: 'Actions',
 			items: pageCommands
 		},
-		// Threads and PRs only once you type: hundreds of rows are noise in the empty palette.
-		{ heading: 'Notification views', items: goEntries.filter((e) => e.id.startsWith('go:view:')) },
-		{ heading: 'Inbox', items: search.trim() ? threadEntries : [] },
+		// PRs and issues only once you type: hundreds of rows are noise in the empty palette.
+		{ heading: 'Views', items: goEntries.filter((e) => e.id.startsWith('go:view:')) },
 		{ heading: 'Pull requests and issues', items: search.trim() ? dashEntries : [] },
 		{ heading: 'Go to', items: goEntries.filter((e) => !e.id.startsWith('go:view:')) },
 		{ heading: 'Settings', items: search.trim() ? settingEntries : [] },
@@ -392,7 +314,7 @@
 	>
 		<Dialog.Title class="sr-only">Command palette</Dialog.Title>
 		<Dialog.Description class="sr-only"
-			>Find a thread, run an action, or go to a page.</Dialog.Description
+			>Find a pull request or issue, run an action, or go to a page.</Dialog.Description
 		>
 		<Command.Root
 			bind:value={highlighted}
@@ -405,7 +327,7 @@
 				<div class="min-w-0 flex-1">
 					<Command.Input
 						bind:value={search}
-						placeholder="Search threads, PRs, actions, pages…"
+						placeholder="Search PRs, issues, actions, pages…"
 						class="max-sm:text-base"
 					/>
 				</div>

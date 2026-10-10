@@ -5,11 +5,16 @@
 	import {
 		dashCommands,
 		dashMenu,
-		type DashActionContext,
-		type TurnGroup
+		UNTIL_NEW_ACTIVITY,
+		type DashActionContext
 	} from '$lib/dash-actions';
+	import { snoozeLabel, type SnoozeChoice } from '$lib/shared/item-snooze';
+	import { alreadyTrue } from '$lib/shared/snooze';
+	import { snoozeOptions } from '$lib/time';
+	import SnoozeButton from './snooze-button.svelte';
+	import SnoozeSheet from './snooze-sheet.svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
-	import { DASH_MOUSE, shortcutsFor } from '$lib/shortcuts';
+	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { itemPagePath } from '$lib/shared/item-page';
 	import { goto } from '$app/navigation';
@@ -18,13 +23,22 @@
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { ListDrag } from '$lib/drag.svelte';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, queryClient, refetchUnlessLive } from '$lib/queries';
+	import { dashQuery, keys, queryClient, refetchUnlessLive, setSettings } from '$lib/queries';
+	import { applySettings } from '$lib/save-settings';
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
-	import { arrangeGroup, NEW_COMMITS_REASON, orderAfterDrop } from '$lib/shared/dashboard';
+	import { sortItems } from '$lib/shared/dashboard';
+	import {
+		groupByLabel,
+		groupByOptions,
+		groupItems,
+		projectsHolding,
+		type GroupByOption
+	} from '$lib/shared/grouping';
+	import { projectAccessOf, statusColor } from '$lib/shared/projects';
+	import { MARK_DOT } from '$lib/marks';
 	import {
 		findStacks,
 		rotateToFront,
@@ -36,20 +50,27 @@
 	} from '$lib/shared/stacks';
 	import StackStrip from './stack-strip.svelte';
 	import StackOutsideRow from './stack-outside-row.svelte';
-	import type { DashItem, DashKind, DashResponse, Turn } from '$lib/shared/types';
+	import type {
+		DashItem,
+		DashKind,
+		DashProject,
+		DashResponse,
+		GroupBy,
+		ItemView
+	} from '$lib/shared/types';
+	import { viewKinds } from '$lib/shared/item-views';
+	import { page } from '$app/state';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
-	import type { Classification } from '$lib/shared/types';
-	import { groupOf, itemQueryFacts, type PinChange } from '$lib/shared/categories';
-	import { exprMatches, NOTIFICATION_WORDS, parseExpr } from '$lib/shared/query';
-	import { ruleMatches } from '$lib/shared/classify';
+	import {
+		matchesCategoryFilter,
+		type CategoryFilter,
+		type CategoryPin
+	} from '$lib/shared/categories';
 	import { rowMarks, type RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
-	import FilterBuilder from './rules/filter-builder.svelte';
-	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import PillRow, { type Pill } from './pill-row.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
@@ -69,116 +90,151 @@
 	import { keepHeldRow } from '$lib/shared/held-row';
 	import WhyLine from './why-line.svelte';
 	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
-	import NotNeededDialog, { type NotNeededTarget } from './not-needed-dialog.svelte';
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
 	import JevNotice from './jev-notice.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import Search from '@lucide/svelte/icons/search';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
-	import Eye from '@lucide/svelte/icons/eye';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
 	import BellOff from '@lucide/svelte/icons/bell-off';
-	import CircleSlash from '@lucide/svelte/icons/circle-slash';
+	import Mail from '@lucide/svelte/icons/mail';
+	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Link from '@lucide/svelte/icons/link';
-	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
-	import Undo from '@lucide/svelte/icons/undo-2';
+	import Rows3 from '@lucide/svelte/icons/rows-3';
+	import Check from '@lucide/svelte/icons/check';
 
-	let { kind }: { kind: DashKind } = $props();
-	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
+	let { view }: { view: ItemView } = $props();
+	type Showing = DashKind | 'both';
+	const SHOWING_LABELS: Record<Showing, string> = {
+		pr: 'Pull requests',
+		issue: 'Issues',
+		both: 'Both'
+	};
+	const showingOptions = (v: ItemView): Showing[] => {
+		const kinds = viewKinds(v);
+		return kinds.length > 1 ? [...kinds, 'both'] : kinds;
+	};
+	const showingKey = (id: string) => `hush:view-kind:${id}`;
+	function readShowing(v: ItemView): Showing {
+		const options = showingOptions(v);
+		const asked = page.url.searchParams.get('show') ?? localStorage.getItem(showingKey(v.id));
+		return options.find((k) => k === asked) ?? options[0] ?? 'pr';
+	}
+	let showing = $state<Showing>(readShowing(untrack(() => view)));
+	$effect(() => {
+		const v = view;
+		void page.url.searchParams.get('show');
+		untrack(() => (showing = readShowing(v)));
+	});
+	function show(next: Showing) {
+		showing = next;
+		localStorage.setItem(showingKey(view.id), next);
+	}
+	const kinds = $derived<DashKind[]>(showing === 'both' ? viewKinds(view) : [showing]);
+	const noun = $derived(
+		showing === 'both' ? 'pull requests and issues' : showing === 'pr' ? 'pull requests' : 'issues'
+	);
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
 
-	const dashQ = createQuery(() => dashQuery(kind));
+	const prQ = createQuery(() => ({
+		...dashQuery('pr'),
+		enabled: viewKinds(view).includes('pr')
+	}));
+	const issueQ = createQuery(() => ({
+		...dashQuery('issue'),
+		enabled: viewKinds(view).includes('issue')
+	}));
+	const queryOf = (k: DashKind) => (k === 'pr' ? prQ : issueQ);
+	const shownQueries = $derived(kinds.map(queryOf));
 	const me = createQuery(meQuery);
-	const data = $derived(dashQ.data ?? null);
+	const data = $derived.by(() => {
+		const answers = shownQueries.map((q) => q.data);
+		if (answers.some((d) => !d)) return null;
+		const ds = answers as DashResponse[];
+		return {
+			items: ds.flatMap((d) => d.items),
+			errors: [...new Set(ds.flatMap((d) => d.errors))],
+			skipped: [
+				...new Set(ds.flatMap((d) => d.sections.filter((s) => s.id === view.id && s.skipped)))
+			].map((s) => s.skipped!),
+			fetchedAt: Math.min(...ds.map((d) => d.fetchedAt)),
+			refreshing: ds.some((d) => d.refreshing),
+			projects: ds.some((d) => d.projects)
+				? [...new Map(ds.flatMap((d) => d.projects ?? []).map((p) => [p.key, p] as const)).values()]
+				: undefined
+		};
+	});
 	const pageOpenedAt = Date.now();
-	const revalidatingAfterOpen = $derived(dashQ.isFetching && dashQ.dataUpdatedAt < pageOpenedAt);
+	const fetching = $derived(shownQueries.some((q) => q.isFetching));
+	const revalidatingAfterOpen = $derived(
+		fetching && shownQueries.some((q) => q.dataUpdatedAt < pageOpenedAt)
+	);
+	const loadError = $derived(shownQueries.find((q) => q.isError)?.error ?? null);
+	const pending = $derived(shownQueries.some((q) => q.isPending));
+	const dashKeys = (k: DashKind[] = viewKinds(view)) => k.map((x) => keys.dash(x));
+	const cancelDash = () =>
+		Promise.all(dashKeys().map((queryKey) => queryClient.cancelQueries({ queryKey })));
+	const invalidateDash = () =>
+		dashKeys().forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
+	const refetchDash = () => dashKeys().forEach((queryKey) => refetchUnlessLive(queryKey));
+	function patchItems(ids: Set<string>, patch: (x: DashItem) => DashItem) {
+		for (const queryKey of dashKeys())
+			queryClient.setQueryData<DashResponse>(queryKey, (old) =>
+				old ? { ...old, items: old.items.map((x) => (ids.has(x.id) ? patch(x) : x)) } : old
+			);
+	}
 	let refreshing = $state(false);
-	let section = $state<string | null>(null);
-	let categoryFilter = $state<string | null>(null);
-	let query = $state('');
-	let showHidden = $state(false);
+	let categoryFilter = $state<CategoryFilter | null>(null);
+	let showSnoozed = $state(false);
+	let snoozeSheetIds = $state<string[] | null>(null);
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
-	let searchEl = $state<HTMLInputElement | null>(null);
-	// Collapsed groups are read at once (not after the first paint), and they slide only after
+	const DEFAULT_COLLAPSED = new Set(['drafts']);
+	const collapsedKey = (v: ItemView) => `hush:collapsed:${v.id}:${v.groupBy}`;
+	// Collapsed sections are read at once (not after the first paint), and they slide only after
 	// you open or close one: a page that loads shows them as they are, with no motion.
-	const readCollapsed = (k: DashKind): Record<Turn, boolean> => {
-		const base = { you: false, team: false, them: false, none: true };
+	function readCollapsed(v: ItemView): Record<string, boolean> {
 		try {
-			return { ...base, ...JSON.parse(localStorage.getItem(`hush:collapsed:${k}`) ?? '{}') };
+			return JSON.parse(localStorage.getItem(collapsedKey(v)) ?? '{}');
 		} catch {
-			return base;
+			return {};
 		}
-	};
-	let collapsed = $state<Record<Turn, boolean>>(readCollapsed(untrack(() => kind)));
+	}
+	let collapsedChoice = $state<Record<string, boolean>>(readCollapsed(untrack(() => view)));
+	const isCollapsed = (key: string) => collapsedChoice[key] ?? DEFAULT_COLLAPSED.has(key);
+	function setCollapsed(key: string, value: boolean) {
+		collapsedChoice = { ...collapsedChoice, [key]: value };
+		localStorage.setItem(collapsedKey(view), JSON.stringify(collapsedChoice));
+	}
 	let groupMotion = $state(false);
 	const sel = new Selection();
-
-	const ALL_GROUPS: TurnGroup[] = [
-		{ turn: 'you', label: 'Your turn', hint: 'You are the next person who must act.' },
-		{
-			turn: 'team',
-			label: "Your team's turn",
-			hint: 'A review is requested from a team you are in.'
-		},
-		{ turn: 'them', label: 'Waiting on others', hint: 'You did your part. Someone else must act.' },
-		{ turn: 'none', label: 'Other', hint: 'Drafts, and threads that only mention you.' }
-	];
-	// Only a team review request makes it the team's turn, and only PRs have review requests (GitHub
-	// assigns issues to people, not teams). Issues show the group only if you moved one there.
-	const GROUPS = $derived(
-		kind === 'pr' || dashQ.data?.items.some((i) => i.turn === 'team')
-			? ALL_GROUPS
-			: ALL_GROUPS.filter((g) => g.turn !== 'team')
-	);
-	const groupLabel = (t: Turn) => ALL_GROUPS.find((g) => g.turn === t)!.label;
 
 	const categoryGroups = $derived(me.data?.settings.categoryGroups ?? []);
 
 	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.categories, me.data?.settings);
 
-	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
-	const categoryCount = (id: string) =>
-		visibleItems.filter((i) => i.categories?.includes(id)).length;
-	const hiddenParts = $derived(me.data?.settings.rows[kind] ?? []);
+	const inView = (i: DashItem) => i.sections.includes(view.id);
+	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed && inView(i)));
+	const categoryCount = (filter: CategoryFilter) =>
+		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
+	const hiddenPartsOf = (i: DashItem) => me.data?.settings.rows[i.kind] ?? [];
 
-	const sectionNames = $derived(
-		Object.fromEntries((data?.sections ?? []).map((s) => [s.id, s.name]))
-	);
-	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed).length ?? 0);
+	const snoozedCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
+	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
 
-	const queryExpr = $derived.by(() => {
-		if (!query.includes(':')) return null;
-		const parsed = parseExpr(query);
-		return parsed.errors.length ? null : parsed.expr;
-	});
-	function matchesQuery(i: DashItem, q: string) {
-		const settings = me.data?.settings;
-		if (queryExpr && settings) {
-			const facts = itemQueryFacts(i, me.data!.login, settings);
-			const c = { category: 'fyi', kind: 'none' } as Classification;
-			return exprMatches(queryExpr, (when) => ruleMatches(when, facts, c));
-		}
-		return `${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
-			.toLowerCase()
-			.includes(q);
-	}
-
-	const peekOwner = $derived(kind === 'pr' ? 'pulls' : 'issues');
+	const peekOwner = $derived(`view:${view.id}:${showing}`);
 	const owns = $derived(peek.owner === peekOwner);
 	let filteredBefore: DashItem[] = [];
 	const filtered = $derived.by(() => {
-		const q = query.trim().toLowerCase();
 		const listed = (data?.items ?? []).filter(
 			(i) =>
-				i.dismissed === showHidden &&
-				(!section || i.sections.includes(section)) &&
-				(!categoryFilter || !!i.categories?.includes(categoryFilter)) &&
-				(!q || matchesQuery(i, q))
+				i.dismissed === showSnoozed &&
+				inView(i) &&
+				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups))
 		);
 		return keepHeldRow(
 			listed,
@@ -192,19 +248,33 @@
 	const heldOutOfKeyboardOrder = (id: string | null) =>
 		id !== null && id === peek.heldId && owns && filtered.some((i) => i.id === id);
 
-	/** Groups in display order: new items on top, then your manual order. */
-	const arrangedGroups = $derived(
-		GROUPS.map((g) => ({
-			...g,
-			items: arrangeGroup(filtered.filter((i) => i.turn === g.turn))
-		}))
+	const groupBy = $derived(view.groupBy);
+	const projects = $derived<DashProject[]>(
+		projectsHolding(visibleItems, data?.projects ?? [], groupBy)
+	);
+	const noProjectAccess = $derived(!!me.data && projectAccessOf(me.data.scopes ?? []) === 'none');
+	const hasSections = $derived(!!view.sections?.length);
+	const groupByChoices = $derived(groupByOptions(categoryGroups, projects, hasSections));
+	const editSectionsPath = $derived(`/settings/views#view-${view.id}`);
+	const startsNewKind = (choices: GroupByOption[], k: number) =>
+		k > 0 && choices[k].kind !== choices[k - 1].kind;
+	const groupByName = $derived(groupByLabel(groupBy, categoryGroups, data?.projects ?? []));
+	const sections = $derived(
+		groupItems(sortItems(filtered), groupBy, {
+			me: me.data?.login ?? '',
+			categoryGroups,
+			projects: data?.projects,
+			sections: view.sections
+		})
 	);
 
 	let stackFront = $state<Record<string, string>>({});
 	let rotationDirection = $state(0);
 	let peekedOutsideKey = $state<string | null>(null);
 
-	const stacks = $derived(kind === 'pr' ? findStacks(arrangedGroups.flatMap((g) => g.items)) : []);
+	const stacks = $derived(
+		kinds.includes('pr') ? findStacks(sections.flatMap((section) => section.items)) : []
+	);
 	const stackOf = $derived(stackByMember(stacks));
 	const rotated = (s: Stack) => rotateToFront(s, stackFront[s.bottomKey]);
 	const inListMembers = (members: StackMember[]) =>
@@ -212,42 +282,20 @@
 	const itemsOfUnit = (u: ListUnit) => (u.stack ? inListMembers(rotated(u.stack)) : [u.item]);
 	const visibleItemOfUnit = (u: ListUnit) => itemsOfUnit(u).slice(0, 1);
 
-	const baseGroups = $derived(
-		arrangedGroups.map((g) => {
-			const units = unitsOf(g.items, stackOf);
-			return { ...g, units, items: units.flatMap(itemsOfUnit) };
+	const sectionLabelOf = (id: string) =>
+		sections.find((section) => section.items.some((x) => x.id === id))?.label || view.name;
+	const listed = $derived(
+		sections.map((section) => {
+			const units = unitsOf(section.items, stackOf);
+			return { ...section, units, items: units.flatMap(itemsOfUnit) };
 		})
 	);
 
-	// --- Drag and drop ----------------------------------------------------------------
-	const drag = new ListDrag({
-		enabled: () => !showHidden,
-		// Dragging a selected row moves the whole selection, in list order.
-		pick: (id) => {
-			const stack = stackOf.get(id);
-			if (stack) return inListMembers(rotated(stack)).map((i) => i.id);
-			return sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id];
-		},
-		isCollapsed: (zone) => collapsed[zone as Turn],
-		drop: (ids, zone, index) => dropAt(ids, zone as Turn, index)
-	});
-	const dragging = $derived(new Set(drag.ids));
-
-	/** Rows to render: dragged rows leave their lists; the placeholder opens where they land. */
-	const groups = $derived(
-		baseGroups.map((g) => {
-			const rows: Row[] = g.units
-				.filter((u) => !itemsOfUnit(u).some((i) => dragging.has(i.id)))
-				.map((u) => ({ key: u.key, unit: u }));
-			if (drag.active && drag.zone === g.turn && !collapsed[g.turn])
-				rows.splice(Math.min(drag.index, rows.length), 0, { key: '__placeholder', unit: null });
-			return { ...g, rows };
-		})
-	);
-
-	/** Keyboard order: only rows in open groups. */
+	/** Keyboard order: only rows in open sections. */
 	const navigable = $derived(
-		baseGroups.flatMap((g) => (collapsed[g.turn] ? [] : g.units.flatMap(visibleItemOfUnit)))
+		listed.flatMap((section) =>
+			isCollapsed(section.key) ? [] : section.units.flatMap(visibleItemOfUnit)
+		)
 	);
 	const order = $derived(navigable.map((i) => i.id));
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
@@ -273,23 +321,22 @@
 	});
 	const peekCurrentKey = $derived(peekedOutsideMember?.key ?? peekItem?.id ?? null);
 	const peekStack = $derived(peekCurrentKey ? (stackOf.get(peekCurrentKey) ?? null) : null);
-	// Looking at it in the peek for a moment: "since you looked" starts again (when there is
-	// something to reset).
+	let readByPeek: string | null = null;
 	$effect(() => {
 		const i = peekItem;
-		if (!i || (i.seenAt && !i.changes?.length)) return;
-		const timer = setTimeout(() => api.seen([i.id]).catch(() => {}), 1500);
-		return () => clearTimeout(timer);
+		if (i?.id === readByPeek) return;
+		readByPeek = i?.id ?? null;
+		if (i?.unread) untrack(() => markSeenHere([i.id]));
 	});
 	$effect(() => {
-		const k = kind;
+		void showing;
+		const v = view;
 		untrack(() => {
-			section = null;
 			categoryFilter = null;
 			selectedId = null;
 			sel.clear();
 			groupMotion = false;
-			collapsed = readCollapsed(k);
+			collapsedChoice = readCollapsed(v);
 		});
 	});
 	// Back on the page that owns the peek (after another tab): the cursor goes to the item it
@@ -412,137 +459,6 @@
 	const rotateIn = (_node: Element, direction: number) => rotationSlide(-direction);
 	const rotateOut = (_node: Element, direction: number) => rotationSlide(direction);
 
-	/** `index` counts the visible rows left in the group once the dragged rows are out. */
-	function dropAt(ids: string[], turn: Turn, index: number) {
-		const left = (baseGroups.find((g) => g.turn === turn)?.units ?? []).filter(
-			(u) => !itemsOfUnit(u).some((i) => ids.includes(i.id))
-		);
-		const idsOf = (units: ListUnit[]) => units.flatMap((u) => itemsOfUnit(u).map((i) => i.id));
-		const visible = [...idsOf(left.slice(0, index)), ...ids, ...idsOf(left.slice(index))];
-		return arrange(ids, turn, orderAfterDrop(fullGroup(turn), visible, ids));
-	}
-
-	// Enter and leave animations that know about dragging.
-	type Row = { key: string; unit: ListUnit | null };
-	function enter(node: Element, r: Row) {
-		if (!r.unit)
-			return drag.fresh ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
-		if (drag.settling) {
-			// The dropped stack unfolds: the first card is already in place, the rest slide out of it.
-			const k = drag.unfold.indexOf(r.unit.item.id);
-			return k < 0
-				? { duration: 0 }
-				: fly(node, { y: -28, opacity: 0, duration: 320, delay: 35 * k, easing: cubicOut });
-		}
-		if (drag.active) return { duration: 0 };
-		return fly(node, { y: -8, duration: 200 });
-	}
-	function leave(node: Element, r: Row) {
-		if (!r.unit)
-			return drag.settling ? { duration: 0 } : slide(node, { duration: 200, easing: cubicOut });
-		// Rows lifted by a drag vanish at once: the floating card stands in for them.
-		if (drag.active || drag.settling) return { duration: 0 };
-		return slide(node, { duration: 200, easing: cubicOut });
-	}
-
-	/** Full order of a group, including rows hidden by the current filter. */
-	const fullGroup = (turn: Turn) =>
-		arrangeGroup(
-			(data?.items ?? []).filter((i) => i.turn === turn && i.dismissed === showHidden)
-		).map((i) => i.id);
-
-	function dropped(id: string, turn: Turn, visible: string[]) {
-		// Dragging a selected row moves the whole selection, in list order.
-		const moved = sel.has(id) && sel.size > 1 ? sel.targets(order, id) : [id];
-		const block = new Set(moved);
-		const vis = visible.filter((x) => x === id || !block.has(x));
-		vis.splice(vis.indexOf(id), 1, ...moved);
-		const before = fullGroup(turn);
-		const next = orderAfterDrop(before, vis, moved);
-		const sameGroup = moved.every((m) => byId(m)?.turn === turn);
-		if (sameGroup && next.join() === before.join()) return;
-		arrange(moved, turn, next);
-	}
-
-	/**
-	 * Move items into a group at a given order: update the cache now, then save.
-	 * `turn` null undoes your moves (back to Hush's group).
-	 */
-	async function arrange(ids: string[], turn: Turn | null, groupOrder?: string[]) {
-		const items = ids.map(byId).filter((i): i is DashItem => !!i);
-		if (!items.length) return;
-		const prev = new Map(items.map((i) => [i.id, i]));
-		const target = (i: DashItem) => turn ?? i.autoTurn;
-		const rank = new Map((groupOrder ?? []).map((x, n) => [x, n]));
-		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
-		const set = (fn: (x: DashItem) => DashItem) =>
-			queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
-				old ? { ...old, items: old.items.map(fn) } : old
-			);
-		set((x) =>
-			prev.has(x.id)
-				? {
-						...x,
-						turn: target(x),
-						movedByYou: target(x) !== x.autoTurn,
-						rank: rank.get(x.id) ?? x.rank
-					}
-				: rank.has(x.id)
-					? { ...x, rank: rank.get(x.id)! }
-					: x
-		);
-		sel.clear();
-		// Save in the background: a drop must finish its one visual update without waiting.
-		void persistArrange(items, target, groupOrder, prev, turn, set);
-	}
-
-	async function persistArrange(
-		items: DashItem[],
-		target: (i: DashItem) => Turn,
-		groupOrder: string[] | undefined,
-		prev: Map<string, DashItem>,
-		turn: Turn | null,
-		set: (fn: (x: DashItem) => DashItem) => void
-	) {
-		try {
-			await api.arrange(
-				items.map((i) => ({
-					id: i.id,
-					updatedAt: i.updatedAt,
-					// Same group: leave any move as it is. Back to Hush's group: undo the move.
-					turn: target(i) === i.turn ? undefined : target(i) === i.autoTurn ? null : target(i)
-				})),
-				groupOrder ?? []
-			);
-			if (items.some((i) => i.turn !== target(i)))
-				toast(turn ? `Moved to “${groupLabel(turn)}”` : 'Back in its own group', {
-					description: items.length === 1 ? items[0].title : `${items.length} items`,
-					action: {
-						label: 'Undo',
-						onClick: () => {
-							set((x) => prev.get(x.id) ?? x);
-							api
-								.arrange(
-									items.map((i) => ({
-										id: i.id,
-										updatedAt: i.updatedAt,
-										turn: i.movedByYou ? i.turn : null
-									})),
-									[]
-								)
-								.catch((err) => {
-									toast.error(err.message);
-									queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
-								});
-						}
-					}
-				});
-		} catch (err) {
-			toast.error((err as Error).message);
-			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
-		}
-	}
-
 	// --- Everything else --------------------------------------------------------------
 	let lastCursorIndex = 0;
 	$effect(() => {
@@ -562,11 +478,15 @@
 	async function refresh() {
 		refreshing = true;
 		try {
-			await queryClient.fetchQuery({
-				queryKey: keys.dash(kind),
-				queryFn: () => api.dashboard(kind, true),
-				staleTime: 0
-			});
+			await Promise.all(
+				kinds.map((k) =>
+					queryClient.fetchQuery({
+						queryKey: keys.dash(k),
+						queryFn: () => api.dashboard(k, true),
+						staleTime: 0
+					})
+				)
+			);
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -579,19 +499,18 @@
 	// group) and peek it.
 	$effect(() => {
 		const r = palette.peekRequest;
-		if (!r || r.page !== (kind === 'pr' ? 'pulls' : 'issues') || !data) return;
+		if (!r || r.page !== 'view' || r.view !== view.id || !kinds.includes(r.kind) || !data) return;
 		const item = data.items.find((x) => x.id === r.id);
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
-			query = '';
-			section = null;
 			categoryFilter = null;
-			showHidden = !!item.dismissed;
+			showSnoozed = !!item.dismissed;
 			sel.clear();
 			peekedOutsideKey = null;
-			const stackLead = stackOf.get(item.id)?.mostUrgentInList;
-			collapsed[(stackLead ?? item).turn] = false;
+			const lead = stackOf.get(item.id)?.mostUrgentInList ?? item;
+			const home = sections.find((section) => section.items.some((x) => x.id === lead.id));
+			if (home) setCollapsed(home.key, false);
 			revealInStack(item.id);
 			selectedId = item.id;
 			take();
@@ -604,160 +523,204 @@
 			: null;
 		if (!item) return;
 		untrack(() => {
-			palette.peekRequest = { page: peekOwner, id: item.id };
+			palette.peekRequest = { page: 'view', view: view.id, kind: item.kind, id: item.id };
 		});
 	});
 
-	$effect(() => {
-		localStorage.setItem(`hush:collapsed:${kind}`, JSON.stringify(collapsed));
-	});
-
-	const sourcePills = $derived<Pill[]>(
-		[{ id: null, name: 'All' }, ...(data?.sections ?? [])].map((s) => {
-			const count = sectionCount(s.id);
-			return { id: s.id, label: s.name, count, dim: !count };
+	const countIn = (k: DashKind) =>
+		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && inView(i)).length;
+	const showingPills = $derived<Pill[]>(
+		showingOptions(view).map((option) => {
+			const count =
+				option === 'both' ? viewKinds(view).reduce((n, k) => n + countIn(k), 0) : countIn(option);
+			return { id: option, label: SHOWING_LABELS[option], count, dim: !count };
 		})
 	);
 
-	function sectionCount(id: string | null) {
-		return (data?.items ?? []).filter((i) => !i.dismissed && (!id || i.sections.includes(id)))
-			.length;
-	}
-
-	function setDismissed(ids: Set<string>, dismissed: boolean) {
-		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
-			old ? { ...old, items: old.items.map((x) => (ids.has(x.id) ? { ...x, dismissed } : x)) } : old
-		);
+	async function setGroupBy(by: GroupBy) {
+		const settings = me.data?.settings;
+		if (!settings || by === view.groupBy) return;
+		const views = settings.views.map((v) => (v.id === view.id ? { ...v, groupBy: by } : v));
+		setSettings({ ...settings, views });
+		try {
+			await applySettings({ views });
+		} catch (err) {
+			setSettings(settings);
+			toast.error((err as Error).message);
+		}
 	}
 
 	async function pin(
 		ids: string[],
-		change: PinChange,
+		categoryPin: CategoryPin,
 		patch: (x: DashItem) => DashItem,
 		message: string
 	) {
-		const set = new Set(ids);
-		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
-		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
-			old ? { ...old, items: old.items.map((x) => (set.has(x.id) ? patch(x) : x)) } : old
-		);
+		await cancelDash();
+		patchItems(new Set(ids), patch);
 		sel.clear();
 		try {
-			await api.pinItems(ids, change);
+			await api.pinItems(ids, categoryPin);
 			toast(message, {
 				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} ${noun}`
 			});
-			refetchUnlessLive(keys.dash(kind));
+			refetchDash();
 		} catch (err) {
 			toast.error((err as Error).message);
-			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
+			invalidateDash();
 		}
 	}
 
-	function pinCategory(ids: string[], change: PinChange) {
-		const groups = categoryGroups;
-		if ('group' in change) return pin(ids, change, (x) => x, 'Hush chooses the category again');
-		const group = groupOf(groups, change.category);
-		const name = group?.categories.find((c) => c.id === change.category)?.name ?? change.category;
-		const replaced = new Set(
-			group && !group.multiple ? group.categories.map((c) => c.id) : [change.category]
-		);
+	function pinCategory(ids: string[], categoryPin: CategoryPin) {
+		const group = categoryGroups.find((g) => g.id === categoryPin.group);
+		const chosen = group?.categories.find((c) => c.id === categoryPin.category);
+		if (!group || !chosen)
+			return pin(ids, categoryPin, (x) => x, 'Hush chooses the category again');
+		const inGroup = new Set(group.categories.map((c) => c.id));
+		const replace = (list: string[] | undefined) => [
+			...(list ?? []).filter((c) => !inGroup.has(c)),
+			chosen.id
+		];
 		return pin(
 			ids,
-			change,
+			categoryPin,
 			(x) => ({
 				...x,
-				categories: [
-					...(x.categories ?? []).filter((c) => !replaced.has(c)),
-					...(change.state === 'on' ? [change.category] : [])
-				],
-				pinnedCategories: [...(x.pinnedCategories ?? []), change.category]
+				categories: replace(x.categories),
+				pinnedCategories: replace(x.pinnedCategories)
 			}),
-			change.state === 'on' ? `Added “${name}”` : `Removed “${name}”`
+			`${group.name}: ${chosen.name}`
 		);
 	}
 
-	/** Mute: hidden until you unmute it, and its threads muted (see PollerData.mute). */
+	function leaveRows(set: Set<string>) {
+		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
+		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
+		sel.clear();
+	}
+
+	const describe = (items: DashItem[]) =>
+		items.length === 1 ? items[0].title : `${items.length} items`;
+
 	async function toggleMute(ids: string[]) {
 		const items = ids.map(byId).filter((i): i is DashItem => !!i);
 		if (!items.length) return;
 		const mute = !items[0].muted;
 		const set = new Set(items.map((i) => i.id));
-		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
-		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
-		sel.clear();
-		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
-		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
-			old
-				? {
-						...old,
-						items: old.items.map((x) =>
-							set.has(x.id) ? { ...x, dismissed: mute, muted: mute } : x
-						)
-					}
-				: old
-		);
+		leaveRows(set);
+		await cancelDash();
+		patchItems(set, (x) => ({ ...x, dismissed: mute, muted: mute, snooze: undefined }));
 		try {
 			if (mute) await api.muteItems([...set]);
-			else await api.unhide([...set]);
-			refetchUnlessLive(keys.threadsAll);
+			else await api.unsnoozeItems([...set]);
 			toast(mute ? 'Muted' : 'Unmuted', {
-				description: items.length === 1 ? items[0].title : `${items.length} items`,
+				description: describe(items),
 				action: mute
 					? {
 							label: 'Undo',
 							onClick: () => {
 								api
-									.unhide([...set])
-									.then(() => queryClient.invalidateQueries({ queryKey: keys.dash(kind) }))
+									.unsnoozeItems([...set])
+									.then(invalidateDash)
 									.catch((e) => toast.error(e.message));
 							}
 						}
 					: undefined
 			});
 		} catch (err) {
-			queryClient.invalidateQueries({ queryKey: keys.dash(kind) });
+			invalidateDash();
 			toast.error((err as Error).message);
 		}
 	}
 
-	async function toggleHide(ids: string[]) {
+	async function snooze(ids: string[], choice: SnoozeChoice) {
 		const items = ids.map(byId).filter((i): i is DashItem => !!i);
 		if (!items.length) return;
-		const hide = !items[0].dismissed;
 		const set = new Set(items.map((i) => i.id));
-		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
-		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
-		sel.clear();
-		await queryClient.cancelQueries({ queryKey: keys.dash(kind) });
-		setDismissed(set, hide);
+		leaveRows(set);
+		await cancelDash();
+		patchItems(set, (x) => ({ ...x, dismissed: true, muted: false, snooze: choice }));
 		try {
-			if (hide) await api.hide(items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })));
-			else await api.unhide([...set]);
-			toast(hide ? 'Hidden until it changes' : 'Shown again', {
-				description: items.length === 1 ? items[0].title : `${items.length} items`,
-				action: hide
-					? {
-							label: 'Undo',
-							onClick: () => {
-								setDismissed(set, false);
-								api.unhide([...set]).catch((e) => {
-									toast.error(e.message);
-									setDismissed(set, true);
-								});
-							}
-						}
-					: undefined
+			await api.snoozeItems(
+				items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })),
+				choice
+			);
+			toast(`Snoozed ${snoozeLabel(choice).replace(/^Until/, 'until')}`, {
+				description: describe(items),
+				action: {
+					label: 'Undo',
+					onClick: () => {
+						patchItems(set, (x) => ({ ...x, dismissed: false, snooze: undefined }));
+						api.unsnoozeItems([...set]).catch((e) => {
+							toast.error(e.message);
+							invalidateDash();
+						});
+					}
+				}
 			});
 		} catch (err) {
-			setDismissed(set, !hide);
+			invalidateDash();
 			toast.error((err as Error).message);
 		}
+	}
+
+	async function unsnooze(ids: string[]) {
+		const items = ids.map(byId).filter((i): i is DashItem => !!i);
+		if (!items.length) return;
+		const set = new Set(items.map((i) => i.id));
+		leaveRows(set);
+		await cancelDash();
+		patchItems(set, (x) => ({ ...x, dismissed: false, muted: false, snooze: undefined }));
+		try {
+			await api.unsnoozeItems([...set]);
+			toast('Back in the list', { description: describe(items) });
+		} catch (err) {
+			invalidateDash();
+			toast.error((err as Error).message);
+		}
+	}
+
+	const toggleSnooze = (ids: string[]) =>
+		showSnoozed ? unsnooze(ids) : snooze(ids, UNTIL_NEW_ACTIVITY);
+
+	const SEEN_BATCH = 50;
+	function sendInBatches(keys: string[], send: (batch: string[]) => Promise<unknown>) {
+		const batches = Array.from({ length: Math.ceil(keys.length / SEEN_BATCH) }, (_, k) =>
+			keys.slice(k * SEEN_BATCH, (k + 1) * SEEN_BATCH)
+		);
+		return Promise.all(batches.map(send));
+	}
+
+	function markSeenHere(ids: string[]) {
+		patchItems(new Set(ids), (x) => ({ ...x, unread: false }));
+		sendInBatches(ids, api.seen).catch(() => invalidateDash());
+	}
+
+	async function setRead(ids: string[], read: boolean) {
+		const set = new Set(ids);
+		patchItems(set, (x) => ({
+			...x,
+			unread: !read,
+			...(read ? { seenAt: Date.now(), changes: [] } : { seenAt: null })
+		}));
+		try {
+			await sendInBatches(ids, read ? api.seen : api.unseen);
+		} catch (err) {
+			invalidateDash();
+			toast.error((err as Error).message);
+		}
+	}
+
+	function markAllRead() {
+		const ids = visibleItems.filter((i) => i.unread).map((i) => i.id);
+		if (!ids.length) return;
+		setRead(ids, true);
+		toast(`Marked ${ids.length} as read`);
 	}
 
 	function open(i: DashItem, url: string) {
 		openOnGitHub(url);
-		api.seen([i.id]).catch(() => {});
+		markSeenHere([i.id]);
 	}
 
 	async function copyLinks(ids: string[]) {
@@ -767,15 +730,6 @@
 			.map((i) => i!.url);
 		await navigator.clipboard.writeText(urls.join('\n'));
 		toast.success(urls.length === 1 ? 'Link copied' : `${urls.length} links copied`);
-	}
-
-	/** Move to the top of another group (menu and bulk bar). */
-	function moveTo(ids: string[], turn: Turn) {
-		const block = new Set(ids);
-		arrange(ids, turn, [
-			...order.filter((x) => block.has(x)),
-			...fullGroup(turn).filter((x) => !block.has(x))
-		]);
 	}
 
 	const targets = () => sel.targets(order, selectedId);
@@ -817,14 +771,13 @@
 		if (
 			target instanceof Element &&
 			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
-		) {
-			if (e.key === 'Escape' && target === searchEl) searchEl?.blur();
+		)
 			return;
-		}
 		const cmd = commandFor(e, ['list', 'dash']);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
-		const chips = [null, ...(data?.sections ?? []).map((s) => s.id)];
+		const views = me.data?.settings.views ?? [];
+		const options = showingOptions(view);
 		// Each command's keys: shared/keymap.ts (and Settings → Keybinds).
 		const run: Record<string, () => void> = {
 			'list.next': () => move(1),
@@ -840,16 +793,27 @@
 			'list.fullPage': () => i && goto(itemPagePath(i.repo, i.number, i.kind)),
 			'list.copy': () => copyLinks(targets()),
 			'list.refresh': () => refresh(),
-			'list.search': () => searchEl?.focus(),
+			'list.search': () => (palette.open = true),
 			'list.help': () => (helpOpen = true),
-			'dash.hide': () => toggleHide(targets()),
-			'dash.showHidden': () => (showHidden = !showHidden),
+			'dash.snooze': () => toggleSnooze(targets()),
+			'dash.snoozeTomorrow': () =>
+				!showSnoozed &&
+				snooze(targets(), { until: snoozeOptions().find((o) => o.id === 'tomorrow')!.until }),
+			'dash.showSnoozed': () => (showSnoozed = !showSnoozed),
 			'dash.mute': () => toggleMute(targets()),
-			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i),
+			'dash.read': () => {
+				const ids = targets();
+				setRead(
+					ids,
+					ids.some((x) => byId(x)?.unread)
+				);
+			},
 			'dash.stackUp': () => stepStack(1),
-			'dash.stackDown': () => stepStack(-1)
+			'dash.stackDown': () => stepStack(-1),
+			'dash.kind': () =>
+				options.length > 1 && show(options[(options.indexOf(showing) + 1) % options.length])
 		};
-		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
+		views.slice(0, 9).forEach((v, n) => (run[`dash.view.${n + 1}`] = () => goto(`/v/${v.id}`)));
 		const fn = run[cmd];
 		if (fn) {
 			e.preventDefault();
@@ -877,12 +841,19 @@
 	// Swipe actions on touch screens (Settings → General → Swipe actions; shared/swipe.ts).
 	function swipeSide(side: 'left' | 'right', i: DashItem): SwipeSide | null {
 		switch (me.data?.settings.swipe.dash[side] ?? 'none') {
-			case 'hide':
+			case 'snooze':
 				return {
-					label: i.dismissed ? 'Show again' : 'Hide',
-					icon: i.dismissed ? Eye : EyeOff,
+					label: i.dismissed ? 'Wake up' : 'Snooze',
+					icon: i.dismissed ? AlarmClockOff : AlarmClock,
 					tone: 'bg-signal-review text-white',
-					run: () => toggleHide([i.id])
+					run: () => (i.dismissed ? unsnooze([i.id]) : snooze([i.id], UNTIL_NEW_ACTIVITY))
+				};
+			case 'read':
+				return {
+					label: i.unread ? 'Read' : 'Unread',
+					icon: i.unread ? MailOpen : Mail,
+					tone: 'bg-primary text-primary-foreground',
+					run: () => setRead([i.id], !!i.unread)
 				};
 			case 'mute':
 				return {
@@ -891,44 +862,27 @@
 					tone: 'bg-muted-foreground text-background',
 					run: () => toggleMute([i.id])
 				};
-			case 'not-needed':
-				return i.turn === 'you' && !i.dismissed
-					? {
-							label: 'Not my turn',
-							icon: CircleSlash,
-							tone: 'bg-foreground text-background',
-							run: () => sayNotNeeded(i)
-						}
-					: null;
 		}
 		return null;
-	}
-
-	// "Not my turn…": Hush was wrong about an item in Your turn (not-needed-dialog.svelte).
-	let notNeededFor = $state<NotNeededTarget | null>(null);
-	function sayNotNeeded(i: DashItem) {
-		notNeededFor = {
-			id: i.id,
-			title: i.title,
-			repo: i.repo,
-			review: i.requestedMe,
-			newCommits: i.turnReason === NEW_COMMITS_REASON,
-			team: false,
-			bot: i.authorIsBot,
-			elsewhere: 'Other'
-		};
 	}
 
 	const actions: DashActionContext = {
 		get noun() {
 			return noun;
 		},
-		get showHidden() {
-			return showHidden;
+		get showSnoozed() {
+			return showSnoozed;
 		},
-		get groups() {
-			return GROUPS;
+		get unreadCount() {
+			return unreadCount;
 		},
+		get groupBy() {
+			return groupBy;
+		},
+		get hasSections() {
+			return hasSections;
+		},
+		setGroupBy,
 		get order() {
 			return order;
 		},
@@ -938,19 +892,23 @@
 		get categoryGroups() {
 			return categoryGroups;
 		},
+		get projects() {
+			return projects;
+		},
 		pinCategory,
 		sel,
 		byId,
 		peek: peekThis,
 		open,
-		moveTo,
-		arrange,
-		toggleHide,
 		toggleMute,
 		copyLinks,
 		refresh,
-		toggleShowHidden: () => (showHidden = !showHidden),
-		notNeeded: sayNotNeeded
+		toggleShowSnoozed: () => (showSnoozed = !showSnoozed),
+		snooze,
+		unsnooze,
+		snoozeSheet: (ids) => (snoozeSheetIds = ids),
+		setRead,
+		markAllRead
 	};
 	const menuFor = (ids: string[]) => dashMenu(actions, ids);
 	$effect(() => palette.register(() => dashCommands(actions, targets())));
@@ -959,36 +917,62 @@
 <svelte:window onkeydown={onKey} />
 
 <main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
-	<div class="flex flex-wrap items-center gap-2">
-		<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
-			<Search
-				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-			/>
-			<Input
-				bind:ref={searchEl}
-				bind:value={query}
-				placeholder="Filter {noun}"
-				class="h-8 pr-8 pl-8"
-				aria-label="Filter {noun}"
-			/>
-			<FilterBuilder
-				bind:value={query}
-				id="dash-filter-{kind}"
-				exclude={NOTIFICATION_WORDS}
-				suggestions={ruleSuggestions(me.data?.settings)}
-				preview={(q) =>
-					me.data && data ? previewItems(q, me.data.login, me.data.settings, data.items) : null}
+	<div class="flex items-center gap-2">
+		<div class="min-w-0 flex-1">
+			<PillRow
+				pills={showingPills}
+				bind:value={() => showing, (k) => k && show(k as Showing)}
+				label="Pull requests or issues"
+				action={{
+					label: `Edit ${view.name}`,
+					href: `/settings/views#view-${view.id}`,
+					icon: Pencil
+				}}
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" size="sm" aria-label="Group by {groupByName}">
+							<Rows3 /><span class="hidden max-w-48 truncate sm:inline">{groupByName}</span>
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end" class="min-w-60">
+					<DropdownMenu.Label>Group by</DropdownMenu.Label>
+					{#each groupByChoices as o, k (o.id)}
+						{#if startsNewKind(groupByChoices, k)}
+							<DropdownMenu.Separator />
+						{/if}
+						<DropdownMenu.Item onclick={() => setGroupBy(o.id)}>
+							<span class="flex-1">{o.label}</span>
+							{#if o.id === groupBy}<Check class="size-3.5" />{/if}
+						</DropdownMenu.Item>
+					{/each}
+					{#if noProjectAccess}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item disabled class="text-xs">
+							Project status needs project access
+						</DropdownMenu.Item>
+					{/if}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={() => goto(editSectionsPath)}>
+						<Pencil />
+						{hasSections ? 'Edit custom sections…' : 'Make custom sections…'}
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 			<Button
-				variant={showHidden ? 'secondary' : 'ghost'}
+				variant={showSnoozed ? 'secondary' : 'ghost'}
 				size="sm"
-				onclick={() => (showHidden = !showHidden)}
-				disabled={!hiddenCount && !showHidden}
+				onclick={() => (showSnoozed = !showSnoozed)}
+				disabled={!snoozedCount && !showSnoozed}
 			>
-				<EyeOff /><span class="hidden sm:inline">{showHidden ? 'Showing hidden' : 'Hidden'}</span>
-				{#if hiddenCount}<span class="tabular-nums opacity-70">{hiddenCount}</span>{/if}
+				<AlarmClock /><span class="hidden sm:inline"
+					>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
+				>
+				{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
 			</Button>
 			<Button
 				variant="ghost"
@@ -1003,18 +987,6 @@
 		</div>
 	</div>
 
-	{#if data}
-		<div class="mt-3">
-			<PillRow
-				pills={sourcePills}
-				bind:value={section}
-				label="Sources"
-				toggle
-				action={{ label: 'Edit sources', href: '/settings/dashboards', icon: Pencil }}
-			/>
-		</div>
-	{/if}
-
 	<p class="mt-2 mb-2 flex h-4 items-center px-1 text-xs text-muted-foreground">
 		{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
 			<span class="inline-flex items-center gap-1"
@@ -1026,9 +998,9 @@
 	</p>
 
 	<JevNotice />
-	{#if dashQ.isError}
+	{#if loadError}
 		<Alert.Root variant="destructive" class="mb-3"
-			><Alert.Description>{dashQ.error.message}</Alert.Description></Alert.Root
+			><Alert.Description>{loadError.message}</Alert.Description></Alert.Root
 		>
 	{/if}
 	{#each data?.errors ?? [] as err (err)}
@@ -1056,11 +1028,11 @@
 			</Alert.Root>
 		{/if}
 	{/each}
-	{#each data?.sections.filter((s) => s.skipped) ?? [] as s (s.id)}
-		<p class="mb-2 px-1 text-xs text-signal-warn">{s.name}: {s.skipped}</p>
+	{#each data?.skipped ?? [] as note (note)}
+		<p class="mb-2 px-1 text-xs text-signal-warn">{note}</p>
 	{/each}
 
-	{#if dashQ.isPending}
+	{#if pending}
 		<div class="grid gap-2">
 			{#each [0, 1, 2, 3, 4] as k (k)}
 				<div class="flex items-center gap-3 px-3 py-3">
@@ -1077,14 +1049,12 @@
 			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
 		>
 			<CircleCheck class="mb-3 size-8 text-signal-merge" />
-			{#if query}
-				<p class="font-medium">No {noun} match “{query}”.</p>
-			{:else if showHidden}
-				<p class="font-medium">Nothing is hidden.</p>
+			{#if showSnoozed}
+				<p class="font-medium">Nothing is snoozed or muted.</p>
 			{:else}
-				<p class="font-medium">No open {noun} involve you.</p>
+				<p class="font-medium">No open {noun} in {view.name}.</p>
 				<p class="mt-1 text-sm text-muted-foreground">
-					<a class="underline" href="/settings/dashboards">Edit the sources</a> to track more.
+					<a class="underline" href="/settings/views#view-{view.id}">Edit its searches</a> to find more.
 				</p>
 			{/if}
 		</div>
@@ -1092,77 +1062,62 @@
 		<ContextMenu.Root bind:open={contextOpen}>
 			<ContextMenu.Trigger>
 				{#snippet child({ props })}
-					<div {...props} class="grid gap-5" data-drag-root oncontextmenucapture={onContextMenu}>
-						{#each groups as g (g.turn)}
-							{@const count = baseGroups.find((b) => b.turn === g.turn)?.units.length ?? 0}
-							{@const target = drag.active && drag.zone === g.turn}
-							{@const headerDrop = target && (collapsed[g.turn] || !count)}
-							<!-- The whole group (header and rows) is one drop zone. Always in the layout, so
-							     picking up a card never shifts the page. -->
-							<section data-drag-zone={g.turn}>
-								<button
-									class={cn(
-										'group/h mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors duration-150',
-										headerDrop && 'bg-primary/[0.07] text-primary'
-									)}
-									onclick={() => {
-										groupMotion = true;
-										collapsed[g.turn] = !collapsed[g.turn];
-									}}
-									aria-expanded={!collapsed[g.turn]}
-								>
-									<ChevronDown
-										class={cn(
-											'size-3.5 text-muted-foreground',
-											groupMotion && 'transition-transform',
-											collapsed[g.turn] && '-rotate-90'
-										)}
-									/>
-									<h2
-										class={cn(
-											'text-xs font-semibold tracking-wide uppercase',
-											!count && !headerDrop && 'text-muted-foreground/70'
-										)}
+					<div {...props} class="grid gap-5" oncontextmenucapture={onContextMenu}>
+						{#each listed as section (section.key)}
+							{@const closed = isCollapsed(section.key)}
+							<section>
+								{#if section.label}
+									<button
+										class="mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left"
+										onclick={() => {
+											groupMotion = true;
+											setCollapsed(section.key, !closed);
+										}}
+										aria-expanded={!closed}
 									>
-										{g.label}
-									</h2>
-									<span class="text-xs text-muted-foreground tabular-nums">{count}</span>
-									<span
-										class={cn(
-											'ml-2 hidden truncate text-xs text-muted-foreground opacity-0 transition-opacity group-hover/h:opacity-100 sm:inline',
-											headerDrop && 'text-primary opacity-100'
-										)}>{headerDrop ? 'Drop to move here' : g.hint}</span
-									>
-								</button>
-								{#if !collapsed[g.turn]}
-									<!-- An empty list is 0 px tall; the placeholder opens it when you drag over. -->
-									<!-- Opening or closing a group slides it; the rows' own transitions are local, so
-									     they do not also play. -->
+										<ChevronDown
+											class={cn(
+												'size-3.5 text-muted-foreground',
+												groupMotion && 'transition-transform',
+												closed && '-rotate-90'
+											)}
+										/>
+										{#if section.color}
+											<span
+												class={cn(
+													'size-2 shrink-0 rounded-full',
+													MARK_DOT[statusColor(section.color)]
+												)}
+											></span>
+										{/if}
+										<h2 class="truncate text-xs font-semibold tracking-wide uppercase">
+											{section.label}
+										</h2>
+										<span class="text-xs text-muted-foreground tabular-nums"
+											>{section.units.length}</span
+										>
+									</button>
+								{/if}
+								{#if !closed}
+									<!-- Opening or closing a section slides it; the rows' own transitions are local,
+									     so they do not also play. -->
 									<ul
 										transition:slide={groupMotion ? SECTION_SLIDE : { duration: 0 }}
 										class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
 										role="listbox"
 										aria-multiselectable="true"
-										aria-label={g.label}
+										aria-label={section.label || view.name}
 									>
-										{#each g.rows as r (r.key)}
+										{#each section.units as unit (unit.key)}
 											<li
 												animate:flip={FLIP}
-												in:enter={r}
-												out:leave={r}
-												data-drag-id={r.unit?.item.id}
-												data-drag-placeholder={!r.unit || undefined}
-												style={r.unit ? undefined : `height: ${drag.gap}px`}
-												class={r.unit
-													? 'drag-row'
-													: 'rounded-xl border-2 border-dashed border-primary/25 bg-primary/[0.05]'}
-												onpointerdown={(e) =>
-													r.unit && drag.pointerdown(e, r.unit.item.id, e.currentTarget)}
+												in:fly={{ y: -8, duration: 200 }}
+												out:slide={{ duration: 200, easing: cubicOut }}
 											>
-												{#if r.unit?.stack}
-													{@render stackRow(r.unit.stack)}
-												{:else if r.unit}
-													{@render itemRow(r.unit.item)}
+												{#if unit.stack}
+													{@render stackRow(unit.stack)}
+												{:else}
+													{@render itemRow(unit.item)}
 												{/if}
 											</li>
 										{/each}
@@ -1180,104 +1135,46 @@
 	{/if}
 </main>
 
-{#if drag.active}
-	{@const first = byId(drag.ids[0])}
-	{@const lift = drag.lift.current}
-	<!-- The card under the pointer. With a selection, the others stack behind it. -->
-	<div
-		class="pointer-events-none fixed top-0 left-0 z-50 will-change-transform"
-		style="width: {drag.width}px; transform-origin: {drag.grab.x}px {drag.grab
-			.y}px; transform: translate3d({drag.pos.current.x}px, {drag.pos.current.y}px, 0) scale({1 -
-			0.08 * lift});"
-	>
-		{#each drag.ids.slice(1, 3).reverse() as id, k (id)}
-			{@const depth = drag.ids.slice(1, 3).length - k}
-			<div
-				class="absolute inset-0 rounded-xl border bg-background"
-				style="transform: translateY({depth * 10 * lift}px) scale({1 - depth * 0.03}); opacity: {1 -
-					depth * 0.22}; box-shadow: 0 6px 16px -10px rgb(0 0 0 / 0.3);"
-			></div>
-		{/each}
-		<div
-			class="relative overflow-hidden rounded-xl border bg-background"
-			style="box-shadow: 0 {6 + 16 * lift}px {18 + 30 * lift}px -{10 -
-				2 * lift}px rgb(0 0 0 / {0.12 + 0.22 * lift});"
-		>
-			{#if first}
-				<DashRow
-					item={first}
-					marks={marksFor(first)}
-					hidden={hiddenParts}
-					checked={sel.has(first.id)}
-					{sectionNames}
-					draggable={false}
-					onopen={() => {}}
-					onhide={() => {}}
-					onmute={() => {}}
-					oncopy={() => {}}
-					onrowclick={() => {}}
-					ontoggle={() => {}}
-					onundomove={() => {}}
-				/>
-			{/if}
-		</div>
-		{#if drag.ids.length > 1}
-			<span class="drag-count" style="transform: scale({0.6 + 0.4 * lift})">{drag.ids.length}</span>
-		{/if}
-	</div>
-{/if}
-
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger>
-			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="sm" aria-label="Move to"
-					><ArrowRightLeft /><span class="hidden sm:inline">Move to</span></Button
-				>
-			{/snippet}
-		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="center" side="top">
-			{#each GROUPS as g (g.turn)}
-				<DropdownMenu.Item onclick={() => moveTo(targets(), g.turn)}>{g.label}</DropdownMenu.Item>
-			{/each}
-		</DropdownMenu.Content>
-	</DropdownMenu.Root>
+	<SnoozeButton
+		snoozed={showSnoozed}
+		subjects={targets().map((x) => byId(x)?.kind ?? 'other')}
+		labelClass="hidden sm:inline"
+		onpick={(choice) => snooze(targets(), choice)}
+		onwake={() => unsnooze(targets())}
+	/>
 	<Button
 		variant="ghost"
 		size="sm"
-		aria-label={showHidden ? 'Show again' : 'Hide until it changes'}
-		onclick={() => toggleHide(targets())}
+		aria-label="Mark as read or unread"
+		onclick={() => {
+			const ids = targets();
+			setRead(
+				ids,
+				ids.some((x) => byId(x)?.unread)
+			);
+		}}><MailOpen /><span class="hidden sm:inline">Read</span></Button
 	>
-		{#if showHidden}<Eye /><span class="hidden sm:inline">Show</span>{:else}<EyeOff /><span
-				class="hidden sm:inline">Hide</span
-			>{/if}
-	</Button>
 	<Button variant="ghost" size="sm" aria-label="Copy links" onclick={() => copyLinks(targets())}
 		><Link /><span class="hidden sm:inline">Copy links</span></Button
 	>
 </BulkBar>
-
-<NotNeededDialog bind:target={notNeededFor} />
 
 {#snippet itemRow(i: DashItem, stack?: Stack)}
 	<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
 		<DashRow
 			item={i}
 			marks={marksFor(i)}
-			hidden={hiddenParts}
+			hidden={hiddenPartsOf(i)}
 			selected={i.id === selectedId && !peekedOutsideMember}
 			checked={sel.has(i.id)}
 			selecting={sel.size > 0}
-			draggable={!showHidden}
-			showSections={!section}
-			{sectionNames}
 			onopen={open}
-			onhide={(x) => toggleHide([x.id])}
+			onsnooze={(x) => toggleSnooze([x.id])}
 			onmute={(x) => toggleMute([x.id])}
 			oncopy={(x) => copyLinks([x.id])}
 			onrowclick={(e) => onRowClick(e, i)}
 			ontoggle={(e) => onToggle(e, i)}
-			onundomove={(x) => arrange([x.id], null)}
 			menu={() => menuFor([i.id])}
 			stack={stack && {
 				position: positionIn(stack, i.id) + 1,
@@ -1325,43 +1222,25 @@
 	{#if peekItem}
 		{@const i = peekItem}
 		<WhyLine
-			lead={i.muted ? 'Muted' : i.dismissed ? 'Hidden' : groupLabel(i.turn)}
+			lead={i.muted ? 'Muted' : i.dismissed ? 'Snoozed' : sectionLabelOf(i.id)}
 			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
 			changes={i.changes ?? []}
 			seenAt={i.seenAt ?? null}
-			notes={[
-				i.movedByYou && 'You moved it here, until it changes',
-				i.sections.length > 0 &&
-					`Found by: ${i.sections.map((id) => sectionNames[id] ?? id).join(', ')}`
-			]}
-		>
-			{#snippet actions()}
-				{#if i.turn === 'you' && !i.dismissed}
-					<Button
-						variant="outline"
-						size="xs"
-						title="Not my turn ({keysOf('dash.notNeeded')[0] ?? ''})"
-						onclick={() => sayNotNeeded(i)}>Not my turn</Button
-					>
-				{/if}
-			{/snippet}
-		</WhyLine>
+		/>
 	{/if}
 {/snippet}
 
 {#snippet peekFooter()}
 	{#if peekItem}
 		{@const i = peekItem}
-		<Button
-			variant="ghost"
-			size="sm"
-			aria-label={i.dismissed ? 'Show again' : 'Hide until it changes'}
-			onclick={() => toggleHide([i.id])}
-		>
-			{#if i.dismissed}<Eye /><span class="max-sm:sr-only">Show again</span>{:else}<EyeOff /><span
-					class="max-sm:sr-only">Hide</span
-				>{/if}
-		</Button>
+		<SnoozeButton
+			snoozed={!!i.dismissed}
+			subjects={[i.kind]}
+			disabled={alreadyTrue(i)}
+			labelClass="max-sm:sr-only"
+			onpick={(choice) => snooze([i.id], choice)}
+			onwake={() => unsnooze([i.id])}
+		/>
 		<Button variant="ghost" size="sm" aria-label="Copy link" onclick={() => copyLinks([i.id])}
 			><Link /><span class="max-sm:sr-only">Copy link</span></Button
 		>
@@ -1370,7 +1249,17 @@
 
 <ShortcutsDialog
 	bind:open={helpOpen}
-	shortcuts={shortcutsFor(['global', 'list', 'dash', 'peek'], DASH_MOUSE)}
+	shortcuts={shortcutsFor(['global', 'list', 'dash', 'peek'], LIST_MOUSE)}
 />
 
 <PeekHost />
+
+{#if snoozeSheetIds}
+	{@const ids = snoozeSheetIds}
+	<SnoozeSheet
+		bind:open={() => snoozeSheetIds !== null, (open) => !open && (snoozeSheetIds = null)}
+		subjects={ids.map((x) => byId(x)?.kind ?? 'other')}
+		untilNewActivity
+		onpick={(choice) => snooze(ids, choice)}
+	/>
+{/if}

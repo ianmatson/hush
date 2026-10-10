@@ -9,9 +9,10 @@ Hush works from the keyboard. Press {{key:list.help}} on any list to see the sho
 
 {{key:palette}} opens the command palette. Type to find:
 
-- **Threads, pull requests, and issues** by title or repository. Enter peeks at it; `Mod`+Enter opens it on GitHub.
-- **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Peek, Move to…
-- **Pages**: every inbox tab and notification view, Pull requests, Issues, and each settings page.
+- **Pull requests and issues** of your views, by title, repository, number, or author. Enter peeks at it; `Mod`+Enter opens it on GitHub.
+- **Actions** on the item under the cursor or the selection: Snooze, Mute, Mark as read, Peek…, and **Mark all as read** for the view.
+- **Group by** for the view you are in: type “group by”.
+- **Pages**: every view, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
 - **Settings** that are on or off: type a word from the setting, for example “bots”, “drafts”, or “push”. Enter turns it on or off.
 
@@ -30,19 +31,19 @@ Go to **Settings → Keybinds**. It lists every command by where it works.
 Your keys are saved at once, and follow you to every device. In settings.json they are the [`keys`](/docs/settings#keys) setting:
 
 ```json settings
-{ "keys": { "inbox.done": ["d"], "inbox.mute": [], "list.peek": ["Space", "p"] } }
+{ "keys": { "dash.snooze": ["d"], "dash.mute": [], "list.peek": ["Space", "p"] } }
 ```
 
-Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row to the selection, Shift-click selects a range, and on the Pull requests and Issues tabs you drag ⋮⋮ to move an item.
+Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row to the selection, and Shift-click selects a range.
 
 ## Where keys work
 
-A key works in one scope. Keys can repeat across scopes that are never active together ({{key:inbox.done}} is Done in the inbox and {{key:dash.hide}} is Hide on the Pull requests tab), but not inside scopes that are active at the same time.
+A key works in one scope. Keys can repeat across scopes that are never active together ({{key:dash.snoozeTomorrow}} snoozes an item in a view, and {{key:page.splitView}} changes the layout of the Files tab on a full page), but not inside scopes that are active at the same time.
 
 - **Everywhere**: on every page.
-- **Lists**: the inbox and the Pull requests and Issues tabs.
-- **Inbox** and **Pull requests and issues**: only on those pages.
+- **Lists** and **Pull requests and issues**: in your views.
 - **Peek**: while the [peek](/docs/peek) is open.
+- **Full page**: on the [full page](/docs/peek#full-page) of a pull request or issue.
 - **Text boxes**: while you type in the comment box or settings.json.
 
 Keys do not work while you type in a text box, except the “Text boxes” keys and Esc.

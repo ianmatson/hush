@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { computeTurn, turnFactsFromEnrichment } from './dashboard';
 import {
 	dashFactsOf,
 	enrichmentOf,
 	lastVerdictOf,
 	subjectKey,
-	subjectKeyOfUrl,
 	subjectUrls,
 	type SubjectFacts
 } from './subject';
@@ -51,10 +49,7 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 }
 
 describe('subject keys', () => {
-	it('reads both URL forms and gives both back', () => {
-		expect(subjectKeyOfUrl('https://github.com/o/r/pull/12/files')).toBe('o/r#12');
-		expect(subjectKeyOfUrl('https://github.com/o/r/issues/3#issuecomment-1')).toBe('o/r#3');
-		expect(subjectKeyOfUrl('https://github.com/o/r/actions/runs/1')).toBeNull();
+	it('gives both URL forms of a key', () => {
 		expect(subjectUrls(subjectKey('o/r', 12))).toEqual([
 			'https://github.com/o/r/pull/12',
 			'https://github.com/o/r/issues/12'
@@ -75,7 +70,7 @@ describe('views of one subject', () => {
 		expect(lastVerdictOf(s, ME)).toEqual({ by: 'bob', at: T1 });
 	});
 
-	it('the inbox gets your request, short team slugs, and your review', () => {
+	it('the facts keep your request, short team slugs, and your review', () => {
 		const e = enrichmentOf(
 			pr({
 				reviewRequests: [
@@ -113,7 +108,7 @@ describe('views of one subject', () => {
 		expect(dashFactsOf(s, ME, new Set()).requestedAt).toBeNull();
 	});
 
-	it('an issue keeps only issue facts in the inbox', () => {
+	it('an issue keeps only issue facts', () => {
 		const e = enrichmentOf(
 			pr({ kind: 'issue', state: 'closed', url: 'https://github.com/o/r/issues/1' }),
 			ME
@@ -122,60 +117,4 @@ describe('views of one subject', () => {
 		expect(e).not.toHaveProperty('ci');
 		expect(e).not.toHaveProperty('reviewRequestedFromMe');
 	});
-});
-
-describe('the inbox and the dashboards agree about one stored subject', () => {
-	const teams = ['acme/website'];
-	const cases: [string, Partial<SubjectFacts>][] = [
-		['review requested', { reviewRequests: [{ team: false, name: ME }] }],
-		[
-			're-review requested',
-			{ reviewRequests: [{ team: false, name: ME }], myReview: { at: T0, state: 'COMMENTED' } }
-		],
-		['team request', { reviewRequests: [{ team: true, name: 'acme/website' }] }],
-		['closed', { state: 'closed', reviewRequests: [{ team: false, name: ME }] }],
-		['merged', { state: 'merged' }],
-		['my PR, CI failed', { author: ME, ci: 'FAILURE' }],
-		['my PR, changes requested', { author: ME, reviewDecision: 'CHANGES_REQUESTED' }],
-		['my PR, approved', { author: ME, reviewDecision: 'APPROVED' }],
-		[
-			'my PR, approved with open threads',
-			{ author: ME, reviewDecision: 'APPROVED', openThreads: 2 }
-		],
-		['my PR, conflicts', { author: ME, mergeable: 'CONFLICTING' }],
-		['new commits since my review', { myReview: { at: T0, state: 'APPROVED' }, lastCommitAt: T1 }],
-		['draft', { draft: true, reviewRequests: [{ team: false, name: ME }] }],
-		[
-			'someone replied on my PR',
-			{
-				author: ME,
-				comments: 1,
-				lastComment: { author: 'bob', authorIsBot: false, body: '', url: 'u', createdAt: T1 }
-			}
-		],
-		['assigned issue', { kind: 'issue', assignees: [ME] }]
-	];
-	for (const [name, over] of cases)
-		for (const reviewResolution of ['strict', 'any_review'] as const)
-			it(`${name} (${reviewResolution})`, () => {
-				const s = pr({
-					...over,
-					verdicts: [{ by: 'bob', at: T2, state: 'APPROVED' }],
-					url:
-						over.kind === 'issue'
-							? 'https://github.com/acme/website/issues/1'
-							: 'https://github.com/acme/website/pull/1'
-				});
-				const opts = { botsAreFyi: true, reviewResolution };
-				const dash = computeTurn(dashFactsOf(s, ME, new Set(teams)), ME, [], opts);
-				const inbox = computeTurn(
-					turnFactsFromEnrichment(enrichmentOf(s, ME), s.repo, ME, teams),
-					ME,
-					[],
-					opts
-				);
-				expect(inbox.turn).toBe(dash.turn);
-				expect(inbox.kind).toBe(dash.kind);
-				expect(inbox.summary).toBe(dash.summary);
-			});
 });

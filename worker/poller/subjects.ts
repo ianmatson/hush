@@ -1,9 +1,6 @@
-import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
-import { placeItem, type ItemPins } from '../../src/lib/shared/categories';
-import { TRACKED_SOURCE } from '../../src/lib/shared/sources';
+import { placeItem } from '../../src/lib/shared/categories';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
-import { watchOutcome } from '../../src/lib/shared/watch';
-import type { DashItem, DashResponse, ThreadFacts } from '../../src/lib/shared/types';
+import type { DashItem, DashResponse, RuleFacts } from '../../src/lib/shared/types';
 import {
 	dashFactsOf,
 	enrichmentOf,
@@ -11,36 +8,30 @@ import {
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
 import type { SubjectDecisions } from '../../src/lib/shared/decisions';
+import type { ItemMark } from '../../src/lib/shared/item-snooze';
+import { itemPush, type FactEvent } from '../../src/lib/shared/push-facts';
+import type { SnoozeEvent } from '../../src/lib/shared/snooze';
 import { fetchSubjects } from '../github';
-import { SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
+import type { PushCandidate } from './alerts';
 import { PollerDecisions } from './decisions';
-import { subjectRefOf, type ThreadRow } from './schema';
-import { MAX_INDIVIDUAL_PUSHES, TRACKED_SEEN_REFRESH, type Resolved, type Who } from './shared';
+import { TRACKED_SEEN_REFRESH, type Who } from './shared';
 
 /** SQLite binds at most this many values per statement here; longer IN lists go in chunks. */
 const CHUNK = 90;
 const marks = (n: number) => Array(n).fill('?').join(',');
 const parse = (json: string | undefined) => (json ? (JSON.parse(json) as SubjectFacts) : null);
-
-/** A thread, and its subject's facts now and before this read. */
-type Apply = { row: ThreadRow; fresh: SubjectFacts; before: SubjectFacts | null };
+const NEW_SUBJECT_WINDOW_MS = 60 * 60_000;
 
 /**
  * The subject store. Every GitHub read of a PR or issue goes through `record`, which keeps the
- * one copy of its facts and updates every view of it: the inbox threads and the cached dashboards.
+ * one copy of its facts, pushes the facts you chose, and updates the cached dashboards.
  */
 export abstract class PollerSubjects extends PollerDecisions {
-	/**
-	 * Store fresh facts from GitHub, then update the views. The threads about these subjects get
-	 * the facts whether or not they changed, so a thread that is out of date catches up. The
-	 * dashboard build passes `dash: false` (its cache is already new); ingest passes
-	 * `threads: false` (it writes those threads itself).
-	 */
 	protected async record(
 		who: Who,
 		subjects: SubjectFacts[],
-		opts: { dash?: boolean; threads?: boolean; quiet?: boolean; allAreInboxThreads?: boolean } = {}
-	): Promise<{ changed: number; resolved: Resolved[]; wrote: number }> {
+		opts: { dash?: boolean; quiet?: boolean; mentions?: Map<string, FactEvent> } = {}
+	): Promise<{ changed: number }> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
 		const stored = new Map<string, string>();
@@ -64,44 +55,78 @@ export abstract class PollerSubjects extends PollerDecisions {
 					now
 				);
 		});
-		await this.decideSubjects(who, subjects, { allAreInboxThreads: opts.allAreInboxThreads });
+		await this.decideSubjects(who, subjects);
 		const decided = this.decisionsOf(who, subjects);
+		if (!opts.quiet) {
+			const mentions = opts.mentions ?? new Map<string, FactEvent>();
+			const pushable = [...fresh].filter(
+				([k]) => mentions.has(k) || changed.some(([c]) => c === k)
+			);
+			await this.pushFactsOf(who, pushable, stored, decided, mentions);
+		}
 		if (opts.dash !== false)
 			await this.patchDashCaches(
 				who,
 				changed.map(([, x]) => x),
 				decided
 			);
-		if (opts.threads === false || !keys.length)
-			return { changed: changed.length, resolved: [], wrote: 0 };
-
-		const items: Apply[] = [];
-		for (let i = 0; i < keys.length; i += CHUNK) {
-			const chunk = keys.slice(i, i + CHUNK);
-			for (const row of this.all<ThreadRow>(
-				`SELECT * FROM threads WHERE category != 'muted' AND subject_key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				items.push({
-					row,
-					fresh: fresh.get(row.subject_key!)!,
-					before: parse(stored.get(row.subject_key!))
-				});
-		}
-		const out = await this.applyFacts(who, items, decided, opts);
-		return { changed: changed.length, ...out };
+		return { changed: changed.length };
 	}
 
-	/** Read these threads' PRs and issues again (the watcher, the refresh button). */
-	protected async refresh(
+	private async pushFactsOf(
 		who: Who,
-		rows: Pick<ThreadRow, 'id' | 'subject_key'>[],
-		opts: { quiet?: boolean } = {}
-	): Promise<Resolved[]> {
-		const refs = rows.flatMap((r) => subjectRefOf(r) ?? []);
-		if (!refs.length) return [];
-		const fetched = await fetchSubjects(who.token, refs, who.me);
-		return (await this.record(who, [...fetched.values()], opts)).resolved;
+		changed: [string, SubjectFacts][],
+		stored: Map<string, string>,
+		decided: Map<string, SubjectDecisions>,
+		mentions: Map<string, FactEvent>
+	) {
+		const wanted = new Set(who.settings.pushFacts);
+		if (!wanted.size || !changed.length) return;
+		if (!(await this.ctx.storage.get<boolean>('initialized'))) return;
+		const myTeams = new Set((await this.teams()).teams.map((t) => t.slug));
+		const keys = changed.map(([k]) => k);
+		const marksOf = new Map<string, ItemMark>();
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const m of this.all<{
+				item_id: string;
+				updated_at: string;
+				snoozed_until: number | null;
+				snooze_event: SnoozeEvent | null;
+				snoozed_at: number | null;
+			}>(`SELECT * FROM dash_snoozed WHERE item_id IN (${marks(chunk.length)})`, ...chunk))
+				marksOf.set(m.item_id, {
+					updatedAt: m.updated_at,
+					snoozedUntil: m.snoozed_until,
+					snoozeEvent: m.snooze_event,
+					snoozedAt: m.snoozed_at
+				});
+		}
+		const now = Date.now();
+		const candidates: PushCandidate[] = changed.flatMap(([key, after]) => {
+			const push = itemPush(
+				parse(stored.get(key)),
+				after,
+				marksOf.get(key),
+				wanted,
+				who.me,
+				myTeams,
+				now - NEW_SUBJECT_WINDOW_MS,
+				now,
+				mentions.has(key) ? [mentions.get(key)!] : []
+			);
+			if (!push) return [];
+			return [
+				{
+					itemKey: key,
+					reason: push.reason,
+					ignoresRepeatSetting: push.reason === 'snooze-over',
+					urgent: !!decided.get(key)?.urgent,
+					message: { title: push.title, body: `${after.title}\n${after.repo}`, url: after.url }
+				}
+			];
+		});
+		await this.deliver(candidates);
 	}
 
 	/** Replace changed subjects in the cached dashboards (and drop the ones that closed). */
@@ -111,7 +136,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		decided: Map<string, SubjectDecisions> = new Map()
 	) {
 		if (!subs.length) return;
-		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview } = who.settings;
+		const { dash } = who.settings;
 		let teamSet: Set<string> | null = null;
 		for (const kind of ['pr', 'issue'] as const) {
 			const key = `dash:${kind}`;
@@ -136,14 +161,13 @@ export abstract class PollerSubjects extends PollerDecisions {
 							i.sections.map((x) => names[x] ?? x),
 							who.me,
 							dash.staleDays,
-							Date.now(),
-							{ botsAreFyi, reviewResolution, newCommitsAfterReview }
+							Date.now()
 						)
 					];
 				})
 			);
 			const items = this.placeItems(who, patched, byId);
-			if (this.storePlacements(items)) await this.bumpVersion();
+			this.storeTracked(items);
 			const data: DashResponse = {
 				...cached.data,
 				items,
@@ -170,18 +194,15 @@ export abstract class PollerSubjects extends PollerDecisions {
 		return out;
 	}
 
-	protected itemPins(keys: string[]): Map<string, ItemPins> {
-		const out = new Map<string, ItemPins>();
+	protected itemPins(keys: string[]): Map<string, string[]> {
+		const out = new Map<string, string[]>();
 		for (let i = 0; i < keys.length; i += CHUNK) {
 			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; pinned_on: string; pinned_off: string }>(
-				`SELECT key, pinned_on, pinned_off FROM item_pins WHERE key IN (${marks(chunk.length)})`,
+			for (const r of this.all<{ key: string; pinned: string }>(
+				`SELECT key, pinned FROM item_pins WHERE key IN (${marks(chunk.length)})`,
 				...chunk
 			))
-				out.set(r.key, {
-					on: JSON.parse(r.pinned_on) as string[],
-					off: JSON.parse(r.pinned_off) as string[]
-				});
+				out.set(r.key, JSON.parse(r.pinned) as string[]);
 		}
 		return out;
 	}
@@ -198,77 +219,57 @@ export abstract class PollerSubjects extends PollerDecisions {
 		for (const [k, f] of this.storedSubjectFacts(missing)) facts.set(k, f);
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const pins = this.itemPins(keys);
-		const sourceNames = new Map(
-			[...who.settings.sources, TRACKED_SOURCE].map((x) => [x.id, x.name])
-		);
 		return items.map((i) => {
 			const s = facts.get(i.id);
 			if (!s) return { ...i, categories: [], pinnedCategories: [] };
 			const d = decided.get(i.id);
-			const t: ThreadFacts = {
+			const t: RuleFacts = {
 				repo: s.repo,
 				subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
 				title: s.title,
-				reason: '',
-				htmlUrl: s.url,
 				enrichment: enrichmentOf(s, who.me, d),
-				me: who.me,
-				myTeams: who.inboxTeams,
-				sources: i.sections.map((id) => sourceNames.get(id) ?? id)
+				me: who.me
 			};
-			const placed = placeItem(
-				t,
-				classify(t, who.settings),
-				pins.get(i.id),
-				who.settings.categoryGroups
-			);
+			const placed = placeItem(t, pins.get(i.id), who.settings.categoryGroups);
 			return { ...i, categories: placed.categories, pinnedCategories: placed.pinned };
 		});
 	}
 
-	protected trackedPlacements(
-		keys: string[]
-	): Map<string, { categories: string[]; seenAt: number }> {
-		const out = new Map<string, { categories: string[]; seenAt: number }>();
+	private trackedSeenAt(keys: string[]): Map<string, number> {
+		const out = new Map<string, number>();
 		for (let i = 0; i < keys.length; i += CHUNK) {
 			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; categories: string; seen_at: number }>(
-				`SELECT key, categories, seen_at FROM tracked_items WHERE key IN (${marks(chunk.length)})`,
+			for (const r of this.all<{ key: string; seen_at: number }>(
+				`SELECT key, seen_at FROM tracked_items WHERE key IN (${marks(chunk.length)})`,
 				...chunk
 			))
-				out.set(r.key, {
-					categories: JSON.parse(r.categories) as string[],
-					seenAt: r.seen_at
-				});
+				out.set(r.key, r.seen_at);
 		}
 		return out;
 	}
 
-	protected storePlacements(items: DashItem[], seen = false): boolean {
+	protected trackedItemKeys(keys: string[]): Set<string> {
+		return new Set(this.trackedSeenAt(keys).keys());
+	}
+
+	protected storeTracked(items: DashItem[], seen = false) {
 		const now = Date.now();
-		const stored = this.trackedPlacements(items.map((i) => i.id));
-		let marksChanged = false;
-		const writes: (() => void)[] = [];
-		for (const i of items) {
-			const old = stored.get(i.id);
-			const categories = JSON.stringify(i.categories ?? []);
-			const sameMarks = !!old && JSON.stringify(old.categories) === categories;
-			const seenAt = old && !(seen && now - old.seenAt > TRACKED_SEEN_REFRESH) ? old.seenAt : now;
-			if (sameMarks && seenAt === old.seenAt) continue;
-			if (!sameMarks) marksChanged = true;
-			writes.push(() =>
+		const stored = this.trackedSeenAt(items.map((i) => i.id));
+		const due = items.filter((i) => {
+			const seenAt = stored.get(i.id);
+			return seenAt === undefined || (seen && now - seenAt > TRACKED_SEEN_REFRESH);
+		});
+		if (!due.length) return;
+		this.transaction(() => {
+			for (const i of due)
 				this.run(
-					`INSERT INTO tracked_items (key, kind, seen_at, categories) VALUES (?, ?, ?, ?)
-           ON CONFLICT (key) DO UPDATE SET seen_at = excluded.seen_at, categories = excluded.categories`,
+					`INSERT INTO tracked_items (key, kind, seen_at) VALUES (?, ?, ?)
+           ON CONFLICT (key) DO UPDATE SET seen_at = excluded.seen_at`,
 					i.id,
 					i.kind,
-					seenAt,
-					categories
-				)
-			);
-		}
-		if (writes.length) this.transaction(() => writes.forEach((w) => w()));
-		return marksChanged;
+					now
+				);
+		});
 	}
 
 	protected async rePlaceCachedItems(who: Who): Promise<void> {
@@ -277,7 +278,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
 			if (!cached) continue;
 			const items = this.placeItems(who, cached.data.items);
-			if (this.storePlacements(items)) await this.bumpVersion();
+			this.storeTracked(items);
 			await this.ctx.storage.put(key, { sig: cached.sig, data: { ...cached.data, items } });
 			this.broadcast({ type: 'dash', kind });
 		}
@@ -293,145 +294,28 @@ export abstract class PollerSubjects extends PollerDecisions {
 	}
 
 	/**
-	 * Apply fresh facts to inbox threads: classify, then watchOutcome (resolve, reopen, wake).
-	 * Writes only threads that changed, and pushes what now needs you.
-	 */
-	private async applyFacts(
-		who: Who,
-		items: Apply[],
-		decided: Map<string, SubjectDecisions>,
-		opts: { quiet?: boolean } = {}
-	): Promise<{ resolved: Resolved[]; wrote: number }> {
-		const { me, settings, inboxTeams: myTeams } = who;
-		const writes: (() => void)[] = [];
-		const candidates: PushCandidate[] = [];
-		const resolved: Resolved[] = [];
-		for (const { row: r, fresh, before } of items) {
-			const e = enrichmentOf(fresh, me, decided.get(r.subject_key!));
-			const c = withOverride(
-				classify(
-					{
-						repo: r.repo,
-						subjectType: r.subject_type,
-						title: r.title,
-						reason: r.reason,
-						htmlUrl: r.html_url,
-						enrichment: e,
-						me,
-						myTeams
-					},
-					settings
-				),
-				r,
-				r.gh_updated_at
-			);
-			const out = watchOutcome(
-				{
-					category: r.category,
-					kind: r.kind,
-					triage: r.triage,
-					enrichment: before ? enrichmentOf(before, me) : null,
-					resolvedAt: r.resolved_at,
-					snoozeEvent: r.snooze_event,
-					snoozedAt: r.snoozed_at
-				},
-				c,
-				e,
-				me
-			);
-			const triage = out.triage;
-			const resolvedAt = out.resolvedAt;
-			const note = triage === 'done' ? (out.resolvedNote ?? r.resolved_note) : null;
-			const clearSnooze = out.clearSnooze ? 1 : 0;
-			const same =
-				c.category === r.category &&
-				c.kind === r.kind &&
-				c.summary === r.summary &&
-				c.why === r.why &&
-				c.actionLabel === r.action_label &&
-				c.actionUrl === r.action_url &&
-				(c.rule ?? null) === r.rule &&
-				triage === r.triage &&
-				resolvedAt === r.resolved_at &&
-				note === r.resolved_note &&
-				!clearSnooze;
-			if (same) continue;
-			writes.push(() =>
-				this.run(
-					`UPDATE threads SET category = ?, kind = ?, summary = ?, why = ?, action_label = ?, action_url = ?,
-             rule = ?, triage = ?, resolved_at = ?, resolved_note = ?,
-             snoozed_until = CASE WHEN ? THEN NULL ELSE snoozed_until END,
-             snooze_event = CASE WHEN ? THEN NULL ELSE snooze_event END
-           WHERE id = ?`,
-					c.category,
-					c.kind,
-					c.summary,
-					c.why,
-					c.actionLabel,
-					c.actionUrl,
-					c.rule ?? null,
-					triage,
-					resolvedAt,
-					note,
-					clearSnooze,
-					clearSnooze,
-					r.id
-				)
-			);
-			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
-			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
-			const wanted = snoozeOver
-				? settings.pushAction
-				: settings.pushTurnChanges && shouldPush(c, settings);
-			if (out.push && wanted)
-				candidates.push({
-					itemKey: r.subject_key ?? r.id,
-					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,
-					ignoresRepeatSetting: snoozeOver,
-					urgent: !snoozeOver && c.category === 'action' && !!e.urgent,
-					message: { title: out.push, body: `${r.title}\n${r.repo}`, url: c.actionUrl }
-				});
-		}
-		if (writes.length) {
-			this.transaction(() => writes.forEach((w) => w()));
-			await this.bumpVersion();
-		}
-		if (!opts.quiet) await this.deliver(candidates.slice(0, MAX_INDIVIDUAL_PUSHES));
-		return { resolved, wrote: writes.length };
-	}
-
-	/**
 	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Stores its facts,
-	 * which updates its inbox threads and its entry in the cached dashboards. About 1 point.
+	 * which updates its entry in the cached dashboards. About 1 point.
 	 */
-	async recheck(
-		repo: string,
-		number: number
-	): Promise<{ resolved: { title: string; note: string }[] }> {
+	async recheck(repo: string, number: number): Promise<{ ok: true }> {
 		const who = await this.who();
-		if (!who) return { resolved: [] };
+		if (!who) return { ok: true };
 		const [owner, name] = repo.split('/');
 		const key = subjectKey(repo, number);
 		const fetched = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
 		const sub = fetched.get(key);
-		if (!sub) return { resolved: [] };
-		const out = await this.record(who, [sub]);
-		return { resolved: out.resolved.map(({ title, note }) => ({ title, note })) };
+		if (sub) await this.record(who, [sub]);
+		return { ok: true };
 	}
 
 	/**
 	 * Facts that the API fetched (the peek): store them and update every view. `changed` tells the
 	 * browser to refetch its lists.
 	 */
-	async recordFetched(
-		sub: SubjectFacts
-	): Promise<{ changed: boolean; resolved: { title: string; note: string }[] }> {
+	async recordFetched(sub: SubjectFacts): Promise<{ changed: boolean }> {
 		const who = await this.who();
-		if (!who) return { changed: false, resolved: [] };
+		if (!who) return { changed: false };
 		const out = await this.record(who, [sub]);
-		return {
-			changed: out.changed > 0 || out.wrote > 0,
-			resolved: out.resolved.map(({ title, note }) => ({ title, note }))
-		};
+		return { changed: out.changed > 0 };
 	}
 }

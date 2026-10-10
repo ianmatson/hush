@@ -156,7 +156,6 @@ export interface PushMessage {
 	body: string;
 	url: string;
 	tag?: string;
-	threadIds?: string[];
 }
 
 const TOPIC_MAX_LENGTH = 32;

@@ -14,12 +14,14 @@
 		menu = 'dropdown',
 		subjects,
 		disabled = [],
+		untilNewActivity = false,
 		onpick
 	}: {
 		menu?: 'dropdown' | 'context';
 		subjects: ('pr' | 'issue' | 'other')[];
 		/** Conditions that are already true; shown greyed out. */
 		disabled?: SnoozeEvent[];
+		untilNewActivity?: boolean;
 		onpick: (body: { until?: number; event?: SnoozeEvent }) => void;
 	} = $props();
 
@@ -38,6 +40,10 @@
 	{/each}
 {/snippet}
 
+{#if untilNewActivity}
+	<M.Item onclick={() => onpick({})}>Until new activity</M.Item>
+	<M.Separator />
+{/if}
 {#each snoozeOptions() as opt (opt.label)}
 	<M.Item onclick={() => onpick({ until: opt.until })}>{opt.label}</M.Item>
 {/each}

@@ -14,9 +14,9 @@
 		<Alert.Description>
 			Jev, a decision model from TypeSafe (through Cloudflare), reads the title, labels, start of
 			the description, and 2 newest comments of your pull requests and issues. It puts each into a
-			category and tags, and tells which comments need you. It keeps nothing.
+			category, and tells which comments need you. It keeps nothing.
 			<span class="mt-1 flex flex-wrap gap-x-3">
-				<a class="underline underline-offset-2" href="/settings/inbox#smart-decisions"
+				<a class="underline underline-offset-2" href="/settings/categories#smart-decisions"
 					>Turn it off</a
 				>
 				<a class="underline underline-offset-2" href="/settings/categories"

@@ -1,8 +1,7 @@
 import type { Change } from './types';
 
 /**
- * One fact, one badge. A row's headline (the dashboard's turn reason, the inbox summary) already
- * says some facts; the badges after it leave those out, so nothing shows twice.
+ * One fact, one badge. A row's headline (the turn reason) already says some facts; the badges after it leave those out, so nothing shows twice.
  */
 export type Fact = 'ci' | 'review' | 'threads' | 'conflicts' | 'draft' | 'requested';
 
@@ -34,24 +33,4 @@ export function newChanges(changes: Change[], said: Set<Fact>, texts: string[]):
 		const f = CHANGE_FACT[c.kind];
 		return !(f && said.has(f)) && !texts.some((t) => same(t, c.text));
 	});
-}
-
-/** The words in an inbox summary that make its "why" tag say nothing new. */
-const WHY_IN_SUMMARY: Record<string, RegExp> = {
-	'Review requested': /review/i,
-	'You were mentioned': /mention/i,
-	'Team mentioned': /mention/i,
-	'Assigned to you': /assign/i,
-	'You opened this': /\byour\b/i,
-	'You commented': /you commented/i,
-	'State changed': /merged|closed|reopened/i,
-	'Your workflow run': /workflow run/i,
-	'Security alert': /vulnerab|security/i,
-	'Deployment approval requested': /deploy/i
-};
-
-/** Does the inbox "why" tag add something to the summary? */
-export function whyAddsInfo(why: string, summary: string): boolean {
-	if (same(why, summary)) return false;
-	return !WHY_IN_SUMMARY[why]?.test(summary);
 }

@@ -4,7 +4,7 @@ import { randomToken, sha256 } from '../crypto';
 import { renderFeed } from '../feeds';
 import { routes } from '../app';
 
-// --- Feeds: one inbox tab as Atom, at a secret URL ----------------------------------------
+// --- Feeds: one view or category as Atom, at a secret URL ----------------------------------
 
 type FeedRow = { view: string; created_at: number };
 const feedDTO = (r: FeedRow, url?: string): FeedDTO => ({

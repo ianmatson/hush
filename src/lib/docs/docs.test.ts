@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseExpr } from '$lib/shared/query';
+import { parseExpr, queryError } from '$lib/shared/query';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, mergeSettings, validateSettings } from '$lib/shared/settings-schema';
 import type { Settings } from '$lib/shared/types';
@@ -57,6 +57,24 @@ describe('docs', () => {
 		for (const { page, text } of queries) {
 			expect(text, page).not.toBe('');
 			expect(parseExpr(text).errors, `${page}: ${text}`).toEqual([]);
+		}
+	});
+
+	it('have view searches that Hush accepts', () => {
+		const searches = [
+			...blocks('query search').map((b) => ({ page: b.page, text: b.text.trim() })),
+			...DOCS.flatMap((d) =>
+				d.markdown
+					.split(/\n\n/)
+					.filter((t) => /^\| Search +\|/.test(t))
+					.flatMap((t) => t.split('\n').slice(2))
+					.map((row) => ({ page: d.slug, text: /^\| `([^`]+)`/.exec(row)?.[1] ?? '' }))
+			)
+		];
+		expect(searches.length).toBeGreaterThan(3);
+		for (const { page, text } of searches) {
+			expect(text, page).not.toBe('');
+			expect(queryError(text, 'search'), `${page}: ${text}`).toBeNull();
 		}
 	});
 

@@ -1,72 +1,74 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
-	import { flip } from 'svelte/animate';
-	import { fly, slide } from 'svelte/transition';
+	import { fly } from 'svelte/transition';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { cx } from './demo-ui';
 	import Search from '@lucide/svelte/icons/search';
 	import Bell from '@lucide/svelte/icons/bell';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Rows3 from '@lucide/svelte/icons/rows-3';
+	import Check from '@lucide/svelte/icons/check';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import MockAvatar from './mock-avatar.svelte';
 	import PushAlert from './push-alert.svelte';
-	import DemoRow from './demo-row.svelte';
+	import DemoList from './demo-list.svelte';
 	import DemoPeek, { type CommentMode } from './demo-peek.svelte';
-	import DemoDash from './demo-dash.svelte';
 	import {
 		DEMO_DASH,
-		DEMO_THREADS,
-		DASH_SECTIONS,
-		type DemoDashItem,
 		DEMO_ME,
+		DEMO_VIEWS,
+		GROUP_BY_CHOICES,
+		demoSections,
+		inDemoView,
+		type DemoDashItem,
 		type DemoEntry,
+		type DemoGroupBy,
 		type DemoPeek as PeekData,
-		type DemoThread
+		type DemoViewId
 	} from './demo-data';
 
-	type Page = 'inbox' | 'pulls' | 'issues';
-	type ViewId = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'mine';
+	type Kind = 'pulls' | 'issues';
 	interface Toast {
 		key: number;
 		text: string;
 		undo?: () => void;
-		fuseMs?: number;
 	}
 
 	const TOAST_MS = 4500;
 	const RERUN_MS = 3500;
 	const MERGE_CONFIRM_MS = 4000;
-	const ALERT_THREAD = 't-review';
-	const VIEWS: { id: ViewId; label: string; strong?: boolean; counted?: boolean }[] = [
-		{ id: 'action', label: 'Needs you', strong: true, counted: true },
-		{ id: 'fyi', label: 'FYI', counted: true },
-		{ id: 'snoozed', label: 'Snoozed' },
-		{ id: 'done', label: 'Done' },
-		{ id: 'muted', label: 'Muted' },
-		{ id: 'mine', label: 'Mine', counted: true }
+	const GROUP_BY_TOUR_MS = 3400;
+	const GROUP_BY_TOUR: DemoGroupBy[] = ['role', 'status', 'custom'];
+	const ALERT_ITEM = 'p-20508';
+	const KINDS: { id: Kind; label: string }[] = [
+		{ id: 'pulls', label: 'Pull requests' },
+		{ id: 'issues', label: 'Issues' }
 	];
 
 	const reducedMotion = new MediaQuery('prefers-reduced-motion: reduce');
-	const motion = $derived(reducedMotion.current ? 0 : 200);
+	const motion = $derived(reducedMotion.current ? 0 : 220);
 
-	let threads = $state<DemoThread[]>(structuredClone(DEMO_THREADS));
 	let dash = $state(structuredClone(DEMO_DASH));
-	let page = $state<Page>('inbox');
-	let view = $state<ViewId>('action');
-	let selectedThread = $state<string | null>('t-review');
-	let selectedDash = $state<Record<'pulls' | 'issues', string | null>>({
-		pulls: 'p-482',
-		issues: 'i-477'
-	});
-	let hiddenDash = $state<string[]>([]);
+	let view = $state<DemoViewId>('mine');
+	let kind = $state<Kind>('pulls');
+	let groupBy = $state<Record<DemoViewId, DemoGroupBy>>(
+		Object.fromEntries(DEMO_VIEWS.map((v) => [v.id, v.groupBy])) as Record<DemoViewId, DemoGroupBy>
+	);
+	let selected = $state<Record<Kind, string | null>>({ pulls: 'p-20387', issues: 'i-20700' });
+	let away = $state<string[]>([]);
+	let unread = $state<string[]>(['p-20387', 'p-20454', 'i-20700']);
 	let peekOpen = $state(false);
+	let groupMenuOpen = $state(false);
 	let alertShown = $state(true);
+	let touring = $state(false);
 	let rerunningId = $state<string | null>(null);
 	let confirmingMergeId = $state<string | null>(null);
 	let toast = $state<Toast | null>(null);
-	let listEl = $state<HTMLElement | null>(null);
+	let stageEl = $state<HTMLElement | null>(null);
 
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	let tourTimer: ReturnType<typeof setInterval> | undefined;
 	let toastKey = 0;
 
 	function later(ms: number, run: () => void) {
@@ -75,184 +77,149 @@
 			run();
 		}, ms);
 		timers.add(id);
-		return id;
 	}
 
 	onDestroy(() => {
 		for (const id of timers) clearTimeout(id);
 		clearTimeout(toastTimer);
+		clearInterval(tourTimer);
 	});
 
-	function showToast(text: string, undo?: () => void, fuseMs?: number) {
+	function showToast(text: string, undo?: () => void) {
 		clearTimeout(toastTimer);
-		toast = { key: ++toastKey, text, undo, fuseMs };
+		toast = { key: ++toastKey, text, undo };
 		const key = toast.key;
-		toastTimer = setTimeout(
-			() => {
-				if (toast?.key === key) toast = null;
-			},
-			(fuseMs ?? 0) + TOAST_MS
-		);
+		toastTimer = setTimeout(() => {
+			if (toast?.key === key) toast = null;
+		}, TOAST_MS);
 	}
 
-	function inView(t: DemoThread, v: ViewId) {
-		if (v === 'muted') return t.muted;
-		if (t.muted) return false;
-		if (v === 'snoozed') return t.triage === 'snoozed';
-		if (v === 'done') return t.triage === 'done';
-		if (t.triage !== 'inbox') return false;
-		if (v === 'mine') return t.peek.author.login === DEMO_ME.login;
-		return t.list === v;
-	}
-
-	const visible = $derived(threads.filter((t) => inView(t, view)));
-	const countOf = (v: ViewId) => threads.filter((t) => inView(t, v)).length;
-	const current = $derived(visible.find((t) => t.id === selectedThread) ?? visible[0] ?? null);
-	const dashItems = $derived(
-		page === 'inbox' ? [] : dash[page].filter((i) => !hiddenDash.includes(i.id))
-	);
-	const turnCount = (p: 'pulls' | 'issues') =>
-		dash[p].filter((i) => i.group === 'yours' && !hiddenDash.includes(i.id)).length;
-	const currentDash = $derived.by(() => {
-		if (page === 'inbox') return null;
-		const wanted = selectedDash[page];
-		return dashItems.find((i) => i.id === wanted) ?? dashItems[0] ?? null;
-	});
-	const NAV = $derived([
-		{ id: 'inbox' as const, label: 'Inbox', short: '', badge: countOf('action') },
-		{ id: 'pulls' as const, label: 'Pull requests', short: 'PRs', badge: turnCount('pulls') },
-		{ id: 'issues' as const, label: 'Issues', short: '', badge: turnCount('issues') }
-	]);
-
-	const byId = (id: string) => threads.find((t) => t.id === id);
-	const alertThread = $derived(byId(ALERT_THREAD)!);
-	const refOf = (t: { repo: string; number: number | null }) =>
-		t.number ? `${t.repo}#${t.number}` : t.repo;
+	const inView = (i: DemoDashItem, v: DemoViewId) => inDemoView(i, v) && !away.includes(i.id);
+	const items = $derived(dash[kind].filter((i) => inView(i, view)));
+	const sections = $derived(demoSections(items, groupBy[view]));
+	const ordered = $derived(sections.flatMap((s) => s.items));
+	const current = $derived(ordered.find((i) => i.id === selected[kind]) ?? ordered[0] ?? null);
+	const unreadIn = (v: DemoViewId) =>
+		[...dash.pulls, ...dash.issues].filter((i) => inView(i, v) && unread.includes(i.id)).length;
+	const countOf = (k: Kind) => dash[k].filter((i) => inView(i, view)).length;
+	const groupLabel = $derived(GROUP_BY_CHOICES.find((c) => c.id === groupBy[view])?.label ?? '');
+	const byId = (id: string) => [...dash.pulls, ...dash.issues].find((i) => i.id === id);
+	const alertItem = $derived(byId(ALERT_ITEM)!);
+	const refOf = (i: DemoDashItem) => `${i.repo}#${i.number}`;
 	const end = (s: string) => (/[.!?…]$/.test(s) ? s : `${s}.`);
+	const LEAD = {
+		yours: 'Your turn',
+		team: 'Your team’s turn',
+		waiting: 'Waiting on others',
+		other: 'Involves you'
+	};
 
-	function leadOf(t: DemoThread) {
-		if (t.muted) return 'Muted';
-		if (t.triage === 'done') return 'Done';
-		if (t.triage === 'snoozed') return 'Snoozed';
-		return t.list === 'action' ? 'Needs you' : 'FYI';
+	function stopTour() {
+		touring = false;
+		clearInterval(tourTimer);
 	}
 
-	function whyText(t: DemoThread) {
-		const notes = [
-			t.why && `GitHub: ${t.why.charAt(0).toLowerCase()}${t.why.slice(1)}`,
-			t.rule && (t.rule === 'Muted by you' ? 'You muted it' : `Rule: ${t.rule}`),
-			t.note && `Hush moved it: ✓ ${t.note}`
-		].filter((n): n is string => !!n);
-		return [t.summary, ...notes].map(end).join(' ');
+	function startTour() {
+		if (reducedMotion.current || touring) return;
+		touring = true;
+		tourTimer = setInterval(() => {
+			if (view !== 'mine' || kind !== 'pulls') return;
+			const at = GROUP_BY_TOUR.indexOf(groupBy.mine);
+			groupBy.mine = GROUP_BY_TOUR[(at + 1) % GROUP_BY_TOUR.length];
+		}, GROUP_BY_TOUR_MS);
 	}
 
-	function selectAfterLeaving(id: string, before: DemoThread[]) {
-		if (selectedThread !== id && current?.id !== id) return;
-		if (visible.some((t) => t.id === id)) return;
-		const at = before.findIndex((t) => t.id === id);
-		const next = before.slice(at + 1).find((t) => t.id !== id) ?? before[at - 1];
-		selectedThread = next?.id ?? null;
-		const focusWasInList = !!listEl?.contains(document.activeElement);
-		if (focusWasInList && next) tick().then(() => focusRow(next.id));
-	}
-
-	function focusRow(id: string) {
-		listEl?.querySelector<HTMLElement>(`[data-demo-row="${id}"] button`)?.focus();
-	}
-
-	function change(id: string, patch: Partial<DemoThread>, message: string, undoable = true) {
-		const t = byId(id);
-		if (!t) return;
-		const before = visible.slice();
-		const snapshot: Partial<DemoThread> = {
-			triage: t.triage,
-			muted: t.muted,
-			rule: t.rule,
-			note: t.note,
-			snoozedLabel: t.snoozedLabel,
-			unread: t.unread
-		};
-		Object.assign(t, patch);
-		selectAfterLeaving(id, before);
-		showToast(message, undoable ? () => restoreSnapshot(id, snapshot) : undefined);
-	}
-
-	function restoreSnapshot(id: string, snapshot: Partial<DemoThread>) {
-		const t = byId(id);
-		if (!t) return;
-		Object.assign(t, snapshot);
-		selectedThread = id;
-		toast = null;
-	}
-
-	const markDone = (id: string) =>
-		change(id, { triage: 'done', unread: false }, `Marked done: ${byId(id)?.title}`);
-	const snooze = (id: string, label = 'until tomorrow 9:00') =>
-		change(
-			id,
-			{ triage: 'snoozed', snoozedLabel: label, unread: false },
-			`Snoozed ${label === 'for 3 hours' ? 'for 3 hours' : label}: ${byId(id)?.title}`
-		);
-	const mute = (id: string) =>
-		change(id, { muted: true, rule: 'Muted by you' }, `Muted: ${byId(id)?.title}`);
-
-	function restore(id: string) {
-		const t = byId(id);
-		if (!t) return;
-		change(
-			id,
-			{
-				triage: 'inbox',
-				muted: false,
-				rule: t.rule === 'Muted by you' ? undefined : t.rule,
-				snoozedLabel: undefined,
-				note: undefined
+	function watchVisibility(node: HTMLElement) {
+		const seen = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) startTour();
+				else if (touring) (clearInterval(tourTimer), (touring = false));
 			},
-			`${t.muted ? 'Unmuted' : 'Moved to inbox'}: ${t.title}`
+			{ threshold: 0.4 }
 		);
+		seen.observe(node);
+		return () => seen.disconnect();
 	}
 
-	function openOnGitHub(t: DemoThread) {
-		t.unread = false;
-		window.open(t.url, '_blank', 'noopener');
+	function takeOver() {
+		stopTour();
 	}
 
-	function resolve(id: string | undefined, note: string) {
-		const t = id ? byId(id) : undefined;
-		if (!t || t.triage === 'done') return;
-		const before = visible.slice();
-		Object.assign(t, { triage: 'done', note, unread: false });
-		selectAfterLeaving(t.id, before);
+	function setGroupBy(by: DemoGroupBy) {
+		stopTour();
+		groupBy[view] = by;
+		groupMenuOpen = false;
+	}
+
+	function leave(item: DemoDashItem, message: string) {
+		stopTour();
+		const before = ordered.slice();
+		away = [...away, item.id];
+		if (current?.id === item.id) {
+			const at = before.findIndex((i) => i.id === item.id);
+			selected[kind] = (before[at + 1] ?? before[at - 1])?.id ?? null;
+		}
+		showToast(message, () => {
+			away = away.filter((id) => id !== item.id);
+			selected[kind] = item.id;
+			toast = null;
+		});
+	}
+
+	const snooze = (item: DemoDashItem) => leave(item, `Snoozed until new activity: ${item.title}`);
+	const mute = (item: DemoDashItem) => leave(item, `Muted: ${item.title}`);
+	const copy = (item: DemoDashItem) => showToast(`Copied the link to ${refOf(item)}.`);
+	const open = (item: DemoDashItem) => window.open(item.url, '_blank', 'noopener');
+
+	function select(item: DemoDashItem) {
+		stopTour();
+		selected[kind] = item.id;
+		peekOpen = true;
+		unread = unread.filter((id) => id !== item.id);
+	}
+
+	function goTo(next: DemoViewId) {
+		stopTour();
+		view = next;
+		peekOpen = false;
+		groupMenuOpen = false;
+	}
+
+	function pickKind(next: Kind) {
+		stopTour();
+		kind = next;
+		peekOpen = false;
 	}
 
 	function addEntry(peek: PeekData, entry: Omit<DemoEntry, 'ago'>) {
 		peek.timeline.push({ ...entry, ago: 'now' });
 	}
 
-	function approve(peek: PeekData, reference: string, threadId?: string) {
+	function approve(peek: PeekData, reference: string) {
 		const mine = peek.pr?.reviews.find((r) => r.who.login === DEMO_ME.login);
 		if (mine) mine.state = 'APPROVED';
 		else peek.pr?.reviews.push({ who: DEMO_ME, state: 'APPROVED' });
 		addEntry(peek, { who: DEMO_ME, verb: 'approved', tone: 'good', text: '' });
-		resolve(threadId, 'You approved');
 		showToast(`Approved ${reference}.`);
 	}
 
-	function rerun(peek: PeekData, reference: string, threadId?: string) {
+	function rerun(item: DemoDashItem, reference: string) {
+		const peek = item.peek;
 		if (!peek.pr) return;
 		const failed = peek.pr.checks.filter((c) => c.state === 'failure');
 		for (const check of failed) check.state = 'pending';
 		rerunningId = reference;
+		item.ci = 'running';
 		showToast(`Re-running ${failed.length} failed jobs on ${reference}.`);
 		later(RERUN_MS, () => {
 			for (const check of failed) check.state = 'success';
 			rerunningId = null;
-			resolve(threadId, 'CI passes now');
-			showToast(`CI passes now on ${reference}. Hush moved it to Done.`);
+			item.ci = 'pass';
+			showToast(`CI passes now on ${reference}.`);
 		});
 	}
 
-	function merge(peek: PeekData, reference: string, threadId?: string) {
+	function merge(peek: PeekData, reference: string) {
 		if (confirmingMergeId !== reference) {
 			confirmingMergeId = reference;
 			later(MERGE_CONFIRM_MS, () => {
@@ -262,24 +229,14 @@
 		}
 		confirmingMergeId = null;
 		peek.state = 'merged';
-		resolve(threadId, 'You merged');
 		showToast(`Merged ${reference}.`);
 	}
 
-	function comment(
-		peek: PeekData,
-		reference: string,
-		body: string,
-		mode: CommentMode,
-		thread?: DemoThread
-	) {
+	function comment(peek: PeekData, reference: string, body: string, mode: CommentMode) {
 		const verb =
 			mode === 'approve' ? 'approved' : mode === 'changes' ? 'requested changes' : 'commented';
 		const tone = mode === 'approve' ? 'good' : mode === 'changes' ? 'bad' : undefined;
 		addEntry(peek, { who: DEMO_ME, verb, tone, text: body });
-		if (mode === 'approve') resolve(thread?.id, 'You approved');
-		else if (mode === 'changes') resolve(thread?.id, 'You requested changes');
-		else if (thread?.kind === 'reply') resolve(thread.id, 'You replied');
 		showToast(
 			mode === 'comment'
 				? `Commented on ${reference}.`
@@ -287,92 +244,36 @@
 		);
 	}
 
-	function leaveDash(item: DemoDashItem, message: string) {
-		if (page === 'inbox') return;
-		const dashPage = page;
-		const before = dashItems.slice();
-		const wasCurrent = currentDash?.id === item.id;
-		hiddenDash = [...hiddenDash, item.id];
-		if (wasCurrent) {
-			const at = before.findIndex((i) => i.id === item.id);
-			selectedDash[dashPage] = (before[at + 1] ?? before[at - 1])?.id ?? null;
-		}
-		showToast(message, () => {
-			hiddenDash = hiddenDash.filter((id) => id !== item.id);
-			selectedDash[dashPage] = item.id;
-			toast = null;
-		});
-	}
-
-	const hideDash = (item: DemoDashItem) =>
-		leaveDash(item, `Hidden until it changes: ${item.title}`);
-	const muteDash = (item: DemoDashItem) => leaveDash(item, `Muted: ${item.title}`);
-	const copyDash = (item: DemoDashItem) =>
-		showToast(`Copied the link to ${item.repo}#${item.number}.`);
-	const openDash = (item: DemoDashItem) => window.open(item.url, '_blank', 'noopener');
-
-	function goTo(next: Page) {
-		page = next;
-		peekOpen = false;
-	}
-
-	function pickView(next: ViewId) {
-		view = next;
-		peekOpen = false;
-	}
-
-	function selectThread(t: DemoThread) {
-		selectedThread = t.id;
-		peekOpen = true;
-		if (t.unread) later(800, () => (t.unread = false));
-	}
-
-	function selectDash(item: DemoDashItem) {
-		if (page === 'inbox') return;
-		selectedDash[page] = item.id;
-		peekOpen = true;
-	}
-
 	async function moveCursor(step: number) {
-		if (page === 'inbox') {
-			if (!visible.length) return;
-			const at = Math.max(
-				0,
-				visible.findIndex((t) => t.id === current?.id)
-			);
-			const next = visible[Math.min(visible.length - 1, Math.max(0, at + step))];
-			selectedThread = next.id;
-			await tick();
-			focusRow(next.id);
-			return;
-		}
-		if (!dashItems.length) return;
+		stopTour();
+		if (!ordered.length) return;
 		const at = Math.max(
 			0,
-			dashItems.findIndex((i) => i.id === currentDash?.id)
+			ordered.findIndex((i) => i.id === current?.id)
 		);
-		const next = dashItems[Math.min(dashItems.length - 1, Math.max(0, at + step))];
-		selectedDash[page] = next.id;
+		const next = ordered[Math.min(ordered.length - 1, Math.max(0, at + step))];
+		selected[kind] = next.id;
 		await tick();
-		document.querySelector<HTMLElement>(`[data-demo-dash-row="${next.id}"] .row-main`)?.focus();
+		stageEl?.querySelector<HTMLElement>(`[data-demo-dash-row="${next.id}"] .row-main`)?.focus();
+	}
+
+	function cycleGroupBy() {
+		const at = GROUP_BY_TOUR.indexOf(groupBy[view]);
+		setGroupBy(GROUP_BY_TOUR[(at + 1) % GROUP_BY_TOUR.length]);
 	}
 
 	function onKey(e: KeyboardEvent) {
 		if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
 		if ((e.target as HTMLElement).closest('textarea, input')) return;
 		const key = e.key.toLowerCase();
-		const t = page === 'inbox' ? current : null;
-		const inInbox = !!t && t.triage === 'inbox' && !t.muted;
-		const item = page === 'inbox' ? null : currentDash;
 		if (key === 'j' || e.key === 'ArrowDown') moveCursor(1);
-		else if (key === 'e' && item) hideDash(item);
-		else if (key === 'm' && item) muteDash(item);
-		else if (key === 'c' && item) copyDash(item);
 		else if (key === 'k' || e.key === 'ArrowUp') moveCursor(-1);
-		else if (key === 'e' && inInbox) markDone(t.id);
-		else if (key === 's' && inInbox) snooze(t.id);
-		else if (key === 'm' && inInbox) mute(t.id);
-		else if (e.key === 'Escape' && peekOpen) peekOpen = false;
+		else if (key === 'g') cycleGroupBy();
+		else if (key === 's' && current) snooze(current);
+		else if (key === 'm' && current) mute(current);
+		else if (key === 'c' && current) copy(current);
+		else if (e.key === 'Escape' && (peekOpen || groupMenuOpen))
+			((peekOpen = false), (groupMenuOpen = false));
 		else return;
 		e.preventDefault();
 	}
@@ -382,29 +283,27 @@
 		return () => node.removeEventListener('keydown', onKey);
 	}
 
-	function alertDone() {
-		markDone(ALERT_THREAD);
-		alertShown = false;
-	}
-
-	function alertSnooze() {
-		snooze(ALERT_THREAD, 'for 3 hours');
-		alertShown = false;
-	}
-
 	function alertOpen() {
-		page = 'inbox';
-		view = inView(byId(ALERT_THREAD)!, 'action') ? 'action' : 'done';
-		selectedThread = ALERT_THREAD;
+		stopTour();
+		view = 'mine';
+		kind = 'pulls';
+		away = away.filter((id) => id !== ALERT_ITEM);
+		selected.pulls = ALERT_ITEM;
 		peekOpen = true;
 		alertShown = false;
 	}
-
-	const dashPeek = (item: DemoDashItem) =>
-		(item.threadId && byId(item.threadId)?.peek) || item.peek;
 </script>
 
-<div class="stage" role="region" aria-label="Interactive demo of Hush" {@attach listenForKeys}>
+<div
+	class="stage"
+	role="region"
+	aria-label="Interactive demo of Hush"
+	bind:this={stageEl}
+	{@attach listenForKeys}
+	{@attach watchVisibility}
+	onpointerdown={takeOver}
+	onfocusin={takeOver}
+>
 	<div class="window">
 		<header class="flex h-12 items-center gap-4 border-b px-4 max-sm:gap-2 max-sm:px-3">
 			<span class="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
@@ -413,36 +312,43 @@
 			</span>
 			<nav
 				class="flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm"
-				aria-label="Demo pages"
+				aria-label="Demo views"
 			>
-				{#each NAV as link (link.id)}
+				{#each DEMO_VIEWS as v (v.id)}
+					{@const badge = unreadIn(v.id)}
 					<button
 						type="button"
-						aria-current={page === link.id ? 'page' : undefined}
+						aria-current={view === v.id ? 'page' : undefined}
 						class={cx(
 							'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:text-foreground',
-							page === link.id && 'bg-muted text-foreground'
+							view === v.id && 'bg-muted text-foreground'
 						)}
-						onclick={() => goTo(link.id)}
+						onclick={() => goTo(v.id)}
 					>
-						{#if link.short}<span class="sm:hidden">{link.short}</span><span class="max-sm:hidden"
-								>{link.label}</span
-							>{:else}{link.label}{/if}
-						{#if link.badge}
+						{v.name}
+						{#if badge}
 							<span
 								class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-								>{link.badge}</span
+								>{badge}</span
 							>
 						{/if}
 					</button>
 				{/each}
+				<button
+					type="button"
+					class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+					aria-label="New view"
+					onclick={() =>
+						showToast('A new view is a name and a search, such as repo:acme/web is:open size:<50.')}
+					><Plus class="size-4" /></button
+				>
 			</nav>
 			<div class="ml-auto flex items-center gap-1">
 				<button
 					type="button"
 					class="flex h-7 items-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-md:w-7 max-md:justify-center max-sm:hidden md:border md:pr-1 md:pl-2 md:text-xs"
 					aria-label="Search and commands"
-					onclick={() => showToast('⌘K finds threads, pull requests, pages, and commands.')}
+					onclick={() => showToast('⌘K finds pull requests, issues, pages, and commands.')}
 				>
 					<Search class="size-4 md:size-3.5" /><span class="hidden md:inline">Search</span><kbd
 						class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline">⌘K</kbd
@@ -462,148 +368,105 @@
 
 		<div class="body" data-peek-open={peekOpen || undefined}>
 			<div class="main">
-				{#if page === 'inbox'}
-					<nav
-						class="flex w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5 text-sm"
-						aria-label="Views"
-					>
-						{#each VIEWS as v (v.id)}
-							{@const count = v.counted ? countOf(v.id) : 0}
+				<div class="flex items-center gap-2 px-1">
+					<div class="flex min-w-0 gap-1 overflow-x-auto" role="tablist" aria-label="Kind">
+						{#each KINDS as k (k.id)}
 							<button
 								type="button"
-								aria-current={view === v.id ? 'page' : undefined}
+								role="tab"
+								aria-selected={kind === k.id}
 								class={cx(
-									'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
-									view === v.id && 'bg-background text-foreground shadow-xs'
+									'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+									kind === k.id
+										? 'border-foreground/20 bg-foreground text-background'
+										: 'text-muted-foreground hover:bg-muted hover:text-foreground'
 								)}
-								onclick={() => pickView(v.id)}
+								onclick={() => pickKind(k.id)}
 							>
-								{v.label}
-								{#if count}
-									<span
-										class={cx(
-											'min-w-4.5 rounded-full px-1 text-center text-[0.7rem] leading-4 tabular-nums',
-											v.strong ? 'bg-primary text-primary-foreground' : 'bg-foreground/10'
-										)}>{count}</span
-									>
-								{/if}
+								{k.label}
+								<span class="tabular-nums opacity-70">{countOf(k.id)}</span>
 							</button>
 						{/each}
-					</nav>
-					<p class="mt-3 mb-2 px-1 text-xs text-muted-foreground">
-						Synced 1m ago{#if view === 'mine'}
-							· Needs you + FYI, author:@me{:else if view === 'fyi'}
-							· Activity you may want to know about, but that does not need you.{/if}
-					</p>
-					{#if visible.length}
-						<ul
-							bind:this={listEl}
-							class="grid grid-cols-[minmax(0,1fr)] gap-0.5"
-							aria-label="Threads"
+					</div>
+					<div class="relative ml-auto">
+						<button
+							type="button"
+							class={cx(
+								'group-by flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-muted',
+								touring && 'touring'
+							)}
+							aria-expanded={groupMenuOpen}
+							aria-label="Group by {groupLabel}"
+							onclick={() => (groupMenuOpen = !groupMenuOpen)}
 						>
-							{#each visible as t (t.id)}
-								<li
-									data-demo-row={t.id}
-									class="row-enter"
-									animate:flip={{ duration: motion }}
-									out:slide={{ duration: motion }}
-								>
-									<DemoRow
-										thread={t}
-										selected={t.id === current?.id}
-										onselect={() => selectThread(t)}
-										ondone={() => markDone(t.id)}
-										onsnooze={() => snooze(t.id)}
-										onmute={() => mute(t.id)}
-										onrestore={() => restore(t.id)}
-										onopen={() => openOnGitHub(t)}
-									/>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<div
-							class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-16 text-center"
-						>
-							<CircleCheck class="mb-3 size-8 text-signal-merge" />
-							<p class="font-medium">
-								{view === 'action' ? 'Nothing needs you.' : 'This view is empty.'}
-							</p>
-							{#if view === 'action'}
-								<p class="mt-1 text-sm text-muted-foreground">Done, Snooze, and Mute have Undo.</p>
-							{/if}
-						</div>
-					{/if}
-				{:else}
-					<DemoDash
-						items={dashItems}
-						sections={DASH_SECTIONS[page]}
-						selectedId={currentDash?.id ?? null}
+							<Rows3 class="size-3.5" />
+							{#key groupLabel}
+								<span class="label-swap">{groupLabel}</span>
+							{/key}
+						</button>
+						{#if groupMenuOpen}
+							<div
+								class="absolute right-0 z-10 mt-1 grid w-48 rounded-lg border bg-popover p-1 text-sm text-popover-foreground shadow-md"
+								transition:fly={{ y: -4, duration: motion }}
+							>
+								<p class="px-2 py-1 text-xs text-muted-foreground">Group by</p>
+								{#each GROUP_BY_CHOICES as choice (choice.id)}
+									<button
+										type="button"
+										class="flex items-center rounded-md px-2 py-1.5 text-left hover:bg-muted"
+										onclick={() => setGroupBy(choice.id)}
+									>
+										<span class="flex-1">{choice.label}</span>
+										{#if choice.id === groupBy[view]}<Check class="size-3.5" />{/if}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+				<p class="mt-2 mb-1 px-1 text-xs text-muted-foreground">Updated 1m ago</p>
+				{#if sections.length}
+					<DemoList
+						{sections}
+						selectedId={current?.id ?? null}
 						{motion}
-						onselect={selectDash}
-						onhide={hideDash}
-						onmute={muteDash}
-						oncopy={copyDash}
-						onopen={openDash}
+						onselect={select}
+						onsnooze={snooze}
+						onmute={mute}
+						oncopy={copy}
+						onopen={open}
 					/>
+				{:else}
+					<div
+						class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-16 text-center"
+					>
+						<CircleCheck class="mb-3 size-8 text-signal-merge" />
+						<p class="font-medium">Nothing here.</p>
+						<p class="mt-1 text-sm text-muted-foreground">Snooze and Mute have Undo.</p>
+					</div>
 				{/if}
 			</div>
 
 			<aside class="peek" aria-label="Peek">
-				{#if page === 'inbox' && current}
-					{@const t = current}
+				{#if current}
+					{@const item = current}
+					{@const reference = refOf(item)}
 					<DemoPeek
-						lead={leadOf(t)}
-						text={whyText(t)}
-						changes={t.triage === 'inbox' ? (t.changes ?? []) : []}
-						title={t.title}
-						reference={refOf(t)}
-						peek={t.peek}
-						place={t.triage === 'inbox' && !t.muted ? 'inbox' : 'away'}
-						rerunning={rerunningId === refOf(t)}
-						confirmingMerge={confirmingMergeId === refOf(t)}
-						ondone={() => markDone(t.id)}
-						onsnooze={() => snooze(t.id)}
-						onmute={() => mute(t.id)}
-						onrestore={() => restore(t.id)}
-						onhide={() => {}}
-						onapprove={() => approve(t.peek, refOf(t), t.id)}
-						onrerun={() => rerun(t.peek, refOf(t), t.id)}
-						onmerge={() => merge(t.peek, refOf(t), t.id)}
-						oncomment={(body, mode) => comment(t.peek, refOf(t), body, mode, t)}
-						onopen={() => openOnGitHub(t)}
-						onclose={() => (peekOpen = false)}
-					/>
-				{:else if currentDash}
-					{@const item = currentDash}
-					{@const peek = dashPeek(item)}
-					{@const reference = `${item.repo}#${item.number}`}
-					{@const linked = item.threadId ? byId(item.threadId) : undefined}
-					<DemoPeek
-						lead={item.group === 'yours'
-							? 'Your turn'
-							: item.group === 'team'
-								? 'Your team’s turn'
-								: item.group === 'waiting'
-									? 'Waiting on others'
-									: 'Other'}
+						lead={LEAD[item.group]}
 						text={end(item.reason)}
 						title={item.title}
 						{reference}
-						{peek}
-						place="dash"
+						peek={item.peek}
 						rerunning={rerunningId === reference}
 						confirmingMerge={confirmingMergeId === reference}
-						ondone={() => {}}
-						onsnooze={() => {}}
-						onmute={() => muteDash(item)}
-						onrestore={() => {}}
-						onhide={() => hideDash(item)}
-						onapprove={() => approve(peek, reference, item.threadId)}
-						onrerun={() => rerun(peek, reference, item.threadId)}
-						onmerge={() => merge(peek, reference, item.threadId)}
-						oncomment={(body, mode) => comment(peek, reference, body, mode, linked)}
-						onopen={() => openDash(item)}
+						onsnooze={() => snooze(item)}
+						onmute={() => mute(item)}
+						oncopy={() => copy(item)}
+						onapprove={() => approve(item.peek, reference)}
+						onrerun={() => rerun(item, reference)}
+						onmerge={() => merge(item.peek, reference)}
+						oncomment={(body, mode) => comment(item.peek, reference, body, mode)}
+						onopen={() => open(item)}
 						onclose={() => (peekOpen = false)}
 					/>
 				{:else}
@@ -629,9 +492,6 @@
 								onclick={toast.undo}>Undo</button
 							>
 						{/if}
-						{#if toast.fuseMs}
-							<span class="fuse" style:--fuse="{toast.fuseMs}ms"></span>
-						{/if}
 					</div>
 				{/key}
 			{/if}
@@ -641,13 +501,9 @@
 	{#if alertShown}
 		<div class="float float-enter" out:fly={{ y: -12, duration: motion }}>
 			<PushAlert
-				title={alertThread.summary}
-				body="{refOf(alertThread)} · {alertThread.title}"
+				title="CI failed on your PR"
+				body="{refOf(alertItem)} · {alertItem.title}"
 				onopen={alertOpen}
-				actions={[
-					{ label: 'Done', run: alertDone },
-					{ label: 'Snooze 3h', run: alertSnooze }
-				]}
 			/>
 		</div>
 	{/if}
@@ -656,8 +512,8 @@
 	A working demo with real pull requests and issues from <a
 		href="https://github.com/PostHog/posthog.com"
 		rel="noreferrer">PostHog/posthog.com</a
-	>. Click a row, or use <kbd>J</kbd> <kbd>K</kbd> to move,
-	<kbd>E</kbd> for Done, and <kbd>S</kbd> to snooze.
+	>. Change <b>Group by</b>, click a row, or use <kbd>J</kbd> <kbd>K</kbd> to move,
+	<kbd>G</kbd> to group another way, and <kbd>S</kbd> to snooze.
 </p>
 
 <style>
@@ -699,6 +555,15 @@
 	.peek :global(.demo-close) {
 		display: none;
 	}
+	.group-by.touring {
+		background: color-mix(in oklab, var(--signal-review) 12%, transparent);
+		color: var(--signal-review);
+	}
+	.label-swap {
+		display: inline-block;
+		animation: demo-rise 0.25s ease-out both;
+		--rise-from: 0.4rem;
+	}
 	.toast-slot {
 		position: absolute;
 		left: 1rem;
@@ -709,21 +574,6 @@
 	}
 	.toast {
 		pointer-events: auto;
-	}
-	.fuse {
-		position: absolute;
-		left: 0;
-		bottom: 0;
-		width: 100%;
-		height: 2px;
-		background: var(--signal-review);
-		transform-origin: left;
-		animation: fuse var(--fuse) linear both;
-	}
-	@keyframes fuse {
-		to {
-			scale: 0 1;
-		}
 	}
 	.float {
 		position: absolute;
@@ -741,6 +591,10 @@
 	.hint a {
 		text-decoration: underline;
 		text-underline-offset: 2px;
+	}
+	.hint b {
+		font-weight: 550;
+		color: var(--foreground);
 	}
 	.hint kbd {
 		padding: 0 0.3em;
@@ -811,12 +665,6 @@
 			transition: none !important;
 			translate: 0 0 !important;
 		}
-		.fuse {
-			animation: none;
-		}
-	}
-	.row-enter {
-		animation: demo-rise 0.2s ease-out both;
 	}
 	.toast-enter {
 		animation: demo-rise 0.2s ease-out both;
@@ -833,9 +681,9 @@
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.row-enter,
 		.toast-enter,
-		.float-enter {
+		.float-enter,
+		.label-swap {
 			animation: none;
 		}
 	}

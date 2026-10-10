@@ -1,26 +1,24 @@
-import type { DashKind, Turn } from '../../src/lib/shared/types';
-import type { PinChange } from '../../src/lib/shared/categories';
+import type { DashKind } from '../../src/lib/shared/types';
+import type { CategoryPin } from '../../src/lib/shared/categories';
+import { MAX_SEARCH_CHARS } from '../../src/lib/shared/item-views';
+import type { SnoozeChoice } from '../../src/lib/shared/item-snooze';
+import { snoozeEvent } from '../../src/lib/shared/snooze';
 import { routes, poller, json, query } from '../app';
 
-const TURNS = new Set<Turn>(['you', 'team', 'them', 'none']);
-
-function pinChangeOf(body: Record<string, unknown>): PinChange | null {
-	if (typeof body.category === 'string' && (body.state === 'on' || body.state === 'off'))
-		return { category: body.category, state: body.state };
-	if (typeof body.group === 'string' && body.state === 'auto')
-		return { group: body.group, state: 'auto' };
-	return null;
+function categoryPinOf(body: Record<string, unknown>): CategoryPin | null {
+	if (typeof body.group !== 'string') return null;
+	if (body.category !== null && typeof body.category !== 'string') return null;
+	return { group: body.group, category: body.category };
 }
 
-/**
- * Save a drop: an optional move to another group (`turn`, or null to undo a move) and the new
- * order of the target group.
- */
+const MAX_ITEMS = 300;
+const LONGEST_SNOOZE_MS = 366 * 24 * 3600_000;
+
 type ItemRef = { id: string; updatedAt: string };
 const validRefs = (items: unknown): items is ItemRef[] =>
 	Array.isArray(items) &&
 	items.length > 0 &&
-	items.length <= 300 &&
+	items.length <= MAX_ITEMS &&
 	items.every(
 		(i) =>
 			typeof i?.id === 'string' &&
@@ -29,6 +27,27 @@ const validRefs = (items: unknown): items is ItemRef[] =>
 			!Number.isNaN(Date.parse(i.updatedAt))
 	);
 
+function itemIdsOf(ids: unknown): string[] {
+	return Array.isArray(ids)
+		? ids
+				.filter((id): id is string => typeof id === 'string' && id.length <= 100)
+				.slice(0, MAX_ITEMS)
+		: [];
+}
+
+function snoozeChoiceOf(body: Record<string, unknown>): SnoozeChoice | null {
+	const { until, event } = body;
+	if (until !== undefined && event !== undefined) return null;
+	if (event !== undefined) {
+		const known = typeof event === 'string' ? snoozeEvent(event) : undefined;
+		return known ? { event: known.id } : null;
+	}
+	if (until === undefined) return {};
+	const later =
+		typeof until === 'number' && until > Date.now() && until < Date.now() + LONGEST_SNOOZE_MS;
+	return later ? { until } : null;
+}
+
 // --- PR and issue dashboards -----------------------------------------------
 
 const app = routes()
@@ -36,13 +55,12 @@ const app = routes()
 		const u = c.get('user');
 		return c.json(await poller(c.env, u.id).teams(c.req.query('refresh') === '1'));
 	})
-	.get('/api/sources/count', query<{ q: string; scope: string }>(), async (c) => {
+	.get('/api/searches/count', query<{ q: string }>(), async (c) => {
 		const q = c.req.query('q') ?? '';
-		const scope = c.req.query('scope') ?? '';
-		if (!q.trim() || q.length > 256 || scope.length > 200)
-			return c.json({ error: 'The search must have 1–256 characters.' }, 400);
+		if (!q.trim() || q.length > MAX_SEARCH_CHARS)
+			return c.json({ error: `The search must have 1–${MAX_SEARCH_CHARS} characters.` }, 400);
 		try {
-			return c.json(await poller(c.env, c.get('user').id).countSource(q, scope));
+			return c.json(await poller(c.env, c.get('user').id).countSource(q));
 		} catch (err) {
 			return c.json({ error: (err as Error).message }, 502);
 		}
@@ -54,72 +72,35 @@ const app = routes()
 			await poller(c.env, c.get('user').id).dashboardView(kind, c.req.query('refresh') === '1')
 		);
 	})
-	/**
-	 * Save a drop. Each item may carry `turn`: a group to move it to, null to undo your move, or
-	 * absent to leave it. `order` is the new order of the target group.
-	 */
-	.post(
-		'/api/dashboard/arrange',
-		json<{ items: (ItemRef & { turn?: Turn | null })[]; order: string[] }>(),
-		async (c) => {
-			const u = c.get('user');
-			const body = c.req.valid('json');
-			if (!validRefs(body.items)) return c.json({ error: 'Invalid items' }, 400);
-			const items = body.items as (ItemRef & { turn?: Turn | null })[];
-			if (items.some((i) => i.turn != null && !TURNS.has(i.turn)))
-				return c.json({ error: 'Unknown group' }, 400);
-			const order = body.order ?? [];
-			if (
-				!Array.isArray(order) ||
-				order.length > 300 ||
-				order.some((id) => typeof id !== 'string' || id.length > 100)
-			)
-				return c.json({ error: 'Invalid order' }, 400);
-
-			return c.json(await poller(c.env, u.id).arrange(items, order));
-		}
-	)
-	.post('/api/dashboard/hide', json<{ items: ItemRef[] }>(), async (c) => {
-		const u = c.get('user');
-		const body = c.req.valid('json');
+	.post('/api/dashboard/snooze', json<{ items: ItemRef[] } & SnoozeChoice>(), async (c) => {
+		const body = c.req.valid('json') as { items?: unknown } & Record<string, unknown>;
 		if (!validRefs(body.items)) return c.json({ error: 'Invalid items' }, 400);
-		return c.json(await poller(c.env, u.id).hide(body.items));
+		const choice = snoozeChoiceOf(body);
+		if (!choice) return c.json({ error: 'Invalid snooze' }, 400);
+		return c.json(await poller(c.env, c.get('user').id).snoozeItems(body.items, choice));
+	})
+	.post('/api/dashboard/unsnooze', json<{ ids: string[] }>(), async (c) => {
+		const ids = itemIdsOf(c.req.valid('json').ids);
+		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
+		return c.json(await poller(c.env, c.get('user').id).unsnoozeItems(ids));
 	})
 	.post('/api/dashboard/mute', json<{ ids: string[] }>(), async (c) => {
-		const body = c.req.valid('json');
-		const ids = Array.isArray(body.ids)
-			? (body.ids as unknown[])
-					.filter((id): id is string => typeof id === 'string' && id.length <= 100)
-					.slice(0, 20)
-			: [];
+		const ids = itemIdsOf(c.req.valid('json').ids);
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
-		return c.json(await poller(c.env, c.get('user').id).mute(ids));
+		return c.json(await poller(c.env, c.get('user').id).muteItems(ids));
 	})
-	.post('/api/items/pin', json<{ ids: string[] } & PinChange>(), async (c) => {
+	.post('/api/items/pin', json<{ ids: string[] } & CategoryPin>(), async (c) => {
 		const body = c.req.valid('json') as { ids?: unknown } & Record<string, unknown>;
-		const ids = Array.isArray(body.ids)
-			? (body.ids as unknown[])
-					.filter((id): id is string => typeof id === 'string' && id.length <= 100)
-					.slice(0, 300)
-			: [];
+		const ids = itemIdsOf(body.ids);
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
-		const change = pinChangeOf(body);
-		if (!change) return c.json({ error: 'Invalid pin' }, 400);
-		const out = await poller(c.env, c.get('user').id).pinItems(ids, change);
+		const pin = categoryPinOf(body);
+		if (!pin) return c.json({ error: 'Invalid pin' }, 400);
+		const out = await poller(c.env, c.get('user').id).pinItems(ids, pin);
 		if ('error' in out) return c.json({ error: out.error }, out.status);
 		return c.json(out);
 	})
 	.post('/api/items/reevaluate', async (c) =>
 		c.json(await poller(c.env, c.get('user').id).reevaluateItems())
-	)
-	.post('/api/dashboard/unhide', json<{ ids: string[] }>(), async (c) => {
-		const u = c.get('user');
-		const body = c.req.valid('json');
-		const ids = Array.isArray(body.ids)
-			? (body.ids as unknown[]).filter((id): id is string => typeof id === 'string').slice(0, 300)
-			: [];
-		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
-		return c.json(await poller(c.env, u.id).unhide(ids));
-	});
+	);
 
 export default app;

@@ -21,7 +21,7 @@ export function tokenHelp(message: string): { title: string; body: string } | nu
 	if (message === PROJECT_ACCESS_NEEDED)
 		return {
 			title: 'Hush has no project access',
-			body: 'A source reads a project board, and your token is older than project boards in Hush. Sign in with GitHub again. For a custom token from the GitHub CLI, run "gh auth refresh -s project" and replace the token.'
+			body: 'A view reads a project board, and your token is older than project boards in Hush. Sign in with GitHub again. For a custom token from the GitHub CLI, run "gh auth refresh -s project" and replace the token.'
 		};
 	if (/SAML|single sign-on|SSO/i.test(message))
 		return {

@@ -5,30 +5,27 @@ import {
 	sortItems,
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
-import type { DashKind, DashResponse } from '../../src/lib/shared/types';
+import type { DashItem, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
 import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
-import {
-	fetchDetails,
-	fetchSubjects,
-	forTeams,
-	needsDetails,
-	searchCounts,
-	searchShort
-} from '../github';
+import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
 import {
 	MAX_SOURCE_COUNT_SEARCHES,
+	searchKinds,
 	sectionsFor,
-	sourceKinds,
-	TRACKED_SOURCE,
+	viewsPassingFilters,
 	type SourceCount
-} from '../../src/lib/shared/sources';
+} from '../../src/lib/shared/item-views';
 import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
 import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
-import { boardCount, boardShort } from '../projects';
-import { DASH_TTL } from './shared';
+import { boardCount, boardShort, itemStatuses } from '../projects';
+import { projectKeyOf } from '../../src/lib/shared/grouping';
+import { itemQueryFacts } from '../../src/lib/shared/categories';
+import { DASH_TTL, type Who } from './shared';
+import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 
 const RETRY_AFTER = 60_000;
+const NEW_ITEM_REASON = 'new-item';
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
 
 async function findItems(token: string, queries: ExpandedQuery[]) {
@@ -81,14 +78,13 @@ export abstract class PollerDashboard extends PollerSync {
 		return true;
 	}
 
-	async countSource(query: string, scope: string): Promise<SourceCount> {
+	async countSource(query: string): Promise<SourceCount> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
 		const { teams } = await this.teams();
-		const source = { id: 'count', name: '', query, enabled: true };
-		const dash = { ...who.settings.dash, scope };
-		const searches = sourceKinds(query).flatMap((kind) =>
-			expandSections(sectionsFor(kind, [source]), dash, teams).queries.map((q) => ({
+		const view: ItemView = { id: 'count', name: '', searches: [query], groupBy: 'none' };
+		const searches = searchKinds(query).flatMap((kind) =>
+			expandSections(sectionsFor(kind, [view]), who.settings.dash, teams).queries.map((q) => ({
 				kind,
 				q: q.q
 			}))
@@ -118,8 +114,10 @@ export abstract class PollerDashboard extends PollerSync {
 	async rebuildBoards(): Promise<void> {
 		const who = await this.who();
 		if (!who) return;
-		const kinds = DASH_KINDS.filter((kind) =>
-			sectionsFor(kind, who.settings.sources).some((s) => s.enabled && readsBoard(s.query))
+		const groupsByProject = who.settings.views.some((v) => projectKeyOf(v.groupBy));
+		const kinds = DASH_KINDS.filter(
+			(kind) =>
+				groupsByProject || sectionsFor(kind, who.settings.views).some((s) => readsBoard(s.query))
 		);
 		await Promise.all(kinds.map((kind) => this.rebuildTracked(kind)));
 	}
@@ -135,15 +133,10 @@ export abstract class PollerDashboard extends PollerSync {
 	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
-		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview, tracked } = who.settings;
-		const sections = sectionsFor(kind, who.settings.sources);
+		const { dash, views } = who.settings;
+		const sections = sectionsFor(kind, views);
 		const sig = JSON.stringify([
-			botsAreFyi,
-			reviewResolution,
-			newCommitsAfterReview,
 			sections,
-			tracked,
-			dash.scope,
 			dash.excludedTeams,
 			dash.staleDays,
 			dash.hideOthersDrafts,
@@ -186,95 +179,157 @@ export abstract class PollerDashboard extends PollerSync {
 			if (use) facts.set(k, use);
 		}
 		await this.ctx.storage.put(readKey, nextRead);
-		const trackedFacts = await this.trackedSubjects(who.token, who.me, tracked, kind);
-		for (const [k, f] of trackedFacts) facts.set(k, f);
 		const errors = [...new Set([...searchErrors, ...detailErrors])].slice(0, 3);
 
 		await this.decideSubjects(who, [...facts.values()]);
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const teamSet = new Set(teams.map((t) => t.slug));
-		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
+		const byId = new Map<string, { facts: DashFacts; filtersByView: Map<string, Set<string>> }>();
 		for (const h of hits) {
 			const subject = facts.get(h.key);
 			if (!subject || !forTeams(h.query, subject, who.me)) continue;
 			const e = byId.get(h.key) ?? {
 				facts: dashFactsOf(subject, who.me, teamSet, decided.get(h.key)),
-				sections: new Set<string>()
+				filtersByView: new Map<string, Set<string>>()
 			};
-			e.sections.add(h.query.section);
+			const filters = e.filtersByView.get(h.query.section) ?? new Set<string>();
+			filters.add(h.query.filter ?? '');
+			e.filtersByView.set(h.query.section, filters);
 			byId.set(h.key, e);
 		}
-		for (const [k, subject] of trackedFacts) {
-			const e = byId.get(k) ?? {
-				facts: dashFactsOf(subject, who.me, teamSet, decided.get(k)),
-				sections: new Set<string>()
-			};
-			e.sections.add(TRACKED_SOURCE.id);
-			byId.set(k, e);
-		}
-		const enabled = [...sections.filter((s) => s.enabled), TRACKED_SOURCE];
-		const boardSections = new Set(enabled.filter((s) => readsBoard(s.query)).map((s) => s.id));
-		const placedOnBoard = (found: Set<string>) => [...found].some((id) => boardSections.has(id));
+		const boardSections = new Set(sections.filter((s) => readsBoard(s.query)).map((s) => s.id));
+		const placedOnBoard = (viewIds: Iterable<string>) =>
+			[...viewIds].some((id) => boardSections.has(id));
+		const finish = (dashFacts: DashFacts, viewIds: Set<string>) => {
+			const ordered = views.filter((v) => viewIds.has(v.id));
+			return finishItem(
+				dashFacts,
+				ordered.map((s) => s.id),
+				ordered.map((s) => s.name),
+				who.me,
+				dash.staleDays,
+				Date.now()
+			);
+		};
 		const items = sortItems(
 			[...byId.values()]
-				.filter(({ facts, sections }) => keepItem(facts, who.me, dash) || placedOnBoard(sections))
-				.map(({ facts, sections }) => {
-					const ordered = enabled.filter((s) => sections.has(s.id));
-					return finishItem(
-						facts,
-						ordered.map((s) => s.id),
-						ordered.map((s) => s.name),
-						who.me,
-						dash.staleDays,
-						Date.now(),
-						{ botsAreFyi, reviewResolution, newCommitsAfterReview }
-					);
-				})
+				.filter(
+					({ facts, filtersByView }) =>
+						keepItem(facts, who.me, dash) || placedOnBoard(filtersByView.keys())
+				)
+				.map(({ facts, filtersByView }) => finish(facts, new Set(filtersByView.keys())))
 		);
-		const placed = this.placeItems(who, items, facts);
-		const marksChanged = this.storePlacements(placed, true);
+		const placed = this.keepHushMatches(who, this.placeItems(who, items, facts), byId, finish);
+		this.storeTracked(placed, true);
 		const complete = !searchErrors.length && !detailErrors.length;
 		if (cached && cached.sig !== sig && complete)
-			await this.untrackMissing(
+			this.untrackMissing(
 				kind,
 				placed.map((i) => i.id)
 			);
 		await this.storeTrackedBuild(kind, complete);
-		if (marksChanged) await this.bumpVersion();
+		const nodeIdOf = (key: string) => latest.get(key)?.id ?? '';
+		const statuses =
+			who.projectAccess === 'none'
+				? null
+				: await itemStatuses(who.token, placed.map((i) => nodeIdOf(i.id)).filter(Boolean));
 		const data: DashResponse = {
 			kind,
-			items: placed,
-			sections: enabled
-				.filter((s) => s.id !== TRACKED_SOURCE.id || trackedFacts.size)
-				.map((s) => ({
-					id: s.id,
-					name: s.name,
-					count: placed.filter((i) => i.sections.includes(s.id)).length,
-					...(skipped[s.id] ? { skipped: skipped[s.id] } : {})
-				})),
+			items: statuses
+				? placed.map((i) => ({ ...i, projectStatus: statuses.statusOf.get(nodeIdOf(i.id)) ?? {} }))
+				: placed,
+			...(statuses && { projects: statuses.projects }),
+			sections: views.map((v) => ({
+				id: v.id,
+				name: v.name,
+				count: placed.filter((i) => i.sections.includes(v.id)).length,
+				...(skipped[v.id] ? { skipped: skipped[v.id] } : {})
+			})),
 			teams,
 			fetchedAt: Date.now(),
-			errors: teamError ? [teamError, ...errors] : errors
+			errors: [
+				...new Set([...(teamError ? [teamError] : []), ...errors, ...(statuses?.errors ?? [])])
+			].slice(0, 3)
 		};
 		await this.ctx.storage.put(key, { sig, data });
-		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
-		await this.record(who, [...fresh.values(), ...trackedFacts.values()], { dash: false });
+		await this.pushNewItems(who, kind, placed, complete);
+		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
 	}
 
-	private async trackedSubjects(
-		token: string,
-		me: string,
-		tracked: string[],
-		kind: DashKind
-	): Promise<Map<string, SubjectFacts>> {
-		const refs = tracked.flatMap((key) => {
-			const m = /^([^/]+)\/([^#]+)#(\d+)$/.exec(key);
-			return m ? [{ key, owner: m[1], repo: m[2], number: Number(m[3]) }] : [];
+	private keepHushMatches(
+		who: Who,
+		items: DashItem[],
+		byId: Map<string, { facts: DashFacts; filtersByView: Map<string, Set<string>> }>,
+		finish: (dashFacts: DashFacts, viewIds: Set<string>) => DashItem
+	): DashItem[] {
+		const now = Date.now();
+		return items.flatMap((i) => {
+			const entry = byId.get(i.id);
+			if (!entry) return [i];
+			const viewIds = viewsPassingFilters(
+				i.sections,
+				entry.filtersByView,
+				itemQueryFacts(i, who.me, who.settings, now)
+			);
+			if (viewIds.size === i.sections.length) return [i];
+			if (!viewIds.size) return [];
+			return [
+				{
+					...finish(entry.facts, viewIds),
+					categories: i.categories,
+					pinnedCategories: i.pinnedCategories
+				}
+			];
 		});
-		if (!refs.length) return new Map();
-		const found = await fetchSubjects(token, refs, me);
-		return new Map([...found].filter(([, f]) => f.kind === kind && f.state === 'open'));
+	}
+
+	private async pushNewItems(who: Who, kind: DashKind, items: DashItem[], complete: boolean) {
+		const now = Date.now();
+		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
+		const searchesKey = (viewId: string) => `viewItemsFor:${viewId}:${kind}`;
+		const remembered = await this.ctx.storage.get<string>(
+			who.settings.views.map((v) => searchesKey(v.id))
+		);
+		const candidates: PushCandidate[] = [];
+		const firstSeen: { viewId: string; itemId: string }[] = [];
+		const nowRemembered: Record<string, string> = {};
+		for (const v of who.settings.views) {
+			const found = items.filter((i) => i.sections.includes(v.id));
+			const known = new Set(
+				this.all<{ item_id: string }>(
+					'SELECT item_id FROM view_items WHERE view_id = ? AND kind = ?',
+					v.id,
+					kind
+				).map((r) => r.item_id)
+			);
+			const fresh = found.filter((i) => !known.has(i.id));
+			firstSeen.push(...fresh.map((i) => ({ viewId: v.id, itemId: i.id })));
+			const searches = JSON.stringify(v.searches);
+			const sameSearches = remembered.get(searchesKey(v.id)) === searches;
+			if (complete && !sameSearches) nowRemembered[searchesKey(v.id)] = searches;
+			if (!v.pushNew || !sameSearches || !initialized) continue;
+			for (const i of fresh)
+				if (i.author.toLowerCase() !== who.me.toLowerCase())
+					candidates.push({
+						itemKey: i.id,
+						reason: NEW_ITEM_REASON,
+						message: { title: `New in ${v.name}`, body: `${i.title}\n${i.repo}`, url: i.url }
+					});
+		}
+		if (firstSeen.length)
+			this.transaction(() => {
+				for (const f of firstSeen)
+					this.run(
+						`INSERT OR IGNORE INTO view_items (view_id, kind, item_id, first_seen_at) VALUES (?, ?, ?, ?)`,
+						f.viewId,
+						kind,
+						f.itemId,
+						now
+					);
+			});
+		if (Object.keys(nowRemembered).length) await this.ctx.storage.put(nowRemembered);
+		await this.deliver(candidates);
 	}
 
 	/** The stored facts of these PRs and issues ("owner/repo#123"). */

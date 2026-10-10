@@ -10,7 +10,8 @@ import {
 	type ProjectsDTO,
 	type ProjectAccess
 } from '../src/lib/shared/projects';
-import { SOURCE_RESULTS_MAX } from '../src/lib/shared/sources';
+import { SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
+import type { DashProject } from '../src/lib/shared/types';
 import { gh, type SearchHit } from './github';
 
 type Node = Record<string, any>;
@@ -104,6 +105,68 @@ export async function boardCount(token: string, query: string): Promise<number |
 	const project = boardOf(answer.data);
 	if (project) return project.items?.totalCount ?? null;
 	throw new Error(friendly(answer.errors)[0] ?? notFound(board));
+}
+
+const STATUSES_CHUNK = 50;
+
+const ITEM_STATUSES = `query($ids: [ID!]!) { nodes(ids: $ids) {
+  ... on PullRequest { id projectItems(first: 10, includeArchived: false) { nodes { ...Status } } }
+  ... on Issue { id projectItems(first: 10, includeArchived: false) { nodes { ...Status } } }
+} }
+fragment Status on ProjectV2Item {
+  project { number title url closed
+    owner { ... on Organization { login } ... on User { login } }
+    field(name: "Status") { ... on ProjectV2SingleSelectField { options { id name color } } }
+  }
+  fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { optionId } }
+}`;
+
+export interface ItemStatuses {
+	projects: DashProject[];
+	statusOf: Map<string, Record<string, string | null>>;
+}
+
+export function readItemStatuses(nodes: (Node | null)[]): ItemStatuses {
+	const projects = new Map<string, DashProject>();
+	const statusOf = new Map<string, Record<string, string | null>>();
+	for (const n of nodes) {
+		if (!n?.id) continue;
+		const statuses: Record<string, string | null> = {};
+		for (const item of n.projectItems?.nodes ?? []) {
+			const p = item?.project;
+			const owner = p?.owner?.login;
+			if (!p || p.closed || !owner || !p.number) continue;
+			const key = `${owner}/${p.number}`;
+			statuses[key] = item.fieldValueByName?.optionId ?? null;
+			if (!projects.has(key))
+				projects.set(key, {
+					key,
+					title: p.title ?? key,
+					url: p.url ?? '',
+					statuses: (p.field?.options ?? []).map((o: Node) => ({
+						id: o.id,
+						name: o.name ?? '',
+						color: o.color ?? 'GRAY'
+					}))
+				});
+		}
+		statusOf.set(n.id, statuses);
+	}
+	return { projects: [...projects.values()], statusOf };
+}
+
+export async function itemStatuses(
+	token: string,
+	ids: string[]
+): Promise<ItemStatuses & { errors: string[] }> {
+	const nodes: (Node | null)[] = [];
+	const errors: string[] = [];
+	for (let i = 0; i < ids.length; i += STATUSES_CHUNK) {
+		const answer = await graphql(token, ITEM_STATUSES, { ids: ids.slice(i, i + STATUSES_CHUNK) });
+		errors.push(...friendly(answer.errors));
+		nodes.push(...((answer.data?.nodes as (Node | null)[] | undefined) ?? []));
+	}
+	return { ...readItemStatuses(nodes), errors: [...new Set(errors)].slice(0, 3) };
 }
 
 const PROJECT_FIELDS = 'id number title url closed';

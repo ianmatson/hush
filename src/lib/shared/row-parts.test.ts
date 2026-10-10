@@ -13,16 +13,15 @@ import { parseSettings } from './settings';
 
 describe('row contents', () => {
 	it('keep the parts that say what to do next by default', () => {
-		for (const part of ['sources', 'labels', 'threads'])
+		for (const part of ['labels', 'threads'])
 			expect(rowShows(DEFAULT_ROWS, 'pr', part)).toBe(false);
 		for (const part of ['size', 'comments', 'ci', 'review', 'conflicts', 'categories'])
 			expect(rowShows(DEFAULT_ROWS, 'pr', part)).toBe(true);
-		expect(rowShows(DEFAULT_ROWS, 'thread', 'why')).toBe(false);
-		expect(rowShows(DEFAULT_ROWS, 'thread', 'categories')).toBe(true);
 	});
 
 	it('accept only known parts for each kind of row', () => {
-		expect(validateRows({ pr: ['labels', 'size'], thread: ['why'] })).toBeNull();
+		expect(validateRows({ pr: ['labels', 'size'], issue: ['labels'] })).toBeNull();
+		expect(validateRows({ thread: ['why'] })).toMatch(/Unknown setting "rows.thread"/);
 		expect(validateRows({ issue: ['ci'] })).toMatch(/unknown part "ci"/);
 		expect(validateRows({ inbox: [] })).toMatch(/Unknown setting "rows.inbox"/);
 		expect(validateRows({ pr: 'labels' })).toMatch(/list/);

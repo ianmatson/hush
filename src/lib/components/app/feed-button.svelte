@@ -11,8 +11,8 @@
 	import X from '@lucide/svelte/icons/x';
 
 	/**
-	 * The Atom feed of one inbox tab: make it (and copy its secret URL), get a new address, or turn
-	 * it off. Hush keeps only a hash of the address, so it can show the URL only when it makes it.
+	 * The Atom feed of one view or category: make it (and copy its secret URL), get a new address,
+	 * or turn it off. Hush keeps only a hash of the address, so it can show the URL only when it makes it.
 	 */
 	let { view, name, feeds }: { view: string; name: string; feeds: FeedDTO[] | undefined } =
 		$props();

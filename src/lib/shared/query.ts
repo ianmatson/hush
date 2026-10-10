@@ -1,31 +1,26 @@
 import { tokens } from './text-match';
+import { readsBoard } from './projects';
 import type { RuleMatch } from './types';
-
-/**
- * One small query language for rules, notification views, and the Filter box. Rules and views store the
- * text; it compiles to RuleMatch, the form the matcher reads (and back, for the visual editor):
- *
- *   repo:acme/* needs:review -author:bots label:"good first issue" login bug
- *
- * - `word:value` is a condition; `word:a,b` (or the word twice) matches any of the values.
- * - `author:bots` and `from:bots` mean any bot; `-author:bots` and `-from:bots` mean a person.
- * - `is:draft` (or `-is:draft`), and `is:open`, `is:closed`, `is:merged`.
- * - Other words must all be in the title, repo, or author (`text`).
- * - Quote a value that has spaces or commas.
- *
- * WORDS is the whole vocabulary: the parser, the formatter, the errors, and the suggestions
- * while you type all read it.
- */
 
 type Field = keyof RuleMatch;
 
 export const MAX_CONDITION_CHARS = 200;
 export const ME = '@me';
-const SIZE_PATTERN = /^(?:(?:<|>|<=|>=)?\d+|\d+\.\.\d+)$/;
+const NUMBER_PATTERN = /^(?:(?:<|>|<=|>=)?\d+|\d+\.\.\d+)$/;
+const DATE = String.raw`(?:\d{4}-\d{2}-\d{2}|@today(?:-\d{1,4}[dw])?)`;
+const DATE_PATTERN = new RegExp(
+	String.raw`^(?:(?:<|>|<=|>=)?${DATE}|(?:${DATE}|\*)\.\.(?:${DATE}|\*))$`
+);
+const DAY_MS = 86_400_000;
+
+export type WordRuns = 'both' | 'github' | 'hush';
+export type QueryPlace = 'rule' | 'section' | 'search';
 
 export interface QueryWord {
 	key: string;
-	field: Field;
+	field?: Field;
+	runs: WordRuns;
+	format?: 'number' | 'date';
 	/** What the word filters on, for the suggestions. */
 	help: string;
 	example: string;
@@ -37,62 +32,62 @@ export interface QueryWord {
 
 const v = (stored: string, help: string) => ({ stored, help });
 
+const github = (key: string, help: string, example: string, format?: 'date'): QueryWord => ({
+	key,
+	runs: 'github',
+	help,
+	example,
+	format
+});
+
 export const WORDS: QueryWord[] = [
-	{ key: 'repo', field: 'repo', help: 'Repository (* matches anything)', example: 'repo:acme/*' },
+	{
+		key: 'repo',
+		field: 'repo',
+		runs: 'both',
+		help: 'Repository; * matches anything',
+		example: 'repo:acme/web'
+	},
+	{
+		key: 'org',
+		field: 'org',
+		runs: 'both',
+		help: 'Owner of the repository: an org or a person',
+		example: 'org:acme'
+	},
 	{
 		key: 'author',
 		field: 'author',
+		runs: 'both',
 		help: 'Who opened it; author:bots for any bot',
 		example: 'author:dependabot*',
 		bots: 'bot'
 	},
 	{
-		key: 'from',
-		field: 'by',
-		help: 'Who did the latest activity (a comment or a review); from:bots for any bot',
-		example: 'from:github-actions',
-		bots: 'byBot'
-	},
-	{ key: 'label', field: 'label', help: 'Has this label', example: 'label:"good first issue"' },
-	{
 		key: 'assignee',
 		field: 'assignee',
+		runs: 'both',
 		help: 'Who it is assigned to; @me for you',
 		example: 'assignee:@me'
 	},
 	{
+		key: 'label',
+		field: 'label',
+		runs: 'both',
+		help: 'Has this label',
+		example: 'label:"good first issue"'
+	},
+	{
 		key: 'review-requested',
 		field: 'reviewRequested',
+		runs: 'both',
 		help: 'Whose review is requested: @me, a login, or org/team',
 		example: 'review-requested:@me'
 	},
 	{
-		key: 'size',
-		field: 'size',
-		help: 'Lines changed in a pull request: <50, >500, 10..200',
-		example: 'size:<50'
-	},
-	{
-		key: 'category',
-		field: 'itemCategory',
-		help: 'Has this category (name or id); not in category rules',
-		example: 'category:low-effort'
-	},
-	{
-		key: 'source',
-		field: 'source',
-		help: 'Which source found it (its name)',
-		example: 'source:"Assigned to you"'
-	},
-	{
-		key: 'about',
-		field: 'about',
-		help: 'What it is about, in your own words (smart decisions)',
-		example: 'about:"database migrations"'
-	},
-	{
 		key: 'type',
 		field: 'type',
+		runs: 'both',
 		help: 'What it is',
 		example: 'type:pr',
 		values: {
@@ -101,53 +96,127 @@ export const WORDS: QueryWord[] = [
 		}
 	},
 	{
-		key: 'event',
-		field: 'reason',
-		help: 'Why GitHub notified you',
-		example: 'event:you-opened',
+		key: 'draft',
+		field: 'draft',
+		runs: 'both',
+		help: 'A draft pull request, or not',
+		example: 'draft:false',
+		values: { true: v('true', 'Draft'), false: v('false', 'Not a draft') }
+	},
+	{
+		key: 'review',
+		field: 'review',
+		runs: 'both',
+		help: 'Review state of a pull request',
+		example: 'review:approved',
 		values: {
-			'review-requested': v('review_requested', 'Your review was requested'),
-			mentioned: v('mention', 'You were mentioned'),
-			'team-mentioned': v('team_mention', 'Your team was mentioned'),
-			'you-opened': v('author', 'You opened it'),
-			'you-commented': v('comment', 'You commented on it'),
-			assigned: v('assign', 'You were assigned'),
-			watching: v('subscribed', 'You watch the repository'),
-			subscribed: v('manual', 'You subscribed to it'),
-			'state-changed': v('state_change', 'You changed its state')
+			none: v('none', 'No review yet'),
+			required: v('required', 'Review required'),
+			approved: v('approved', 'Approved'),
+			changes_requested: v('changes_requested', 'Changes requested')
 		}
 	},
 	{
-		key: 'needs',
-		field: 'kind',
-		help: 'What Hush thinks you must do',
-		example: 'needs:review',
+		key: 'status',
+		field: 'ci',
+		runs: 'both',
+		help: 'CI of a pull request',
+		example: 'status:failure',
 		values: {
-			review: v('review', 'Review it'),
-			'fix-ci': v('fix_ci', 'Fix failing CI'),
-			changes: v('address_review', 'Address review comments'),
-			conflict: v('resolve_conflict', 'Resolve a merge conflict'),
-			merge: v('merge', 'Merge it'),
-			reply: v('reply', 'Reply'),
-			triage: v('triage', 'Triage it'),
-			nothing: v('none', 'Nothing: FYI')
+			success: v('success', 'CI passed'),
+			failure: v('failure', 'CI failed'),
+			pending: v('pending', 'CI running')
 		}
 	},
 	{
-		key: 'in',
+		key: 'comments',
+		field: 'comments',
+		runs: 'both',
+		format: 'number',
+		help: 'Number of comments: >10, 0, 5..20',
+		example: 'comments:>10'
+	},
+	{
+		key: 'created',
+		field: 'created',
+		runs: 'both',
+		format: 'date',
+		help: 'When it was opened: >2026-01-01, <@today-30d',
+		example: 'created:>@today-7d'
+	},
+	{
+		key: 'updated',
+		field: 'updated',
+		runs: 'both',
+		format: 'date',
+		help: 'When it last changed: <@today-14d, 2026-01-01..2026-02-01',
+		example: 'updated:<@today-14d'
+	},
+	{
+		key: 'no',
+		field: 'no',
+		runs: 'both',
+		help: 'Has no labels, or no assignee',
+		example: 'no:assignee',
+		values: { label: v('label', 'No labels'), assignee: v('assignee', 'No assignee') }
+	},
+	{
+		key: 'from',
+		field: 'by',
+		runs: 'hush',
+		help: 'Who did the latest activity (a comment or a review); from:bots for any bot',
+		example: 'from:github-actions',
+		bots: 'byBot'
+	},
+	{
+		key: 'size',
+		field: 'size',
+		runs: 'hush',
+		format: 'number',
+		help: 'Lines changed in a pull request: <50, >500, 10..200',
+		example: 'size:<50'
+	},
+	{
+		key: 'category',
 		field: 'category',
-		help: "Hush's list for it, before your rules",
-		example: 'in:fyi',
-		values: {
-			'needs-you': v('action', 'Needs you'),
-			fyi: v('fyi', 'FYI'),
-			muted: v('muted', 'Muted')
-		}
-	}
+		runs: 'hush',
+		help: 'Has this category (its name or id)',
+		example: 'category:low'
+	},
+	{
+		key: 'about',
+		field: 'about',
+		runs: 'hush',
+		help: 'What it is about, in your own words (smart decisions)',
+		example: 'about:"database migrations"'
+	},
+	github('mentions', 'Mentions this person', 'mentions:@me'),
+	github('commenter', 'Has a comment by this person', 'commenter:octocat'),
+	github('involves', 'Author, assignee, commenter, or mentioned', 'involves:@me'),
+	github('reviewed-by', 'Reviewed by this person', 'reviewed-by:@me'),
+	github('user-review-requested', 'Review requested from this person', 'user-review-requested:@me'),
+	github(
+		'team-review-requested',
+		'Review requested from this team; @team for each of your teams',
+		'team-review-requested:@team'
+	),
+	github('team', 'Mentions this team', 'team:acme/web'),
+	github('base', 'Base branch of a pull request', 'base:main'),
+	github('head', 'Head branch of a pull request', 'head:fix-login'),
+	github('milestone', 'In this milestone', 'milestone:"v2.0"'),
+	github('project', 'In this project; with status:, reads the board', 'project:acme/5'),
+	github('archived', 'In an archived repository, or not', 'archived:false'),
+	github('in', 'Where the free words must be', 'in:title'),
+	github('linked', 'Linked to a pull request or an issue', 'linked:pr'),
+	github('closed', 'When it was closed', 'closed:>@today-7d', 'date'),
+	github('merged', 'When it was merged', 'merged:>@today-7d', 'date'),
+	github('sort', 'Which 100 results GitHub sends first', 'sort:created-desc')
 ];
 
 /** `is:` (not a field of its own): draft, and the state of a PR or issue. */
 export const IS_VALUES: Record<string, string> = {
+	pr: 'A pull request',
+	issue: 'An issue',
 	draft: 'A draft pull request',
 	open: 'Open',
 	closed: 'Closed',
@@ -156,25 +225,22 @@ export const IS_VALUES: Record<string, string> = {
 
 /** Words that were renamed: a clear error, not a silent miss. */
 const RENAMED: Record<string, string> = {
-	kind: 'needs',
-	reason: 'event',
-	why: 'event',
 	by: 'from'
 };
 
-export const NOTIFICATION_WORDS = ['event', 'needs', 'in'];
-const NOTIFICATION_FIELDS = WORDS.filter((w) => NOTIFICATION_WORDS.includes(w.key)).map(
-	(w) => w.field
-);
-
-export const usesNotificationWords = (query: string) =>
-	leavesOf(compileExpr(query)).some((w) => NOTIFICATION_FIELDS.some((f) => w[f] !== undefined));
-
-export const usesItemMarks = (query: string) =>
-	leavesOf(compileExpr(query)).some((w) => !!w.itemCategory?.length);
-
 export const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
-const WORD = new Map(WORDS.map((w) => [w.key, w]));
+export const WORD = new Map(WORDS.map((w) => [w.key, w]));
+const IS_TYPES = { pr: 'PullRequest', issue: 'Issue' } as const;
+const ONE_GLOB_FIELDS = new Set<Field>(['repo', 'org', 'author', 'by', 'assignee']);
+
+export const wordWorksIn = (w: Pick<QueryWord, 'key' | 'runs'>, place: QueryPlace) =>
+	place === 'search'
+		? w.key !== 'about'
+		: w.runs !== 'github' &&
+			!(place === 'rule' && w.key === 'category') &&
+			!(place === 'section' && w.key === 'about');
+
+export const wordsFor = (place: QueryPlace) => WORDS.filter((w) => wordWorksIn(w, place));
 
 /** Split `a,b` values; a quoted part keeps its commas. */
 function values(raw: string): string[] {
@@ -224,7 +290,8 @@ export function parseQuery(query: string): ParsedQuery {
 				else if (!(x in IS_VALUES))
 					errors.push(`Unknown “is:${x}”. Use ${Object.keys(IS_VALUES).join(', ')}.`);
 				else if (x === 'draft') when.draft = !not;
-				else if (not) errors.push(`“-is:${x}” is not supported. Use is:open, closed, or merged.`);
+				else if (not) errors.push(`“-is:${x}” is not supported here.`);
+				else if (x === 'pr' || x === 'issue') add('type', IS_TYPES[x]);
 				else if (!states.includes(x as 'open')) states.push(x as 'open');
 			}
 			continue;
@@ -234,6 +301,11 @@ export function parseQuery(query: string): ParsedQuery {
 			errors.push(`Unknown “${rawKey}:”. Use ${QUERY_KEYS.join(', ')}.`);
 			continue;
 		}
+		if (!w.field) {
+			errors.push(`“${key}:” works only in a view's search.`);
+			continue;
+		}
+		const field = w.field;
 		for (const x of vals) {
 			if (w.bots && x.toLowerCase() === 'bots') {
 				when[w.bots] = !not;
@@ -247,29 +319,35 @@ export function parseQuery(query: string): ParsedQuery {
 				);
 				continue;
 			}
-			if (w.field === 'size' && !SIZE_PATTERN.test(x)) {
-				errors.push(`“size:${x}” must look like <50, >500, <=10, >=10, or 10..200.`);
+			if (w.format === 'number' && !NUMBER_PATTERN.test(x)) {
+				errors.push(`“${key}:${x}” must look like <50, >500, <=10, >=10, or 10..200.`);
 				continue;
 			}
-			if (w.field === 'about' && x.length > MAX_CONDITION_CHARS) {
+			if (w.format === 'date' && !DATE_PATTERN.test(x)) {
+				errors.push(
+					`“${key}:${x}” must be a date such as >2026-01-01, <@today-7d, or 2026-01-01..2026-02-01.`
+				);
+				continue;
+			}
+			if (field === 'about' && x.length > MAX_CONDITION_CHARS) {
 				errors.push(`An about: condition must be ${MAX_CONDITION_CHARS} characters or fewer.`);
 				continue;
 			}
 			if (!w.values) {
-				add(w.field, x);
+				add(field, x);
 				continue;
 			}
 			const hit = Object.entries(w.values).find(([word]) => word === x.toLowerCase());
-			if (hit) add(w.field, hit[1].stored);
-			else errors.push(`Unknown “${key}:${x}”. Use ${Object.keys(w.values).join(', ')}.`);
+			if (!hit) errors.push(`Unknown “${key}:${x}”. Use ${Object.keys(w.values).join(', ')}.`);
+			else if (field === 'draft') when.draft = hit[1].stored === 'true';
+			else add(field, hit[1].stored);
 		}
 	}
 	for (const w of WORDS) {
-		const list = lists.get(w.field);
-		if (!list?.length) continue;
+		const list = w.field && lists.get(w.field);
+		if (!w.field || !list?.length) continue;
 		// Repo, author, and from: one glob is stored as a string (the form people write by hand).
-		const one =
-			w.field === 'repo' || w.field === 'author' || w.field === 'by' || w.field === 'assignee';
+		const one = ONE_GLOB_FIELDS.has(w.field);
 		(when as Record<string, unknown>)[w.field] = one && list.length === 1 ? list[0] : list;
 	}
 	if (states.length) when.state = states;
@@ -300,11 +378,111 @@ export function compileQuery(query: string): RuleMatch {
 	return when;
 }
 
+const NO_CATEGORY_IN_RULES = 'Category rules cannot use category:.';
+const NO_ABOUT_IN_SECTIONS =
+	'Sections cannot use about:. Make a category whose rule uses about:, then use category:.';
+const NO_ABOUT_IN_SEARCHES =
+	"A view's search cannot use about:. Make a category whose rule uses about:, then use category:.";
+const NO_OR_IN_SEARCHES =
+	"A view's search cannot use OR or parentheses. Add a search for each choice.";
+const HUSH_VALUE = /[*?]/;
+
 /** Why a stored query cannot be saved, or null. */
-export function queryError(query: unknown): string | null {
+export function queryError(query: unknown, place: QueryPlace = 'rule'): string | null {
 	if (typeof query !== 'string') return 'must be a query (text), such as "repo:acme/*".';
 	if (query.length > MAX_QUERY) return `the query must be ${MAX_QUERY} characters or fewer.`;
-	return parseExpr(query).errors[0] ?? null;
+	if (place === 'search') return splitSearch(query).errors[0] ?? null;
+	const { expr, errors } = parseExpr(query);
+	if (errors.length) return errors[0];
+	const leaves = leavesOf(expr);
+	if (place === 'rule' && leaves.some((w) => w.category?.length)) return NO_CATEGORY_IN_RULES;
+	if (place === 'section' && leaves.some((w) => w.about?.length)) return NO_ABOUT_IN_SECTIONS;
+	return null;
+}
+
+export interface SplitSearch {
+	github: string;
+	hush: string;
+	errors: string[];
+}
+
+const runsInHush = (w: QueryWord, value: string) =>
+	w.runs === 'hush' ||
+	(w.runs === 'both' && ((!!w.bots && value.toLowerCase() === 'bots') || HUSH_VALUE.test(value)));
+
+export function splitSearch(search: string): SplitSearch {
+	if (readsBoard(search)) return { github: search.trim(), hush: '', errors: [] };
+	const github: string[] = [];
+	const hush: string[] = [];
+	const errors: string[] = [];
+	for (const t of tokenize(search)) {
+		if (t.type !== 'term') {
+			errors.push(NO_OR_IN_SEARCHES);
+			continue;
+		}
+		const m = /^-?([a-z][a-z-]*):(.*)$/i.exec(t.text);
+		const w = m ? WORD.get(m[1].toLowerCase()) : undefined;
+		if (!m || !w) {
+			github.push(t.text);
+			continue;
+		}
+		if (w.field === 'about') {
+			errors.push(NO_ABOUT_IN_SEARCHES);
+			continue;
+		}
+		const vals = values(m[2]);
+		if (vals.some((x) => runsInHush(w, x))) {
+			hush.push(t.text);
+			continue;
+		}
+		if (w.runs === 'both' && vals.length > 1 && w.key !== 'label')
+			errors.push(`In a view's search, give ${w.key}: one value. Add a search for each value.`);
+		github.push(t.text);
+	}
+	const hushText = hush.join(' ');
+	if (hushText) errors.push(...parseExpr(hushText).errors);
+	return { github: github.join(' '), hush: hushText, errors: [...new Set(errors)] };
+}
+
+const TODAY = /@today(?:-(\d{1,4})([dw]))?/g;
+
+function dayStart(date: string, now: number): number | null {
+	const relative = /^@today(?:-(\d+)([dw]))?$/.exec(date);
+	if (relative) {
+		const back = relative[1] ? Number(relative[1]) * (relative[2] === 'w' ? 7 : 1) : 0;
+		return Math.floor(now / DAY_MS) * DAY_MS - back * DAY_MS;
+	}
+	const t = Date.parse(`${date}T00:00:00Z`);
+	return Number.isNaN(t) ? null : t;
+}
+
+export const resolveToday = (text: string, now: number) =>
+	text.replace(TODAY, (date) => new Date(dayStart(date, now)!).toISOString().slice(0, 10));
+
+export function dateMatches(spec: string, iso: string | null | undefined, now: number): boolean {
+	const t = iso ? Date.parse(iso) : NaN;
+	if (Number.isNaN(t)) return false;
+	const range = /^(.+)\.\.(.+)$/.exec(spec);
+	if (range) {
+		const from = range[1] === '*' ? null : dayStart(range[1], now);
+		const to = range[2] === '*' ? null : dayStart(range[2], now);
+		return (from === null || t >= from) && (to === null || t < to + DAY_MS);
+	}
+	const m = /^(<=|>=|<|>)?(.+)$/.exec(spec);
+	const day = m ? dayStart(m[2], now) : null;
+	if (!m || day === null) return false;
+	switch (m[1]) {
+		case '<':
+			return t < day;
+		case '<=':
+			return t < day + DAY_MS;
+		case '>':
+			return t >= day + DAY_MS;
+		case '>=':
+			return t >= day;
+		default:
+			return t >= day && t < day + DAY_MS;
+	}
 }
 
 export type QueryExpr =
@@ -323,7 +501,7 @@ type Token =
 const OR_WORD = 'OR';
 const EVERYTHING: QueryExpr = { kind: 'match', when: {} };
 
-function tokenize(query: string): Token[] {
+export function tokenize(query: string): Token[] {
 	const out: Token[] = [];
 	let i = 0;
 	while (i < query.length) {
@@ -452,7 +630,7 @@ export function leavesOf(expr: QueryExpr): RuleMatch[] {
 	}
 }
 
-export function sizeMatches(spec: string, lines: number): boolean {
+export function numberMatches(spec: string, lines: number): boolean {
 	const range = /^(\d+)\.\.(\d+)$/.exec(spec);
 	if (range) return lines >= Number(range[1]) && lines <= Number(range[2]);
 	const bound = /^(<=|>=|<|>)?(\d+)$/.exec(spec);
@@ -478,6 +656,7 @@ export const aboutTexts = (query: string) =>
 export function formatQuery(when: RuleMatch): string {
 	const parts: string[] = [];
 	for (const w of WORDS) {
+		if (!w.field || w.field === 'draft') continue;
 		const list = asList(when[w.field]).map((x) => {
 			const word = w.values && Object.entries(w.values).find(([, val]) => val.stored === x)?.[0];
 			return quote(word ?? x);
@@ -505,7 +684,8 @@ export interface Suggestion {
  */
 export function suggest(
 	query: string,
-	caret: number
+	caret: number,
+	place: QueryPlace = 'rule'
 ): { from: number; to: number; items: Suggestion[] } {
 	let start = caret;
 	while (start > 0 && !/\s/.test(query[start - 1])) start--;
@@ -519,8 +699,12 @@ export function suggest(
 		const prefix = token.slice(neg).toLowerCase();
 		if (/["]/.test(prefix)) return none;
 		const keys = [
-			...WORDS.map((w) => ({ key: w.key, help: w.help, example: w.example })),
-			{ key: 'is', help: 'Draft, open, closed, or merged', example: 'is:draft' }
+			...wordsFor(place).map((w) => ({ key: w.key, help: w.help, example: w.example })),
+			{
+				key: 'is',
+				help: 'Pull request, issue, draft, open, closed, or merged',
+				example: 'is:draft'
+			}
 		].filter((w) => w.key.startsWith(prefix) && w.key !== prefix);
 		return {
 			from: start + neg,

@@ -42,8 +42,8 @@
 		)
 			return;
 		try {
-			const note = await applySettings(patch, true);
-			toast.success(`Settings imported.${note}`);
+			await applySettings(patch, true);
+			toast.success('Settings imported.');
 		} catch (err) {
 			toast.error((err as Error).message);
 		}

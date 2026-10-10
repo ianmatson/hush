@@ -1,11 +1,11 @@
 ---
 title: How to stop Dependabot and bot notification noise on GitHub
-description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and keep bot pull requests in FYI with Hush.
+description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and keep bot pull requests out of your Hush views.
 ---
 
 ## Short answer
 
-**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. In Hush, pull requests that bots open are FYI by default, so they do not push. Mute a thread to stop it on GitHub too.**
+**In `.github/dependabot.yml`, use `groups` and a weekly `schedule`, so Dependabot opens a few grouped pull requests in place of many. In your notification settings, choose where Dependabot alerts go. Hush leaves pull requests that bots open out of your views by default, and never counts a bot's comment as a reply to you.**
 
 ## Why Dependabot is noisy
 
@@ -63,25 +63,50 @@ Grouped updates and a weekly schedule often cut Dependabot's pull requests to a 
 
 ## Where Hush helps
 
-Hush treats bots differently by default, with [`botsAreFyi`](/docs/settings#botsarefyi) on:
+Hush treats bots differently, with no setting to change:
 
-- Pull requests that bots open are **FYI**, unless they ask for your review by name.
-- Comments and mentions by bots do not count as replies to you.
-- On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name or the pull request is assigned to you. Hush then does not track them, so their notifications do not come in to the inbox either. Turn off **Hide PRs and issues that bots opened** in **Settings → Sources** to get them.
+- A pull request that a bot opens is not your turn, unless it asks for your review by name. Its row says “Bot PR”.
+- A comment by a bot is not a reply to you, and it never pushes.
+- In your [views](/docs/views), bot pull requests and issues are left out by default ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested or you are assigned. Turn off **Hide PRs and issues that bots opened** in **Settings → Views → Filters** to see them.
 
 A bot is a login that ends in `[bot]`, or that starts with dependabot, renovate, github-actions, or codecov.
 
-Dependabot **alerts** do not come in to Hush: Hush keeps only notifications about pull requests and issues. Read alerts on GitHub, or by email (Step 2).
+Dependabot **alerts** do not show in Hush: Hush shows only pull requests and issues. Read alerts on GitHub, or by email (Step 2).
 
-To keep bot pull requests out of Needs you, keep `botsAreFyi` on:
+To see the Dependabot pull requests of one repository in one place, turn off hidden bots, and add a [view](/docs/views) for them. Then `-author:app/dependabot` keeps them out of your other views:
 
 ```json settings
-{ "botsAreFyi": true }
+{
+	"dash": { "hideBots": false },
+	"views": [
+		{
+			"id": "mine",
+			"name": "Mine",
+			"searches": [
+				"is:open involves:@me -author:app/dependabot",
+				"is:pr is:open review-requested:@me"
+			],
+			"groupBy": "role"
+		},
+		{
+			"id": "deps",
+			"name": "Dependencies",
+			"searches": ["repo:acme/web is:pr is:open author:app/dependabot"],
+			"groupBy": "status"
+		}
+	]
+}
 ```
 
-- To see bot activity in one place, make a [notification view](/docs/views) with `from:bots`, or leave bots out of a view with `-author:bots`. `author:dependabot*` matches the login `dependabot[bot]`: `author:` matches who opened a pull request or issue.
-- To stop one thread, choose **Mute** on it: Hush also unsubscribes you on GitHub.
-- A [category](/docs/categories) with the rule `author:dependabot*` marks Dependabot pull requests on their rows, and gives them a filter and a feed. Categories do not change the inbox: they do not make a thread FYI or Muted.
+To take one pull request out of your views, choose **Mute** on it. Mute stays in Hush: GitHub still notifies you. To stop GitHub's notifications for it too, choose **Unsubscribe** on GitHub.
+
+A [category](/docs/categories) marks Dependabot pull requests on their rows, and gives them a filter and a feed. Give it this rule:
+
+```query
+author:dependabot* type:pr
+```
+
+`author:` matches who opened a pull request or issue, so `author:dependabot*` matches the login `dependabot[bot]`. Categories do not change whose turn it is.
 
 ## Sources
 

@@ -18,11 +18,11 @@
 		{/each}
 		<a href={REPO_URL} rel="noreferrer">Source</a>
 		<a href="{APP_URL}/login">Sign in</a>
-		<a class="open" href="{APP_URL}/inbox">Open Hush</a>
+		<a class="open" href="{APP_URL}/v">Open Hush</a>
 	</nav>
 
 	<div class="narrow">
-		<a class="open" href="{APP_URL}/inbox">Open Hush</a>
+		<a class="open" href="{APP_URL}/v">Open Hush</a>
 		<details class="menu">
 			<summary aria-label="Menu">
 				<svg viewBox="0 0 20 20" aria-hidden="true">

@@ -10,30 +10,30 @@ import {
 	type Counts
 } from './tab-status';
 
-const counts: Counts = { alerts: 0, inbox: 7, inboxFyi: 2, prYou: 3, prTeam: 8, issueYou: 0 };
+const counts: Counts = { alerts: 0, unread: 7, prYou: 3, prTeam: 8, issueYou: 0 };
 const OLD = {
 	enabled: true,
-	sources: ['inbox', 'prYou', 'issueYou'] as CountSource[],
+	sources: ['unread', 'prYou', 'issueYou'] as CountSource[],
 	style: 'total' as const
 };
 
 describe('title', () => {
 	it('sums the chosen sources', () => {
-		expect(total(counts, ['inbox', 'prYou', 'issueYou'])).toBe(10);
+		expect(total(counts, ['unread', 'prYou', 'issueYou'])).toBe(10);
 		expect(titlePrefix(counts, OLD)).toBe('(10)');
 		expect(titlePrefix({ ...counts, alerts: 4 }, DEFAULT_PREFS.title)).toBe('(4)');
 	});
 	it('breaks down by source and skips zeros', () => {
 		const t = {
 			enabled: true,
-			sources: ['inbox', 'prYou', 'issueYou', 'prTeam'] as CountSource[],
+			sources: ['unread', 'prYou', 'issueYou', 'prTeam'] as CountSource[],
 			style: 'breakdown' as const
 		};
-		expect(titlePrefix(counts, t)).toBe('(7 · 3 PR · 8 team)');
+		expect(titlePrefix(counts, t)).toBe('(7 unread · 3 PR · 8 team)');
 	});
 	it('adds nothing when off or zero', () => {
 		expect(titlePrefix(counts, { ...OLD, enabled: false })).toBe('');
-		expect(titlePrefix({ ...counts, inbox: 0, prYou: 0 }, OLD)).toBe('');
+		expect(titlePrefix({ ...counts, unread: 0, prYou: 0 }, OLD)).toBe('');
 		expect(titlePrefix(counts, DEFAULT_PREFS.title)).toBe('');
 	});
 	it('replaces an old prefix instead of stacking', () => {
@@ -65,36 +65,24 @@ describe('tab status prefs', () => {
 		expect(p.appBadge.sources).toEqual(['alerts']);
 	});
 
-	it('moves saved old defaults to the new default, and keeps lists you changed', () => {
+	it('drops the inbox counts from saved lists', () => {
 		store.set(
 			'hush:tab-status',
 			JSON.stringify({
 				title: { enabled: true, sources: ['issueYou', 'inbox', 'prYou'], style: 'breakdown' },
-				favicon: { enabled: false, sources: ['inbox'], color: 'blue' },
-				appBadge: { enabled: true, sources: ['inbox', 'prYou', 'issueYou'] }
-			})
-		);
-		const p = loadPrefs();
-		expect(p.title).toEqual({ enabled: true, sources: ['alerts'], style: 'breakdown' });
-		expect(p.favicon).toEqual({
-			enabled: false,
-			sources: ['inbox'],
-			color: 'blue',
-			style: 'count'
-		});
-		expect(p.appBadge.sources).toEqual(['alerts']);
-	});
-
-	it('does not migrate again after a save at version 2', () => {
-		store.set(
-			'hush:tab-status',
-			JSON.stringify({
-				...DEFAULT_PREFS,
-				title: { ...DEFAULT_PREFS.title, sources: ['inbox', 'prYou', 'issueYou'] },
+				favicon: { enabled: false, sources: ['inboxFyi'], color: 'blue' },
+				appBadge: { enabled: true, sources: ['alerts', 'inbox'] },
 				v: 2
 			})
 		);
-		expect(loadPrefs().title.sources).toEqual(['inbox', 'prYou', 'issueYou']);
+		const p = loadPrefs();
+		expect(p.title).toEqual({
+			enabled: true,
+			sources: ['issueYou', 'prYou'],
+			style: 'breakdown'
+		});
+		expect(p.favicon.sources).toEqual([]);
+		expect(p.appBadge.sources).toEqual(['alerts']);
 	});
 });
 
@@ -107,13 +95,13 @@ describe('tab icon', () => {
 	});
 
 	it('labels unread alerts as "new" in the breakdown title', () => {
-		const counts = { alerts: 2, inbox: 5, inboxFyi: 0, prYou: 1, prTeam: 0, issueYou: 0 };
+		const counts = { alerts: 2, unread: 5, prYou: 1, prTeam: 0, issueYou: 0 };
 		expect(
 			titlePrefix(counts, {
 				enabled: true,
-				sources: ['alerts', 'inbox', 'prYou'],
+				sources: ['alerts', 'unread', 'prYou'],
 				style: 'breakdown'
 			})
-		).toBe('(2 new · 5 · 1 PR)');
+		).toBe('(2 new · 5 unread · 1 PR)');
 	});
 });

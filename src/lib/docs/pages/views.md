@@ -1,50 +1,116 @@
 ---
-title: Notification views
-description: Extra inbox tabs that show only the notifications you choose.
+title: Views
+description: The tabs in the top bar. Each view shows the open pull requests and issues that its GitHub searches find.
 ---
 
-A notification view is an inbox tab with only the notification threads that match its conditions: one project, one team's repositories, one category, threads from one person. It filters notifications only. It does not move threads: a thread in a view is still in its own list (Needs you, FYI…), and Done, Snooze, and Mute work the same way there.
+A **view** is a tab in the top bar, at `/v/<id>`. It shows the open pull requests and issues that its [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests) find. Hush starts with one view, **Mine**: the work that involves you.
+
+{{ref:views}}
+
+Add a view for work that does not mention you, such as a repository that you are responsible for, a label, or a project board:
+
+| View        | Searches                                           |
+| ----------- | -------------------------------------------------- |
+| Website     | `repo:acme/website is:open`                        |
+| Bugs        | `org:acme is:issue is:open label:bug`              |
+| This sprint | `project:acme/12 status:"This week","In progress"` |
+
+A view never mixes with another view: it shows only what its own searches find. An item can be in more than one view.
 
 ## Make a view
 
-- Type a [filter](/docs/inbox#filter), such as `repo:acme/web-* needs:review`, and choose the bookmark button at the end of the box: **Save this filter as a notification view (a new tab)**.
-- Or choose **+** after the tabs: **New notification view**.
+1. Choose **+** at the end of the top bar, or choose **Add view** in **Settings → Views**.
+2. Give the view a name. It is the label of its tab.
+3. Write one or more searches, as text or picked one by one. **Try on GitHub** opens the GitHub part of the search on GitHub, and Hush says how many results GitHub finds.
+4. Choose **Save**.
 
-In the view editor:
+## Searches
 
-- **Name**: the tab's label, up to 40 characters.
-- **Show threads from**: the base list. Needs you + FYI, Needs you, FYI, Snoozed, or Done.
-- **Only threads where**: a [query](/docs/query-language), as text or picked one by one. It is the same language as the rules of [categories](/docs/categories#rules). No query: the view shows every thread of its base.
+- A search uses the [query language](/docs/query-language): GitHub search words, and Hush words such as `size:<50`, `-author:bots`, or `category:low`. Hush sends the GitHub words to GitHub, then keeps the results that match the Hush words. See [In a view's search](/docs/query-language#in-a-views-search).
+- `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams (it leaves out your own PRs).
+- A search with `is:pr`, or a word that only pull requests have (such as `review-requested:` or `reviewed-by:`), finds pull requests. With `is:issue`, issues. With neither, both.
+- Hush adds `archived:false` to each search, unless the search says `archived:`.
+- A view has up to 5 searches. Hush keeps the 100 most recently updated results of each search.
+- A search that names no person, team, repository, organization, or project looks at all of GitHub. Hush warns you, because it keeps only the newest 100 results.
 
-`category:` works in a view. It matches the categories of the thread's PR or issue: `category:high-effort` shows the notifications about items with high effort.
+### Project boards
 
-Choose **Save view**. The new tab opens, with its count.
+A search can read a GitHub project board. Name the project with `project:` and one or more columns with `status:`:
 
-## Change a view
+`project:acme/12 status:"This week","In progress" no:assignee`
 
-- Open the view's tab and choose the pencil button, **Edit notification view**. **Delete view** is in the editor.
-- **Settings → Inbox → Views and feeds** lists your notification views: drag them to change their order, or edit or delete them there.
-- Keys {{key:inbox.view.6}} to {{key:inbox.view.9}} open your first four views.
+- Hush reads this search from the board, not with GitHub search. The rest of the search uses the [board's filter words](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/filtering-projects), such as `assignee:@me`, `no:assignee`, `label:bug`, and `-status:Done`.
+- `acme/12` is the owner of the project and its number, from the project's address (`github.com/orgs/acme/projects/12`).
+- Hush does not add `archived:false` to a board search.
+- Draft items on the board are left out: they are not pull requests or issues.
+- Hidden bots and others' drafts are not hidden here: someone put them on the board.
+- It needs the `project` scope. A token from before Hush read boards does not have it: then a note above the list says so. See [project boards](/docs/github-access#project-boards).
 
-You can have up to 12 notification views. A view can have an [Atom feed](/docs/feeds).
+A search with `project:` but no `status:` is a normal GitHub search: it finds every open item in the project, whatever its column.
+
+### Teams
+
+**Settings → Views → Teams** lists your teams. Turn off big teams (such as “everyone”) to cut noise. **Look up teams again** finds new teams at once; otherwise Hush looks every 6 hours.
+
+## In a view
+
+- At the top, a switch shows **Pull requests**, **Issues**, or **Both**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
+- The list puts the items into sections, by the view's Group by. See [Pull requests and issues](/docs/pull-requests-and-issues#group-by).
+- The pencil button next to the switch opens the view in **Settings → Views**.
+- A view has no filter box. To find an item, press {{key:palette}} or {{key:list.search}} to search.
+- The number on a tab counts the unread items in the view that are not snoozed or muted. See [Unread](/docs/pull-requests-and-issues#unread).
+- {{key:dash.view.1}} to {{key:dash.view.9}} open your first nine views.
+- On a narrow window, views that do not fit go in **More**. On a phone, the top bar is one menu.
+
+## Your start view
+
+Hush opens your start view when you open the app (`app.hush-gh.com` or `/v`). By default, this is your first view. To change it, go to **Settings → General → Appearance → Start page**, and choose a view. This browser remembers the choice.
+
+## Views and GitHub notifications
+
+Hush tracks the pull requests and issues that your views find. Your GitHub notifications are only a signal: they tell Hush quickly that a tracked item changed, and Hush then reads that item again.
+
+- Hush checks your notifications every few minutes. A notification about an item that no view finds is ignored.
+- A notification about an item that Hush does not track yet runs the searches of your views again, at most every 5 minutes. If a search finds the item now, Hush tracks it.
+- Some changes come with no notification, such as CI results or your own review. The next search of your views finds them, within about 15 minutes.
+- When the searches of all your views stop finding an item (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more.
+- When you change your views, Hush stops at once to track the items that no view finds now.
+
+Hush never changes your notifications on GitHub: it does not mark them as read or done, and it does not unsubscribe you.
+
+## Change or delete a view
+
+In **Settings → Views**:
+
+- Change a view's name and searches.
+- Turn on **Push new items** to get a push when a pull request or issue shows up in the view for the first time. See [What gets pushed](/docs/notifications#what-gets-pushed).
+- Move a view up or down. The top bar shows the views in this order.
+- Delete a view with the trash button. You keep at least one view.
+- **Defaults** puts back the Mine view and removes the others. Nothing changes until you choose **Save**.
+
+**Filters** in **Settings → Views** hide drafts that others opened ([`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts)) and PRs and issues that bots opened ([`dash.hideBots`](/docs/settings#dash-hidebots)), such as dependabot or a GitHub App. Both are on by default.
+
+You can have up to 12 views. Each view can have an [Atom feed](/docs/feeds).
 
 ## In settings.json
 
-Notification views are the [`views`](/docs/settings#views) setting:
+Views are the [`views`](/docs/settings#views) setting:
 
 ```json settings
 {
 	"views": [
 		{
-			"id": "webreviews",
-			"name": "Web reviews",
-			"base": "action",
-			"query": "repo:acme/web-* needs:review"
+			"id": "mine",
+			"name": "Mine",
+			"searches": ["is:pr is:open review-requested:@me", "is:open involves:@me"],
+			"groupBy": "role"
 		},
-		{ "id": "alice", "name": "From Alice", "base": "inbox", "query": "from:alice" },
-		{ "id": "big", "name": "Big work", "base": "inbox", "query": "category:high-effort" }
+		{
+			"id": "website",
+			"name": "Website",
+			"searches": ["repo:acme/website is:open"],
+			"groupBy": "status"
+		}
 	]
 }
 ```
-
-In a view, `in:` is the thread's list now.

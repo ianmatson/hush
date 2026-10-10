@@ -8,15 +8,13 @@ description: Read a pull request or issue without leaving Hush, and approve, com
 The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. On a wide screen, the peek is a panel on the right that grows with the screen, the list stays visible, and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
 
 - {{key:list.peek}} or {{key:list.escape}} closes it.
-- The peek stays open when you go to the Inbox, Pull requests, or Issues tab, and shows the same item until you move the cursor there. Settings does not show the peek.
-- The alert history (the bell) opens in the same place; the one that you opened last stays.
+- The peek stays open when you go to another view, and shows the same item until you move the cursor there. Settings does not show the peek.
+- The alert history (the bell) opens in the same place; the one that you opened last stays. An alert about a pull request or issue opens it in a peek there.
 - For a pull request in a [stack](/docs/pull-requests-and-issues#stacked-pull-requests), the peek lists the stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack.
-
-Every inbox thread is about a pull request or an issue, so every thread has a peek.
 
 ### Open the peek from a link
 
-Add `?peek=` and a pull request or issue to the address of the Inbox, Pull requests, or Issues tab, and Hush opens with its peek: `https://app.hush-gh.com/inbox?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue. When the item is in the list of that tab, the peek opens on its row, with the buttons of the page.
+Add `?peek=` and a pull request or issue to the address of a view, and Hush opens with its peek: `https://app.hush-gh.com/v/mine?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue. When the item is in the list of that page, the peek opens on its row, with the buttons of the page.
 
 The address follows the peek: when you open the peek or move it to another item, the address changes to its `?peek=` link. Reload the page, or copy the address, and the peek opens on the same item. When you close the peek, the address loses its `?peek=`.
 
@@ -85,7 +83,7 @@ The address of this view ends in `?since=review`.
 
 ## What it shows
 
-- **Why it is here**, at the top, in plain words: “Needs you: CI failed on your PR. GitHub: You opened this.” on the inbox, and “Your turn: Review requested, for 2d. Found by: Review requests.” on the Pull requests and Issues tabs. “Hush moved it: ✓ You approved” when Hush moved it by itself. Under it, what changed since you last looked (see [Since you looked](/docs/inbox#since-you-looked)).
+- **Why it is here**, at the top, in plain words: the item's section and its reason, such as “Reviews: Review requested, for 2d.” Under it, what changed since you last looked (see [Since you looked](/docs/pull-requests-and-issues#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened. An **External** badge shows when the author is not a member or collaborator of the repository, and **First-time** when it is their first PR or issue there. The **External contributor** part in **Settings → General → Row contents** turns the badge on or off, for rows and the peek.
 - For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
@@ -98,16 +96,16 @@ The address of this view ends in `?since=review`.
 - **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The part starts closed: its title shows the number of messages, or a spinner while Hush searches. Click the title to show the messages. With no messages, this part is not shown.
 - A comment box at the end.
 
-A thread that stays open in the peek for a moment is marked as read, also on GitHub. Turn this off with [`peekMarksRead`](/docs/settings#peekmarksread).
+When the peek opens an item, Hush marks it as read. This stays in Hush: it does not change your notifications on GitHub. Press {{key:dash.read}} to make the item unread again. See [Unread](/docs/pull-requests-and-issues#unread).
 
 ## The bottom bar
 
 The bar at the bottom of the peek has two parts:
 
-1. The buttons of the page that you are on: **Done**, **Snooze**, **Mute**, and **Read** in the inbox; **Hide until it changes** and **Copy link** on the Pull requests and Issues tabs.
+1. The buttons of the view: **Snooze** and **Copy link**.
 2. The **actions on GitHub**: a main button, and **More** for the rest.
 
-The main button is the action that fits what the thread asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).
+The main button is the action that fits what the item asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).
 
 ## Actions on GitHub
 

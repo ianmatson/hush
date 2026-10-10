@@ -25,6 +25,7 @@ export type MenuEntry =
 			icon?: Component;
 			subjects: ('pr' | 'issue' | 'other')[];
 			disabled: SnoozeEvent[];
+			untilNewActivity?: boolean;
 			onpick: (body: { until?: number; event?: SnoozeEvent }) => void;
 			/** Phones: a sheet instead of nested submenus. */
 			sheet: () => void;

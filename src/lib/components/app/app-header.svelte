@@ -4,7 +4,10 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { alertsQuery, dashQuery, leaveTo, meQuery, threadsQuery, turnCount } from '$lib/queries';
+	import { alertsQuery, dashQuery, leaveTo, meQuery } from '$lib/queries';
+	import { fitItems } from '$lib/fit';
+	import { tick } from 'svelte';
+	import type { DashResponse } from '$lib/shared/types';
 	import { alertsSeen } from '$lib/alerts.svelte';
 	import { ui } from '$lib/ui.svelte';
 	import { cn } from '$lib/utils';
@@ -18,36 +21,98 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Bell from '@lucide/svelte/icons/bell';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Plus from '@lucide/svelte/icons/plus';
 	import { palette } from '$lib/palette.svelte';
 
 	const me = createQuery(meQuery);
-	const inboxCount = createQuery(() => ({
-		...threadsQuery('action'),
-		select: (d) => d.counts.action
-	}));
-	const prTurns = createQuery(() => ({ ...dashQuery('pr'), select: turnCount }));
-	const issueTurns = createQuery(() => ({ ...dashQuery('issue'), select: turnCount }));
+	const prs = createQuery(() => dashQuery('pr'));
+	const issues = createQuery(() => dashQuery('issue'));
+	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
+		d?.items.filter((i) => i.unread && !i.dismissed && i.sections.includes(viewId)).length ?? 0;
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);
 	const newAlerts = $derived(alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0);
 
 	const links = $derived([
-		{ href: '/inbox', label: 'Inbox', badge: inboxCount.data },
-		{ href: '/pulls', label: 'Pull requests', badge: prTurns.data },
-		{ href: '/issues', label: 'Issues', badge: issueTurns.data }
+		...(me.data?.settings.views ?? []).map((v) => ({
+			href: `/v/${v.id}`,
+			label: v.name,
+			badge: unreadIn(prs.data, v.id) + unreadIn(issues.data, v.id)
+		}))
 	]);
+
+	const GAP = 2;
+	const NEW_WIDTH = 28;
+	let navWidth = $state(0);
+	let measure = $state<HTMLElement | null>(null);
+	let widths = $state<number[]>([]);
+	let moreWidth = $state(0);
+	$effect(() => {
+		void links.map((l) => `${l.label}${l.badge}`).join();
+		void navWidth;
+		tick().then(() => {
+			if (!measure) return;
+			widths = [...measure.querySelectorAll<HTMLElement>('[data-link]')].map((e) => e.offsetWidth);
+			moreWidth = measure.querySelector<HTMLElement>('[data-more]')?.offsetWidth ?? 0;
+		});
+	});
+	const shown = $derived(
+		!navWidth || widths.length !== links.length
+			? links.map((_, k) => k)
+			: fitItems(widths, navWidth, {
+					gap: GAP,
+					moreWidth,
+					reserved: NEW_WIDTH,
+					keep: links.findIndex((l) => active(l.href))
+				})
+	);
+	const overflow = $derived(links.filter((_, k) => !shown.includes(k)));
 	const active = (href: string) =>
 		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
-	// Phones: one menu instead of three tabs. On settings pages it reads "Go to".
-	const current = $derived(links.find((l) => active(l.href)));
-	const othersWaiting = $derived(links.some((l) => l !== current && l.badge));
+	const MORE_CLASS =
+		'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground hover:text-foreground';
 
 	async function signOut() {
 		await api.logout().catch(() => {});
 		leaveTo('/login');
 	}
 </script>
+
+{#snippet badge(n: number | null | undefined, extra = '')}
+	{#if n}
+		<span
+			class={cn(
+				'min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums',
+				extra
+			)}>{n}</span
+		>
+	{/if}
+{/snippet}
+
+{#snippet moreLabel(waiting: boolean)}
+	<span class="hidden sm:inline">More</span>
+	{#if waiting}<span class="size-1.5 rounded-full bg-primary"></span>{/if}
+	<ChevronDown class="size-3.5" />
+{/snippet}
+
+{#snippet link(
+	l: { href: string; label: string; badge: number | null | undefined },
+	measured: boolean
+)}
+	<a
+		href={l.href}
+		data-link={measured ? '' : undefined}
+		tabindex={measured ? -1 : undefined}
+		aria-current={!measured && active(l.href) ? 'page' : undefined}
+		class={cn(
+			'flex max-w-48 shrink-0 items-center gap-1.5 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
+			active(l.href) && 'bg-muted text-foreground'
+		)}
+	>
+		<span class="truncate">{l.label}</span>{@render badge(l.badge)}
+	</a>
+{/snippet}
 
 <header class="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
 	<div class="mx-auto flex h-12 max-w-4xl items-center gap-3 px-3 sm:gap-4 sm:px-4">
@@ -59,55 +124,39 @@
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger
-				class="flex h-8 min-w-0 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm sm:hidden"
-			>
-				<span class="truncate">{current?.label ?? 'Go to'}</span>
-				{#if current?.badge}
-					<span
-						class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-						>{current.badge}</span
-					>
-				{/if}
-				{#if othersWaiting}
-					<span class="size-1.5 rounded-full bg-primary" aria-label="Other pages have items"></span>
-				{/if}
-				<ChevronDown class="size-3.5 text-muted-foreground" />
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="start" class="min-w-48">
-				{#each links as l (l.href)}
-					<DropdownMenu.Item onclick={() => goto(l.href)} class={cn(active(l.href) && 'bg-muted')}>
-						{l.label}
-						{#if l.badge}
-							<span
-								class="ml-auto min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-								>{l.badge}</span
-							>
-						{/if}
-					</DropdownMenu.Item>
+		<div class="relative min-w-0 flex-1" bind:clientWidth={navWidth}>
+			<div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+				<div bind:this={measure} class="invisible absolute top-0 left-0 flex w-max gap-0.5 text-sm">
+					{#each links as l (l.href)}{@render link(l, true)}{/each}
+					<span data-more class={MORE_CLASS}>{@render moreLabel(true)}</span>
+				</div>
+			</div>
+			<nav class="flex min-w-0 items-center gap-0.5 text-sm" aria-label="Views">
+				{#each links as l, k (l.href)}
+					{#if shown.includes(k)}{@render link(l, false)}{/if}
 				{/each}
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
-		<nav class="hidden min-w-0 items-center gap-0.5 overflow-x-auto pr-1 text-sm sm:flex">
-			{#each links as l (l.href)}
+				{#if overflow.length}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger class={MORE_CLASS} aria-label="More views">
+							{@render moreLabel(overflow.some((l) => l.badge))}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start" class="min-w-48">
+							{#each overflow as l (l.href)}
+								<DropdownMenu.Item onclick={() => goto(l.href)} class="gap-2">
+									{l.label}{@render badge(l.badge, 'ml-auto')}
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{/if}
 				<a
-					href={l.href}
-					class={cn(
-						'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground transition-colors hover:text-foreground',
-						active(l.href) && 'bg-muted text-foreground'
-					)}
+					href="/settings/views?new=1"
+					class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+					aria-label="New view"
+					title="New view"><Plus class="size-4" /></a
 				>
-					{l.label}
-					{#if l.badge}
-						<span
-							class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-							>{l.badge}</span
-						>
-					{/if}
-				</a>
-			{/each}
-		</nav>
+			</nav>
+		</div>
 		<div class="ml-auto flex items-center gap-1">
 			<button
 				type="button"

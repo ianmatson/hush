@@ -11,48 +11,51 @@ import {
 
 describe('settings file', () => {
 	it('has only your changes', () => {
-		const s = mergeSettings(DEFAULT_SETTINGS, { pushFyi: true, dash: { staleDays: 5 } as never });
+		const s = mergeSettings(DEFAULT_SETTINGS, {
+			pushWhileOpen: true,
+			dash: { staleDays: 5 } as never
+		});
 		const file = settingsFile(s);
-		expect(file.settings).toEqual({ pushFyi: true, dash: { staleDays: 5 } });
+		expect(file.settings).toEqual({ pushWhileOpen: true, dash: { staleDays: 5 } });
 		expect(settingsFromFile(JSON.stringify(file))).toEqual(file.settings);
 		expect(parseSettings(JSON.stringify(file.settings))).toEqual(s);
 	});
 
 	it('drops settings that are gone', () => {
-		expect(parseSettings('{"digestHour":8,"pushFyi":true}')).toEqual({
+		expect(parseSettings('{"digestHour":8,"pushWhileOpen":true}')).toEqual({
 			...DEFAULT_SETTINGS,
-			pushFyi: true
+			pushWhileOpen: true
 		});
+	});
+
+	it('drops dashboard settings that are gone, so the rest can still be saved', () => {
+		const stored = '{"dash":{"scope":"archived:false org:posthog","pr":{},"hideBots":false}}';
+		const s = parseSettings(stored);
+		expect(s.dash).toEqual({ ...DEFAULT_SETTINGS.dash, hideBots: false });
+		expect(validateSettings(mergeSettings(s, { dash: s.dash }), ['dash'])).toBeNull();
+	});
+
+	it('drops swipe actions and key commands that are gone', () => {
+		const s = parseSettings(
+			JSON.stringify({
+				swipe: { dash: { right: 'hide', left: 'read' } },
+				keys: { 'dash.hide': ['z'], 'dash.read': ['y'] }
+			})
+		);
+		expect(s.swipe.dash).toEqual({ right: 'snooze', left: 'read' });
+		expect(s.keys).toEqual({ 'dash.read': ['y'] });
+		expect(validateSettings(s, ['swipe', 'keys'])).toBeNull();
 	});
 
 	it('refuses other files', () => {
-		expect(settingsFromFile('{"hush":1,"settings":{"pushFyi":true,"nope":1}}')).toEqual({
-			pushFyi: true
+		expect(settingsFromFile('{"hush":2,"settings":{"pushWhileOpen":true,"nope":1}}')).toEqual({
+			pushWhileOpen: true
 		});
 		expect(settingsFromFile('nope')).toMatch(/not JSON/);
 		expect(settingsFromFile('{"rules":[]}')).toMatch(/not a Hush settings file/);
-		expect(settingsFromFile('{"hush":1,"settings":{}}')).toMatch(/no settings/);
-		expect(settingsFromFile('{"hush":3,"settings":{"pushFyi":true}}')).toMatch(/newer Hush/);
-	});
-
-	it('reads a version 1 file: JSON conditions become query text', () => {
-		const v1 = {
-			hush: 1,
-			settings: {
-				rules: [
-					{
-						name: 'Docs',
-						when: { repo: 'acme/website', label: ['docs'] },
-						then: { category: 'fyi' }
-					}
-				],
-				views: [{ id: 'web', name: 'Web', base: 'inbox', when: { repo: 'acme/web-*' } }]
-			}
-		};
-		const patch = settingsFromFile(JSON.stringify(v1));
-		expect(patch).toMatchObject({
-			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
-		});
+		expect(settingsFromFile('{"hush":2,"settings":{}}')).toMatch(/no settings/);
+		expect(settingsFromFile('{"hush":1,"settings":{"pushWhileOpen":true}}')).toMatch(/older Hush/);
+		expect(settingsFromFile('{"hush":3,"settings":{"pushWhileOpen":true}}')).toMatch(/newer Hush/);
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
@@ -75,28 +78,24 @@ describe('settings schema', () => {
 
 	it('keeps the rest of a group', () => {
 		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } as never });
-		expect(s.dash.scope).toEqual(DEFAULT_SETTINGS.dash.scope);
+		expect(s.dash.staleDays).toEqual(DEFAULT_SETTINGS.dash.staleDays);
 		expect(settingsOverrides(s)).toEqual({ dash: { hideBots: false } });
 	});
 
 	it('checks each setting', () => {
 		const check = (patch: object) =>
 			validateSettings(mergeSettings(DEFAULT_SETTINGS, patch), Object.keys(patch));
-		expect(check({ pushFyi: true })).toBeNull();
-		expect(check({ pushFyi: 'yes' })).toMatch(/true or false/);
+		expect(check({ pushWhileOpen: true })).toBeNull();
+		expect(check({ pushWhileOpen: 'yes' })).toMatch(/true or false/);
 		expect(check({ nope: 1 })).toMatch(/Unknown setting "nope"/);
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);
-		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
-		expect(check({ newCommitsAfterReview: 'changes_requested' })).toBeNull();
-		expect(check({ newCommitsAfterReview: 'x' })).toMatch(/changes_requested/);
-		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
-			/"A"/
+		expect(check({ reviewResolution: 'strict' } as never)).toMatch(
+			/Unknown setting "reviewResolution"/
 		);
+		expect(check({ views: [{ id: 'a', name: 'A', searches: [] }] })).toMatch(/"A"/);
 		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
-		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toMatch(
-			/"multiple"/
-		);
+		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toBeNull();
 	});
 });
 
@@ -119,20 +118,23 @@ describe('category groups', () => {
 });
 
 describe('swipe settings', () => {
-	it('keeps the other side and list when you change one', () => {
-		const s = mergeSettings(DEFAULT_SETTINGS, { swipe: { inbox: { left: 'mute' } } } as never);
-		expect(s.swipe.dash).toEqual(DEFAULT_SETTINGS.swipe.dash);
+	it('keeps the other side when you change one, and drops the inbox swipes', () => {
+		const s = mergeSettings(DEFAULT_SETTINGS, { swipe: { dash: { left: 'read' } } } as never);
 		expect(validateSettings(s, ['swipe'])).toBeNull();
+		expect(parseSettings(JSON.stringify({ swipe: s.swipe })).swipe.dash).toEqual({
+			right: 'snooze',
+			left: 'read'
+		});
 		const parsed = parseSettings(JSON.stringify({ swipe: { inbox: { left: 'mute' } } }));
-		expect(parsed.swipe.inbox).toEqual({ right: 'done', left: 'mute' });
+		expect(parsed.swipe).toEqual(DEFAULT_SETTINGS.swipe);
 	});
 
 	it('refuses unknown actions and sides', () => {
 		const check = (swipe: unknown) =>
 			validateSettings({ ...DEFAULT_SETTINGS, swipe } as never, ['swipe']);
-		expect(check({ inbox: { left: 'mute', right: 'done' } })).toBeNull();
-		expect(check({ inbox: { left: 'merge', right: 'done' } })).toMatch(/swipe.inbox.left/);
-		expect(check({ inbox: { up: 'done' } })).toMatch(/left.*right/);
-		expect(check({ nope: {} })).toMatch(/swipe.nope/);
+		expect(check({ dash: { left: 'mute', right: 'snooze' } })).toBeNull();
+		expect(check({ dash: { left: 'merge', right: 'snooze' } })).toMatch(/swipe.dash.left/);
+		expect(check({ dash: { up: 'snooze' } })).toMatch(/left.*right/);
+		expect(check({ inbox: {} })).toMatch(/swipe.inbox/);
 	});
 });
