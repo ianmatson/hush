@@ -3,12 +3,7 @@
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
 	import { DEFAULT_ROWS, ROW_KINDS, ROW_PARTS, type RowKind } from '$lib/shared/row-parts';
-	import {
-		PREVIEW_MARKS,
-		PREVIEW_SOURCE_NAMES,
-		PREVIEW_THREAD,
-		previewItem
-	} from '$lib/row-preview';
+	import { PREVIEW_MARKS, PREVIEW_THREAD, previewItem } from '$lib/row-preview';
 	import { Button } from '$lib/components/ui/button';
 	import SavedSwitch from './saved-switch.svelte';
 	import * as Card from '$lib/components/ui/card';
@@ -74,8 +69,6 @@
 						item={previewItem(kind)}
 						marks={PREVIEW_MARKS}
 						hidden={rows[kind]}
-						showSections
-						sectionNames={PREVIEW_SOURCE_NAMES}
 						draggable={false}
 						onopen={noop}
 						onhide={noop}

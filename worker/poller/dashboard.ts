@@ -17,11 +17,11 @@ import {
 } from '../github';
 import {
 	MAX_SOURCE_COUNT_SEARCHES,
+	searchKinds,
 	sectionsFor,
-	sourceKinds,
-	TRACKED_SOURCE,
+	trackedItemsOf,
 	type SourceCount
-} from '../../src/lib/shared/sources';
+} from '../../src/lib/shared/item-views';
 import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
 import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
 import { boardCount, boardShort } from '../projects';
@@ -81,14 +81,13 @@ export abstract class PollerDashboard extends PollerSync {
 		return true;
 	}
 
-	async countSource(query: string, scope: string): Promise<SourceCount> {
+	async countSource(query: string): Promise<SourceCount> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
 		const { teams } = await this.teams();
-		const source = { id: 'count', name: '', query, enabled: true };
-		const dash = { ...who.settings.dash, scope };
-		const searches = sourceKinds(query).flatMap((kind) =>
-			expandSections(sectionsFor(kind, [source]), dash, teams).queries.map((q) => ({
+		const view = { id: 'count', name: '', searches: [query], items: [] };
+		const searches = searchKinds(query).flatMap((kind) =>
+			expandSections(sectionsFor(kind, [view]), who.settings.dash, teams).queries.map((q) => ({
 				kind,
 				q: q.q
 			}))
@@ -119,7 +118,7 @@ export abstract class PollerDashboard extends PollerSync {
 		const who = await this.who();
 		if (!who) return;
 		const kinds = DASH_KINDS.filter((kind) =>
-			sectionsFor(kind, who.settings.sources).some((s) => s.enabled && readsBoard(s.query))
+			sectionsFor(kind, who.settings.views).some((s) => readsBoard(s.query))
 		);
 		await Promise.all(kinds.map((kind) => this.rebuildTracked(kind)));
 	}
@@ -135,15 +134,15 @@ export abstract class PollerDashboard extends PollerSync {
 	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
-		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview, tracked } = who.settings;
-		const sections = sectionsFor(kind, who.settings.sources);
+		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview, views } = who.settings;
+		const sections = sectionsFor(kind, views);
+		const tracked = trackedItemsOf(views);
 		const sig = JSON.stringify([
 			botsAreFyi,
 			reviewResolution,
 			newCommitsAfterReview,
 			sections,
-			tracked,
-			dash.scope,
+			views.map((v) => [v.id, v.items]),
 			dash.excludedTeams,
 			dash.staleDays,
 			dash.hideOthersDrafts,
@@ -209,17 +208,16 @@ export abstract class PollerDashboard extends PollerSync {
 				facts: dashFactsOf(subject, who.me, teamSet, decided.get(k)),
 				sections: new Set<string>()
 			};
-			e.sections.add(TRACKED_SOURCE.id);
+			for (const v of views) if (v.items.includes(k)) e.sections.add(v.id);
 			byId.set(k, e);
 		}
-		const enabled = [...sections.filter((s) => s.enabled), TRACKED_SOURCE];
-		const boardSections = new Set(enabled.filter((s) => readsBoard(s.query)).map((s) => s.id));
+		const boardSections = new Set(sections.filter((s) => readsBoard(s.query)).map((s) => s.id));
 		const placedOnBoard = (found: Set<string>) => [...found].some((id) => boardSections.has(id));
 		const items = sortItems(
 			[...byId.values()]
 				.filter(({ facts, sections }) => keepItem(facts, who.me, dash) || placedOnBoard(sections))
 				.map(({ facts, sections }) => {
-					const ordered = enabled.filter((s) => sections.has(s.id));
+					const ordered = views.filter((v) => sections.has(v.id));
 					return finishItem(
 						facts,
 						ordered.map((s) => s.id),
@@ -244,14 +242,12 @@ export abstract class PollerDashboard extends PollerSync {
 		const data: DashResponse = {
 			kind,
 			items: placed,
-			sections: enabled
-				.filter((s) => s.id !== TRACKED_SOURCE.id || trackedFacts.size)
-				.map((s) => ({
-					id: s.id,
-					name: s.name,
-					count: placed.filter((i) => i.sections.includes(s.id)).length,
-					...(skipped[s.id] ? { skipped: skipped[s.id] } : {})
-				})),
+			sections: views.map((v) => ({
+				id: v.id,
+				name: v.name,
+				count: placed.filter((i) => i.sections.includes(v.id)).length,
+				...(skipped[v.id] ? { skipped: skipped[v.id] } : {})
+			})),
 			teams,
 			fetchedAt: Date.now(),
 			errors: teamError ? [teamError, ...errors] : errors

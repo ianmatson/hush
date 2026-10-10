@@ -36,7 +36,7 @@ const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<ThreadFacts>
 			smart: [],
 			...enrichment
 		},
-		sources: ['You opened'],
+		views: ['Mine'],
 		...over
 	}) satisfies ThreadFacts;
 
@@ -53,7 +53,7 @@ const API: ItemCategory = {
 	id: 'api',
 	name: 'API',
 	color: 'blue',
-	rule: 'repo:acme/api OR source:"API bugs"',
+	rule: 'repo:acme/api OR view:"API bugs"',
 	description: ''
 };
 const BUGS: ItemCategory = {
@@ -89,8 +89,8 @@ describe('placeItem', () => {
 		const t = thread({ labels: ['docs'], ...jevChose(area, 'bugs') }, { repo: 'acme/api' });
 		expect(place(t, [area]).categories).toEqual(['api']);
 	});
-	it('can use the source that found the item', () => {
-		expect(place(thread({}, { sources: ['API bugs'] }), [area]).categories).toEqual(['api']);
+	it('can use the view that has the item', () => {
+		expect(place(thread({}, { views: ['API bugs'] }), [area]).categories).toEqual(['api']);
 	});
 	it("uses Jev's choice when no rule matches", () => {
 		expect(place(thread(jevChose(area, 'bugs')), [area]).categories).toEqual(['bugs']);

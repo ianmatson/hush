@@ -14,6 +14,8 @@
 	import Check from '@lucide/svelte/icons/check';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
 	import type { ThemeSwatch } from '$lib/themes/list';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { meQuery } from '$lib/queries';
 
 	const modes = [
 		{ id: 'light', label: 'Light', icon: Sun },
@@ -25,11 +27,14 @@
 	let themesOpen = $state(false);
 	const current = $derived(ALL_THEMES.find((t) => t.id === theme.current));
 
-	const starts = { '/inbox': 'Inbox', '/pulls': 'Pull requests', '/issues': 'Issues' } as const;
-	let start = $state<keyof typeof starts>('/inbox');
+	const me = createQuery(meQuery);
+	const starts = $derived<Record<string, string>>({
+		'/inbox': 'Inbox',
+		...Object.fromEntries((me.data?.settings.views ?? []).map((v) => [`/v/${v.id}`, v.name]))
+	});
+	let start = $state('/inbox');
 	onMount(() => {
-		const saved = localStorage.getItem('hush:start');
-		start = saved && saved in starts ? (saved as keyof typeof starts) : '/inbox';
+		start = localStorage.getItem('hush:start') ?? '/inbox';
 	});
 	$effect(() => localStorage.setItem('hush:start', start));
 </script>
@@ -86,7 +91,7 @@
 			</SettingRow>
 			<SettingRow label="Start page" description="The tab Hush opens first.">
 				<Select.Root type="single" bind:value={start}>
-					<Select.Trigger class="w-40">{starts[start]}</Select.Trigger>
+					<Select.Trigger class="w-40">{starts[start] ?? 'Inbox'}</Select.Trigger>
 					<Select.Content>
 						{#each Object.entries(starts) as [value, label] (value)}
 							<Select.Item {value} {label} />

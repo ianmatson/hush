@@ -90,10 +90,13 @@ describe('conditionId', () => {
 });
 
 describe('smartConditions', () => {
-	it('collects each different about: text once, from views and category and tag rules', () => {
-		const views = [{ id: 'v1', name: 'Deps', base: 'inbox' as const, query: 'about:"deps"' }];
-		const markRules = ['about:"database migrations"', 'repo:acme/* about:"Database migrations"'];
-		expect(smartConditions(views, markRules).map((c) => c.id)).toEqual([
+	it('collects each different about: text of the category rules once', () => {
+		const markRules = [
+			'about:"deps"',
+			'about:"database migrations"',
+			'repo:acme/* about:"Database migrations"'
+		];
+		expect(smartConditions(markRules).map((c) => c.id)).toEqual([
 			conditionId('deps'),
 			conditionId('database migrations')
 		]);

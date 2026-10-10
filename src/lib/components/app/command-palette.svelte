@@ -16,7 +16,7 @@
 		refetchUnlessLive,
 		threadsQuery
 	} from '$lib/queries';
-	import Bookmark from '@lucide/svelte/icons/bookmark';
+	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
@@ -64,6 +64,7 @@
 	// Lists Hush keeps fresh anyway are fetched when the palette opens; Done and Muted come from
 	// the cache only (they can be long, and you seldom look for them).
 	const FETCH: View[] = ['action', 'fyi', 'snoozed'];
+	const me = createQuery(meQuery);
 	const lists = VIEWS.map((v) =>
 		createQuery(() => ({ ...threadsQuery(v.id), enabled: palette.open && FETCH.includes(v.id) }))
 	);
@@ -108,16 +109,16 @@
 	const dashEntries = $derived.by((): Entry[] => {
 		if (!palette.open) return [];
 		const turn = { you: 'Your turn', team: "Team's turn", them: 'Waiting', none: 'Other' };
-		return (
-			[
-				['pulls', prs.data],
-				['issues', issues.data]
-			] as const
-		).flatMap(([page, d]) =>
+		const views = me.data?.settings.views ?? [];
+		return [prs.data, issues.data].flatMap((d) =>
 			(d?.items ?? [])
 				// A PR that is also an inbox thread shows once, as the thread.
 				.filter((i) => !inboxUrls.has(i.url))
-				.map((i) => ({
+				.flatMap((i) => {
+					const home = views.find((v) => i.sections.includes(v.id));
+					return home ? [{ i, home }] : [];
+				})
+				.map(({ i, home }) => ({
 					id: `dash:${i.id}`,
 					label: i.title,
 					detail: `${i.repo}#${i.number}`,
@@ -130,13 +131,16 @@
 						...i.labels.map((l) => l.name)
 					],
 					url: i.url,
-					where: `${page === 'pulls' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
-					run: () => peek({ page, id: i.id }, `/${page}`)
+					where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
+					run: () =>
+						peek(
+							{ page: 'view', view: home.id, kind: i.kind, id: i.id },
+							`/v/${home.id}?show=${i.kind}`
+						)
 				}))
 		);
 	});
 
-	const me = createQuery(meQuery);
 	const goEntries = $derived<Entry[]>([
 		...VIEWS.map((v) => ({
 			id: `go:${v.id}`,
@@ -154,32 +158,18 @@
 		...(me.data?.settings.views ?? []).map((v) => ({
 			id: `go:view:${v.id}`,
 			label: v.name,
-			where: 'Notification view',
-			icon: Bookmark as Component,
-			keywords: ['view', 'saved', v.query],
-			run: () => goto(`/inbox?view=v:${v.id}`)
+			where: 'View',
+			icon: LayoutList as Component,
+			keywords: ['view', 'prs', 'issues', ...v.searches],
+			run: () => goto(`/v/${v.id}`)
 		})),
-		{
-			id: 'go:pulls',
-			label: 'Pull requests',
-			icon: GitPullRequest,
-			keywords: ['prs', 'dashboard'],
-			run: () => goto('/pulls')
-		},
-		{
-			id: 'go:issues',
-			label: 'Issues',
-			icon: CircleDot,
-			keywords: ['dashboard'],
-			run: () => goto('/issues')
-		},
 		...(
 			[
 				['general', 'General', 'appearance menus account export import'],
 				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
 				['json', 'settings.json', 'json advanced all every raw'],
-				['inbox', 'Inbox, views, and feeds', 'feeds defaults'],
-				['dashboards', 'Sources', 'sections searches tracked teams dashboards'],
+				['inbox', 'Inbox and feeds', 'feeds defaults'],
+				['views', 'Views', 'views searches sources tracked teams dashboards'],
 				['categories', 'Categories', 'categories groups tags rules labels effort impact feeds'],
 				['notifications', 'Notifications', 'push quiet']
 			] as const

@@ -10,7 +10,7 @@ import {
 	type ProjectsDTO,
 	type ProjectAccess
 } from '../src/lib/shared/projects';
-import { SOURCE_RESULTS_MAX } from '../src/lib/shared/sources';
+import { SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
 import { gh, type SearchHit } from './github';
 
 type Node = Record<string, any>;

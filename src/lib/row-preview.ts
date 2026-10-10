@@ -45,7 +45,7 @@ const PREVIEW_ITEM: DashItem = {
 	myLastReviewState: null,
 	lastCommitAt: hoursAgo(3),
 	categories: ['preview-low', 'preview-security'],
-	sections: ['preview-source'],
+	sections: ['mine'],
 	turn: 'you',
 	turnReason: 'Review requested',
 	waitingSince: hoursAgo(30),
@@ -96,8 +96,6 @@ export const PREVIEW_MARKS: RowMark[] = [
 		icon: 'lucide:shield'
 	}
 ];
-
-export const PREVIEW_SOURCE_NAMES: Record<string, string> = { 'preview-source': 'Web team' };
 
 export const PREVIEW_THREAD: ThreadDTO = {
 	id: 'preview-thread',

@@ -13,7 +13,7 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
 - **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also `rules`, `categories`, and `tags`, which Hush no longer has. Categories are in [`categoryGroups`](#categorygroups) now.
-- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categoryGroups` or `sources`, is always replaced as a whole.
+- **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categoryGroups` or `views`, is always replaced as a whole.
 - **Changes apply at once**, on every device. A change to `botsAreFyi`, `teamReviewsAreAction`, `reviewResolution`, or `newCommitsAfterReview` sorts your stored threads and items again. A change to `categoryGroups` places your items in categories again.
 
 A complete example:
@@ -59,9 +59,16 @@ A complete example:
 			]
 		}
 	],
-	"views": [{ "id": "web", "name": "Web", "base": "inbox", "query": "repo:acme/web-*" }],
+	"views": [
+		{
+			"id": "mine",
+			"name": "Mine",
+			"searches": ["is:open involves:@me org:acme", "is:pr is:open review-requested:@me org:acme"],
+			"items": []
+		},
+		{ "id": "web", "name": "Web", "searches": ["repo:acme/web is:open"], "items": [] }
+	],
 	"dash": {
-		"scope": "org:acme archived:false",
 		"excludedTeams": ["acme/everyone"],
 		"staleDays": 5
 	},

@@ -1,6 +1,13 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
 import { MAX_QUERIES } from '$lib/shared/dashboard';
-import { DEFAULT_SOURCES, MAX_SOURCES, MAX_TRACKED } from '$lib/shared/sources';
+import {
+	DEFAULT_VIEWS,
+	MAX_SEARCH_CHARS,
+	MAX_TRACKED,
+	MAX_VIEW_NAME_CHARS,
+	MAX_VIEW_SEARCHES,
+	MAX_VIEWS
+} from '$lib/shared/item-views';
 import {
 	DEFAULT_CATEGORY_GROUPS,
 	MARK_COLORS,
@@ -18,7 +25,6 @@ import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
-import { MAX_VIEWS, VIEW_BASES } from '$lib/shared/views';
 import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
@@ -70,7 +76,7 @@ const table = (head: string[], rows: string[][]) =>
 const PAGE: Record<SettingsPage, string> = {
 	general: 'Settings → General',
 	inbox: 'Settings → Inbox',
-	dashboards: 'Settings → Sources',
+	views: 'Settings → Views',
 	categories: 'Settings → Categories',
 	notifications: 'Settings → Notifications',
 	keys: 'Settings → Keybinds'
@@ -214,42 +220,36 @@ A one-time notice on the inbox and on the Pull requests and Issues tabs says tha
 	},
 	views: {
 		type: 'array of views',
-		body: `Notification views: extra tabs after the built-in inbox tabs, in this order. They filter notifications only. Up to ${MAX_VIEWS}.
+		body: `The views in the top bar, in this order. Up to ${MAX_VIEWS}. A view shows the open PRs and issues that its searches find, and its single items. The inbox gets only the notifications about the PRs and issues of your views.
 
-- \`id\`: 1 to 16 lower-case letters or digits. Unique. Feeds and links use it.
-- \`name\`: up to 40 characters. The tab label.
-- \`base\`: the list the view starts from: ${VIEW_BASES.map((b) => `\`"${b.id}"\` (${b.label})`).join(', ')}.
-- \`query\`: a [query](/docs/query-language), the same words as category rules. \`in:\` here is the thread's list now. \`category:\` matches the categories of the thread's PR or issue. \`""\` shows every thread of the base.
+- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`), feed, and the \`view:\` word use it.
+- \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label. Category rules can test it with \`view:\`.
+- \`searches\`: up to ${MAX_VIEW_SEARCHES} [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to ${MAX_SEARCH_CHARS} characters each. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
+- \`items\`: single PRs and issues, as \`"owner/repo#123"\`. They show while they are open, whatever the searches find. Up to ${MAX_TRACKED} in all views.
+
+A view needs a search or an item, and you keep at least one view.
+
+Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once, and Hush removes their notifications.
+
+A change to \`views\` replaces the whole list. To add a view, write the defaults below and your new one.
 
 \`\`\`json settings
 {
   "views": [
-    { "id": "web", "name": "Web team", "base": "inbox", "query": "repo:acme/web-*" },
-    { "id": "ci", "name": "Broken CI", "base": "action", "query": "needs:fix-ci" },
-    { "id": "big", "name": "Big work", "base": "inbox", "query": "category:high-effort" }
+    {
+      "id": "mine",
+      "name": "Mine",
+      "searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"],
+      "items": []
+    },
+    { "id": "website", "name": "Website", "searches": ["repo:acme/website is:open"], "items": ["acme/api#77"] }
   ]
 }
-\`\`\``
-	},
-	sources: {
-		type: 'array of sources',
-		body: `The GitHub searches that decide which PRs and issues Hush tracks. The inbox gets only the notifications about these items and the \`tracked\` ones. Up to ${MAX_SOURCES}.
+\`\`\`
 
-- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
-- \`name\`: up to 60 characters. Category rules can test it with \`source:\`.
-- \`query\`: a [GitHub search](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to 256 characters. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both.
-- \`enabled\`: \`false\` skips the search.
+The default:
 
-Hush runs the sources about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the sources stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`sources\`, the items that the new sources do not find stop at once, and Hush removes their notifications.
-
-A change to \`sources\` replaces the whole list. To add a source, write the defaults below and your new one.
-
-The defaults:
-
-${table(
-	['id', 'name', 'query', 'enabled'],
-	DEFAULT_SOURCES.map((s) => [code(s.id), s.name, code(s.query), String(s.enabled)])
-)}`
+${viewsReference()}`
 	},
 	categoryGroups: {
 		type: 'array of category groups',
@@ -307,21 +307,9 @@ ${table(
 	)
 )}`
 	},
-	tracked: {
-		type: 'array of strings',
-		body: `Single PRs and issues that Hush tracks whatever the sources find, as \`"owner/repo#123"\`. Up to ${MAX_TRACKED}. They show while they are open, and their notifications come in to the inbox.
-
-\`\`\`json settings
-{ "tracked": ["acme/web#482", "acme/api#77"] }
-\`\`\``
-	},
-	'dash.scope': {
-		type: 'string',
-		body: `Added to the end of every source's search, up to 200 characters. Use it to keep the tabs to your work: \`"org:acme archived:false"\`, or \`"-repo:acme/website"\`.`
-	},
 	'dash.excludedTeams': {
 		type: 'array of strings',
-		body: `Teams that \`@team\` sources skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR} hours); turn off big ones, such as “everyone”, to cut noise. A source searches the first 15 teams at most, and one tab runs up to ${MAX_QUERIES} searches.
+		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first 15 teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
 
 \`\`\`json settings
 { "dash": { "excludedTeams": ["acme/everyone", "acme/contractors"] } }
@@ -363,14 +351,14 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	},
 	'swipe.dash': {
 		type: '{ "left": action, "right": action }',
-		body: `The same for pull requests and issues on the dashboards. The actions: ${SWIPE_ACTIONS.dash.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.`
+		body: `The same for pull requests and issues in views. The actions: ${SWIPE_ACTIONS.dash.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.`
 	},
 	'rows.pr': {
 		type: 'array of part ids',
 		body: `The parts that pull request rows do not show. **Settings → General → Row contents** sets it with a preview. The title, the repository and number, the turn, and the main action always show. Parts: ${ROW_PARTS.pr.map((p) => `\`"${p.id}"\` (${p.label})`).join(', ')}. The default hides ${DEFAULT_ROWS.pr.map((id) => `\`"${id}"\``).join(', ')}.
 
 \`\`\`json settings
-{ "rows": { "pr": ["sources", "labels", "comments"] } }
+{ "rows": { "pr": ["threads", "labels", "comments"] } }
 \`\`\``
 	},
 	'rows.issue': {
@@ -586,10 +574,10 @@ function limitsReference(): string {
 			],
 			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
 			['Done threads with no activity are forgotten after', '30 days'],
-			['Notification views', String(MAX_VIEWS)],
-			['Sources', String(MAX_SOURCES)],
-			['Tracked items', String(MAX_TRACKED)],
-			['GitHub searches per tab', String(MAX_QUERIES)],
+			['Views', String(MAX_VIEWS)],
+			['Searches in a view', String(MAX_VIEW_SEARCHES)],
+			['Single items in all views', String(MAX_TRACKED)],
+			['GitHub searches for pull requests, and for issues', String(MAX_QUERIES)],
 			['Items per menu', '60'],
 			['Keys per command', '4'],
 			['Push devices', '10'],
@@ -613,14 +601,15 @@ function limitsReference(): string {
 	);
 }
 
-const sourcesReference = () =>
-	table(
-		['Default source', 'Search', 'On'],
-		DEFAULT_SOURCES.map((s) => [s.name, code(s.query), s.enabled ? 'yes' : 'no'])
+function viewsReference() {
+	return table(
+		['Default view', 'Searches'],
+		DEFAULT_VIEWS.map((v) => [v.name, v.searches.map(code).join(', ')])
 	);
+}
 
 export const REFERENCES: Record<string, (args: string[]) => string> = {
-	sources: sourcesReference,
+	views: viewsReference,
 	keys: someKeys,
 	themes: () => ['Default', ...THEMES.map((t) => t.label)].map((l) => `- ${l}`).join('\n'),
 	settings: settingsReference,

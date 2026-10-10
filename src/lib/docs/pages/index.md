@@ -22,7 +22,7 @@ Hush is a web app for your GitHub notifications. It replaces the notifications p
 - **Whose turn** is one set of rules for the inbox and the [Pull requests and Issues tabs](/docs/pull-requests-and-issues). An item is in Needs you exactly when it is “Your turn”.
 - **Hush follows up by itself.** When you approve, push a fix, or reply, the thread leaves Needs you with a note such as “✓ You approved”. When it needs you again, it comes back.
 - **Categories sort your work.** [Category groups](/docs/categories) mark each PR and issue, such as its effort, by your rules or with Jev. Its notifications show the same categories.
-- **Everything is a setting.** Categories, views, sources, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.
+- **Everything is a setting.** Views, categories, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.
 
 ## Where to start
 

@@ -7,8 +7,6 @@
 		/** Needs you: the count is a strong badge. */
 		strong?: boolean;
 		active: boolean;
-		/** A notification view (menus put a line before the first one). */
-		saved?: boolean;
 	}
 </script>
 
@@ -22,10 +20,15 @@
 	import Check from '@lucide/svelte/icons/check';
 
 	/**
-	 * The inbox view tabs. Wide screens show as many tabs as fit and put the rest in "More" (the
-	 * active tab always shows). Phones get one menu button, like the page menu in the header.
+	 * A row of tabs. Wide screens show as many tabs as fit and put the rest in "More" (the active
+	 * tab always shows). Phones get one menu button. `onnew` adds a "+" button.
 	 */
-	let { tabs, onnew }: { tabs: ViewTab[]; onnew: () => void } = $props();
+	let {
+		tabs,
+		label,
+		onnew,
+		newLabel = 'New view'
+	}: { tabs: ViewTab[]; label: string; onnew?: () => void; newLabel?: string } = $props();
 
 	let width = $state(0);
 	let measure = $state<HTMLElement | null>(null);
@@ -41,7 +44,7 @@
 
 	const GAP = 2;
 	const PAD = 4;
-	const NEW = 28 + GAP;
+	const NEW = $derived(onnew ? 28 + GAP : 0);
 	const MORE = 76 + GAP;
 	/** Indexes of the tabs that fit. */
 	const shown = $derived.by(() => {
@@ -109,22 +112,23 @@
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger
 				class="flex h-9 w-full items-center gap-1.5 rounded-lg bg-muted px-3 text-sm"
-				aria-label="Change view"
+				aria-label="Change {label}"
 			>
 				<span class="truncate font-medium">{current?.label}</span>
 				{#if current}{@render badge(current)}{/if}
 				<ChevronDown class="ml-auto size-4 text-muted-foreground" />
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="start" class="w-(--bits-dropdown-menu-anchor-width) min-w-56">
-				{#each tabs as t, k (t.key)}
-					{#if t.saved && !tabs[k - 1]?.saved}<DropdownMenu.Separator />{/if}
+				{#each tabs as t (t.key)}
 					<DropdownMenu.Item onclick={() => goto(t.href)} class="gap-2">
 						<Check class={cn('size-4', !t.active && 'invisible')} />{t.label}
 						<span class="ml-auto">{@render badge(t)}</span>
 					</DropdownMenu.Item>
 				{/each}
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={onnew}><Plus />New notification view</DropdownMenu.Item>
+				{#if onnew}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={onnew}><Plus />{newLabel}</DropdownMenu.Item>
+				{/if}
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	</div>
@@ -132,7 +136,7 @@
 	<!-- Wide screens: the tabs that fit, then "More". -->
 	<nav
 		class="hidden w-fit max-w-full items-center gap-0.5 rounded-lg bg-muted p-0.5 text-sm sm:flex"
-		aria-label="Views"
+		aria-label={label}
 	>
 		{#each tabs as t, k (t.key)}
 			{#if shown.includes(k)}{@render tab(t)}{/if}
@@ -148,8 +152,7 @@
 					<ChevronDown class="size-3.5" />
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" class="min-w-48">
-					{#each hidden as t, k (t.key)}
-						{#if t.saved && k > 0 && !hidden[k - 1]?.saved}<DropdownMenu.Separator />{/if}
+					{#each hidden as t (t.key)}
 						<DropdownMenu.Item onclick={() => goto(t.href)} class="gap-2">
 							{t.label}<span class="ml-auto">{@render badge(t)}</span>
 						</DropdownMenu.Item>
@@ -157,12 +160,14 @@
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		{/if}
-		<button
-			type="button"
-			class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background/60 hover:text-foreground"
-			aria-label="New notification view"
-			title="New notification view"
-			onclick={onnew}><Plus class="size-4" /></button
-		>
+		{#if onnew}
+			<button
+				type="button"
+				class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-background/60 hover:text-foreground"
+				aria-label={newLabel}
+				title={newLabel}
+				onclick={onnew}><Plus class="size-4" /></button
+			>
+		{/if}
 	</nav>
 </div>

@@ -4,7 +4,6 @@
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import { newChanges, saidBy } from '$lib/shared/badges';
-	import { DEFAULT_SOURCE_IDS } from '$lib/shared/sources';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -41,8 +40,6 @@
 		checked = false,
 		selecting = false,
 		draggable = true,
-		showSections = false,
-		sectionNames,
 		marks = [],
 		hidden = [],
 		onopen,
@@ -63,8 +60,6 @@
 		/** Some row is checked: show checkboxes on every row. */
 		selecting?: boolean;
 		draggable?: boolean;
-		showSections?: boolean;
-		sectionNames: Record<string, string>;
 		marks?: RowMark[];
 		hidden?: string[];
 		onopen: (i: DashItem, url: string) => void;
@@ -133,12 +128,6 @@
 			said,
 			[i.turnReason]
 		)
-	);
-	/** Your own searches say something the reason does not; the built-in ones only repeat it. */
-	const sections = $derived(
-		showSections
-			? i.sections.filter((s) => !DEFAULT_SOURCE_IDS.has(s) && sectionNames[s] !== i.turnReason)
-			: []
 	);
 
 	const review = $derived(
@@ -327,12 +316,6 @@
 					)}
 					style="background:#{l.color}; color:{ink(l.color)}"
 					title={added ? 'Added since you last looked' : undefined}>{l.name}</span
-				>
-			{/each}
-			{#each show('sources') ? sections : [] as s (s)}
-				<span
-					class="hidden rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground sm:inline"
-					>{sectionNames[s] ?? s}</span
 				>
 			{/each}
 		</div>

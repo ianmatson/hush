@@ -1,5 +1,5 @@
 import { NEW_COMMITS_AFTER_REVIEW_OPTIONS, validateDash } from './dashboard';
-import { validateSources, validateTracked } from './sources';
+import { MAX_VIEW_SEARCHES, MAX_VIEWS, validateViews } from './item-views';
 import {
 	markQueries,
 	MAX_CATEGORIES,
@@ -11,7 +11,6 @@ import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
 import { validateRows } from './row-parts';
 import { validateKeys } from './keymap';
-import { formatQuery } from './query';
 import { validateQuietHours } from './quiet';
 import {
 	DIGEST_MINUTES,
@@ -21,15 +20,13 @@ import {
 	validatePushRepeat
 } from './push-policy';
 import { DEFAULT_SETTINGS } from './settings';
-import type { RuleMatch, Settings } from './types';
-import { validateViews } from './views';
+import type { Settings } from './types';
 
 /**
  * Every setting, for the settings.json editor and the docs: one entry per key (and per key of
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
-export type SettingsPage =
-	'inbox' | 'dashboards' | 'categories' | 'notifications' | 'general' | 'keys';
+export type SettingsPage = 'inbox' | 'views' | 'categories' | 'notifications' | 'general' | 'keys';
 export interface SettingInfo {
 	key: string;
 	page: SettingsPage | null;
@@ -134,19 +131,12 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'smartDecisions',
 		page: 'inbox',
-		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, places PRs and issues in the categories that have a description, and checks the about: conditions of your categories and views (up to ${MAX_SMART_CONDITIONS}).`
+		description: `Hush asks Jev, a decision model, to read the title, labels, start of the description, and last 2 comments of your PRs and issues. Jev decides whether new comments need a reply from you, places PRs and issues in the categories that have a description, and checks the about: conditions of your category rules (up to ${MAX_SMART_CONDITIONS}).`
 	},
 	{
 		key: 'views',
-		page: 'inbox',
-		description:
-			'Notification views: extra inbox tabs. Each is { "id", "name", "base", "query": a query }.'
-	},
-	{
-		key: 'sources',
-		page: 'dashboards',
-		description:
-			'The GitHub searches that decide which PRs and issues Hush tracks: { "id", "name", "query", "enabled" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue covers both.'
+		page: 'views',
+		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "items": single PRs and issues as "owner/repo#123" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
 	},
 	{
 		key: 'categoryGroups',
@@ -154,18 +144,8 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		description: `Groups of categories for PRs and issues (up to ${MAX_CATEGORY_GROUPS}). Each is { "id", "name", "categories" }, with up to ${MAX_CATEGORIES} categories of { "id", "name", "color", "icon", "rule": a query, "description": for Jev }. An item gets one category from each group: the first whose rule matches, else the one Jev picks among the categories with a description, else none ("Not sorted").`
 	},
 	{
-		key: 'tracked',
-		page: 'dashboards',
-		description: 'Single PRs and issues to track, as "owner/repo#123", whatever the sources find.'
-	},
-	{
-		key: 'dash.scope',
-		page: 'dashboards',
-		description: 'Added to every search, for example "org:acme archived:false".'
-	},
-	{
 		key: 'dash.excludedTeams',
-		page: 'dashboards',
+		page: 'views',
 		description: '"org/team" slugs that @team skips.'
 	},
 	{
@@ -175,12 +155,12 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	},
 	{
 		key: 'dash.hideOthersDrafts',
-		page: 'dashboards',
+		page: 'views',
 		description: 'Hide draft PRs that you did not open.'
 	},
 	{
 		key: 'dash.hideBots',
-		page: 'dashboards',
+		page: 'views',
 		description:
 			'Hide PRs and issues that bots opened, unless your review is requested or you are assigned.'
 	},
@@ -206,13 +186,13 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'rows.pr',
 		page: 'general',
 		description:
-			'Parts to hide on pull request rows, such as ["sources", "labels"]. Parts: time, author, external, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, categories, categoryNames, labels, sources.'
+			'Parts to hide on pull request rows, such as ["threads", "labels"]. Parts: time, author, external, comments, size, stack, ci, review, threads, conflicts, draft, moved, changes, categories, categoryNames, labels.'
 	},
 	{
 		key: 'rows.issue',
 		page: 'general',
 		description:
-			'Parts to hide on issue rows. Parts: time, author, external, comments, moved, changes, categories, categoryNames, labels, sources.'
+			'Parts to hide on issue rows. Parts: time, author, external, comments, moved, changes, categories, categoryNames, labels.'
 	},
 	{
 		key: 'rows.thread',
@@ -311,9 +291,7 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 			: '"newCommitsAfterReview" must be "always", "changes_requested", or "never".',
 	views: validateViews,
 	dash: validateDash,
-	sources: validateSources,
 	categoryGroups: validateCategoryGroups,
-	tracked: validateTracked,
 	menus: validateMenus,
 	keys: validateKeys,
 	swipe: validateSwipe,
@@ -336,16 +314,15 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 					return `Unknown setting "${k}.${sub}".`;
 	}
 	if (
-		['views', 'categoryGroups'].some((k) => keys.includes(k)) &&
-		smartConditions(next.views, markQueries(next)).length > MAX_SMART_CONDITIONS
+		keys.includes('categoryGroups') &&
+		smartConditions(markQueries(next)).length > MAX_SMART_CONDITIONS
 	)
-		return `Views and category rules can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
+		return `Category rules can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
 	return null;
 }
 
 /**
- * The settings file: `hush` is the format version; `settings` has only your changes. Version 2
- * stores the conditions of rules and views as query text; version 1 had JSON conditions.
+ * The settings file: `hush` is the format version; `settings` has only your changes.
  */
 export interface SettingsFile {
 	hush: 2;
@@ -371,29 +348,13 @@ export function settingsFromFile(text: string): Partial<Settings> | string {
 	const file = data as { hush?: unknown; settings?: unknown } | null;
 	if (!file || typeof file !== 'object' || typeof file.settings !== 'object')
 		return 'This is not a Hush settings file.';
-	if (file.hush !== 1 && file.hush !== 2) return 'This settings file is from a newer Hush.';
-	const raw = (file.hush === 1 ? fromVersion1(file.settings) : (file.settings ?? {})) as Record<
-		string,
-		unknown
-	>;
+	if (file.hush === 1) return 'This settings file is from an older Hush. Export it again.';
+	if (file.hush !== 2) return 'This settings file is from a newer Hush.';
+	const raw = (file.settings ?? {}) as Record<string, unknown>;
 	const patch = Object.fromEntries(
 		Object.keys(DEFAULT_SETTINGS)
 			.filter((k) => raw[k] !== undefined)
 			.map((k) => [k, raw[k]])
 	) as Partial<Settings>;
 	return Object.keys(patch).length ? patch : 'The file has no settings.';
-}
-
-/** A version 1 file: the JSON conditions of rules and views as query text. */
-function fromVersion1(settings: unknown): Record<string, unknown> {
-	const s = { ...(settings as Record<string, unknown>) };
-	const asQuery = (when: unknown) =>
-		when && typeof when === 'object' ? formatQuery(when as RuleMatch) : when;
-	if (Array.isArray(s.views))
-		s.views = s.views.map((v) => {
-			if (!v || typeof v !== 'object' || !('when' in v)) return v;
-			const { when, ...rest } = v as { when: unknown };
-			return { ...rest, query: asQuery(when) };
-		});
-	return s;
 }

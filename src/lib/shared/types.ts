@@ -5,18 +5,6 @@ export type Category = 'action' | 'fyi' | 'muted';
 export type Triage = 'inbox' | 'done' | 'snoozed';
 export type View = 'action' | 'fyi' | 'snoozed' | 'done' | 'muted' | 'all' | 'inbox';
 
-/** What a notification view starts from. "inbox" is Needs you and FYI together. */
-export type ViewBase = 'inbox' | 'action' | 'fyi' | 'snoozed' | 'done';
-
-/** A named filter on the inbox, shown as a tab (see shared/views.ts). */
-export interface SavedView {
-	id: string;
-	name: string;
-	base: ViewBase;
-	/** A query: the same words as rules and the Filter box. "" shows every thread of the base. */
-	query: string;
-}
-
 export type ActionKind =
 	| 'review'
 	| 'fix_ci'
@@ -108,7 +96,7 @@ export interface ThreadFacts {
 	myTeams?: string[];
 	/** Already known (views, from the thread DTO); otherwise read from `enrichment`. */
 	activity?: Activity | null;
-	sources?: string[];
+	views?: string[];
 	itemCategories?: { id: string; name: string }[];
 }
 
@@ -149,7 +137,7 @@ export interface RuleMatch {
 	/** The latest activity is by a bot (true) or by a person (false). */
 	byBot?: boolean;
 	about?: string[];
-	source?: string[];
+	view?: string[];
 	itemCategory?: string[];
 	assignee?: string | string[];
 	reviewRequested?: string[];
@@ -222,11 +210,8 @@ export interface Settings {
 	/** A review request to one of your teams is "Needs you", not FYI. */
 	teamReviewsAreAction: boolean;
 	dash: DashSettings;
-	sources: DashSection[];
-	tracked: string[];
 	categoryGroups: CategoryGroup[];
-	/** Notification views: extra inbox tabs, in order. */
-	views: SavedView[];
+	views: ItemView[];
 	/** Keyboard shortcuts you changed: command id → its keys ([] turns it off). See shared/keymap.ts. */
 	keys: Record<string, string[]>;
 	/** Right-click and "⋯" menus: item ids in order (see shared/menus.ts). */
@@ -246,12 +231,16 @@ export interface DashSection {
 	id: string;
 	name: string;
 	query: string;
-	enabled: boolean;
+}
+
+export interface ItemView {
+	id: string;
+	name: string;
+	searches: string[];
+	items: string[];
 }
 
 export interface DashSettings {
-	/** Appended to every query, e.g. "org:acme archived:false". */
-	scope: string;
 	/** "org/team" slugs that `@team` must skip. */
 	excludedTeams: string[];
 	/** An item that waits longer than this is marked stale. */

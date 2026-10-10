@@ -170,7 +170,7 @@ export abstract class PollerSync extends PollerSubjects {
 		}
 		const fetched = await fetchSubjects(who.token, refs, me);
 		// Store the facts; this ingest writes these threads itself.
-		await this.record(who, [...fetched.values()], { threads: false, allAreInboxThreads: true });
+		await this.record(who, [...fetched.values()], { threads: false });
 		const decided = this.decisionsOf(who, [...fetched.values()]);
 
 		const now = Date.now();

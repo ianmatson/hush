@@ -16,8 +16,7 @@ const ITEM_PARTS: RowPart[] = [
 	{ id: 'changes', label: 'Changes since you looked' },
 	{ id: 'categories', label: 'Categories' },
 	{ id: 'categoryNames', label: 'Category names' },
-	{ id: 'labels', label: 'GitHub labels' },
-	{ id: 'sources', label: 'Sources' }
+	{ id: 'labels', label: 'GitHub labels' }
 ];
 
 const PR_ONLY_PARTS: RowPart[] = [
@@ -55,8 +54,8 @@ export const ROW_KINDS: { id: RowKind; label: string }[] = [
 export const MAX_ROW_LABELS = 2;
 
 export const DEFAULT_ROWS: RowSettings = {
-	pr: ['threads', 'categoryNames', 'labels', 'sources'],
-	issue: ['categoryNames', 'labels', 'sources'],
+	pr: ['threads', 'categoryNames', 'labels'],
+	issue: ['categoryNames', 'labels'],
 	thread: ['why', 'changes', 'categoryNames']
 };
 

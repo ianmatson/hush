@@ -33,7 +33,7 @@ export interface BuilderField {
 	placeholder?: string;
 	help?: string;
 	options?: { value: string; label: string }[];
-	suggest?: 'repo' | 'person' | 'label' | 'source' | 'category';
+	suggest?: 'repo' | 'person' | 'label' | 'view' | 'category';
 	canNegate: boolean;
 }
 
@@ -53,7 +53,7 @@ const LABELS: Record<
 	},
 	size: { label: 'Size' },
 	category: { label: 'Category', suggest: 'category' },
-	source: { label: 'Source', suggest: 'source' },
+	view: { label: 'View', suggest: 'view' },
 	about: { label: 'About (Jev decides)', placeholder: 'database migrations' },
 	type: { label: 'Type' },
 	event: { label: 'Why GitHub notified you' },

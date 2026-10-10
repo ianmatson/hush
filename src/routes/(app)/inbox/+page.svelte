@@ -13,7 +13,7 @@
 	import { fade, fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
-	import { createQueries, createQuery } from '@tanstack/svelte-query';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { api, type ActionBody, type ThreadAction } from '$lib/api';
 	import {
 		keys,
@@ -24,17 +24,13 @@
 		threadsQuery
 	} from '$lib/queries';
 	import { Selection } from '$lib/selection.svelte';
-	import type { Counts, SavedView, ThreadDTO, View, ViewBase } from '$lib/shared/types';
-	import { VIEW_BASES, threadMatches } from '$lib/shared/views';
+	import type { Counts, ThreadDTO, View } from '$lib/shared/types';
+	import { threadMatches } from '$lib/shared/views';
 	import { leavesOf, parseExpr } from '$lib/shared/query';
 	import { NEW_COMMITS_REASON } from '$lib/shared/dashboard';
 	import { conditionId, smartConditions } from '$lib/shared/decisions';
 	import { markQueries } from '$lib/shared/categories';
-	import { saveSettings } from '$lib/save-settings';
-	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
-	import Pencil from '@lucide/svelte/icons/pencil';
-	import BookmarkPlus from '@lucide/svelte/icons/bookmark-plus';
 	import { ago, snoozeOptions } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
@@ -81,7 +77,6 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import { live } from '$lib/live-state.svelte';
 	import QuerySuggest from '$lib/components/app/query-suggest.svelte';
-	import * as Tooltip from '$lib/components/ui/tooltip';
 	import Search from '@lucide/svelte/icons/search';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
@@ -109,37 +104,14 @@
 
 	const me = createQuery(meQuery);
 	const viewParam = $derived(page.url.searchParams.get('view') || 'action');
-	const savedViews = $derived(me.data?.settings.views ?? []);
-	/** The notification view on screen, when the tab is one (?view=v:<id>). */
-	const saved = $derived(
-		viewParam.startsWith('v:') ? (savedViews.find((v) => `v:${v.id}` === viewParam) ?? null) : null
-	);
-	/** The list the page shows and acts on: a built-in view, or the notification view's base. */
 	const view = $derived<View>(
-		saved ? saved.base : viewParam.startsWith('v:') ? 'action' : (viewParam as View)
+		VIEWS.some((v) => v.id === viewParam) ? (viewParam as View) : 'action'
 	);
 	let query = $state('');
 	// The Filter box searches this tab, or every thread (Needs you, FYI, Snoozed, Done, Muted).
 	let everywhere = $state(false);
 	const searching = $derived(everywhere && !!query.trim());
 	const threadsQ = createQuery(() => threadsQuery(searching ? 'all' : view));
-	// The base lists of the notification views, for their tab counts (D1 only, usually a 304).
-	const bases = $derived([...new Set(savedViews.map((v) => v.base))]);
-	const baseLists = createQueries(() => ({ queries: bases.map((b) => threadsQuery(b)) }));
-	const baseThreads = $derived(
-		Object.fromEntries(bases.map((b, k) => [b, baseLists[k]?.data?.threads])) as Partial<
-			Record<ViewBase, ThreadDTO[]>
-		>
-	);
-	// While a tab's list loads, its counts keep the last known numbers (no badges that go away).
-	const lastViewCounts: Record<string, number> = {};
-	const viewCount = (v: SavedView) => {
-		const n = baseThreads[v.base]?.filter((t) =>
-			threadMatches(v.query, t, me.data?.login ?? '', me.data?.settings)
-		).length;
-		if (n !== undefined) lastViewCounts[v.id] = n;
-		return lastViewCounts[v.id] ?? null;
-	};
 	let lastCounts: Counts = { action: 0, fyi: 0, snoozed: 0 };
 	const counts = $derived.by(() => (lastCounts = threadsQ.data?.counts ?? lastCounts));
 
@@ -147,12 +119,7 @@
 	// The Filter box speaks the query language (shared/query.ts); parts with errors are left out.
 	const filter = $derived(parseExpr(query));
 	const checkedConditionIds = $derived(
-		new Set(
-			smartConditions(
-				me.data?.settings.views ?? [],
-				me.data ? markQueries(me.data.settings) : []
-			).map((c) => c.id)
-		)
+		new Set(smartConditions(me.data ? markQueries(me.data.settings) : []).map((c) => c.id))
 	);
 	const aboutHint = $derived.by(() => {
 		const about = leavesOf(filter.expr).flatMap((w) => w.about ?? []);
@@ -160,7 +127,7 @@
 		if (!me.data?.settings.smartDecisions)
 			return 'about: needs smart decisions (Settings → Inbox).';
 		if (about.every((text) => checkedConditionIds.has(conditionId(text)))) return '';
-		return 'Jev checks about: in rules and notification views. Save this filter as a notification view to check it.';
+		return 'Jev checks about: only in category rules. Add it to a category rule to check it.';
 	});
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
@@ -175,10 +142,7 @@
 	const visible = $derived.by(() => {
 		const login = me.data?.login ?? '';
 		const listed = (threadsQ.data?.threads ?? []).filter(
-			(t) =>
-				!pending.has(t.id) &&
-				(searching || !saved || threadMatches(saved.query, t, login, me.data?.settings)) &&
-				threadMatches(query, t, login, me.data?.settings)
+			(t) => !pending.has(t.id) && threadMatches(query, t, login, me.data?.settings)
 		);
 		const heldId = peek.heldId;
 		const keepsHeldRow =
@@ -501,11 +465,6 @@
 			'inbox.notNeeded': () => t && canSayNotNeeded(t) && sayNotNeeded(t)
 		};
 		VIEWS.forEach((v, i) => (run[`inbox.view.${i + 1}`] = () => goto(`/inbox?view=${v.id}`)));
-		savedViews
-			.slice(0, 4)
-			.forEach(
-				(v, i) => (run[`inbox.view.${VIEWS.length + i + 1}`] = () => goto(`/inbox?view=v:${v.id}`))
-			);
 		const fn = run[cmd];
 		if (fn) {
 			e.preventDefault();
@@ -625,77 +584,16 @@
 	const menuFor = (ids: string[]) => inboxMenu(actions, ids);
 	$effect(() => palette.register(() => inboxCommands(actions, targets())));
 
-	// --- Notification views ------------------------------------------------------------------------
-	// Settings → Inbox links here with &edit=1 to edit a view.
-	$effect(() => {
-		if (!saved || page.url.searchParams.get('edit') !== '1') return;
-		const v = saved;
-		untrack(() => {
-			editView(v);
-			goto(`/inbox?view=v:${v.id}`, { replaceState: true, noScroll: true });
-		});
-	});
-	const tabs = $derived<ViewTab[]>([
-		...VIEWS.map((v) => ({
+	const tabs = $derived<ViewTab[]>(
+		VIEWS.map((v) => ({
 			key: v.id,
 			href: `/inbox?view=${v.id}`,
 			label: v.label,
 			count: count(v.id),
 			strong: v.id === 'action',
-			active: !saved && view === v.id
-		})),
-		...savedViews.map((v) => ({
-			key: `v:${v.id}`,
-			href: `/inbox?view=v:${v.id}`,
-			label: v.name,
-			count: viewCount(v),
-			active: saved?.id === v.id,
-			saved: true
+			active: view === v.id
 		}))
-	]);
-	let viewEditorOpen = $state(false);
-	let viewEditing = $state<Omit<SavedView, 'id'> & { id?: string }>({
-		name: '',
-		base: 'inbox',
-		query: ''
-	});
-	/** Open the editor: a view to edit, or a new one (from the current tab and filter text). */
-	function editView(v: SavedView | null, fromFilter = false) {
-		viewEditing = v
-			? structuredClone($state.snapshot(v))
-			: {
-					name: fromFilter ? query.trim().slice(0, 40) : '',
-					base:
-						view === 'action' || view === 'fyi' || view === 'snoozed' || view === 'done'
-							? view
-							: 'inbox',
-					query: fromFilter ? query.trim() : ''
-				};
-		viewEditorOpen = true;
-	}
-	async function saveView(v: Omit<SavedView, 'id'> & { id?: string }) {
-		const clean: SavedView = {
-			...v,
-			name: v.name.trim(),
-			id: v.id ?? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-		};
-		const views = v.id
-			? savedViews.map((x) => (x.id === v.id ? clean : x))
-			: [...savedViews, clean];
-		if (await saveSettings({ views }, v.id ? 'View saved' : `View “${clean.name}” added`)) {
-			viewEditorOpen = false;
-			if (!v.id) {
-				query = '';
-				goto(`/inbox?view=v:${clean.id}`);
-			}
-		}
-	}
-	async function deleteView(id: string) {
-		if (await saveSettings({ views: savedViews.filter((x) => x.id !== id) }, 'View deleted')) {
-			viewEditorOpen = false;
-			goto('/inbox?view=action');
-		}
-	}
+	);
 	const count = (v: View) => (v === 'action' || v === 'fyi' || v === 'snoozed' ? counts[v] : null);
 </script>
 
@@ -731,7 +629,7 @@
 	{/if}
 
 	<div class="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-		<ViewTabs {tabs} onnew={() => editView(null)} />
+		<ViewTabs {tabs} label="Inbox lists" />
 
 		<div class="relative min-w-0 flex-1 sm:w-48 sm:flex-none lg:w-56">
 			<Search
@@ -772,29 +670,7 @@
 					{aboutHint}
 				</p>
 			{/if}
-			<!-- Inside the box, at its right end, over the text: typing does not move anything. -->
-			{#if !saved && query.trim() && !filter.errors.length}
-				<Tooltip.Root>
-					<Tooltip.Trigger
-						class="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-						aria-label="Save this filter as a notification view"
-						onclick={() => editView(null, true)}
-					>
-						<BookmarkPlus class="size-3.5" />
-					</Tooltip.Trigger>
-					<Tooltip.Content>Save this filter as a notification view (a new tab)</Tooltip.Content>
-				</Tooltip.Root>
-			{/if}
 		</div>
-		{#if saved}
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Edit notification view {saved.name}"
-				title="Edit notification view"
-				onclick={() => editView(saved)}><Pencil /></Button
-			>
-		{/if}
 		<Button variant="ghost" size="icon-sm" aria-label="Sync now" onclick={sync} disabled={syncing}>
 			<RefreshCw class={cn(syncing && 'animate-spin')} />
 		</Button>
@@ -812,7 +688,7 @@
 	{#if query.trim()}
 		<div class="mt-3 flex items-center gap-2 px-1 text-xs" role="radiogroup" aria-label="Search">
 			<span class="text-muted-foreground">Search</span>
-			{#each [{ on: false, label: saved ? `“${saved.name}”` : 'this tab' }, { on: true, label: 'everywhere (also Done, Snoozed, Muted)' }] as o (o.label)}
+			{#each [{ on: false, label: 'this tab' }, { on: true, label: 'everywhere (also Done, Snoozed, Muted)' }] as o (o.label)}
 				<button
 					type="button"
 					role="radio"
@@ -832,10 +708,7 @@
 			>{:else if syncing || live.syncing}<span class="inline-flex items-center gap-1"
 				><RefreshCw class="size-3 animate-spin" />Syncing…</span
 			>{:else if me.data?.lastPollAt}Synced {ago(me.data.lastPollAt)}{/if}
-		{#if saved}· {VIEW_BASES.find((b) => b.id === saved.base)?.label}{saved.query
-				? `, ${saved.query}`
-				: ''}{:else if view === 'fyi'}· Activity you may want to know about, but that does not need
-			you.{/if}
+		{#if view === 'fyi'}· Activity you may want to know about, but that does not need you.{/if}
 	</p>
 
 	<!-- A new tab replaces the list at once and fades the new one in. The rows' own transitions are
@@ -1095,16 +968,6 @@
 		onpick={(b) => peekThread && act([peekThread.id], 'snooze', b)}
 	/>
 {/if}
-
-<ViewEditor
-	bind:open={viewEditorOpen}
-	initial={viewEditing}
-	threads={{ ...baseThreads, [view]: threadsQ.data?.threads }}
-	me={me.data?.login ?? ''}
-	settings={me.data?.settings}
-	onsave={saveView}
-	ondelete={viewEditing.id ? () => deleteView(viewEditing.id!) : undefined}
-/>
 
 <ShortcutsDialog
 	bind:open={helpOpen}

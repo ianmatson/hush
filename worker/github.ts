@@ -8,7 +8,7 @@ import type {
 	StackLink,
 	TeamDTO
 } from '../src/lib/shared/types';
-import { newestFirst, SOURCE_RESULTS_MAX } from '../src/lib/shared/sources';
+import { newestFirst, SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
 import { isBot } from '../src/lib/shared/classify';
 import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';

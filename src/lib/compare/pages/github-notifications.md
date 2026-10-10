@@ -19,7 +19,7 @@ description: GitHub notifications in the github.com inbox and GitHub Mobile, nex
 | Price                    | Included with GitHub                                                                      | Free in beta; planned $3 a month or $30 a year                        |
 | Open source              | No                                                                                        | Yes                                                                   |
 | Sort order               | Time (newest or oldest first)                                                             | Needs you, FYI, Muted, by whose turn it is                            |
-| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Categories, a query language, up to 12 notification views             |
+| Filters                  | `reason:`, `is:`, `repo:`, `author:`, `org:`; up to 15 custom filters                     | Categories, a query language, up to 12 views                          |
 | Push                     | GitHub Mobile: mentions, assignments, review requests, deployment approvals, Actions runs | Web Push for "Needs you" items, with quiet hours, digests, and limits |
 | Review a PR              | Yes, with the full diff (web and Mobile)                                                  | Approve, comment, merge, close, re-run CI; no diff view               |
 | GitHub Enterprise Server | Yes                                                                                       | No (github.com only)                                                  |
@@ -41,7 +41,7 @@ You can change the defaults with settings, for example whether bots are FYI, and
 
 **GitHub** is the full tool. You read the diff, comment on lines, and submit reviews on github.com and in GitHub Mobile. Since July 2026, the pull requests dashboard at github.com/pulls has an inbox of review requests, pull requests that need a fix, and pull requests that are ready to merge, with saved views and `AND`/`OR` search. It covers pull requests, not issues or other notifications.
 
-**Hush** has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by whose turn it is: Your turn, Your team's turn, Waiting on others. The [peek](/docs/peek) shows the description, comments, reviews, and checks, and lets you approve, request changes, comment, merge, close, and re-run failed jobs. It does not show the diff, and it counts inline review comments without showing them. For a real code review, Hush sends you to GitHub.
+**Hush** has [views](/docs/views) of pull requests and issues, grouped by whose turn it is: Your turn, Your team's turn, Waiting on others. The [peek](/docs/peek) shows the description, comments, reviews, and checks, and lets you approve, request changes, comment, merge, close, and re-run failed jobs. It does not show the diff, and it counts inline review comments without showing them. For a real code review, Hush sends you to GitHub.
 
 ## Push and alerts
 

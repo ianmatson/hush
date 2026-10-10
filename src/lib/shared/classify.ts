@@ -198,7 +198,7 @@ export function ruleMatches(m: RuleMatch, t: ThreadFacts, c: Classification): bo
 		const wanted = withMe(m.reviewRequested, t.me);
 		if (!requested.some((r) => matchGlobs(r, wanted))) return false;
 	}
-	if (m.source?.length && !t.sources?.some((name) => matchGlobs(name, m.source))) return false;
+	if (m.view?.length && !t.views?.some((name) => matchGlobs(name, m.view))) return false;
 	const named = (mark: { id: string; name: string }, globs: string[]) =>
 		matchGlobs(mark.id, globs) || matchGlobs(mark.name, globs);
 	if (m.itemCategory?.length && !t.itemCategories?.some((x) => named(x, m.itemCategory!)))

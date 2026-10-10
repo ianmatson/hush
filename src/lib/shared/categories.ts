@@ -192,9 +192,9 @@ export function matchesCategoryFilter(
 export function itemQueryFacts(
 	i: DashItem,
 	me: string,
-	settings: Pick<Settings, 'categoryGroups' | 'sources'>
+	settings: Pick<Settings, 'categoryGroups' | 'views'>
 ): ThreadFacts {
-	const sourceNames = new Map(settings.sources.map((s) => [s.id, s.name]));
+	const viewNames = new Map(settings.views.map((v) => [v.id, v.name]));
 	return {
 		repo: i.repo,
 		subjectType: i.kind === 'pr' ? 'PullRequest' : 'Issue',
@@ -222,7 +222,7 @@ export function itemQueryFacts(
 					at: i.lastCommentAt ?? i.updatedAt
 				}
 			: null,
-		sources: i.sections.map((id) => sourceNames.get(id) ?? id),
+		views: i.sections.map((id) => viewNames.get(id) ?? id),
 		itemCategories: allCategories(settings.categoryGroups)
 			.filter((c) => i.categories?.includes(c.id))
 			.map((c) => ({ id: c.id, name: c.name }))

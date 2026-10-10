@@ -5,16 +5,16 @@ description: Which notifications come in, how Hush sorts them, what each tab and
 
 ## What comes in
 
-Hush tracks the pull requests and issues that your [sources](/docs/pull-requests-and-issues#sources) find, and the ones that you [track by hand](/docs/pull-requests-and-issues#sources). Your GitHub notifications are a second stream of information about these items. Hush keeps only the notifications about them:
+Hush tracks the pull requests and issues of your [views](/docs/views): what their searches find, and their single items. Your GitHub notifications are a second stream of information about these items. Hush keeps only the notifications about them:
 
-- A notification about a PR or issue that no source finds, and that you do not track, does not come in.
+- A notification about a PR or issue that is in no view does not come in.
 - A notification that is not about a PR or issue does not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Hush removed the threads of this type that you had.
-- When a notification is about a PR or issue that Hush does not track yet, Hush runs your sources again (at most every 5 minutes). If a source finds the item now, the notification comes in.
-- Hush gets unread notifications again at the next sync (about every 15 minutes). Thus a notification that came before a source found its item is not lost.
+- When a notification is about a PR or issue that Hush does not track yet, Hush runs the searches of your views again (at most every 5 minutes). If a search finds the item now, the notification comes in.
+- Hush gets unread notifications again at the next sync (about every 15 minutes). Thus a notification that came before a search found its item is not lost.
 
-Hush runs your sources about every 15 minutes while it checks GitHub, also when the Pull requests and Issues tabs are not open.
+Hush runs the searches of your views about every 15 minutes while it checks GitHub, also when no view is open.
 
-When your sources stop finding a PR or issue (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more. Thus its last notifications still come in. When you change your sources, or tab settings such as hidden bots or stale days, Hush stops at once to track the items that the new sources do not find, and removes their notifications.
+When no view finds a PR or issue any more (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more. Thus its last notifications still come in. When you change your views, or settings such as hidden bots or stale days, Hush stops at once to track the items that no view finds now, and removes their notifications.
 
 ## Tabs
 
@@ -26,7 +26,7 @@ When your sources stop finding a PR or issue (for example, it was merged or clos
 | **Done**      | Threads that you (or Hush) finished.                                             |
 | **Muted**     | Threads that you muted.                                                          |
 
-After these come your [notification views](/docs/views). Keys {{key:inbox.view.1}} to {{key:inbox.view.5}} open the built-in tabs, and {{key:inbox.view.6}} to {{key:inbox.view.9}} your first four notification views.
+Keys {{key:inbox.view.1}} to {{key:inbox.view.5}} open these tabs.
 
 ## What needs you
 
@@ -58,7 +58,7 @@ Everything else is **FYI**: team mentions, repositories that you watch, merged a
 
 Turn the bot, team, and smart decisions settings on or off in **Settings → Inbox → Defaults**.
 
-The same rules make the “Your turn” group on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” on the Pull requests tab. To change where threads go, use [Doesn't need me](#doesnt-need-me), or a setting such as [`botsAreFyi`](/docs/settings#botsarefyi). Categories do not change where threads go.
+The same rules make the “Your turn” group in your [views](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” in a view. To change where threads go, use [Doesn't need me](#doesnt-need-me), or a setting such as [`botsAreFyi`](/docs/settings#botsarefyi). Categories do not change where threads go.
 
 ## Rows
 
@@ -80,7 +80,7 @@ Click a row to [peek](/docs/peek) at it.
 
 ### Since you looked
 
-Hush remembers what a pull request or issue looked like when you last looked at it: when it stays open in the peek for a moment, or when you open it on GitHub, from the inbox or from the Pull requests and Issues tabs. After that, its rows and its peek list what changed since then:
+Hush remembers what a pull request or issue looked like when you last looked at it: when it stays open in the peek for a moment, or when you open it on GitHub, from the inbox or from a view. After that, its rows and its peek list what changed since then:
 
 - New commits, new comments, and new reviews (“@alice approved”, “@bob requested changes”).
 - CI: “CI fails”, “CI passes now”, “CI running”.
@@ -102,7 +102,7 @@ Each action works on the row under the cursor, or on every selected row.
 
 After each action, a message with **Undo** shows for a few seconds.
 
-**Done is for one event; Mute is for the whole PR or issue.** Done only clears the notification: a pull request or issue has many events, so it stays on the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#actions). Mute hides it there too, until you unmute it, and **Mute** there mutes its thread here. Unmute works on both.
+**Done is for one event; Mute is for the whole PR or issue.** Done only clears the notification: a pull request or issue has many events, so it stays in your [views](/docs/pull-requests-and-issues#actions). Mute hides it there too, until you unmute it, and **Mute** there mutes its thread here. Unmute works on both.
 
 ### What comes back by itself
 
@@ -114,13 +114,13 @@ After each action, a message with **Undo** shows for a few seconds.
 
 When Hush puts a thread in Needs you and it does not need you, press {{key:inbox.notNeeded}}, or choose **Doesn't need me** at the top of the [peek](/docs/peek) or in the right-click menu. Hush asks **Why doesn't this need you?**, and each answer fixes what would have been right:
 
-| Answer                                        | What changes                                                                                                                                   |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Someone else already reviewed it**          | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.               |
-| **New commits after my review don't need me** | Sets [`newCommitsAfterReview`](/docs/settings#newcommitsafterreview) to `"never"`: new commits on a PR that you reviewed are not your turn.    |
-| **Team review requests don't need me**        | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                       |
-| **A bot opened it**                           | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                            |
-| **Only this one**                             | Moves only this thread to FYI, until it changes (a new notification). Its PR or issue also goes to Other on the Pull requests and Issues tabs. |
+| Answer                                        | What changes                                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Someone else already reviewed it**          | Sets [`reviewResolution`](/docs/settings#reviewresolution) to `"any_review"`: a review by someone else settles a review request.            |
+| **New commits after my review don't need me** | Sets [`newCommitsAfterReview`](/docs/settings#newcommitsafterreview) to `"never"`: new commits on a PR that you reviewed are not your turn. |
+| **Team review requests don't need me**        | Turns off [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction).                                                                    |
+| **A bot opened it**                           | Turns on [`botsAreFyi`](/docs/settings#botsarefyi).                                                                                         |
+| **Only this one**                             | Moves only this thread to FYI, until it changes (a new notification). Its PR or issue also goes to Other in your views.                     |
 
 Hush shows only the answers that would change something for this thread. After each one, **Undo** in the message puts everything back. A thread that you moved says “You said: doesn't need me”.
 
@@ -153,8 +153,6 @@ repo:acme/* needs:review -author:bots
 Plain words must all be in the title, the repository, or the author. Suggestions show while you type; {{key:list.search}} goes to the box. When a filter has an error, the message shows under the box, and the part with the error is left out.
 
 `category:` works here too. It matches the categories of the thread's PR or issue: `category:high-effort`.
-
-To keep a filter, choose the bookmark button at the end of the box: **Save this filter as a notification view (a new tab)**. See [Notification views](/docs/views).
 
 ### Search everywhere
 

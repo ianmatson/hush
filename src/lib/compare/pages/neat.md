@@ -36,7 +36,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, for free, wit
 
 **Neat** says it helps you "merge pull requests faster" and "nudge reviewers for stale PRs". It shows a rich preview of a comment, and you open GitHub for the review.
 
-**Hush** has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by whose turn it is, and a [peek](/docs/peek) with Approve, Request changes, Comment, Merge, Close, and Re-run failed jobs. It does not show the diff.
+**Hush** has [views](/docs/views) of pull requests and issues, grouped by whose turn it is, and a [peek](/docs/peek) with Approve, Request changes, Comment, Merge, Close, and Re-run failed jobs. It does not show the diff.
 
 ## Privacy
 

@@ -1,6 +1,5 @@
 import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
 import { placeItem } from '../../src/lib/shared/categories';
-import { TRACKED_SOURCE } from '../../src/lib/shared/sources';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
 import type { DashItem, DashResponse, ThreadFacts } from '../../src/lib/shared/types';
@@ -39,7 +38,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 	protected async record(
 		who: Who,
 		subjects: SubjectFacts[],
-		opts: { dash?: boolean; threads?: boolean; quiet?: boolean; allAreInboxThreads?: boolean } = {}
+		opts: { dash?: boolean; threads?: boolean; quiet?: boolean } = {}
 	): Promise<{ changed: number; resolved: Resolved[]; wrote: number }> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
@@ -64,7 +63,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 					now
 				);
 		});
-		await this.decideSubjects(who, subjects, { allAreInboxThreads: opts.allAreInboxThreads });
+		await this.decideSubjects(who, subjects);
 		const decided = this.decisionsOf(who, subjects);
 		if (opts.dash !== false)
 			await this.patchDashCaches(
@@ -195,9 +194,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		for (const [k, f] of this.storedSubjectFacts(missing)) facts.set(k, f);
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const pins = this.itemPins(keys);
-		const sourceNames = new Map(
-			[...who.settings.sources, TRACKED_SOURCE].map((x) => [x.id, x.name])
-		);
+		const viewNames = new Map(who.settings.views.map((v) => [v.id, v.name]));
 		return items.map((i) => {
 			const s = facts.get(i.id);
 			if (!s) return { ...i, categories: [], pinnedCategories: [] };
@@ -211,7 +208,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 				enrichment: enrichmentOf(s, who.me, d),
 				me: who.me,
 				myTeams: who.inboxTeams,
-				sources: i.sections.map((id) => sourceNames.get(id) ?? id)
+				views: i.sections.map((id) => viewNames.get(id) ?? id)
 			};
 			const placed = placeItem(
 				t,

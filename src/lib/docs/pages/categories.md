@@ -8,7 +8,7 @@ A **category** marks a pull request or issue: its effort, its area, its topic. C
 A notification shows the categories of its PR or issue. Hush does not place notifications by themselves.
 
 - Categories show on rows, in the category filter of the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories), and in [feeds](/docs/feeds).
-- Categories do not change the inbox. They do not make a thread Needs you, FYI, or Muted, and they do not change pushes. To change the inbox, see [What needs you](/docs/inbox#what-needs-you) and [Notification views](/docs/views).
+- Categories do not change the inbox. They do not make a thread Needs you, FYI, or Muted, and they do not change pushes. To change the inbox, see [What needs you](/docs/inbox#what-needs-you).
 
 ## How Hush places an item
 
@@ -47,17 +47,17 @@ You can have up to 10 groups, with up to 20 categories in each group. A category
 
 A category's rule is a [query](/docs/query-language), such as `repo:acme/website type:pr`. All of its conditions must match, and `OR` matches either side. An empty rule never matches: the category then gets items only from Jev or by hand.
 
-| Query word                     | Matches                                                          |
-| ------------------------------ | ---------------------------------------------------------------- |
-| `repo:acme/*`                  | The repository. `*` matches anything.                            |
-| `author:dependabot*`           | Who opened the PR or issue.                                      |
-| `author:bots` / `-author:bots` | The author is a bot, or a person.                                |
-| `from:alice`                   | Who did the newest activity: a comment or a review.              |
-| `label:bug`                    | Has this label (the exact name, any case).                       |
-| `type:pr`                      | What it is: pr or issue.                                         |
-| `source:"Involves you"`        | Which [source](/docs/pull-requests-and-issues#sources) found it. |
-| `size:<50`                     | Lines changed in a pull request.                                 |
-| `about:"database migrations"`  | What it is about, in your words. Jev decides.                    |
+| Query word                     | Matches                                             |
+| ------------------------------ | --------------------------------------------------- |
+| `repo:acme/*`                  | The repository. `*` matches anything.               |
+| `author:dependabot*`           | Who opened the PR or issue.                         |
+| `author:bots` / `-author:bots` | The author is a bot, or a person.                   |
+| `from:alice`                   | Who did the newest activity: a comment or a review. |
+| `label:bug`                    | Has this label (the exact name, any case).          |
+| `type:pr`                      | What it is: pr or issue.                            |
+| `view:Mine`                    | Which [view](/docs/views) has it.                   |
+| `size:<50`                     | Lines changed in a pull request.                    |
+| `about:"database migrations"`  | What it is about, in your words. Jev decides.       |
 
 Rules cannot use `category:`. They also cannot use `event:`, `needs:`, and `in:`, because these words are about notifications, and rules look only at the PR or issue. Every word and value is in the [query language](/docs/query-language) reference.
 
@@ -138,5 +138,5 @@ Each category can have an [Atom feed](/docs/feeds) of its open pull requests and
 ## Tips
 
 - Put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
-- To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter) or a [notification view](/docs/views). They can also use `category:`.
+- To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter). It can also use `category:`.
 - Give a category a description, and leave its rule empty, to let Jev fill it.

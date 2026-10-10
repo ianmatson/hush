@@ -80,7 +80,7 @@ That is all. There are no analytics, tracking, or advertising services, and no t
 ## Your browser
 
 - One cookie: your session. It is `HttpOnly` and `Secure`. It ends after 7 days with no use, or 30 days after sign-in.
-- Local storage: a copy of your lists (so that Hush opens at once); the comments that you started to write in the peek and did not send (for up to 30 days); your recent choices in the command palette; and the choices that are for this browser only: theme and mode, start page, tab counts, closed groups on the Pull requests and Issues tabs, and notes that you chose not to see again. **Sign out** clears the copy of your lists and the unsent comments.
+- Local storage: a copy of your lists (so that Hush opens at once); the comments that you started to write in the peek and did not send (for up to 30 days); your recent choices in the command palette; and the choices that are for this browser only: theme and mode, start page, tab counts, closed groups and the Pull requests or Issues choice of each view, and notes that you chose not to see again. **Sign out** clears the copy of your lists and the unsent comments.
 
 ## How long it is kept
 

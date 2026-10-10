@@ -36,7 +36,9 @@
 	} from '$lib/shared/stacks';
 	import StackStrip from './stack-strip.svelte';
 	import StackOutsideRow from './stack-outside-row.svelte';
-	import type { DashItem, DashKind, DashResponse, Turn } from '$lib/shared/types';
+	import type { DashItem, DashKind, DashResponse, ItemView, Turn } from '$lib/shared/types';
+	import { viewKinds } from '$lib/shared/item-views';
+	import { page } from '$app/state';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import type { Classification } from '$lib/shared/types';
@@ -91,7 +93,24 @@
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Undo from '@lucide/svelte/icons/undo-2';
 
-	let { kind }: { kind: DashKind } = $props();
+	let { view }: { view: ItemView } = $props();
+	const KIND_LABELS: Record<DashKind, string> = { pr: 'Pull requests', issue: 'Issues' };
+	const kindKey = (id: string) => `hush:view-kind:${id}`;
+	function readKind(v: ItemView): DashKind {
+		const allowed = viewKinds(v);
+		const asked = page.url.searchParams.get('show') ?? localStorage.getItem(kindKey(v.id));
+		return allowed.find((k) => k === asked) ?? allowed[0] ?? 'pr';
+	}
+	let kind = $state<DashKind>(readKind(untrack(() => view)));
+	$effect(() => {
+		const v = view;
+		void page.url.searchParams.get('show');
+		untrack(() => (kind = readKind(v)));
+	});
+	function showKind(k: DashKind) {
+		kind = k;
+		localStorage.setItem(kindKey(view.id), k);
+	}
 	const noun = $derived(kind === 'pr' ? 'pull requests' : 'issues');
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
@@ -102,7 +121,6 @@
 	const pageOpenedAt = Date.now();
 	const revalidatingAfterOpen = $derived(dashQ.isFetching && dashQ.dataUpdatedAt < pageOpenedAt);
 	let refreshing = $state(false);
-	let section = $state<string | null>(null);
 	let categoryFilter = $state<CategoryFilter | null>(null);
 	let query = $state('');
 	let showHidden = $state(false);
@@ -146,15 +164,13 @@
 
 	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.categories, me.data?.settings);
 
-	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
+	const inView = (i: DashItem) => i.sections.includes(view.id);
+	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed && inView(i)));
 	const categoryCount = (filter: CategoryFilter) =>
 		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
 	const hiddenParts = $derived(me.data?.settings.rows[kind] ?? []);
 
-	const sectionNames = $derived(
-		Object.fromEntries((data?.sections ?? []).map((s) => [s.id, s.name]))
-	);
-	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed).length ?? 0);
+	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
 
 	const queryExpr = $derived.by(() => {
 		if (!query.includes(':')) return null;
@@ -173,7 +189,7 @@
 			.includes(q);
 	}
 
-	const peekOwner = $derived(kind === 'pr' ? 'pulls' : 'issues');
+	const peekOwner = $derived(`view:${view.id}:${kind}`);
 	const owns = $derived(peek.owner === peekOwner);
 	let filteredBefore: DashItem[] = [];
 	const filtered = $derived.by(() => {
@@ -181,7 +197,7 @@
 		const listed = (data?.items ?? []).filter(
 			(i) =>
 				i.dismissed === showHidden &&
-				(!section || i.sections.includes(section)) &&
+				inView(i) &&
 				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups)) &&
 				(!q || matchesQuery(i, q))
 		);
@@ -288,8 +304,8 @@
 	});
 	$effect(() => {
 		const k = kind;
+		void view.id;
 		untrack(() => {
-			section = null;
 			categoryFilter = null;
 			selectedId = null;
 			sel.clear();
@@ -584,13 +600,12 @@
 	// group) and peek it.
 	$effect(() => {
 		const r = palette.peekRequest;
-		if (!r || r.page !== (kind === 'pr' ? 'pulls' : 'issues') || !data) return;
+		if (!r || r.page !== 'view' || r.view !== view.id || r.kind !== kind || !data) return;
 		const item = data.items.find((x) => x.id === r.id);
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
 			query = '';
-			section = null;
 			categoryFilter = null;
 			showHidden = !!item.dismissed;
 			sel.clear();
@@ -609,7 +624,7 @@
 			: null;
 		if (!item) return;
 		untrack(() => {
-			palette.peekRequest = { page: peekOwner, id: item.id };
+			palette.peekRequest = { page: 'view', view: view.id, kind, id: item.id };
 		});
 	});
 
@@ -617,17 +632,19 @@
 		localStorage.setItem(`hush:collapsed:${kind}`, JSON.stringify(collapsed));
 	});
 
-	const sourcePills = $derived<Pill[]>(
-		[{ id: null, name: 'All' }, ...(data?.sections ?? [])].map((s) => {
-			const count = sectionCount(s.id);
-			return { id: s.id, label: s.name, count, dim: !count };
+	const otherKindQ = createQuery(() => ({
+		...dashQuery(kind === 'pr' ? 'issue' : 'pr'),
+		enabled: viewKinds(view).length > 1
+	}));
+	const kindCount = (k: DashKind) =>
+		((k === kind ? data : otherKindQ.data)?.items ?? []).filter((i) => !i.dismissed && inView(i))
+			.length;
+	const kindPills = $derived<Pill[]>(
+		viewKinds(view).map((k) => {
+			const count = kindCount(k);
+			return { id: k, label: KIND_LABELS[k], count, dim: !count };
 		})
 	);
-
-	function sectionCount(id: string | null) {
-		return (data?.items ?? []).filter((i) => !i.dismissed && (!id || i.sections.includes(id)))
-			.length;
-	}
 
 	function setDismissed(ids: Set<string>, dismissed: boolean) {
 		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
@@ -828,7 +845,8 @@
 		const cmd = commandFor(e, ['list', 'dash']);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
-		const chips = [null, ...(data?.sections ?? []).map((s) => s.id)];
+		const views = me.data?.settings.views ?? [];
+		const kinds = viewKinds(view);
 		// Each command's keys: shared/keymap.ts (and Settings → Keybinds).
 		const run: Record<string, () => void> = {
 			'list.next': () => move(1),
@@ -851,9 +869,11 @@
 			'dash.mute': () => toggleMute(targets()),
 			'dash.notNeeded': () => i && i.turn === 'you' && !i.dismissed && sayNotNeeded(i),
 			'dash.stackUp': () => stepStack(1),
-			'dash.stackDown': () => stepStack(-1)
+			'dash.stackDown': () => stepStack(-1),
+			'dash.kind': () =>
+				kinds.length > 1 && showKind(kinds[(kinds.indexOf(kind) + 1) % kinds.length])
 		};
-		chips.slice(0, 10).forEach((id, n) => (run[`dash.section.${n}`] = () => (section = id)));
+		views.slice(0, 9).forEach((v, n) => (run[`dash.view.${n + 1}`] = () => goto(`/v/${v.id}`)));
 		const fn = run[cmd];
 		if (fn) {
 			e.preventDefault();
@@ -1007,17 +1027,14 @@
 		</div>
 	</div>
 
-	{#if data}
-		<div class="mt-3">
-			<PillRow
-				pills={sourcePills}
-				bind:value={section}
-				label="Sources"
-				toggle
-				action={{ label: 'Edit sources', href: '/settings/dashboards', icon: Pencil }}
-			/>
-		</div>
-	{/if}
+	<div class="mt-3">
+		<PillRow
+			pills={kindPills}
+			bind:value={() => kind, (k) => k && showKind(k as DashKind)}
+			label="Pull requests or issues"
+			action={{ label: `Edit ${view.name}`, href: `/settings/views#view-${view.id}`, icon: Pencil }}
+		/>
+	</div>
 
 	<p class="mt-2 mb-2 flex h-4 items-center px-1 text-xs text-muted-foreground">
 		{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
@@ -1086,9 +1103,9 @@
 			{:else if showHidden}
 				<p class="font-medium">Nothing is hidden.</p>
 			{:else}
-				<p class="font-medium">No open {noun} involve you.</p>
+				<p class="font-medium">No open {noun} in {view.name}.</p>
 				<p class="mt-1 text-sm text-muted-foreground">
-					<a class="underline" href="/settings/dashboards">Edit the sources</a> to track more.
+					<a class="underline" href="/settings/views#view-{view.id}">Edit its searches</a> to find more.
 				</p>
 			{/if}
 		</div>
@@ -1213,7 +1230,6 @@
 					marks={marksFor(first)}
 					hidden={hiddenParts}
 					checked={sel.has(first.id)}
-					{sectionNames}
 					draggable={false}
 					onopen={() => {}}
 					onhide={() => {}}
@@ -1273,8 +1289,6 @@
 			checked={sel.has(i.id)}
 			selecting={sel.size > 0}
 			draggable={!showHidden}
-			showSections={!section}
-			{sectionNames}
 			onopen={open}
 			onhide={(x) => toggleHide([x.id])}
 			onmute={(x) => toggleMute([x.id])}
@@ -1333,11 +1347,7 @@
 			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
 			changes={i.changes ?? []}
 			seenAt={i.seenAt ?? null}
-			notes={[
-				i.movedByYou && 'You moved it here, until it changes',
-				i.sections.length > 0 &&
-					`Found by: ${i.sections.map((id) => sectionNames[id] ?? id).join(', ')}`
-			]}
+			notes={[i.movedByYou && 'You moved it here, until it changes']}
 		>
 			{#snippet actions()}
 				{#if i.turn === 'you' && !i.dismissed}

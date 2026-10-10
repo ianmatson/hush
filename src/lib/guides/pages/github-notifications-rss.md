@@ -1,11 +1,11 @@
 ---
 title: How to follow GitHub notifications in an RSS or Atom reader
-description: GitHub has no documented feed for your notifications inbox. Use the Atom feeds for releases and commits, the REST API, or a private Hush feed of your Needs you list, FYI, or a notification view.
+description: GitHub has no documented feed for your notifications inbox. Use the Atom feeds for releases and commits, the REST API, or a private Hush feed of your Needs you list, FYI, or a view.
 ---
 
 ## Short answer
 
-**GitHub does not give your notifications inbox an RSS or Atom feed. It has unsupported Atom feeds for public activity, such as `https://github.com/OWNER/REPO/releases.atom`, and a REST API for notifications. Hush gives each inbox tab and each notification view a private Atom feed that you can paste into any feed reader.**
+**GitHub does not give your notifications inbox an RSS or Atom feed. It has unsupported Atom feeds for public activity, such as `https://github.com/OWNER/REPO/releases.atom`, and a REST API for notifications. Hush gives each inbox tab and each view a private Atom feed that you can paste into any feed reader.**
 
 ## What GitHub has
 
@@ -29,9 +29,9 @@ The notifications API (`GET /notifications`) lists your notification threads. A 
 
 ## Get a feed of your notifications with Hush
 
-Hush can make a private Atom feed of any inbox tab: **Needs you**, **FYI**, **Needs you + FYI**, or one of your [notification views](/docs/views).
+Hush can make a private Atom feed of an inbox tab: **Needs you**, **FYI**, or **Needs you + FYI**. Each of your [views](/docs/views) can have a feed too.
 
-Hush keeps only the notifications about the pull requests and issues that your [sources](/docs/pull-requests-and-issues#sources) find. Releases and CI runs do not come in, so use GitHub's feeds for them.
+Hush keeps only the notifications about the pull requests and issues of your [views](/docs/views). Releases and CI runs do not come in, so use GitHub's feeds for them.
 
 1. Sign in at [app.hush-gh.com](https://app.hush-gh.com).
 2. Go to **Settings → Inbox → Views and feeds**.
@@ -53,23 +53,28 @@ The feed has the threads that are in the tab now, newest first. A thread that yo
 
 ### A feed for one topic
 
-Make a notification view, then make a feed of it. For example, a view of the review requests in one repository, and a view of the notifications about items with high effort:
+Make a [view](/docs/views), then make a feed of it in **Settings → Views**. For example, a view of the open review requests in one repository:
 
 ```json settings
 {
 	"views": [
 		{
-			"id": "webreviews",
-			"name": "Web reviews",
-			"base": "action",
-			"query": "repo:acme/web needs:review"
+			"id": "mine",
+			"name": "Mine",
+			"searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"],
+			"items": []
 		},
-		{ "id": "big", "name": "Big work", "base": "inbox", "query": "category:high-effort" }
+		{
+			"id": "web-reviews",
+			"name": "Web reviews",
+			"searches": ["repo:acme/web is:pr is:open review-requested:@me"],
+			"items": []
+		}
 	]
 }
 ```
 
-The feed of a view stops working when you delete the view.
+The feed of a view has its open pull requests and issues, newest update first. It stops working when you delete the view.
 
 ### A feed of open pull requests and issues
 
@@ -98,7 +103,7 @@ Each [category](/docs/categories) can have a feed too, in **Settings → Categor
 ## When to use what
 
 - **Releases of projects that you use:** GitHub's `releases.atom`. It needs no account.
-- **Your own notifications, sorted, in a reader:** a Hush feed of Needs you or a notification view.
+- **Your own notifications, sorted, in a reader:** a Hush feed of Needs you, or of a view.
 - **Open pull requests and issues of one kind, in a reader:** a Hush feed of a category.
 - **Push to your phone in place of a reader:** see [push notifications for review requests and CI](/guides/github-push-notifications).
 

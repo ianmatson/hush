@@ -1,5 +1,5 @@
 import { DEFAULT_DASH } from './dashboard';
-import { DEFAULT_SOURCES, upgradeSources } from './sources';
+import { DEFAULT_VIEWS, validateViews } from './item-views';
 import { DEFAULT_CATEGORY_GROUPS } from './categories';
 import { DEFAULT_MENUS, upgradeMenus } from './menus';
 import { DEFAULT_SWIPE } from './swipe';
@@ -29,10 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	botsAreFyi: true,
 	teamReviewsAreAction: false,
 	dash: DEFAULT_DASH,
-	sources: DEFAULT_SOURCES,
-	tracked: [],
 	categoryGroups: DEFAULT_CATEGORY_GROUPS,
-	views: [],
+	views: DEFAULT_VIEWS,
 	menus: DEFAULT_MENUS,
 	keys: {},
 	swipe: DEFAULT_SWIPE,
@@ -52,7 +50,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 		return {
 			...DEFAULT_SETTINGS,
 			...raw,
-			sources: upgradeSources(raw.sources ?? DEFAULT_SOURCES),
+			views: validateViews(raw.views) ? DEFAULT_VIEWS : raw.views!,
 			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
 			swipe: {

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { SavedView, ThreadDTO } from './types';
+import type { ThreadDTO } from './types';
 import {
 	categoryFeedView,
 	feedViewOk,
 	parseCategoryFeed,
+	parseViewFeed,
 	threadMatches,
-	validateViews,
+	viewFeedView,
 	type MarkNames
 } from './views';
 
@@ -40,15 +41,7 @@ const t = (over: Partial<ThreadDTO> = {}): ThreadDTO =>
 		...over
 	}) as ThreadDTO;
 
-const view = (over: Partial<SavedView> = {}): SavedView => ({
-	id: 'v1',
-	name: 'CI',
-	base: 'inbox',
-	query: '',
-	...over
-});
-
-describe('notification views', () => {
+describe('threadMatches', () => {
 	it('match on the categories of the thread’s PR or issue', () => {
 		const marks: MarkNames = {
 			categoryGroups: [
@@ -92,29 +85,17 @@ describe('notification views', () => {
 		expect(threadMatches({ label: ['docs'] }, t({ labels: ['docs'] }), 'ian')).toBe(true);
 		expect(threadMatches({ bot: true }, t({ authorIsBot: true }), 'ian')).toBe(true);
 	});
-
-	it('refuses bad views', () => {
-		expect(validateViews([view()])).toBeNull();
-		expect(validateViews([view({ name: ' ' })])).toMatch(/name/);
-		expect(validateViews([view({ base: 'muted' as never })])).toMatch(/base/);
-		expect(validateViews([view(), view()])).toMatch(/same id/);
-		expect(validateViews([view({ query: 'nope:1' })])).toMatch(/nope/);
-		expect(validateViews([view({ query: { repo: 'x' } as never })])).toMatch(/must be a query/);
-	});
 });
 
 describe('feeds', () => {
-	it('exist for tabs, saved views, and categories', () => {
+	it('exist for inbox tabs, views, and categories', () => {
 		expect(feedViewOk('action')).toBe(true);
-		expect(feedViewOk('v:abc')).toBe(true);
+		expect(viewFeedView('posthog-com')).toBe('v:posthog-com');
+		expect(parseViewFeed('v:posthog-com')).toBe('posthog-com');
+		expect(feedViewOk('v:posthog-com')).toBe(true);
 		expect(categoryFeedView('needs-decision')).toBe('c:needs-decision');
 		expect(parseCategoryFeed('c:needs-decision')).toBe('needs-decision');
 		expect(feedViewOk('c:bugs')).toBe(true);
 		expect(feedViewOk('t:bugs')).toBe(false);
-	});
-
-	it('allow category: in notification views', () => {
-		const view = { id: 'a', name: 'A', base: 'inbox', query: 'category:blocked' } as SavedView;
-		expect(validateViews([view])).toBeNull();
 	});
 });

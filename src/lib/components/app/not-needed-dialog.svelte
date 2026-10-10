@@ -56,7 +56,7 @@
 			out.push({
 				id: 'team',
 				label: 'Team review requests don’t need me',
-				effect: 'Review requests to your teams are FYI (they stay on the Pull requests tab).'
+				effect: 'Review requests to your teams are FYI (they stay in your views).'
 			});
 		if (t.bot && !settings.botsAreFyi)
 			out.push({

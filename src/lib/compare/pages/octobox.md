@@ -18,7 +18,7 @@ description: Octobox and Hush are both web apps for GitHub notifications. Octobo
 | Price                | Free for open source; enhanced data for private repos from $10 per user per month         | Free in beta; planned $3 a month or $30 a year              |
 | Open source          | Yes (AGPL-3.0)                                                                            | Yes                                                         |
 | Sort order           | Time, with search and filters                                                             | Needs you, FYI, Muted, by whose turn it is                  |
-| Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | Categories, a query language, notification views            |
+| Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | Categories, a query language, views                         |
 | Push alerts          | Not documented                                                                            | Web Push, quiet hours, digests, limits                      |
 | Pull request actions | Comment from the thread view (beta)                                                       | Approve, request changes, comment, merge, close, re-run CI  |
 | GitHub Enterprise    | Yes, when self-hosted                                                                     | No (github.com only)                                        |
@@ -37,7 +37,7 @@ Both apps bring a finished thread back when there is new activity, and in both, 
 
 **Octobox** has a thread view, in public beta, that shows the comments of a notification inside Octobox. You can post a comment from it. Approve and merge are not documented.
 
-**Hush** has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by Your turn, Your team's turn, and Waiting on others, also for items with no notification. The [peek](/docs/peek) shows the description, comments, reviews, and checks, with Approve, Request changes, Comment, Merge, Close, and Re-run failed jobs. Hush does not show the diff.
+**Hush** has [views](/docs/views) of pull requests and issues, grouped by Your turn, Your team's turn, and Waiting on others, also for items with no notification. The [peek](/docs/peek) shows the description, comments, reviews, and checks, with Approve, Request changes, Comment, Merge, Close, and Re-run failed jobs. Hush does not show the diff.
 
 ## Alerts
 

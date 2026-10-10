@@ -31,11 +31,11 @@ export const NAV: { group: string; pages: string[] }[] = [
 	{ group: 'Start', pages: ['', 'getting-started', 'github-access'] },
 	{
 		group: 'Use Hush',
-		pages: ['inbox', 'pull-requests-and-issues', 'peek', 'notifications', 'feeds']
+		pages: ['views', 'pull-requests-and-issues', 'inbox', 'peek', 'notifications', 'feeds']
 	},
 	{
 		group: 'Make it yours',
-		pages: ['categories', 'views', 'query-language', 'keybinds', 'appearance-and-menus']
+		pages: ['categories', 'query-language', 'keybinds', 'appearance-and-menus']
 	},
 	{ group: 'Reference', pages: ['settings', 'limits', 'agents', 'troubleshooting'] }
 ];

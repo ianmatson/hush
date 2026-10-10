@@ -47,7 +47,7 @@ export function cachedThreads(): ThreadDTO[] {
 export function previewItems(
 	query: string,
 	me: string,
-	settings: Pick<Settings, 'categoryGroups' | 'sources'>,
+	settings: Pick<Settings, 'categoryGroups' | 'views'>,
 	items: DashItem[] = cachedItems()
 ): RulePreview | null {
 	if (!query.trim() || parseExpr(query).errors.length || !items.length) return null;
@@ -93,7 +93,7 @@ const uniq = (xs: (string | null | undefined)[]) =>
 	[...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
 
 export function ruleSuggestions(
-	settings: Pick<Settings, 'categoryGroups' | 'sources'> | undefined
+	settings: Pick<Settings, 'categoryGroups' | 'views'> | undefined
 ): Partial<Record<NonNullable<BuilderField['suggest']>, string[]>> {
 	const items = cachedItems();
 	const threads = cachedThreads();
@@ -109,7 +109,7 @@ export function ruleSuggestions(
 			...items.flatMap((i) => i.labels.map((l) => l.name)),
 			...threads.flatMap((t) => t.labels)
 		]),
-		source: uniq(settings?.sources.map((s) => s.name) ?? []),
+		view: uniq(settings?.views.map((v) => v.name) ?? []),
 		category: uniq(allCategories(settings?.categoryGroups ?? []).map((c) => c.name))
 	};
 }

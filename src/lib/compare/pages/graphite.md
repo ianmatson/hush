@@ -24,13 +24,13 @@ description: Graphite's pull request inbox next to Hush for GitHub notifications
 | Code review              | Full diff, comments, approve, merge, stacks, merge queue (Team plan and up), AI review                               | Approve, comment, merge, close, re-run CI; no diff                    |
 | Alerts                   | In-app; Slack (Starter plan and up)                                                                                  | Web Push with quiet hours and digests; Atom feeds                     |
 | GitHub Enterprise Server | Enterprise plan only                                                                                                 | No                                                                    |
-| Team features            | Insights, automations, shared inbox sections, ACLs, SAML (by plan)                                                   | Team review requests and `@team` sources only                         |
+| Team features            | Insights, automations, shared inbox sections, ACLs, SAML (by plan)                                                   | Team review requests and `@team` searches only                        |
 
 ## What each one is for
 
 **Graphite** replaces much of the GitHub pull request page. Its inbox lists the pull requests in your default repositories (up to 3 on the free plan, up to 30 on Team and Enterprise) in sections you can change and share with teammates. Its review page shows the diff, and you can comment, approve, and merge. It adds stacked pull requests through its CLI, a merge queue, automations, and AI review. Graphite does not document issues, discussions, releases, or other GitHub notifications in its inbox.
 
-**Hush** is about the notification inbox. It tracks the pull requests and issues that your saved GitHub searches find, reads your notifications about them and the facts of each item, and decides if you are the next person who must act. It has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by whose turn it is, across all repositories it can see. The [peek](/docs/peek) lets you approve, request changes, comment, merge, close, and re-run failed jobs, but you read the code on GitHub.
+**Hush** is about the notification inbox. It tracks the pull requests and issues that your saved GitHub searches find, reads your notifications about them and the facts of each item, and decides if you are the next person who must act. It has [views](/docs/views) of pull requests and issues, grouped by whose turn it is, across all repositories it can see. The [peek](/docs/peek) lets you approve, request changes, comment, merge, close, and re-run failed jobs, but you read the code on GitHub.
 
 ## Alerts
 

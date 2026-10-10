@@ -62,7 +62,7 @@ export const persistOptions = {
 			q.state.status === 'success' && !MEMORY_ONLY_KEYS.has(String(q.queryKey[0]))
 	},
 	// Change this when a cached shape changes, to drop old caches.
-	buster: 'v2'
+	buster: 'v3'
 };
 
 export const keys = {

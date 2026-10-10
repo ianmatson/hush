@@ -158,8 +158,7 @@ export const api = {
 			})
 		);
 	},
-	countSource: (q: string, scope: string) =>
-		ok(client.api.sources.count.$get({ query: { q, scope } })),
+	countSearch: (q: string) => ok(client.api.searches.count.$get({ query: { q } })),
 	dashboard: (kind: DashKind, refresh = false) =>
 		ok(
 			client.api.dashboard[':kind'].$get({

@@ -19,7 +19,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 | Open source              | Yes (MIT)                                                                                     | Yes                                                                 |
 | Where your data is       | On your computer; token in the OS keychain                                                    | On Hush's servers; token encrypted                                  |
 | Sort order               | GitHub's reasons, with filters; group by repository or date                                   | Needs you, FYI, Muted, by whose turn it is                          |
-| Filters                  | Reason, type, state, user type (bots), review request type, account, `author:`/`org:`/`repo:` | Categories, a query language, notification views                    |
+| Filters                  | Reason, type, state, user type (bots), review request type, account, `author:`/`org:`/`repo:` | Categories, a query language, views                                 |
 | Alerts                   | Native desktop notifications, sound, unread count in the tray                                 | Web Push on desktop and phone, quiet hours, digests                 |
 | Actions                  | Mark read, mark done, unsubscribe, open on GitHub                                             | Done, snooze, mute, read; approve, comment, merge, close, re-run CI |
 | Several accounts         | Yes                                                                                           | No                                                                  |
@@ -38,7 +38,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 
 **Gitify** has no review or comment features. You open the thread on GitHub to act. It can mark a thread done when you open it.
 
-**Hush** has [Pull requests and Issues tabs](/docs/pull-requests-and-issues) grouped by whose turn it is, and a [peek](/docs/peek) where you read the description, comments, reviews, and checks, then approve, request changes, comment, merge, close, or re-run failed jobs. Hush does not show the diff.
+**Hush** has [views](/docs/views) of pull requests and issues, grouped by whose turn it is, and a [peek](/docs/peek) where you read the description, comments, reviews, and checks, then approve, request changes, comment, merge, close, or re-run failed jobs. Hush does not show the diff.
 
 ## Alerts
 
@@ -65,7 +65,7 @@ description: Gitify and Hush both help with GitHub notifications. Gitify is a fr
 - It moves threads to Done by itself when they stop needing you.
 - Approve, comment, and merge without leaving the list.
 - Push to your phone, with quiet hours and digests; it keeps checking when your computer sleeps.
-- Categories, snoozes, notification views, and Atom feeds.
+- Categories, snoozes, views, and Atom feeds.
 
 ## Choose Gitify if…
 

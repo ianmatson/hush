@@ -7,7 +7,7 @@ import {
 	statusColor,
 	statusName
 } from './projects';
-import { searchIsUnscoped, sectionsFor } from './sources';
+import { searchIsUnscoped, sectionsFor } from './item-views';
 
 describe('boardQueryOf', () => {
 	it('reads a board when the search names a project and a status', () => {
@@ -32,11 +32,11 @@ describe('boardQueryOf', () => {
 	});
 });
 
-describe('expandSections with a board source', () => {
-	it('does not add the search scope to the board filter', () => {
+describe('expandSections with a board search', () => {
+	it('does not add archived:false to the board filter', () => {
 		const sections = sectionsFor('issue', [
-			{ id: 'board', name: 'Board', query: 'project:acme/7 status:Todo', enabled: true },
-			{ id: 'mine', name: 'Mine', query: 'is:open assignee:@me', enabled: true }
+			{ id: 'board', name: 'Board', searches: ['project:acme/7 status:Todo'], items: [] },
+			{ id: 'mine', name: 'Mine', searches: ['is:open assignee:@me'], items: [] }
 		]);
 		const { queries } = expandSections(sections, DEFAULT_DASH, []);
 		expect(queries.map((q) => q.q)).toEqual([

@@ -45,7 +45,7 @@ description: gh-hush is a GitHub CLI extension that clears GitHub notifications 
 - It runs all the time and sorts each new notification as it comes, not only when you run a command.
 - It decides who must act next from CI, reviews, and comments.
 - Push alerts on desktop and phone.
-- Snooze, notification views, feeds, and pull request actions.
+- Snooze, views, feeds, and pull request actions.
 - Read notifications are sorted too, not only unread ones.
 
 ## Choose gh-hush if…

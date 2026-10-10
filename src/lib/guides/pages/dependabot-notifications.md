@@ -67,7 +67,7 @@ Hush treats bots differently by default, with [`botsAreFyi`](/docs/settings#bots
 
 - Pull requests that bots open are **FYI**, unless they ask for your review by name.
 - Comments and mentions by bots do not count as replies to you.
-- On the [Pull requests tab](/docs/pull-requests-and-issues), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name or the pull request is assigned to you. Hush then does not track them, so their notifications do not come in to the inbox either. Turn off **Hide PRs and issues that bots opened** in **Settings → Sources** to get them.
+- In your [views](/docs/views), bot pull requests are left out ([`dash.hideBots`](/docs/settings#dash-hidebots)), unless your review is requested by name or the pull request is assigned to you. Hush then does not track them, so their notifications do not come in to the inbox either. Turn off **Hide PRs and issues that bots opened** in **Settings → Views** to get them.
 
 A bot is a login that ends in `[bot]`, or that starts with dependabot, renovate, github-actions, or codecov.
 
@@ -79,7 +79,7 @@ To keep bot pull requests out of Needs you, keep `botsAreFyi` on:
 { "botsAreFyi": true }
 ```
 
-- To see bot activity in one place, make a [notification view](/docs/views) with `from:bots`, or leave bots out of a view with `-author:bots`. `author:dependabot*` matches the login `dependabot[bot]`: `author:` matches who opened a pull request or issue.
+- To see bot activity in one place, type `from:bots` in the inbox [Filter box](/docs/inbox#filter), or leave bots out with `-author:bots`. `author:dependabot*` matches the login `dependabot[bot]`: `author:` matches who opened a pull request or issue.
 - To stop one thread, choose **Mute** on it: Hush also unsubscribes you on GitHub.
 - A [category](/docs/categories) with the rule `author:dependabot*` marks Dependabot pull requests on their rows, and gives them a filter and a feed. Categories do not change the inbox: they do not make a thread FYI or Muted.
 

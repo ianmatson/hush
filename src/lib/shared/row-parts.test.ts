@@ -13,7 +13,7 @@ import { parseSettings } from './settings';
 
 describe('row contents', () => {
 	it('keep the parts that say what to do next by default', () => {
-		for (const part of ['sources', 'labels', 'threads'])
+		for (const part of ['labels', 'threads'])
 			expect(rowShows(DEFAULT_ROWS, 'pr', part)).toBe(false);
 		for (const part of ['size', 'comments', 'ci', 'review', 'conflicts', 'categories'])
 			expect(rowShows(DEFAULT_ROWS, 'pr', part)).toBe(true);

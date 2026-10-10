@@ -15,10 +15,10 @@
     ]
   }],
   "views": [
-    { "id": "docs", "name": "Docs reviews",
-      "base": "action", "query": "label:docs" }
+    { "id": "website", "name": "Website",
+      "searches": ["repo:PostHog/posthog.com is:open"], "items": [] }
   ],
-  "dash": { "scope": "org:PostHog", "staleDays": 5 },
+  "dash": { "staleDays": 5 },
   "keys": { "inbox.done": ["d"] },
   "swipe": { "inbox": { "right": "done" } }
 }`;

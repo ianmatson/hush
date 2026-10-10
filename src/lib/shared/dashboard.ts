@@ -12,7 +12,6 @@ import type {
 } from './types';
 
 export const DEFAULT_DASH: DashSettings = {
-	scope: 'archived:false',
 	excludedTeams: [],
 	staleDays: 3,
 	hideOthersDrafts: true,
@@ -38,20 +37,22 @@ export interface ExpandedQuery {
  */
 const TEAM_REVIEW = /\bteam-review-requested:@team\b/g;
 const REVIEW_REQUESTED_ME = /(?<![\w-])review-requested:@me\b/;
+const NAMES_ARCHIVED = /(?:^|\s)-?archived:/i;
+
+const withoutArchivedRepos = (query: string) =>
+	readsBoard(query) || NAMES_ARCHIVED.test(query) ? query : `${query} archived:false`;
 
 /** Turn saved sections into concrete GitHub search strings. */
 export function expandSections(
 	sections: DashSection[],
-	dash: Pick<DashSettings, 'scope' | 'excludedTeams'>,
+	dash: Pick<DashSettings, 'excludedTeams'>,
 	teams: TeamDTO[]
 ): { queries: ExpandedQuery[]; skipped: Record<string, string> } {
 	const tracked = teams.filter((t) => !dash.excludedTeams.includes(t.slug));
 	const queries: ExpandedQuery[] = [];
 	const skipped: Record<string, string> = {};
 	for (const s of sections) {
-		if (!s.enabled) continue;
-		const scope = readsBoard(s.query) ? '' : dash.scope.trim();
-		const q = [s.query.trim(), scope].filter(Boolean).join(' ');
+		const q = withoutArchivedRepos(s.query.trim());
 		if (REVIEW_REQUESTED_ME.test(q) && dash.excludedTeams.length && !q.includes('@team')) {
 			queries.push({ section: s.id, q, teams: tracked.map((t) => t.slug), orDirect: true });
 			continue;
@@ -536,8 +537,6 @@ export function orderAfterDrop(full: string[], visible: string[], moved: string[
 export function validateDash(d: unknown): string | null {
 	if (typeof d !== 'object' || d === null) return 'Dashboard settings must be an object.';
 	const x = d as Partial<DashSettings>;
-	if (x.scope !== undefined && (typeof x.scope !== 'string' || x.scope.length > 200))
-		return 'Scope must be 200 characters or fewer.';
 	if (
 		x.excludedTeams !== undefined &&
 		(!Array.isArray(x.excludedTeams) || x.excludedTeams.some((t) => typeof t !== 'string'))

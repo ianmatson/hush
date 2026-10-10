@@ -1,6 +1,6 @@
 ---
 title: Limits, timing, and data
-description: How often Hush checks GitHub, what it stores, how long it keeps it, and the limits on views, sources, categories, and devices.
+description: How often Hush checks GitHub, what it stores, how long it keeps it, and the limits on views, categories, and devices.
 ---
 
 ## Timing and limits
@@ -11,7 +11,7 @@ Hush checks more often while you use it, because a check costs GitHub requests a
 
 ## What Hush sees
 
-Hush sees the pull requests and issues that your sources find or that you track, their facts, and what GitHub puts in your notifications about them. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); the inbox watcher finds those within 15 minutes, and the dashboards on their next search.
+Hush sees the pull requests and issues of your views, their facts, and what GitHub puts in your notifications about them. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); the inbox watcher finds those within 15 minutes, and your views on their next search.
 
 ## What Hush stores
 

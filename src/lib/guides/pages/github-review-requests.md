@@ -63,13 +63,13 @@ GitHub's searches know who was asked. They do not know if the request still wait
 
 When you approve or request changes, Hush moves the thread to **Done** by itself. See [what needs you](/docs/inbox#what-needs-you).
 
-Team requests are **FYI** by default. On the [Pull requests tab](/docs/pull-requests-and-issues), they are in their own group, **Your team's turn**. You can change this:
+Team requests are **FYI** by default. In your [views](/docs/pull-requests-and-issues), they are in their own group, **Your team's turn**. You can change this:
 
 - [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests go to Needs you, and push.
 - [`reviewResolution`](/docs/settings#reviewresolution) `"any_review"`: a review by someone else settles a request. Use it on teams where one review is enough.
 - [`dash.excludedTeams`](/docs/settings#dash-excludedteams): leave out big teams, such as "everyone".
 
-A [notification view](/docs/views) with only review requests from people, and the settings above:
+A [view](/docs/views) with only your review requests, next to the default Mine view, and the settings above:
 
 ```json settings
 {
@@ -77,7 +77,18 @@ A [notification view](/docs/views) with only review requests from people, and th
 	"reviewResolution": "any_review",
 	"dash": { "excludedTeams": ["acme/everyone"] },
 	"views": [
-		{ "id": "reviews", "name": "Reviews", "base": "action", "query": "needs:review -author:bots" }
+		{
+			"id": "mine",
+			"name": "Mine",
+			"searches": ["is:open involves:@me", "is:pr is:open reviewed-by:@me -author:@me"],
+			"items": []
+		},
+		{
+			"id": "reviews",
+			"name": "Reviews",
+			"searches": ["is:pr is:open user-review-requested:@me"],
+			"items": []
+		}
 	]
 }
 ```

@@ -93,8 +93,8 @@
 			<span>
 				<span class="font-medium">Review requests to my teams need me</span>
 				<span class="block text-xs text-muted-foreground"
-					>Off: they are FYI, and show under “Your team's turn” on the Pull requests tab. Most
-					people with big teams leave this off.</span
+					>Off: they are FYI, and show under “Your team's turn” in your views. Most people with big
+					teams leave this off.</span
 				>
 			</span>
 		</label>

@@ -6,8 +6,8 @@ export type Shortcut = [keys: string, does: string];
 
 /** Numbered commands (views, sections) show as one line: "1 – 9". */
 const NUMBERED: Record<string, string> = {
-	'inbox.view': 'Change view (6 – 9: your notification views)',
-	'dash.section': 'All, or one section'
+	'inbox.view': 'Change inbox list',
+	'dash.view': 'Open a view'
 };
 
 /** Mouse actions next to the keys (not keyboard shortcuts, so not editable). */

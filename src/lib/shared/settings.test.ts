@@ -26,33 +26,14 @@ describe('settings file', () => {
 	});
 
 	it('refuses other files', () => {
-		expect(settingsFromFile('{"hush":1,"settings":{"pushFyi":true,"nope":1}}')).toEqual({
+		expect(settingsFromFile('{"hush":2,"settings":{"pushFyi":true,"nope":1}}')).toEqual({
 			pushFyi: true
 		});
 		expect(settingsFromFile('nope')).toMatch(/not JSON/);
 		expect(settingsFromFile('{"rules":[]}')).toMatch(/not a Hush settings file/);
-		expect(settingsFromFile('{"hush":1,"settings":{}}')).toMatch(/no settings/);
+		expect(settingsFromFile('{"hush":2,"settings":{}}')).toMatch(/no settings/);
+		expect(settingsFromFile('{"hush":1,"settings":{"pushFyi":true}}')).toMatch(/older Hush/);
 		expect(settingsFromFile('{"hush":3,"settings":{"pushFyi":true}}')).toMatch(/newer Hush/);
-	});
-
-	it('reads a version 1 file: JSON conditions become query text', () => {
-		const v1 = {
-			hush: 1,
-			settings: {
-				rules: [
-					{
-						name: 'Docs',
-						when: { repo: 'acme/website', label: ['docs'] },
-						then: { category: 'fyi' }
-					}
-				],
-				views: [{ id: 'web', name: 'Web', base: 'inbox', when: { repo: 'acme/web-*' } }]
-			}
-		};
-		const patch = settingsFromFile(JSON.stringify(v1));
-		expect(patch).toMatchObject({
-			views: [{ id: 'web', name: 'Web', base: 'inbox', query: 'repo:acme/web-*' }]
-		});
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
@@ -75,7 +56,7 @@ describe('settings schema', () => {
 
 	it('keeps the rest of a group', () => {
 		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } as never });
-		expect(s.dash.scope).toEqual(DEFAULT_SETTINGS.dash.scope);
+		expect(s.dash.staleDays).toEqual(DEFAULT_SETTINGS.dash.staleDays);
 		expect(settingsOverrides(s)).toEqual({ dash: { hideBots: false } });
 	});
 
@@ -90,9 +71,7 @@ describe('settings schema', () => {
 		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
 		expect(check({ newCommitsAfterReview: 'changes_requested' })).toBeNull();
 		expect(check({ newCommitsAfterReview: 'x' })).toMatch(/changes_requested/);
-		expect(check({ views: [{ id: 'a', name: 'A', base: 'inbox', query: 'repo:' }] })).toMatch(
-			/"A"/
-		);
+		expect(check({ views: [{ id: 'a', name: 'A', searches: [], items: [] }] })).toMatch(/"A"/);
 		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
 		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toBeNull();
 	});

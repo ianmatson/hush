@@ -1,5 +1,6 @@
 import type { DashKind, Turn } from '../../src/lib/shared/types';
 import type { CategoryPin } from '../../src/lib/shared/categories';
+import { MAX_SEARCH_CHARS } from '../../src/lib/shared/item-views';
 import { routes, poller, json, query } from '../app';
 
 const TURNS = new Set<Turn>(['you', 'team', 'them', 'none']);
@@ -34,13 +35,12 @@ const app = routes()
 		const u = c.get('user');
 		return c.json(await poller(c.env, u.id).teams(c.req.query('refresh') === '1'));
 	})
-	.get('/api/sources/count', query<{ q: string; scope: string }>(), async (c) => {
+	.get('/api/searches/count', query<{ q: string }>(), async (c) => {
 		const q = c.req.query('q') ?? '';
-		const scope = c.req.query('scope') ?? '';
-		if (!q.trim() || q.length > 256 || scope.length > 200)
-			return c.json({ error: 'The search must have 1–256 characters.' }, 400);
+		if (!q.trim() || q.length > MAX_SEARCH_CHARS)
+			return c.json({ error: `The search must have 1–${MAX_SEARCH_CHARS} characters.` }, 400);
 		try {
-			return c.json(await poller(c.env, c.get('user').id).countSource(q, scope));
+			return c.json(await poller(c.env, c.get('user').id).countSource(q));
 		} catch (err) {
 			return c.json({ error: (err as Error).message }, 502);
 		}

@@ -2,17 +2,12 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { feedsQuery, meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import type { SavedView } from '$lib/shared/types';
-	import { FEED_TABS, VIEW_BASES } from '$lib/shared/views';
+	import { FEED_TABS } from '$lib/shared/views';
 	import {
 		NEW_COMMITS_AFTER_REVIEW_OPTIONS,
 		type NewCommitsAfterReview
 	} from '$lib/shared/dashboard';
 	import * as Select from '$lib/components/ui/select';
-	import SortableList from '$lib/components/app/sortable-list.svelte';
-	import Pencil from '@lucide/svelte/icons/pencil';
-	import Trash from '@lucide/svelte/icons/trash-2';
-	import { Button } from '$lib/components/ui/button';
 	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
 	import * as Card from '$lib/components/ui/card';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
@@ -33,14 +28,6 @@
 	const newCommitsLabel = $derived(
 		NEW_COMMITS_AFTER_REVIEW_OPTIONS.find((o) => o.id === settings?.newCommitsAfterReview)?.label
 	);
-
-	// Notification views, for reordering here (they are made and edited on the inbox).
-	const viewRows = $derived((settings?.views ?? []).map((view) => ({ key: view.id, view })));
-	function describeView(v: SavedView) {
-		return [VIEW_BASES.find((b) => b.id === v.base)?.label, v.query || null]
-			.filter(Boolean)
-			.join(', ');
-	}
 </script>
 
 <svelte:head><title>Inbox · Settings · Hush</title></svelte:head>
@@ -117,18 +104,16 @@
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root id="views">
+		<Card.Root id="feeds">
 			<Card.Header>
-				<Card.Title>Views and feeds</Card.Title>
+				<Card.Title>Feeds</Card.Title>
 				<Card.Description
-					>Notification views are extra inbox tabs, in this order. Make one with “+” after the tabs,
-					or “Save as view” next to the filter. <Rss class="inline size-3.5" /> makes an Atom feed of
-					a tab, for any feed reader.</Card.Description
+					><Rss class="inline size-3.5" /> makes an Atom feed of an inbox tab, for any feed reader. Each
+					view has a feed too, in Settings → Views.</Card.Description
 				>
 			</Card.Header>
-			<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
-				<p class="text-xs font-medium text-muted-foreground">Built-in tabs</p>
-				<ul class="-mt-1.5 grid gap-1 rounded-lg border p-1 text-sm" aria-label="Built-in tabs">
+			<Card.Content>
+				<ul class="grid gap-1 rounded-lg border p-1 text-sm" aria-label="Inbox tabs">
 					{#each FEED_TABS as t (t.id)}
 						<li class="flex items-center gap-2 rounded-md py-0.5 pr-1 pl-2.5 hover:bg-muted/50">
 							<span class="min-w-0 flex-1 truncate">{t.label}</span>
@@ -136,57 +121,7 @@
 						</li>
 					{/each}
 				</ul>
-				<p class="pt-1 text-xs font-medium text-muted-foreground">Your notification views</p>
-				<div class="-mt-1.5 rounded-lg border p-1">
-					<SortableList
-						items={viewRows}
-						onchange={(rows) => saveSettings({ views: rows.map((r) => r.view) }, 'Views saved')}
-						label="Notification views in order"
-						empty="No notification views yet."
-					>
-						{#snippet row(r)}
-							<span class="min-w-0 flex-1">
-								<span class="block truncate">{r.view.name}</span>
-								<span class="block truncate text-xs text-muted-foreground"
-									>{describeView(r.view)}</span
-								>
-							</span>
-						{/snippet}
-						{#snippet actions(r)}
-							<FeedButton view="v:{r.view.id}" name={r.view.name} feeds={feeds.data} />
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Edit {r.view.name}"
-								href="/inbox?view=v:{r.view.id}&edit=1"><Pencil /></Button
-							>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Delete {r.view.name}"
-								onclick={() =>
-									saveSettings(
-										{ views: settings.views.filter((v) => v.id !== r.view.id) },
-										`View “${r.view.name}” deleted`
-									)}><Trash /></Button
-							>
-						{/snippet}
-					</SortableList>
-				</div>
 			</Card.Content>
-		</Card.Root>
-
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Categories</Card.Title>
-				<Card.Description
-					>Each category decides what happens to its threads: Needs you, FYI, or Muted, push, and a
-					move to Done or Snoozed. Set this in <a
-						class="underline underline-offset-2"
-						href="/settings/categories">Categories &amp; tags</a
-					>.</Card.Description
-				>
-			</Card.Header>
 		</Card.Root>
 	{/if}
 </div>

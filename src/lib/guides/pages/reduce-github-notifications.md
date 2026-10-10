@@ -83,9 +83,9 @@ Bots are FYI by default ([`botsAreFyi`](/docs/settings#botsarefyi)), and a revie
 { "botsAreFyi": true, "teamReviewsAreAction": false }
 ```
 
-For one repository that you only read, make a [notification view](/docs/views) for it, or choose **Mute** on its threads. [Categories](/docs/categories) sort your pull requests and issues, for example by effort, but they do not change the inbox.
+For one repository that you only read, choose **Mute** on its threads, or leave it out of your [views](/docs/views). [Categories](/docs/categories) sort your pull requests and issues, for example by effort, but they do not change the inbox.
 
-Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. Hush keeps only the notifications about the pull requests and issues that your [sources](/docs/pull-requests-and-issues#sources) find; it does not show releases, CI runs, or discussions. So the GitHub steps above still help: they leave Hush less to sort.
+Hush does not change what GitHub sends you, except **Mute**, which also unsubscribes you on GitHub. Hush keeps only the notifications about the pull requests and issues of your [views](/docs/views); it does not show releases, CI runs, or discussions. So the GitHub steps above still help: they leave Hush less to sort.
 
 ## Sources
 

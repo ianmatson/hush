@@ -13,11 +13,11 @@ If the org uses SAML single sign-on and the inbox says “GitHub hides notificat
 
 Hush keeps only the notifications about the PRs and issues that it tracks. See [What comes in](/docs/inbox#what-comes-in).
 
-- Check that one of your [sources](/docs/pull-requests-and-issues#sources) finds the PR or issue: look for it on the Pull requests or Issues tab. If no source finds it, change a source, or add the item to **Tracked items** in **Settings → Sources**.
-- Items that the tabs hide by default are not tracked: drafts that others opened, and PRs and issues that bots or GitHub Apps opened. Turn them on in **Settings → Sources → Filters**. See [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
+- Check that one of your [views](/docs/views) has the PR or issue. If none has it, change a view's searches, or add the item to a view's **Single items** in **Settings → Views**.
+- Items that views hide by default are not tracked: drafts that others opened, and PRs and issues that bots or GitHub Apps opened. Turn them on in **Settings → Views → Filters**. See [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 - Notifications that are not about a PR or issue do not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Read them on GitHub.
-- A notification can come before a source finds its item. Hush runs the sources again and gets unread notifications again at the next sync, so it comes in within about 15 minutes.
-- A notification about a PR or issue that your sources stopped finding comes in for 14 days more. After you change your sources, it stops at once.
+- A notification can come before a search finds its item. Hush runs the searches again and gets unread notifications again at the next sync, so it comes in within about 15 minutes.
+- A notification about a PR or issue that no view finds any more comes in for 14 days more. After you change your views, it stops at once.
 
 ## “Hush cannot read your notifications”
 
@@ -54,13 +54,13 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 2. If Slack is not connected any more, connect it again. Hush removes the connection when the app is removed from the workspace, when its access is revoked, or when your Slack account is deactivated.
 3. The other steps under [Pushes do not arrive](#pushes-do-not-arrive), from step 3, apply to Slack too.
 
-## The Pull requests or Issues tab is empty or incomplete
+## A view is empty or incomplete
 
-- The sources are GitHub searches. Choose the link button next to a source in **Settings → Sources** to try its search on GitHub.
-- Check the **Scope**: it is added to every search.
-- `@team` sources need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
+- A view's searches are GitHub searches. Choose the link button next to a search in **Settings → Views** to try it on GitHub.
+- Hush keeps the 100 most recently updated results of each search. Narrow a big search with `repo:`, `label:`, or `org:`.
+- `@team` searches need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
 - Hidden items: press {{key:dash.showHidden}} to show them.
-- Drafts that others opened and PRs and issues that bots opened are hidden by default (**Settings → Sources → Filters**): see [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
+- Drafts that others opened and PRs and issues that bots opened are hidden by default (**Settings → Views → Filters**): see [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 
 ## An item is in the wrong category
 

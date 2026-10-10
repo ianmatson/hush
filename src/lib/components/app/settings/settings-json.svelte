@@ -54,7 +54,7 @@
 
 	const PAGE_LABEL: Record<string, string> = {
 		inbox: 'Inbox',
-		dashboards: 'Sources',
+		views: 'Views',
 		notifications: 'Notifications',
 		general: 'General',
 		keys: 'Keybinds'

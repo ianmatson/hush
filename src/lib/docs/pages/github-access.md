@@ -7,18 +7,18 @@ description: What Hush can read and do on GitHub, why an org can be missing, and
 
 You sign in with GitHub. Hush asks for four scopes:
 
-| Scope           | Why Hush needs it                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `notifications` | Read your notifications, and mark them read, done, or muted.                                                                               |
-| `repo`          | Read the pull requests and issues behind them (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close.       |
-| `read:org`      | Find your teams, for team review requests and `@team` sources.                                                                             |
-| `project`       | Read project boards for [board sources](/docs/pull-requests-and-issues#project-boards), and change an item's project status from the peek. |
+| Scope           | Why Hush needs it                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `notifications` | Read your notifications, and mark them read, done, or muted.                                                                         |
+| `repo`          | Read the pull requests and issues behind them (CI, reviews, comments), and act on them when you ask: approve, comment, merge, close. |
+| `read:org`      | Find your teams, for team review requests and `@team` searches.                                                                      |
+| `project`       | Read project boards for [board searches](/docs/views#project-boards), and change an item's project status from the peek.             |
 
 GitHub's Notifications API accepts only classic scopes, and classic scopes cannot be narrower than these.
 
 ### Project boards
 
-Tokens from a sign-in before Hush read project boards do not have the `project` scope. Then a board source shows a note, and the peek shows no project status. Sign in with GitHub again: **Settings → General → GitHub access** has a link.
+Tokens from a sign-in before Hush read project boards do not have the `project` scope. Then a view with a board search shows a note, and the peek shows no project status. Sign in with GitHub again: **Settings → General → GitHub access** has a link.
 
 For a [custom token](#custom-token) from the GitHub CLI, run `gh auth refresh -s project`, and then replace the token with the output of `gh auth token`.
 

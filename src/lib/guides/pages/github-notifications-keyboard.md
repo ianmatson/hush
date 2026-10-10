@@ -27,7 +27,7 @@ GitHub's shortcuts act on the notification. To review a pull request, open it an
 
 ## A full keyboard flow in Hush
 
-Hush is built for the keyboard. Each list (the inbox, and the Pull requests and Issues tabs) uses the same keys, and the [peek](/docs/peek) lets you act on GitHub without leaving the list.
+Hush is built for the keyboard. Each list (the inbox, and your views) uses the same keys, and the [peek](/docs/peek) lets you act on GitHub without leaving the list.
 
 ### 1. Move and read
 

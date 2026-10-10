@@ -77,9 +77,9 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'inbox.mute', label: 'Mute the thread', scope: 'inbox', keys: ['m'] },
 	{ id: 'inbox.read', label: 'Mark as read / unread', scope: 'inbox', keys: ['u'] },
 	{ id: 'inbox.notNeeded', label: 'Doesn’t need me…', scope: 'inbox', keys: ['n'] },
-	...range(1, 9).map((n) => ({
+	...range(1, 5).map((n) => ({
 		id: `inbox.view.${n}`,
-		label: `View ${n} (${n <= 5 ? 'built-in' : 'your notification views'})`,
+		label: `Inbox list ${n}`,
 		scope: 'inbox' as const,
 		keys: [String(n)]
 	})),
@@ -90,12 +90,13 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'dash.notNeeded', label: 'Not my turn…', scope: 'dash', keys: ['n'] },
 	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'dash', keys: [']'] },
 	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'dash', keys: ['['] },
-	...range(0, 9).map((n) => ({
-		id: `dash.section.${n}`,
-		label: n === 0 ? 'Section: all' : `Section ${n}`,
+	...range(1, 9).map((n) => ({
+		id: `dash.view.${n}`,
+		label: `View ${n}`,
 		scope: 'dash' as const,
 		keys: [String(n)]
 	})),
+	{ id: 'dash.kind', label: 'Pull requests or issues', scope: 'dash', keys: ['t'] },
 
 	{ id: 'peek.approve', label: 'Approve', scope: 'peek', keys: ['a'] },
 	{ id: 'peek.requestChanges', label: 'Request changes', scope: 'peek', keys: ['Shift+a'] },

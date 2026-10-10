@@ -79,10 +79,10 @@ export const WORDS: QueryWord[] = [
 		example: 'category:low-effort'
 	},
 	{
-		key: 'source',
-		field: 'source',
-		help: 'Which source found it (its name)',
-		example: 'source:"Assigned to you"'
+		key: 'view',
+		field: 'view',
+		help: 'Which view has it (its name)',
+		example: 'view:Mine'
 	},
 	{
 		key: 'about',

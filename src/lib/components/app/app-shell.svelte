@@ -86,12 +86,13 @@
 			startChecked = true;
 			// Start page preference (Settings → Appearance).
 			const start = localStorage.getItem('hush:start');
+			const views = me.data.settings.views;
 			if (
 				page.url.pathname === '/inbox' &&
 				!page.url.search &&
-				(start === '/pulls' || start === '/issues')
+				views.some((v) => start === `/v/${v.id}`)
 			)
-				goto(start, { replaceState: true });
+				goto(start!, { replaceState: true });
 		}
 	});
 

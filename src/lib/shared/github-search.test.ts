@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { describeSearch, formatSearch, parseSearch } from './github-search';
-import { DEFAULT_SOURCES } from './sources';
+import { DEFAULT_VIEWS } from './item-views';
 
 describe('GitHub search builder', () => {
-	it.each(DEFAULT_SOURCES.map((s) => s.query))('keeps %s as it is', (query) => {
+	it.each(DEFAULT_VIEWS.flatMap((v) => v.searches))('keeps %s as it is', (query) => {
 		expect(formatSearch(parseSearch(query))).toBe(query);
 	});
 

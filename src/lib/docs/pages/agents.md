@@ -20,13 +20,13 @@ Hush has no public API. Its API accepts only a signed-in browser session, and it
 1. Write the user's settings as JSON (see below).
 2. Give it to the user, who pastes it into **Settings → General → Edit settings.json** and chooses **Save**, or imports it as a file in **Settings → General → Settings file**.
 
-Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about sorting, pushes, categories, views, sources, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
+Hush checks the JSON and shows an error if something is wrong; nothing is saved then. Everything about views, sorting, pushes, categories, menus, and keys is in settings.json. The things that are not (appearance, push devices, feeds, a custom token) are listed in [settings.json](/docs/settings#what-is-not-in-settings-json).
 
 ## Write settings.json
 
 - Write only what differs from the defaults. Leave out every setting that you do not change.
 - **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their `categoryGroups` puts back the default Effort and Impact groups.
-- `categoryGroups`, `views`, `sources`, `tracked`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
+- `categoryGroups`, `views`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
 - Every key, type, default, and limit is in [settings.json](/docs/settings). The rules of categories, and the conditions of views, are queries (text): every word is in the [query language](/docs/query-language#words).
 
@@ -44,10 +44,9 @@ Check these, or Hush refuses the file:
 - `categoryGroups` has up to 10 groups. Each group has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to 40 characters), and `categories` (up to 20). Each item gets one category from each group, or none (“Not sorted”).
 - Each category has `id` (1 to 40 lower-case letters, digits, or dashes; unique across all groups), `name` (up to 40 characters), `color` (`gray`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, or `pink`), `rule` (a query, or `""`), `description` (up to 200 characters, or `""`), and an optional `icon` (`"lucide:<name>"` or one emoji).
 - Categories have no inbox or push settings. They mark items only; they do not change Needs you, FYI, Muted, or pushes.
-- Queries (a category's `rule`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
-- Category rules look only at the PR or issue. They cannot use `category:`, and they must not use `event:`, `needs:`, or `in:`, which are about notifications. A view's `query` can use all of these words.
-- View ids are 1 to 16 lower-case letters or digits, and unique; names are 1 to 40 characters; at most 12 views.
-- Source ids are 1 to 40 lower-case letters, digits, or dashes; queries are 1 to 256 characters.
+- A category's `rule` uses only the words and values of the [query language](/docs/query-language#words), such as `repo:acme/*`, `label:bug`, `type:pr`. Up to 300 characters.
+- Category rules look only at the PR or issue. They cannot use `category:`, and they must not use `event:`, `needs:`, or `in:`, which are about notifications.
+- `views` has 1 to 12 views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to 40 characters), `searches` (up to 5 GitHub searches of 1 to 256 characters), and `items` (single PRs and issues as `"owner/repo#123"`). A view needs a search or an item. The searches are GitHub search syntax, not the query language.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
 - `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.
@@ -140,12 +139,27 @@ Check these, or Hush refuses the file:
 
 An item with the `security` label is in Security. Jev also puts an item there when it is about vulnerabilities, secrets, permissions, or authentication. A list without the Effort or Impact group removes that group.
 
-**“A tab for my repositories.”** A notification view adds a tab and hides nothing:
+**“A tab for my repositories.”** Add a view next to the default Mine view:
 
 ```json settings
 {
 	"views": [
-		{ "id": "mine", "name": "My repos", "base": "inbox", "query": "repo:acme/web,acme/api" }
+		{
+			"id": "mine",
+			"name": "Mine",
+			"searches": [
+				"is:pr is:open review-requested:@me",
+				"is:open involves:@me",
+				"is:pr is:open reviewed-by:@me -author:@me"
+			],
+			"items": []
+		},
+		{
+			"id": "my-repos",
+			"name": "My repos",
+			"searches": ["repo:acme/web is:open", "repo:acme/api is:open"],
+			"items": []
+		}
 	]
 }
 ```
@@ -168,14 +182,14 @@ An item with the `security` label is in Security. Jev also puts an item there wh
 { "keys": { "inbox.done": ["d"], "inbox.mute": ["Shift+d"], "inbox.snooze": [] } }
 ```
 
-**“Show PRs in the acme org only, and skip the everyone team.”**
+**“Skip the everyone team in @team searches.”**
 
 ```json settings
-{ "dash": { "scope": "org:acme archived:false", "excludedTeams": ["acme/everyone"] } }
+{ "dash": { "excludedTeams": ["acme/everyone"] } }
 ```
 
 ## Explain Hush to a user
 
-When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”). Its category icons are those of its PR or issue; categories do not change the list. On the Pull requests and Issues tabs, each row shows its categories too.
+When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”). Its category icons are those of its PR or issue; categories do not change the list. In a view, each row shows its categories too.
 
-When a user asks why a notification is missing, see [What comes in](/docs/inbox#what-comes-in): Hush keeps only the notifications about the PRs and issues that the user's sources find or that the user tracks.
+When a user asks why a notification is missing, see [What comes in](/docs/inbox#what-comes-in): Hush keeps only the notifications about the PRs and issues of the user's views.

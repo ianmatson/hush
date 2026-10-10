@@ -2,7 +2,7 @@ import { classify, globToRegExp, withOverride } from '../../src/lib/shared/class
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
-import { FEED_TABS, parseCategoryFeed, threadMatches } from '../../src/lib/shared/views';
+import { FEED_TABS, parseCategoryFeed, parseViewFeed } from '../../src/lib/shared/views';
 import { itemFeedEntry, threadFeedEntry, type FeedEntry } from '../feed-entries';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import {
@@ -47,7 +47,7 @@ import { DECISION_FILL_KEY } from './decisions';
 import { allCategories, pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
 
 const DECISION_FILL_DELAY_MS = 2_000;
-const PLACEMENT_KEYS = ['categoryGroups', 'sources'] as const;
+const PLACEMENT_KEYS = ['categoryGroups', 'views'] as const;
 
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
@@ -363,45 +363,51 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/**
-	 * An Atom feed of one inbox tab (see worker/feeds.ts): its name and its threads, newest first.
-	 * Null when the tab is gone (a deleted notification view).
+	 * An Atom feed (see worker/feeds.ts): an inbox tab's threads, or the open PRs and issues of a
+	 * view or a category, newest first. Null when the view or category is gone.
 	 */
 	async feedEntries(view: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
 		const categoryId = parseCategoryFeed(view);
 		if (categoryId) return this.categoryFeed(categoryId);
+		const viewId = parseViewFeed(view);
+		if (viewId) return this.viewFeed(viewId);
 		const tab = FEED_TABS.find((t) => t.id === view);
-		const saved = tab ? null : (await this.settings()).views.find((v) => `v:${v.id}` === view);
-		if (!tab && !saved) return null;
-		const { where, args } = viewWhere(saved?.base ?? view);
-		const rows = this.threads(`${where} ORDER BY gh_updated_at DESC LIMIT 300`, ...args);
-		const me = saved ? await this.login() : '';
-		const settings = saved ? await this.settings() : null;
-		const matching = saved
-			? rows.filter((r) => threadMatches(saved.query, toDTO(r), me, settings!))
-			: rows;
-		return {
-			name: saved?.name ?? tab!.label,
-			entries: matching.slice(0, FEED_ENTRIES).map(threadFeedEntry)
-		};
+		if (!tab) return null;
+		const { where, args } = viewWhere(view);
+		const rows = this.threads(
+			`${where} ORDER BY gh_updated_at DESC LIMIT ${FEED_ENTRIES}`,
+			...args
+		);
+		return { name: tab.label, entries: rows.map(threadFeedEntry) };
 	}
 
 	private async categoryFeed(id: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
 		const settings = await this.settings();
 		const category = allCategories(settings.categoryGroups).find((c) => c.id === id);
 		if (!category) return null;
+		return {
+			name: category.name,
+			entries: await this.itemFeed((i) => !!i.categories?.includes(id))
+		};
+	}
+
+	private async viewFeed(id: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
+		const found = (await this.settings()).views.find((v) => v.id === id);
+		if (!found) return null;
+		return { name: found.name, entries: await this.itemFeed((i) => i.sections.includes(id)) };
+	}
+
+	private async itemFeed(keep: (i: DashItem) => boolean): Promise<FeedEntry[]> {
 		const items: DashItem[] = [];
 		for (const kind of ['pr', 'issue'] as const) {
 			const cached = await this.ctx.storage.get<{ data: DashResponse }>(`dash:${kind}`);
 			items.push(...(cached?.data.items ?? []));
 		}
-		return {
-			name: category.name,
-			entries: items
-				.filter((i) => !i.dismissed && !!i.categories?.includes(id))
-				.sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))
-				.slice(0, FEED_ENTRIES)
-				.map(itemFeedEntry)
-		};
+		return items
+			.filter((i) => !i.dismissed && keep(i))
+			.sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))
+			.slice(0, FEED_ENTRIES)
+			.map(itemFeedEntry);
 	}
 
 	// --- Settings -------------------------------------------------------------------------
@@ -517,7 +523,7 @@ export abstract class PollerData extends PollerDashboard {
 				})
 			).values()
 		];
-		await this.decideSubjects(who, threadSubjects, { allAreInboxThreads: true });
+		await this.decideSubjects(who, threadSubjects);
 		const itemKeys = (await this.cachedItemKeys()).slice(0, FILL_MAX);
 		await this.decideSubjects(who, [...this.storedSubjectFacts(itemKeys).values()]);
 		await this.rePlaceCachedItems(who);
