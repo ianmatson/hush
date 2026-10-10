@@ -53,6 +53,8 @@
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import FileCheck from '@lucide/svelte/icons/file-check';
 	import FileDiff from '@lucide/svelte/icons/file-diff';
+	import { DROP_TARGET_CLASS, Uploads, setAttachTarget } from '$lib/attachments.svelte';
+	import { canAttach } from '$lib/shared/attachments';
 
 	let {
 		repo,
@@ -62,6 +64,7 @@
 		lastReview,
 		canComment,
 		isAuthor,
+		permission,
 		changedFiles,
 		additions,
 		deletions
@@ -73,10 +76,15 @@
 		lastReview: { oid: string; at: string } | null;
 		canComment: boolean;
 		isAuthor: boolean;
+		permission: string | null;
 		changedFiles: number;
 		additions: number;
 		deletions: number;
 	} = $props();
+
+	const attachTarget = () => ({ repo, allowed: canAttach(permission) });
+	setAttachTarget(attachTarget);
+	const summaryUploads = new Uploads(attachTarget);
 
 	const MAX_LISTED_FILES = PULL_FILES_PER_PAGE * PULL_FILES_MAX_PAGES;
 	const LAYOUT_KEY = 'hush:diff-layout';
@@ -248,7 +256,7 @@
 	let confirmDiscard = $state(false);
 
 	async function submitReview() {
-		if (!pendingReview || reviewBusy) return;
+		if (!pendingReview || reviewBusy || summaryUploads.pending) return;
 		if (reviewEvent === 'REQUEST_CHANGES' && !reviewSummary.trim())
 			return void toast.error('Say what to change in the summary.');
 		reviewBusy = 'submit';
@@ -591,8 +599,11 @@
 							rows="2"
 							placeholder="Summary (optional, except for Request changes)"
 							aria-label="Review summary"
-							class="w-full resize-y rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-						></textarea>
+							class={cn(
+								'w-full resize-y rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+								DROP_TARGET_CLASS
+							)}
+							{@attach summaryUploads.textarea}></textarea>
 						<div class="flex flex-wrap items-center gap-3">
 							{#each reviewChoices as choice (choice.event)}
 								<label class="flex items-center gap-1.5 text-sm">
@@ -608,7 +619,7 @@
 							<Button
 								size="sm"
 								class="ml-auto"
-								disabled={!!reviewBusy}
+								disabled={!!reviewBusy || !!summaryUploads.pending}
 								onclick={() => void submitReview()}
 							>
 								{#if reviewBusy === 'submit'}<LoaderCircle class="animate-spin" />{/if}

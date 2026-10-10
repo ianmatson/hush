@@ -5,6 +5,9 @@
 	import { suggestionBlock, suggestionIn } from '$lib/shared/diff';
 	import { Button } from '$lib/components/ui/button';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import { cn } from '$lib/utils';
+	import { DROP_TARGET_CLASS, Uploads, getAttachTarget } from '$lib/attachments.svelte';
+	import AttachButton from './attach-button.svelte';
 
 	let {
 		label,
@@ -25,6 +28,7 @@
 	let body = $state(untrack(() => loadDraft(draftKey)));
 	let sending = $state<'review' | 'single' | null>(null);
 	let textarea = $state<HTMLTextAreaElement | null>(null);
+	const uploads = new Uploads(getAttachTarget());
 
 	$effect(() => {
 		textarea?.focus();
@@ -43,7 +47,7 @@
 	}
 
 	async function send(single: boolean) {
-		if (!body.trim() || sending) return;
+		if (!body.trim() || sending || uploads.pending) return;
 		sending = single ? 'single' : 'review';
 		const posted = await onsubmit(body.trim(), single);
 		sending = null;
@@ -61,7 +65,11 @@
 		rows="3"
 		placeholder="Leave a comment"
 		aria-label="Comment on {label}"
-		class="min-h-16 w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+		class={cn(
+			'min-h-16 w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+			DROP_TARGET_CLASS
+		)}
+		{@attach uploads.textarea}
 		onkeydown={(e) => {
 			if (commandFor(e, ['editor']) === 'editor.send') {
 				e.preventDefault();
@@ -83,6 +91,7 @@
 		</div>
 	{/if}
 	<div class="flex flex-wrap items-center gap-2">
+		<AttachButton {uploads} box={textarea} />
 		{#if selectedText !== null}
 			<Button size="sm" variant="ghost" onclick={addSuggestion}>Suggest a change</Button>
 		{/if}
@@ -95,14 +104,18 @@
 				<Button
 					size="sm"
 					variant="outline"
-					disabled={!body.trim() || !!sending}
+					disabled={!body.trim() || !!sending || !!uploads.pending}
 					onclick={() => void send(true)}
 				>
 					{#if sending === 'single'}<LoaderCircle class="animate-spin" />{/if}
 					Comment now
 				</Button>
 			{/if}
-			<Button size="sm" disabled={!body.trim() || !!sending} onclick={() => void send(false)}>
+			<Button
+				size="sm"
+				disabled={!body.trim() || !!sending || !!uploads.pending}
+				onclick={() => void send(false)}
+			>
 				{#if sending === 'review'}<LoaderCircle class="animate-spin" />{/if}
 				{hasPendingReview ? 'Add to review' : 'Start a review'}
 			</Button>

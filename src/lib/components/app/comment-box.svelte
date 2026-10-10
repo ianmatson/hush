@@ -29,6 +29,10 @@
 	import { loadEmojiList } from '$lib/emoji';
 	import { draftKey, loadDraft, saveDraft } from '$lib/drafts';
 	import SuggestMenu from './suggest-menu.svelte';
+	import AttachButton from './attach-button.svelte';
+	import { DROP_TARGET_CLASS, Uploads } from '$lib/attachments.svelte';
+	import { canAttach } from '$lib/shared/attachments';
+	import { cn } from '$lib/utils';
 
 	type EmojiTrigger = Extract<Trigger, { kind: 'emoji' }>;
 	type RemoteTrigger = Exclude<Trigger, EmojiTrigger>;
@@ -58,6 +62,7 @@
 	$effect(() => saveDraft(draft, text));
 
 	let box = $state<HTMLTextAreaElement | null>(null);
+	const uploads = new Uploads(() => ({ repo: p.repo, allowed: canAttach(p.can.permission) }));
 	let wrap = $state<HTMLElement | null>(null);
 
 	// Focus it when the bar, a key, or the palette asks.
@@ -74,6 +79,7 @@
 
 	async function submit(intent: ComposeIntent) {
 		const body = text.trim();
+		if (uploads.pending) return;
 		if (intent !== 'approve' && !body) return void box?.focus();
 		if (!(await sendAction(p, intent, { body: body || undefined }))) return;
 		toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
@@ -281,7 +287,8 @@
 			<Textarea
 				bind:ref={box}
 				bind:value={text}
-				class="min-h-20 text-sm"
+				class={cn('min-h-20 text-sm', DROP_TARGET_CLASS)}
+				{@attach uploads.textarea}
 				{placeholder}
 				aria-label="Comment"
 				aria-autocomplete="list"
@@ -320,6 +327,7 @@
 			{/if}
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
+			<AttachButton {uploads} {box} />
 			<span class="text-xs text-muted-foreground"
 				>Markdown · {keysOf('editor.send')[0] ?? ''} to send</span
 			>
@@ -329,7 +337,7 @@
 					type="button"
 					size="sm"
 					variant={composer.intent === 'request_changes' ? 'destructive' : 'ghost'}
-					disabled={!!acting.id || !text.trim()}
+					disabled={!!acting.id || !!uploads.pending || !text.trim()}
 					onclick={() => submit('request_changes')}>Request changes</Button
 				>
 			{/if}
@@ -338,7 +346,7 @@
 					type="button"
 					size="sm"
 					variant={composer.intent === 'approve' ? 'default' : 'outline'}
-					disabled={!!acting.id}
+					disabled={!!acting.id || !!uploads.pending}
 					onclick={() => submit('approve')}>Approve</Button
 				>
 			{/if}
@@ -346,7 +354,7 @@
 				type="button"
 				size="sm"
 				variant={composer.intent === 'comment' ? 'default' : 'outline'}
-				disabled={!!acting.id || !text.trim()}
+				disabled={!!acting.id || !!uploads.pending || !text.trim()}
 				onclick={() => submit('comment')}
 			>
 				{#if acting.id === 'comment'}<LoaderCircle class="animate-spin" />{/if}Comment

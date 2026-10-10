@@ -134,4 +134,13 @@ Type **@** to mention someone: the people in the conversation come first, then t
 
 GitHub.com makes its own list with private data, so the order can be a little different there. The people and items are the same.
 
+### Images and videos
+
+To attach an image or a video, paste it, drop it on the box, or click the paperclip. This works in every comment box: the conversation, line comments, replies, and the review summary. Hush uploads the file to GitHub, as GitHub.com does, so a file in a private repository stays private. The box shows **Uploading…** until the file is on GitHub, and you cannot send until then.
+
+- GitHub accepts PNG, JPEG, GIF, WebP, SVG, MP4, MOV, and WebM files.
+- An image or a GIF can be 10 MB. A video can be 10 MB on a free GitHub plan, and 100 MB on a paid plan.
+- GitHub lets you attach files only in repositories that you can push to. Where you cannot, the paperclip does not show.
+- An upload cannot be undone: if you delete the link from your comment, the file stays on GitHub.
+
 Hush keeps what you type in the box in this browser until you send it, one draft for each pull request or issue. You can close the peek, or reload Hush, and come back to it. Drafts older than 30 days go away, and signing out deletes them all.

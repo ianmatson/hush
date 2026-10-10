@@ -90,6 +90,13 @@ export const api = {
 		ok(client.api.suggest.$get({ query: { repo, kind, q, from } })),
 	react: (id: string, content: ReactionContent, add: boolean) =>
 		ok(client.api.reactions.$post({ json: { id, content, add } })),
+	attach: (repo: string, file: File, name: string) =>
+		ok(
+			client.api.attachments.$post(
+				{ query: { repo, name, type: file.type } },
+				{ headers: { 'Content-Type': 'application/octet-stream' }, init: { body: file } }
+			)
+		),
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */
 	orgs: () => ok(client.api.account.orgs.$get()),
