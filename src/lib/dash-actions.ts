@@ -69,7 +69,6 @@ export interface DashActionContext {
 	pinCategory(ids: string[], pin: CategoryPin): unknown;
 }
 
-/** ⌘K commands: refresh, snoozed items, and Group by, then actions on the cursor row or the selection. */
 export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteCommand[] {
 	const cmds: PaletteCommand[] = [
 		{

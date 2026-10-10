@@ -217,7 +217,6 @@ export abstract class PollerData extends PollerDashboard {
 		return out;
 	}
 
-	/** Unread again: Hush forgets your last look at these PRs or issues ("owner/repo#123"). */
 	async markUnseen(keys: string[]): Promise<{ ok: true }> {
 		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
 		if (keys.length)
@@ -710,9 +709,6 @@ export abstract class PollerData extends PollerDashboard {
 		}));
 	}
 
-	// --- Dashboard marks: snoozed and muted ------------------------------------------------
-
-	/** A dashboard with your snoozes, mutes, and unread marks applied. */
 	async dashboardView(kind: DashKind, force: boolean): Promise<DashResponse> {
 		const data = await this.dashboard(kind, force);
 		const me = await this.login();
@@ -818,7 +814,6 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	/** Snooze until new activity, until a time, or until something happens (see markState). */
 	async snoozeItems(items: ItemRef[], choice: SnoozeChoice): Promise<{ ok: true }> {
 		const now = Date.now();
 		const until = choice.event ? eventSnoozeDeadline(now) : (choice.until ?? null);
@@ -840,7 +835,6 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	/** Back in the list: ends a snooze or a mute. */
 	async unsnoozeItems(ids: string[]): Promise<{ ok: true }> {
 		this.transaction(() => {
 			for (const id of ids) this.run('DELETE FROM dash_snoozed WHERE item_id = ?', id);
@@ -848,7 +842,6 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	/** Mute: out of the list until you unmute it. Only in Hush: GitHub does not change. */
 	async muteItems(ids: string[]): Promise<{ ok: true }> {
 		this.transaction(() => {
 			for (const id of ids)
