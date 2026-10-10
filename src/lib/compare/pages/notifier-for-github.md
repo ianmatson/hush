@@ -1,36 +1,36 @@
 ---
 title: Hush vs. Notifier for GitHub: two ways to watch GitHub notifications
-description: Notifier for GitHub is a small browser extension that counts unread GitHub notifications; Hush is a web app that sorts them by whose turn it is. When a badge is enough, and when it is not.
+description: Notifier for GitHub is a small browser extension that counts unread GitHub notifications. Hush is a web app for your GitHub pull requests and issues, in views you define, with pushes for the facts you choose. When a badge is enough, and when it is not.
 ---
 
 ## Summary
 
-**Notifier for GitHub is a free, open-source browser extension that shows your unread GitHub notification count on the toolbar and can send desktop alerts; it works with GitHub Enterprise Server and needs no server. Hush is a full inbox: it sorts notifications by who must act next, lets you triage and act on them, and pushes only what needs you.**
+**Notifier for GitHub is a free, open-source browser extension that shows your unread GitHub notification count on the toolbar and can send desktop alerts; it works with GitHub Enterprise Server and needs no server. Hush is not a notification tool: it shows your pull requests and issues in views that you define, lets you act on them, and pushes the facts that you choose.**
 
-- Choose Notifier for GitHub if you only want to know when something new arrives, and you triage on github.com.
-- Choose Hush if the count is always high and you want help to decide what to read first.
+- Choose Notifier for GitHub if you want a toolbar badge for GitHub's notification inbox, and you triage on github.com.
+- Choose Hush if you want your pull requests and issues as views, with pushes for the facts that you choose.
 
 ## At a glance
 
-|                          | Notifier for GitHub                                                 | Hush                                                |
-| ------------------------ | ------------------------------------------------------------------- | --------------------------------------------------- |
-| What it is               | Toolbar badge and alerts                                            | Notification inbox with triage                      |
-| Where it runs            | Chrome (also Edge, Opera, Brave) and Firefox                        | Web app (installable), on Cloudflare                |
-| Price                    | Free                                                                | Free in beta; planned $3 a month or $30 a year      |
-| Open source              | Yes (MIT)                                                           | Yes                                                 |
-| Where your data is       | In your browser; no server                                          | On Hush's servers; token encrypted                  |
-| Sorting                  | None; can count only threads you participate in                     | Needs you, FYI, Muted, by whose turn it is          |
-| Triage                   | None; a click opens GitHub                                          | Done, snooze, mute, read, categories                |
-| Alerts                   | Optional desktop alerts with sound; can limit them to chosen owners | Web Push on desktop and phone, quiet hours, digests |
-| How often                | About once a minute, as GitHub allows                               | Every 5 minutes                                     |
-| GitHub Enterprise Server | Yes (custom root URL)                                               | No                                                  |
-| Latest release           | 25.6.25, 25 June 2025 (Chrome); Firefox listing older               | Beta, updated continuously                          |
+|                          | Notifier for GitHub                                                 | Hush                                                                          |
+| ------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| What it is               | Toolbar badge and alerts                                            | Views of pull requests and issues, with pushes                                |
+| Where it runs            | Chrome (also Edge, Opera, Brave) and Firefox                        | Web app (installable), on Cloudflare                                          |
+| Price                    | Free                                                                | Free in beta; planned $3 a month or $30 a year                                |
+| Open source              | Yes (MIT)                                                           | Yes (AGPL-3.0)                                                                |
+| Where your data is       | In your browser; no server                                          | On Hush's servers; token encrypted                                            |
+| Sorting                  | None; can count only threads you participate in                     | Sections by role, status, repository, category, project status, or your rules |
+| Actions                  | None; a click opens GitHub                                          | Snooze, mute, read; approve, comment, merge; categories                       |
+| Alerts                   | Optional desktop alerts with sound; can limit them to chosen owners | Push for the facts that you choose; Web Push and Slack; quiet hours, digests  |
+| How often                | About once a minute, as GitHub allows                               | Every 5 minutes                                                               |
+| GitHub Enterprise Server | Yes (custom root URL)                                               | No                                                                            |
+| Latest release           | 25.6.25, 25 June 2025 (Chrome); Firefox listing older               | Beta, updated continuously                                                    |
 
 ## What each one does
 
 **Notifier for GitHub** checks GitHub about once a minute and shows the number of unread notifications on its toolbar icon. A click opens github.com/notifications. You can turn on desktop alerts and a sound (both off by default), count only threads you participate in, and limit alerts to repositories of chosen owners. It needs a classic personal access token; fine-grained tokens do not work. It does not list, sort, or change notifications: you triage on GitHub.
 
-**Hush** keeps your notifications in its own inbox. It reads the pull request or issue behind each one and puts the threads that wait on you in **Needs you**, the rest in **FYI**. You mark threads done, snooze, or mute them (Hush does the same on GitHub where GitHub allows it), and act on pull requests in the [peek](/docs/peek). Push goes to every device that you turn on, by default only for Needs you.
+**Hush** shows the open pull requests and issues that the searches of your [views](/docs/views) find, in sections that you choose with [Group by](/docs/pull-requests-and-issues#group-by). Each row says [whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is). You snooze, mute, or mark items read in Hush, and act on pull requests in the [peek](/docs/peek). Hush reads your notifications only to learn quickly that an item changed, and never changes them on GitHub. Push goes to every device that you turn on, and to Slack, for the [facts that you choose](/docs/notifications#what-gets-pushed).
 
 ## Maintenance
 
@@ -38,7 +38,7 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 
 ## Where Notifier for GitHub is better
 
-- Very small and simple: one badge, one click to GitHub.
+- Very small and simple: one badge for GitHub's inbox, one click to GitHub.
 - No server: your token stays in your browser.
 - Works with GitHub Enterprise Server.
 - Checks more often (about once a minute).
@@ -46,10 +46,10 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 
 ## Where Hush is better
 
-- It tells you which threads need you, not only how many are unread.
-- Triage in one place: done, snooze, mute, categories, views.
+- Views of your pull requests and issues, not only a count of unread notifications.
+- Each row says whose turn it is, in sections that you choose.
 - Approve, comment, and merge pull requests from the list.
-- Push to your phone, with quiet hours and digests, also when Hush is not open.
+- Push to your phone for the facts that you choose, with quiet hours and digests, also when Hush is not open.
 - Active development; Notifier for GitHub has had no release since June 2025.
 
 ## Choose Notifier for GitHub if…
@@ -60,7 +60,7 @@ Notifier for GitHub started in 2014 and has about 2,000 stars on GitHub. Its las
 
 ## Choose Hush if…
 
-- The badge never goes to zero, and you want to know what to read first.
+- You want your pull requests and issues as views, with pushes for the facts that you choose.
 - You want categories, snoozes, and pull request actions.
 - You want alerts on your phone.
 

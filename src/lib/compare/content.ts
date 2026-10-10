@@ -41,12 +41,14 @@ const OTHER_TOOLS = `- **[DevHub](https://github.com/devhubapp/devhub)**: column
 export const COMPARE_INDEX: ComparePage & { path: string } = {
 	slug: '',
 	path: '/compare',
-	title: 'GitHub notification tools compared',
+	title: 'GitHub notification and pull request tools compared',
 	description:
 		'Hush next to GitHub’s own notifications, Gitify, Octobox, Graphite, gh-dash, Neat, Notifier for GitHub, and gh-hush: what each one does well, and who should choose which.',
 	markdown: `## Summary
 
-**GitHub's own inbox is free and built in, and sorts by time. Other tools add a desktop app (Gitify, Neat), a self-hosted web inbox (Octobox), a terminal view (gh-dash), a toolbar badge (Notifier for GitHub), team code review (Graphite), or a cleanup command (gh-hush). Hush is a web app that sorts GitHub notifications by whose turn it is and pushes only what waits on you.**
+**GitHub's own inbox is free and built in, and sorts by time. Other tools add a desktop app (Gitify, Neat), a self-hosted web inbox (Octobox), terminal sections of pull requests and issues (gh-dash), a toolbar badge (Notifier for GitHub), team code review (Graphite), or a cleanup command (gh-hush). Hush is a web app for your GitHub work, in views that you define, with pushes for the facts that you choose.**
+
+Most of these tools are notification inboxes. Hush is not: it reads your notifications only to learn that an item changed, and never changes them. gh-dash is the closest match, because it also builds sections from searches.
 
 Each comparison below lists where the other tool is better, where Hush is better, and its sources. We checked every fact on ${LAST_CHECKED}.
 
@@ -64,7 +66,8 @@ ${COMPARE_ORDER.map((slug) => overviewRow(COMPARE_OVERVIEW[slug], `[${COMPARE_OV
 - **You want nothing on a third-party server:** GitHub's own notifications, Gitify, Neat, gh-dash, Notifier for GitHub, gh-hush, or a self-hosted Octobox.
 - **You work in the terminal:** gh-dash, or gh-hush to clean your inbox.
 - **Your team wants a new code review flow:** Graphite.
-- **You want one short list of what waits on you, with push on your phone:** Hush.
+- **You want a notification inbox:** GitHub's own notifications, Octobox, Gitify, or Neat.
+- **You want your pull requests and issues as views, with pushes for the facts you choose, also on your phone:** Hush.
 
 ## Other tools
 
