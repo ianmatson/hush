@@ -8,9 +8,8 @@ import { DEFAULT_PUSH_FACTS, knownPushFacts } from './push-facts';
 import { DEFAULT_ROWS, knownRowParts } from './row-parts';
 import type { Settings } from './types';
 
-const RETIRED_DASH_KEYS = ['pr', 'issue'];
-const withoutRetiredDashKeys = (dash: object | undefined) =>
-	Object.fromEntries(Object.entries(dash ?? {}).filter(([k]) => !RETIRED_DASH_KEYS.includes(k)));
+const knownDashKeys = (dash: object | undefined) =>
+	Object.fromEntries(Object.entries(dash ?? {}).filter(([k]) => k in DEFAULT_DASH));
 
 export const DEFAULT_SETTINGS: Settings = {
 	pushFacts: DEFAULT_PUSH_FACTS,
@@ -46,7 +45,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 			...DEFAULT_SETTINGS,
 			...raw,
 			views: validateViews(raw.views, false) ? DEFAULT_VIEWS : raw.views!,
-			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
+			dash: { ...DEFAULT_DASH, ...knownDashKeys(raw.dash) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
 			swipe: knownSwipe(raw.swipe),
 			keys: knownKeys(raw.keys),

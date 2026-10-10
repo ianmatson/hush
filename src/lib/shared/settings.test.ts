@@ -28,6 +28,13 @@ describe('settings file', () => {
 		});
 	});
 
+	it('drops dashboard settings that are gone, so the rest can still be saved', () => {
+		const stored = '{"dash":{"scope":"archived:false org:posthog","pr":{},"hideBots":false}}';
+		const s = parseSettings(stored);
+		expect(s.dash).toEqual({ ...DEFAULT_SETTINGS.dash, hideBots: false });
+		expect(validateSettings(mergeSettings(s, { dash: s.dash }), ['dash'])).toBeNull();
+	});
+
 	it('drops swipe actions and key commands that are gone', () => {
 		const s = parseSettings(
 			JSON.stringify({
