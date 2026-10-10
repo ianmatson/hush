@@ -43,18 +43,18 @@
 	]);
 
 	const GAP = 2;
-	const MORE_WIDTH = 72;
 	const NEW_WIDTH = 28;
 	let navWidth = $state(0);
 	let measure = $state<HTMLElement | null>(null);
 	let widths = $state<number[]>([]);
+	let moreWidth = $state(0);
 	$effect(() => {
 		void links.map((l) => `${l.label}${l.badge}`).join();
+		void navWidth;
 		tick().then(() => {
-			if (measure)
-				widths = [...measure.querySelectorAll<HTMLElement>('[data-link]')].map(
-					(e) => e.offsetWidth
-				);
+			if (!measure) return;
+			widths = [...measure.querySelectorAll<HTMLElement>('[data-link]')].map((e) => e.offsetWidth);
+			moreWidth = measure.querySelector<HTMLElement>('[data-more]')?.offsetWidth ?? 0;
 		});
 	});
 	const shown = $derived(
@@ -62,7 +62,7 @@
 			? links.map((_, k) => k)
 			: fitItems(widths, navWidth, {
 					gap: GAP,
-					moreWidth: MORE_WIDTH,
+					moreWidth,
 					reserved: NEW_WIDTH,
 					keep: links.findIndex((l) => active(l.href))
 				})
@@ -70,9 +70,8 @@
 	const overflow = $derived(links.filter((_, k) => !shown.includes(k)));
 	const active = (href: string) =>
 		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
-	// Phones: one menu instead of three tabs. On settings pages it reads "Go to".
-	const current = $derived(links.find((l) => active(l.href)));
-	const othersWaiting = $derived(links.some((l) => l !== current && l.badge));
+	const MORE_CLASS =
+		'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground hover:text-foreground';
 
 	async function signOut() {
 		await api.logout().catch(() => {});
@@ -89,6 +88,12 @@
 			)}>{n}</span
 		>
 	{/if}
+{/snippet}
+
+{#snippet moreLabel(waiting: boolean)}
+	<span class="hidden sm:inline">More</span>
+	{#if waiting}<span class="size-1.5 rounded-full bg-primary"></span>{/if}
+	<ChevronDown class="size-3.5" />
 {/snippet}
 
 {#snippet link(
@@ -119,44 +124,11 @@
 			<img src="/icon.svg" alt="" class="size-5 rounded-[5px]" />
 			<span class="hidden sm:inline">hush</span>
 		</a>
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger
-				class="flex h-8 min-w-0 items-center gap-1.5 rounded-md bg-muted px-2.5 text-sm sm:hidden"
-			>
-				<span class="truncate">{current?.label ?? 'Go to'}</span>
-				{#if current?.badge}
-					<span
-						class="min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-						>{current.badge}</span
-					>
-				{/if}
-				{#if othersWaiting}
-					<span class="size-1.5 rounded-full bg-primary" aria-label="Other pages have items"></span>
-				{/if}
-				<ChevronDown class="size-3.5 text-muted-foreground" />
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="start" class="min-w-48">
-				{#each links as l (l.href)}
-					<DropdownMenu.Item onclick={() => goto(l.href)} class={cn(active(l.href) && 'bg-muted')}>
-						{l.label}
-						{#if l.badge}
-							<span
-								class="ml-auto min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums"
-								>{l.badge}</span
-							>
-						{/if}
-					</DropdownMenu.Item>
-				{/each}
-				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={() => goto('/settings/views?new=1')}
-					><Plus /> New view</DropdownMenu.Item
-				>
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
-		<div class="relative hidden min-w-0 flex-1 sm:block" bind:clientWidth={navWidth}>
+		<div class="relative min-w-0 flex-1" bind:clientWidth={navWidth}>
 			<div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
 				<div bind:this={measure} class="invisible absolute top-0 left-0 flex w-max gap-0.5 text-sm">
 					{#each links as l (l.href)}{@render link(l, true)}{/each}
+					<span data-more class={MORE_CLASS}>{@render moreLabel(true)}</span>
 				</div>
 			</div>
 			<nav class="flex min-w-0 items-center gap-0.5 text-sm" aria-label="Views">
@@ -165,13 +137,8 @@
 				{/each}
 				{#if overflow.length}
 					<DropdownMenu.Root>
-						<DropdownMenu.Trigger
-							class="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground hover:text-foreground"
-						>
-							More
-							{#if overflow.some((l) => l.badge)}<span class="size-1.5 rounded-full bg-primary"
-								></span>{/if}
-							<ChevronDown class="size-3.5" />
+						<DropdownMenu.Trigger class={MORE_CLASS} aria-label="More views">
+							{@render moreLabel(overflow.some((l) => l.badge))}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start" class="min-w-48">
 							{#each overflow as l (l.href)}
