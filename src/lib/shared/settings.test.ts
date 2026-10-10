@@ -71,7 +71,7 @@ describe('settings schema', () => {
 		expect(check({ reviewResolution: 'x' })).toMatch(/strict/);
 		expect(check({ newCommitsAfterReview: 'changes_requested' })).toBeNull();
 		expect(check({ newCommitsAfterReview: 'x' })).toMatch(/changes_requested/);
-		expect(check({ views: [{ id: 'a', name: 'A', searches: [], items: [] }] })).toMatch(/"A"/);
+		expect(check({ views: [{ id: 'a', name: 'A', searches: [] }] })).toMatch(/"A"/);
 		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
 		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toBeNull();
 	});

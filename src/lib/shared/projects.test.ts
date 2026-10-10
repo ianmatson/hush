@@ -35,8 +35,8 @@ describe('boardQueryOf', () => {
 describe('expandSections with a board search', () => {
 	it('does not add archived:false to the board filter', () => {
 		const sections = sectionsFor('issue', [
-			{ id: 'board', name: 'Board', searches: ['project:acme/7 status:Todo'], items: [] },
-			{ id: 'mine', name: 'Mine', searches: ['is:open assignee:@me'], items: [] }
+			{ id: 'board', name: 'Board', searches: ['project:acme/7 status:Todo'] },
+			{ id: 'mine', name: 'Mine', searches: ['is:open assignee:@me'] }
 		]);
 		const { queries } = expandSections(sections, DEFAULT_DASH, []);
 		expect(queries.map((q) => q.q)).toEqual([

@@ -7,7 +7,7 @@ A **category** marks a pull request or issue: its effort, its area, its topic. C
 
 A notification shows the categories of its PR or issue. Hush does not place notifications by themselves.
 
-- Categories show on rows, in the category filter of the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories), and in [feeds](/docs/feeds).
+- Categories show on rows, in the category filter of your [views](/docs/pull-requests-and-issues#categories), and in [feeds](/docs/feeds).
 - Categories do not change the inbox. They do not make a thread Needs you, FYI, or Muted, and they do not change pushes. To change the inbox, see [What needs you](/docs/inbox#what-needs-you).
 
 ## How Hush places an item
@@ -18,7 +18,7 @@ Hush checks the categories of each group **from top to bottom**:
 2. The first category whose rule matches.
 3. Jev's choice among the categories that have a description. See [smart decisions](/docs/settings#smartdecisions).
 
-When no rule matches, and Jev is off or cannot answer, the item is **Not sorted** in that group: it has no category from the group. To see these items, choose **Not sorted** under the group in the category filter of the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories). There is no fallback category. To make one, add a category at the bottom of the group with a rule that matches everything, such as `type:pr OR type:issue`.
+When no rule matches, and Jev is off or cannot answer, the item is **Not sorted** in that group: it has no category from the group. To see these items, choose **Not sorted** under the group in the category filter of a [view](/docs/pull-requests-and-issues#categories). There is no fallback category. To make one, add a category at the bottom of the group with a rule that matches everything, such as `type:pr OR type:issue`.
 
 Hush checks the rules on the PR or issue only, never on a notification. Categories that you choose for a PR or issue apply to its notifications too.
 

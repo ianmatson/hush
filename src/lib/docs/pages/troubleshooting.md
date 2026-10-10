@@ -13,7 +13,7 @@ If the org uses SAML single sign-on and the inbox says “GitHub hides notificat
 
 Hush keeps only the notifications about the PRs and issues that it tracks. See [What comes in](/docs/inbox#what-comes-in).
 
-- Check that one of your [views](/docs/views) has the PR or issue. If none has it, change a view's searches, or add the item to a view's **Single items** in **Settings → Views**.
+- Check that one of your [views](/docs/views) has the PR or issue. If none has it, change a view's searches, or add a view that finds it, in **Settings → Views**.
 - Items that views hide by default are not tracked: drafts that others opened, and PRs and issues that bots or GitHub Apps opened. Turn them on in **Settings → Views → Filters**. See [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 - Notifications that are not about a PR or issue do not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Read them on GitHub.
 - A notification can come before a search finds its item. Hush runs the searches again and gets unread notifications again at the next sync, so it comes in within about 15 minutes.

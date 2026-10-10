@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The list in each view, grouped by whose turn it is.
 ---
 
-Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. A switch above the list shows **Pull requests** or **Issues**. Hush groups the items by whose turn it is, and gives each item its [categories](#categories).
+Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. A switch at the top shows **Pull requests** or **Issues**. Hush groups the items by whose turn it is, and gives each item its [categories](#categories).
 
 ## Groups
 
@@ -56,11 +56,9 @@ Set up category groups, and how Hush places items, in **Settings → Categories*
 
 An item opened by someone who is not a member or collaborator of the repository has an **External** badge. It shows **First-time** when it is their first pull request or issue there. Bots get no badge. To turn the badge off, go to **Settings → General → Row contents** and turn off **External contributor**; the [peek](/docs/peek) follows the same setting.
 
-## Filter
+## Find an item
 
-The filter box above the list finds items by text. An item shows when the text is in its title, repository, author, turn reason, or labels. {{key:list.search}} goes to the box.
-
-Text with a `word:` in it is a [query](/docs/query-language): `repo:acme/web label:bug`, `review-requested:@me size:<50`. `category:` works too: `category:high-effort`.
+A view has no filter box: its searches decide what is in it. To find a pull request or issue, use search: press {{key:palette}} or {{key:list.search}}, and type words from its title, its repository, or its number. To show different items, [edit the view](/docs/views#change-or-delete-a-view), or add another view.
 
 ## Actions
 

@@ -3,7 +3,6 @@ import { MAX_QUERIES } from '$lib/shared/dashboard';
 import {
 	DEFAULT_VIEWS,
 	MAX_SEARCH_CHARS,
-	MAX_TRACKED,
 	MAX_VIEW_NAME_CHARS,
 	MAX_VIEW_SEARCHES,
 	MAX_VIEWS
@@ -206,9 +205,9 @@ This also applies to team review requests.`
 - **Comments that need nothing from you:** when the newest comments by other people (not bots) are thanks, approval, a status update, or +1, they no longer make it your turn. A mention such as “cc @you” goes to FYI. Jev must be at least ${YES_AT * 100}% sure; when it is not, Hush does what it did before.
 - **Categories:** Jev places each PR and issue in the categories that have a description, when no rule places it. See [Categories](/docs/categories).
 - **\`about:\` conditions** in category rules and in notification views: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
-- **Order:** on the Pull requests and Issues tabs, items whose text says they block something or are about an incident come first inside their group.
+- **Order:** in your views, items whose text says they block something or are about an incident come first inside their group.
 
-A one-time notice on the inbox and on the Pull requests and Issues tabs says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Inbox → Defaults**: Hush then deletes Jev's answers, and sends Jev nothing more.`
+A one-time notice on the inbox and on your views says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks your open threads again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Inbox → Defaults**: Hush then deletes Jev's answers, and sends Jev nothing more.`
 	},
 	pushUrgentNow: {
 		type: 'boolean',
@@ -220,14 +219,12 @@ A one-time notice on the inbox and on the Pull requests and Issues tabs says tha
 	},
 	views: {
 		type: 'array of views',
-		body: `The views in the top bar, in this order. Up to ${MAX_VIEWS}. A view shows the open PRs and issues that its searches find, and its single items. The inbox gets only the notifications about the PRs and issues of your views.
+		body: `The views in the top bar, in this order. Up to ${MAX_VIEWS}. A view shows the open PRs and issues that its searches find. The inbox gets only the notifications about the PRs and issues of your views.
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`), feed, and the \`view:\` word use it.
 - \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label. Category rules can test it with \`view:\`.
 - \`searches\`: up to ${MAX_VIEW_SEARCHES} [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to ${MAX_SEARCH_CHARS} characters each. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
-- \`items\`: single PRs and issues, as \`"owner/repo#123"\`. They show while they are open, whatever the searches find. Up to ${MAX_TRACKED} in all views.
-
-A view needs a search or an item, and you keep at least one view.
+A view needs at least one search, and you keep at least one view.
 
 Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once, and Hush removes their notifications.
 
@@ -239,10 +236,9 @@ A change to \`views\` replaces the whole list. To add a view, write the defaults
     {
       "id": "mine",
       "name": "Mine",
-      "searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"],
-      "items": []
+      "searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"]
     },
-    { "id": "website", "name": "Website", "searches": ["repo:acme/website is:open"], "items": ["acme/api#77"] }
+    { "id": "website", "name": "Website", "searches": ["repo:acme/website is:open"] }
   ]
 }
 \`\`\`
@@ -553,14 +549,14 @@ function limitsReference(): string {
 			['First sync after sign-in', `notifications from the last ${FIRST_SYNC_DAYS} days`],
 			['Inbox watcher (turn changes with no notification)', `every ${dur(WATCH_EVERY)}`],
 			[
-				'Sources (the Pull requests and Issues tabs)',
+				'The searches of your views',
 				`run every ${dur(DASH_TTL)} while Hush polls; refresh any time`
 			],
 			[
-				'Sources run again for a notification about an untracked PR or issue',
+				'Searches run again for a notification about an untracked PR or issue',
 				`at most every ${dur(TRACKED_REBUILD_GAP)}`
 			],
-			['An item that the sources stop finding stays tracked for', dur(TRACKED_KEEP)],
+			['An item that no view finds any more stays tracked for', dur(TRACKED_KEEP)],
 			['Your teams', `looked up again every ${dur(TEAMS_TTL)}`],
 			[
 				'Polling stops with no visit for',
@@ -576,7 +572,6 @@ function limitsReference(): string {
 			['Done threads with no activity are forgotten after', '30 days'],
 			['Views', String(MAX_VIEWS)],
 			['Searches in a view', String(MAX_VIEW_SEARCHES)],
-			['Single items in all views', String(MAX_TRACKED)],
 			['GitHub searches for pull requests, and for issues', String(MAX_QUERIES)],
 			['Items per menu', '60'],
 			['Keys per command', '4'],

@@ -5,7 +5,6 @@ import {
 	enrichmentOf,
 	lastVerdictOf,
 	subjectKey,
-	subjectKeyOfUrl,
 	subjectUrls,
 	type SubjectFacts
 } from './subject';
@@ -51,10 +50,7 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 }
 
 describe('subject keys', () => {
-	it('reads both URL forms and gives both back', () => {
-		expect(subjectKeyOfUrl('https://github.com/o/r/pull/12/files')).toBe('o/r#12');
-		expect(subjectKeyOfUrl('https://github.com/o/r/issues/3#issuecomment-1')).toBe('o/r#3');
-		expect(subjectKeyOfUrl('https://github.com/o/r/actions/runs/1')).toBeNull();
+	it('gives both URL forms of a key', () => {
 		expect(subjectUrls(subjectKey('o/r', 12))).toEqual([
 			'https://github.com/o/r/pull/12',
 			'https://github.com/o/r/issues/12'

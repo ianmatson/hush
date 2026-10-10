@@ -41,22 +41,15 @@
 	import { page } from '$app/state';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
-	import type { Classification } from '$lib/shared/types';
 	import {
-		itemQueryFacts,
 		matchesCategoryFilter,
 		type CategoryFilter,
 		type CategoryPin
 	} from '$lib/shared/categories';
-	import { exprMatches, NOTIFICATION_WORDS, parseExpr } from '$lib/shared/query';
-	import { ruleMatches } from '$lib/shared/classify';
 	import { rowMarks, type RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
-	import FilterBuilder from './rules/filter-builder.svelte';
-	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import PillRow, { type Pill } from './pill-row.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
@@ -81,7 +74,6 @@
 	import BulkBar from './bulk-bar.svelte';
 	import JevNotice from './jev-notice.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import Search from '@lucide/svelte/icons/search';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import EyeOff from '@lucide/svelte/icons/eye-off';
@@ -122,11 +114,9 @@
 	const revalidatingAfterOpen = $derived(dashQ.isFetching && dashQ.dataUpdatedAt < pageOpenedAt);
 	let refreshing = $state(false);
 	let categoryFilter = $state<CategoryFilter | null>(null);
-	let query = $state('');
 	let showHidden = $state(false);
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
-	let searchEl = $state<HTMLInputElement | null>(null);
 	// Collapsed groups are read at once (not after the first paint), and they slide only after
 	// you open or close one: a page that loads shows them as they are, with no motion.
 	const readCollapsed = (k: DashKind): Record<Turn, boolean> => {
@@ -172,34 +162,15 @@
 
 	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
 
-	const queryExpr = $derived.by(() => {
-		if (!query.includes(':')) return null;
-		const parsed = parseExpr(query);
-		return parsed.errors.length ? null : parsed.expr;
-	});
-	function matchesQuery(i: DashItem, q: string) {
-		const settings = me.data?.settings;
-		if (queryExpr && settings) {
-			const facts = itemQueryFacts(i, me.data!.login, settings);
-			const c = { category: 'fyi', kind: 'none' } as Classification;
-			return exprMatches(queryExpr, (when) => ruleMatches(when, facts, c));
-		}
-		return `${i.title} ${i.repo} ${i.author} ${i.turnReason} ${i.labels.map((l) => l.name).join(' ')}`
-			.toLowerCase()
-			.includes(q);
-	}
-
 	const peekOwner = $derived(`view:${view.id}:${kind}`);
 	const owns = $derived(peek.owner === peekOwner);
 	let filteredBefore: DashItem[] = [];
 	const filtered = $derived.by(() => {
-		const q = query.trim().toLowerCase();
 		const listed = (data?.items ?? []).filter(
 			(i) =>
 				i.dismissed === showHidden &&
 				inView(i) &&
-				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups)) &&
-				(!q || matchesQuery(i, q))
+				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups))
 		);
 		return keepHeldRow(
 			listed,
@@ -605,7 +576,6 @@
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
-			query = '';
 			categoryFilter = null;
 			showHidden = !!item.dismissed;
 			sel.clear();
@@ -838,10 +808,8 @@
 		if (
 			target instanceof Element &&
 			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
-		) {
-			if (e.key === 'Escape' && target === searchEl) searchEl?.blur();
+		)
 			return;
-		}
 		const cmd = commandFor(e, ['list', 'dash']);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
@@ -862,7 +830,7 @@
 			'list.fullPage': () => i && goto(itemPagePath(i.repo, i.number, i.kind)),
 			'list.copy': () => copyLinks(targets()),
 			'list.refresh': () => refresh(),
-			'list.search': () => searchEl?.focus(),
+			'list.search': () => (palette.open = true),
 			'list.help': () => (helpOpen = true),
 			'dash.hide': () => toggleHide(targets()),
 			'dash.showHidden': () => (showHidden = !showHidden),
@@ -983,25 +951,17 @@
 <svelte:window onkeydown={onKey} />
 
 <main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
-	<div class="flex flex-wrap items-center gap-2">
-		<div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
-			<Search
-				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-			/>
-			<Input
-				bind:ref={searchEl}
-				bind:value={query}
-				placeholder="Filter {noun}"
-				class="h-8 pr-8 pl-8"
-				aria-label="Filter {noun}"
-			/>
-			<FilterBuilder
-				bind:value={query}
-				id="dash-filter-{kind}"
-				exclude={NOTIFICATION_WORDS}
-				suggestions={ruleSuggestions(me.data?.settings)}
-				preview={(q) =>
-					me.data && data ? previewItems(q, me.data.login, me.data.settings, data.items) : null}
+	<div class="flex items-center gap-2">
+		<div class="min-w-0 flex-1">
+			<PillRow
+				pills={kindPills}
+				bind:value={() => kind, (k) => k && showKind(k as DashKind)}
+				label="Pull requests or issues"
+				action={{
+					label: `Edit ${view.name}`,
+					href: `/settings/views#view-${view.id}`,
+					icon: Pencil
+				}}
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">
@@ -1025,15 +985,6 @@
 			</Button>
 			<MarkFilter groups={categoryGroups} count={categoryCount} bind:value={categoryFilter} />
 		</div>
-	</div>
-
-	<div class="mt-3">
-		<PillRow
-			pills={kindPills}
-			bind:value={() => kind, (k) => k && showKind(k as DashKind)}
-			label="Pull requests or issues"
-			action={{ label: `Edit ${view.name}`, href: `/settings/views#view-${view.id}`, icon: Pencil }}
-		/>
 	</div>
 
 	<p class="mt-2 mb-2 flex h-4 items-center px-1 text-xs text-muted-foreground">
@@ -1098,9 +1049,7 @@
 			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
 		>
 			<CircleCheck class="mb-3 size-8 text-signal-merge" />
-			{#if query}
-				<p class="font-medium">No {noun} match “{query}”.</p>
-			{:else if showHidden}
+			{#if showHidden}
 				<p class="font-medium">Nothing is hidden.</p>
 			{:else}
 				<p class="font-medium">No open {noun} in {view.name}.</p>

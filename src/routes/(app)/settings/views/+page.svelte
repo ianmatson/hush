@@ -61,7 +61,7 @@
 	function addView() {
 		if (!draft) return;
 		const id = `view-${Math.random().toString(36).slice(2, 8)}`;
-		draft.views = [...draft.views, { id, name: 'New view', searches: ['is:open'], items: [] }];
+		draft.views = [...draft.views, { id, name: 'New view', searches: ['is:open'] }];
 		void tick().then(() => {
 			scrollTo(`view-${id}`);
 			document.querySelector<HTMLInputElement>(`[data-view="${id}"]`)?.select();
@@ -120,8 +120,7 @@
 				target="_blank"
 				rel="noreferrer">GitHub searches</a
 			>
-			find, and the single items you add. <code>@me</code> is you, and <code>@team</code> is each tracked
-			team.
+			find. <code>@me</code> is you, and <code>@team</code> is each tracked team.
 		</p>
 	</div>
 

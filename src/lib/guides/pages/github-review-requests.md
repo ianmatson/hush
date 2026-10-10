@@ -80,14 +80,12 @@ A [view](/docs/views) with only your review requests, next to the default Mine v
 		{
 			"id": "mine",
 			"name": "Mine",
-			"searches": ["is:open involves:@me", "is:pr is:open reviewed-by:@me -author:@me"],
-			"items": []
+			"searches": ["is:open involves:@me", "is:pr is:open reviewed-by:@me -author:@me"]
 		},
 		{
 			"id": "reviews",
 			"name": "Reviews",
-			"searches": ["is:pr is:open user-review-requested:@me"],
-			"items": []
+			"searches": ["is:pr is:open user-review-requested:@me"]
 		}
 	]
 }

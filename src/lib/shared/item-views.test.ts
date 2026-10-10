@@ -3,15 +3,12 @@ import { classify, queryMatches } from './classify';
 import { DEFAULT_SETTINGS } from './settings';
 import {
 	DEFAULT_VIEWS,
-	MAX_TRACKED,
 	MAX_VIEW_SEARCHES,
 	MAX_VIEWS,
 	newestFirst,
 	searchIsUnscoped,
 	searchKinds,
 	sectionsFor,
-	trackedItemsOf,
-	trackedKeyOf,
 	validateViews,
 	viewKinds
 } from './item-views';
@@ -21,7 +18,6 @@ const view = (over: Partial<ItemView> = {}): ItemView => ({
 	id: 'web',
 	name: 'Web',
 	searches: ['repo:acme/web is:open'],
-	items: [],
 	...over
 });
 
@@ -43,12 +39,6 @@ describe('viewKinds', () => {
 		expect(viewKinds(view({ searches: ['is:pr is:open'] }))).toEqual(['pr']);
 		expect(viewKinds(view({ searches: ['is:issue', 'is:pr'] }))).toEqual(['pr', 'issue']);
 		expect(viewKinds(DEFAULT_VIEWS[0])).toEqual(['pr', 'issue']);
-	});
-	it('has both kinds when it has single items, which can be either', () => {
-		expect(viewKinds(view({ searches: ['is:pr'], items: ['acme/web#1'] }))).toEqual([
-			'pr',
-			'issue'
-		]);
 	});
 });
 
@@ -92,27 +82,6 @@ describe('newestFirst', () => {
 	});
 });
 
-describe('trackedKeyOf', () => {
-	it('reads a PR or issue address, or owner/repo#123', () => {
-		expect(trackedKeyOf('https://github.com/acme/web/pull/482')).toBe('acme/web#482');
-		expect(trackedKeyOf(' https://github.com/acme/web/issues/7#issuecomment-1 ')).toBe(
-			'acme/web#7'
-		);
-		expect(trackedKeyOf('acme/web#482')).toBe('acme/web#482');
-		expect(trackedKeyOf('acme/web')).toBeNull();
-	});
-});
-
-describe('trackedItemsOf', () => {
-	it('lists each single item once, from all views', () => {
-		const views = [
-			view({ items: ['acme/web#1', 'acme/web#2'] }),
-			view({ id: 'b', items: ['acme/web#2'] })
-		];
-		expect(trackedItemsOf(views)).toEqual(['acme/web#1', 'acme/web#2']);
-	});
-});
-
 describe('validateViews', () => {
 	it('accepts the defaults', () => {
 		expect(validateViews(DEFAULT_VIEWS)).toBeNull();
@@ -122,28 +91,13 @@ describe('validateViews', () => {
 		expect(validateViews([view(), view()])).toMatch(/Two views/);
 		expect(validateViews([view({ name: ' ' })])).toMatch(/name/);
 		expect(validateViews([view({ searches: [' '] })])).toMatch(/search/);
-		expect(validateViews([view({ searches: [], items: [] })])).toMatch(/add a search or an item/);
+		expect(validateViews([view({ searches: [] })])).toMatch(/add a search/);
 		expect(
 			validateViews([view({ searches: Array(MAX_VIEW_SEARCHES + 1).fill('is:open') })])
 		).toMatch(/Up to|up to/);
 		expect(
 			validateViews(Array.from({ length: MAX_VIEWS + 1 }, (_, i) => view({ id: `v${i}` })))
 		).toMatch(/Up to/);
-	});
-	it('accepts a view with only single items, and refuses items that are not owner/repo#n', () => {
-		expect(validateViews([view({ searches: [], items: ['acme/web#1'] })])).toBeNull();
-		expect(validateViews([view({ items: ['https://github.com/acme/web/pull/1'] })])).toMatch(
-			/owner\/repo#123/
-		);
-	});
-	it(`allows up to ${MAX_TRACKED} single items in all views`, () => {
-		const items = Array.from({ length: MAX_TRACKED + 1 }, (_, i) => `acme/web#${i + 1}`);
-		expect(
-			validateViews([
-				view({ items: items.slice(0, 30) }),
-				view({ id: 'b', items: items.slice(30) })
-			])
-		).toMatch(/single items/);
 	});
 });
 

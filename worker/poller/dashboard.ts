@@ -7,19 +7,11 @@ import {
 } from '../../src/lib/shared/dashboard';
 import type { DashKind, DashResponse } from '../../src/lib/shared/types';
 import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
-import {
-	fetchDetails,
-	fetchSubjects,
-	forTeams,
-	needsDetails,
-	searchCounts,
-	searchShort
-} from '../github';
+import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
 import {
 	MAX_SOURCE_COUNT_SEARCHES,
 	searchKinds,
 	sectionsFor,
-	trackedItemsOf,
 	type SourceCount
 } from '../../src/lib/shared/item-views';
 import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
@@ -85,7 +77,7 @@ export abstract class PollerDashboard extends PollerSync {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
 		const { teams } = await this.teams();
-		const view = { id: 'count', name: '', searches: [query], items: [] };
+		const view = { id: 'count', name: '', searches: [query] };
 		const searches = searchKinds(query).flatMap((kind) =>
 			expandSections(sectionsFor(kind, [view]), who.settings.dash, teams).queries.map((q) => ({
 				kind,
@@ -136,13 +128,11 @@ export abstract class PollerDashboard extends PollerSync {
 		if (!who) throw new Error('Not signed in.');
 		const { dash, botsAreFyi, reviewResolution, newCommitsAfterReview, views } = who.settings;
 		const sections = sectionsFor(kind, views);
-		const tracked = trackedItemsOf(views);
 		const sig = JSON.stringify([
 			botsAreFyi,
 			reviewResolution,
 			newCommitsAfterReview,
 			sections,
-			views.map((v) => [v.id, v.items]),
 			dash.excludedTeams,
 			dash.staleDays,
 			dash.hideOthersDrafts,
@@ -185,8 +175,6 @@ export abstract class PollerDashboard extends PollerSync {
 			if (use) facts.set(k, use);
 		}
 		await this.ctx.storage.put(readKey, nextRead);
-		const trackedFacts = await this.trackedSubjects(who.token, who.me, tracked, kind);
-		for (const [k, f] of trackedFacts) facts.set(k, f);
 		const errors = [...new Set([...searchErrors, ...detailErrors])].slice(0, 3);
 
 		await this.decideSubjects(who, [...facts.values()]);
@@ -202,14 +190,6 @@ export abstract class PollerDashboard extends PollerSync {
 			};
 			e.sections.add(h.query.section);
 			byId.set(h.key, e);
-		}
-		for (const [k, subject] of trackedFacts) {
-			const e = byId.get(k) ?? {
-				facts: dashFactsOf(subject, who.me, teamSet, decided.get(k)),
-				sections: new Set<string>()
-			};
-			for (const v of views) if (v.items.includes(k)) e.sections.add(v.id);
-			byId.set(k, e);
 		}
 		const boardSections = new Set(sections.filter((s) => readsBoard(s.query)).map((s) => s.id));
 		const placedOnBoard = (found: Set<string>) => [...found].some((id) => boardSections.has(id));
@@ -254,23 +234,8 @@ export abstract class PollerDashboard extends PollerSync {
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
-		await this.record(who, [...fresh.values(), ...trackedFacts.values()], { dash: false });
+		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
-	}
-
-	private async trackedSubjects(
-		token: string,
-		me: string,
-		tracked: string[],
-		kind: DashKind
-	): Promise<Map<string, SubjectFacts>> {
-		const refs = tracked.flatMap((key) => {
-			const m = /^([^/]+)\/([^#]+)#(\d+)$/.exec(key);
-			return m ? [{ key, owner: m[1], repo: m[2], number: Number(m[3]) }] : [];
-		});
-		if (!refs.length) return new Map();
-		const found = await fetchSubjects(token, refs, me);
-		return new Map([...found].filter(([, f]) => f.kind === kind && f.state === 'open'));
 	}
 
 	/** The stored facts of these PRs and issues ("owner/repo#123"). */

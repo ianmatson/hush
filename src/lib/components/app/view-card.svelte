@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import type { FeedDTO, ItemView } from '$lib/shared/types';
-	import {
-		MAX_VIEW_NAME_CHARS,
-		MAX_VIEW_SEARCHES,
-		searchKinds,
-		trackedKeyOf
-	} from '$lib/shared/item-views';
+	import { MAX_VIEW_NAME_CHARS, MAX_VIEW_SEARCHES, searchKinds } from '$lib/shared/item-views';
 	import { viewFeedView } from '$lib/shared/views';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -46,8 +41,6 @@
 		ondelete: () => void;
 	} = $props();
 
-	let itemInput = $state('');
-	const itemKey = $derived(trackedKeyOf(itemInput));
 	let openSearch = $state<number | null>(untrack(() => (hasFeed ? null : 0)));
 	const DRAWER = { duration: 180, easing: cubicOut };
 
@@ -67,12 +60,6 @@
 				.querySelector<HTMLElement>(`[data-search="${view.id}-${index}"] :is(input, textarea)`)
 				?.focus()
 		);
-	}
-
-	function addItem() {
-		if (!itemKey) return;
-		if (!view.items.includes(itemKey)) view.items = [...view.items, itemKey];
-		itemInput = '';
 	}
 
 	function onGitHub(query: string) {
@@ -187,49 +174,6 @@
 					disabled={view.searches.length >= MAX_VIEW_SEARCHES}><Plus /> Add search</Button
 				>
 			</div>
-		</div>
-
-		<div class="grid grid-cols-[minmax(0,1fr)] gap-2">
-			<p class="text-xs font-medium text-muted-foreground">Single items</p>
-			{#if view.items.length}
-				<ul class="grid grid-cols-[minmax(0,1fr)] gap-1">
-					{#each view.items as key (key)}
-						<li
-							class="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 font-mono text-xs"
-						>
-							<span class="min-w-0 truncate">{key}</span>
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								aria-label="Remove {key}"
-								onclick={() => (view.items = view.items.filter((k) => k !== key))}><X /></Button
-							>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-			<form
-				class="flex gap-2"
-				onsubmit={(e) => {
-					e.preventDefault();
-					addItem();
-				}}
-			>
-				<label for="view-{view.id}-item" class="sr-only">Pull request or issue to add</label>
-				<Input
-					id="view-{view.id}-item"
-					bind:value={itemInput}
-					class="h-8 font-mono text-xs"
-					placeholder="https://github.com/acme/web/pull/482 or acme/web#482"
-					spellcheck={false}
-				/>
-				<Button type="submit" variant="outline" size="sm" disabled={!itemKey}><Plus /> Add</Button>
-			</form>
-			{#if itemInput.trim() && !itemKey}
-				<p class="text-xs text-muted-foreground">
-					Paste the address of a pull request or issue, or write <code>owner/repo#123</code>.
-				</p>
-			{/if}
 		</div>
 	</Card.Content>
 </Card.Root>

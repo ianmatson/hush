@@ -3,7 +3,7 @@ title: Views
 description: The tabs in the top bar. Each view shows the open pull requests and issues that its GitHub searches find.
 ---
 
-A **view** is a tab in the top bar. It shows the open pull requests and issues that its [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests) find, and the single items that you add to it. Hush starts with one view, **Mine**: the work that involves you.
+A **view** is a tab in the top bar. It shows the open pull requests and issues that its [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests) find. Hush starts with one view, **Mine**: the work that involves you.
 
 {{ref:views}}
 
@@ -51,15 +51,12 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 
 **Settings → Views → Teams** lists your teams. Turn off big teams (such as “everyone”) to cut noise. **Look up teams again** finds new teams at once; otherwise Hush looks every 6 hours.
 
-## Single items
-
-Under **Single items**, paste the address of a pull request or issue (or `owner/repo#123`). The view shows it while it is open, whatever its searches find. You can add up to 50 single items in all your views.
-
 ## In a view
 
-- A view that can find both types has a switch: **Pull requests** and **Issues**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
+- At the top, a switch shows **Pull requests** or **Issues**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
 - The list groups the items by whose turn it is. See [Pull requests and issues](/docs/pull-requests-and-issues).
 - The pencil button next to the switch opens the view in **Settings → Views**.
+- A view has no filter box. To find an item, press {{key:palette}} or {{key:list.search}} to search.
 - The number on a tab counts the items in the view that are your turn.
 - {{key:dash.view.1}} to {{key:dash.view.9}} open your first nine views.
 - On a narrow window, views that do not fit go in **More**. On a phone, the top bar is one menu.
@@ -72,7 +69,7 @@ The [inbox](/docs/inbox#what-comes-in) gets only the notifications about the pul
 
 In **Settings → Views**:
 
-- Change a view's name, searches, and single items.
+- Change a view's name and searches.
 - Move a view up or down. The top bar shows the views in this order.
 - Delete a view with the trash button. You keep at least one view.
 - **Defaults** puts back the Mine view and removes the others. Nothing changes until you choose **Save**.
@@ -91,14 +88,12 @@ Views are the [`views`](/docs/settings#views) setting:
 		{
 			"id": "mine",
 			"name": "Mine",
-			"searches": ["is:pr is:open review-requested:@me", "is:open involves:@me"],
-			"items": []
+			"searches": ["is:pr is:open review-requested:@me", "is:open involves:@me"]
 		},
 		{
 			"id": "website",
 			"name": "Website",
-			"searches": ["repo:acme/website is:open"],
-			"items": ["acme/api#77"]
+			"searches": ["repo:acme/website is:open"]
 		}
 	]
 }

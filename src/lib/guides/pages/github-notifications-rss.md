@@ -61,14 +61,12 @@ Make a [view](/docs/views), then make a feed of it in **Settings → Views**. Fo
 		{
 			"id": "mine",
 			"name": "Mine",
-			"searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"],
-			"items": []
+			"searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"]
 		},
 		{
 			"id": "web-reviews",
 			"name": "Web reviews",
-			"searches": ["repo:acme/web is:pr is:open review-requested:@me"],
-			"items": []
+			"searches": ["repo:acme/web is:pr is:open review-requested:@me"]
 		}
 	]
 }

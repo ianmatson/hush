@@ -1,9 +1,9 @@
 ---
 title: Query language
-description: The one-line syntax of the filter boxes and category rules, with every word and value.
+description: The one-line syntax of the inbox filter box and category rules, with every word and value.
 ---
 
-One short syntax filters the inbox and your [views](/docs/views), and writes the rules of [categories](/docs/categories#rules):
+One short syntax filters the inbox and writes the rules of [categories](/docs/categories#rules):
 
 ```query
 repo:acme/* needs:review -author:bots label:"good first issue" login bug
@@ -58,7 +58,7 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 category:high-effort,medium-effort
 ```
 
-It works in the Filter boxes of the inbox and of your views. For a notification, it matches the categories of its PR or issue. The rules of categories cannot use it. `category:` is not an old name for `in:`. There is no `tag:`: an item has one category from each group.
+It works in the inbox Filter box. For a notification, it matches the categories of its PR or issue. The rules of categories cannot use it. `category:` is not an old name for `in:`. There is no `tag:`: an item has one category from each group.
 
 ## Words for notifications
 

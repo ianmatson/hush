@@ -5,7 +5,7 @@ description: Which notifications come in, how Hush sorts them, what each tab and
 
 ## What comes in
 
-Hush tracks the pull requests and issues of your [views](/docs/views): what their searches find, and their single items. Your GitHub notifications are a second stream of information about these items. Hush keeps only the notifications about them:
+Hush tracks the pull requests and issues that the searches of your [views](/docs/views) find. Your GitHub notifications are a second stream of information about these items. Hush keeps only the notifications about them:
 
 - A notification about a PR or issue that is in no view does not come in.
 - A notification that is not about a PR or issue does not come in: releases, CI and workflow runs, discussions, commits, security alerts, and invitations. Hush removed the threads of this type that you had.

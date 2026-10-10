@@ -63,10 +63,9 @@ A complete example:
 		{
 			"id": "mine",
 			"name": "Mine",
-			"searches": ["is:open involves:@me org:acme", "is:pr is:open review-requested:@me org:acme"],
-			"items": []
+			"searches": ["is:open involves:@me org:acme", "is:pr is:open review-requested:@me org:acme"]
 		},
-		{ "id": "web", "name": "Web", "searches": ["repo:acme/web is:open"], "items": [] }
+		{ "id": "web", "name": "Web", "searches": ["repo:acme/web is:open"] }
 	],
 	"dash": {
 		"excludedTeams": ["acme/everyone"],

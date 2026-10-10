@@ -151,14 +151,12 @@ An item with the `security` label is in Security. Jev also puts an item there wh
 				"is:pr is:open review-requested:@me",
 				"is:open involves:@me",
 				"is:pr is:open reviewed-by:@me -author:@me"
-			],
-			"items": []
+			]
 		},
 		{
 			"id": "my-repos",
 			"name": "My repos",
-			"searches": ["repo:acme/web is:open", "repo:acme/api is:open"],
-			"items": []
+			"searches": ["repo:acme/web is:open", "repo:acme/api is:open"]
 		}
 	]
 }

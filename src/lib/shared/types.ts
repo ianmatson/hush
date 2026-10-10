@@ -237,7 +237,6 @@ export interface ItemView {
 	id: string;
 	name: string;
 	searches: string[];
-	items: string[];
 }
 
 export interface DashSettings {

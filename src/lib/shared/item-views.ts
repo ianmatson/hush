@@ -1,4 +1,3 @@
-import { subjectKeyOfUrl } from './subject';
 import type { DashKind, DashSection, ItemView } from './types';
 
 export const MAX_VIEWS = 12;
@@ -7,7 +6,6 @@ export const MAX_VIEW_NAME_CHARS = 40;
 export const MAX_SEARCH_CHARS = 256;
 export const MAX_SOURCE_COUNT_SEARCHES = 10;
 export const SOURCE_RESULTS_MAX = 100;
-export const MAX_TRACKED = 50;
 const SORTS = /(?:^|\s)sort:/i;
 export const newestFirst = (query: string) =>
 	SORTS.test(query) ? query : `${query} sort:updated-desc`;
@@ -30,8 +28,7 @@ export const DEFAULT_VIEWS: ItemView[] = [
 			'is:pr is:open review-requested:@me',
 			'is:open involves:@me',
 			'is:pr is:open reviewed-by:@me -author:@me'
-		],
-		items: []
+		]
 	}
 ];
 
@@ -47,8 +44,7 @@ export function searchKinds(query: string): DashKind[] {
 	return DASH_KINDS;
 }
 
-export function viewKinds(view: Pick<ItemView, 'searches' | 'items'>): DashKind[] {
-	if (view.items.length) return DASH_KINDS;
+export function viewKinds(view: Pick<ItemView, 'searches'>): DashKind[] {
 	return DASH_KINDS.filter((kind) => view.searches.some((q) => searchKinds(q).includes(kind)));
 }
 
@@ -63,16 +59,6 @@ export function sectionsFor(kind: DashKind, views: ItemView[]): DashSection[] {
 	);
 }
 
-export const trackedItemsOf = (views: ItemView[]) => [...new Set(views.flatMap((v) => v.items))];
-
-export function trackedKeyOf(input: string): string | null {
-	const text = input.trim();
-	const fromUrl = subjectKeyOfUrl(text);
-	if (fromUrl) return fromUrl;
-	const short = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(text);
-	return short ? `${short[1]}#${Number(short[2])}` : null;
-}
-
 function validateView(v: Partial<ItemView> | null, ids: Set<string>): string | null {
 	if (typeof v?.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(v.id))
 		return 'Each view needs a short id.';
@@ -80,16 +66,12 @@ function validateView(v: Partial<ItemView> | null, ids: Set<string>): string | n
 	ids.add(v.id);
 	if (typeof v.name !== 'string' || !v.name.trim() || v.name.length > MAX_VIEW_NAME_CHARS)
 		return `Each view needs a name (${MAX_VIEW_NAME_CHARS} characters or fewer).`;
-	if (!Array.isArray(v.searches) || v.searches.length > MAX_VIEW_SEARCHES)
+	if (!Array.isArray(v.searches) || !v.searches.length) return `"${v.name}": add a search.`;
+	if (v.searches.length > MAX_VIEW_SEARCHES)
 		return `"${v.name}": up to ${MAX_VIEW_SEARCHES} searches are allowed.`;
 	for (const q of v.searches)
 		if (typeof q !== 'string' || !q.trim() || q.length > MAX_SEARCH_CHARS)
 			return `"${v.name}": each search must have 1–${MAX_SEARCH_CHARS} characters.`;
-	if (!Array.isArray(v.items)) return `"${v.name}": "items" must be a list.`;
-	for (const key of v.items)
-		if (typeof key !== 'string' || trackedKeyOf(key) !== key)
-			return `"${v.name}": “${String(key)}” is not a PR or issue such as "owner/repo#123".`;
-	if (!v.searches.length && !v.items.length) return `"${v.name}": add a search or an item.`;
 	return null;
 }
 
@@ -102,7 +84,5 @@ export function validateViews(views: unknown): string | null {
 		const err = validateView(v, ids);
 		if (err) return err;
 	}
-	if (trackedItemsOf(views as ItemView[]).length > MAX_TRACKED)
-		return `Up to ${MAX_TRACKED} single items are allowed in all views.`;
 	return null;
 }

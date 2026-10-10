@@ -58,12 +58,6 @@ export interface SubjectFacts {
 /** "owner/repo#123": the store's key. */
 export const subjectKey = (repo: string, number: number) => `${repo}#${number}`;
 
-/** The key of a github.com PR or issue URL, or null. */
-export function subjectKeyOfUrl(url: string): string | null {
-	const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/(\d+)/);
-	return m ? subjectKey(m[1], Number(m[2])) : null;
-}
-
 /** Both URL forms GitHub uses for a subject (threads store either). */
 export function subjectUrls(key: string): [string, string] {
 	const [repo, n] = key.split('#');
