@@ -31,9 +31,8 @@
 	}));
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
-	const yourTurnIn = (d: DashResponse | undefined, viewId: string) =>
-		d?.items.filter((i) => i.turn === 'you' && !i.dismissed && i.sections.includes(viewId))
-			.length ?? 0;
+	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
+		d?.items.filter((i) => i.unread && !i.dismissed && i.sections.includes(viewId)).length ?? 0;
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);
@@ -43,7 +42,7 @@
 		...(me.data?.settings.views ?? []).map((v) => ({
 			href: `/v/${v.id}`,
 			label: v.name,
-			badge: yourTurnIn(prs.data, v.id) + yourTurnIn(issues.data, v.id)
+			badge: unreadIn(prs.data, v.id) + unreadIn(issues.data, v.id)
 		})),
 		{ href: '/inbox', label: 'Inbox', badge: inboxCount.data }
 	]);

@@ -70,7 +70,7 @@
 						marks={PREVIEW_MARKS}
 						hidden={rows[kind]}
 						onopen={noop}
-						onhide={noop}
+						onsnooze={noop}
 						onmute={noop}
 						oncopy={noop}
 						onrowclick={noop}

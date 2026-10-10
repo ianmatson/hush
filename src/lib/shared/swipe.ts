@@ -20,15 +20,30 @@ export const SWIPE_ACTIONS: Record<SwipeKind, { id: string; label: string }[]> =
 	],
 	dash: [
 		{ id: 'none', label: 'Nothing' },
-		{ id: 'hide', label: 'Hide until it changes' },
-		{ id: 'mute', label: 'Mute' }
+		{ id: 'snooze', label: 'Snooze until new activity' },
+		{ id: 'mute', label: 'Mute' },
+		{ id: 'read', label: 'Read / unread' }
 	]
 };
 
 export const DEFAULT_SWIPE: SwipeSettings = {
 	inbox: { right: 'done', left: 'snooze' },
-	dash: { right: 'hide', left: 'mute' }
+	dash: { right: 'snooze', left: 'mute' }
 };
+
+export function knownSwipe(
+	saved: Partial<Record<SwipeKind, Partial<SwipePair>>> | undefined
+): SwipeSettings {
+	const pairOf = (kind: SwipeKind): SwipePair => {
+		const savedPair = saved?.[kind] ?? {};
+		const choose = (side: keyof SwipePair) => {
+			const id = savedPair[side];
+			return SWIPE_ACTIONS[kind].some((a) => a.id === id) ? id! : DEFAULT_SWIPE[kind][side];
+		};
+		return { ...DEFAULT_SWIPE[kind], left: choose('left'), right: choose('right') };
+	};
+	return { inbox: pairOf('inbox'), dash: pairOf('dash') };
+}
 
 export function validateSwipe(v: unknown): string | null {
 	if (typeof v !== 'object' || v === null) return '"swipe" must be an object.';

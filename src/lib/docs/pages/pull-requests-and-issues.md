@@ -77,20 +77,44 @@ A view has no filter box: its searches decide what is in it. To find a pull requ
 
 ## Actions
 
-| Action                | Key                     | What it does                                                                                                                                                                                           |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Peek                  | {{key:list.peek}}       | Read it in the [peek](/docs/peek), and act on GitHub from there.                                                                                                                                       |
-| Main action           | {{key:list.open}}       | Review, Fix CI, Reply… on GitHub.                                                                                                                                                                      |
-| Open on GitHub        | {{key:list.openGitHub}} | The PR or issue itself.                                                                                                                                                                                |
-| Hide until it changes | {{key:dash.hide}}       | Hides the item until something new happens on it. The inbox does not change (Done there does not hide it here).                                                                                        |
-| Mute                  | {{key:dash.mute}}       | Hides the item until you unmute it, and mutes its thread in the inbox (you are unsubscribed on GitHub). Mute in the inbox mutes it here too. **Show hidden items** lists muted items, with **Unmute**. |
-| Show hidden items     | {{key:dash.showHidden}} | Shows hidden items, to show one again.                                                                                                                                                                 |
-| Copy link             | {{key:list.copy}}       | Copies the links of the item or the selection.                                                                                                                                                         |
-| Refresh               | {{key:list.refresh}}    | Searches GitHub again now.                                                                                                                                                                             |
+| Action                       | Key                         | What it does                                                                       |
+| ---------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| Peek                         | {{key:list.peek}}           | Read it in the [peek](/docs/peek), and act on GitHub from there.                   |
+| Main action                  | {{key:list.open}}           | Review, Fix CI, Reply… on GitHub.                                                  |
+| Open on GitHub               | {{key:list.openGitHub}}     | The PR or issue itself.                                                            |
+| Snooze until new activity    | {{key:dash.snooze}}         | The item leaves the list until something new happens on it. See [Snooze](#snooze). |
+| Snooze until tomorrow        | {{key:dash.snoozeTomorrow}} | The item leaves the list until tomorrow at 9:00.                                   |
+| Mute                         | {{key:dash.mute}}           | The item leaves the list until you unmute it.                                      |
+| Mark as read or unread       | {{key:dash.read}}           | See [Unread](#unread).                                                             |
+| Show snoozed and muted items | {{key:dash.showSnoozed}}    | Lists the items that you snoozed or muted, to wake one up or unmute it.            |
+| Copy link                    | {{key:list.copy}}           | Copies the links of the item or the selection.                                     |
+| Refresh                      | {{key:list.refresh}}        | Searches GitHub again now.                                                         |
+
+## Snooze
+
+Snooze takes an item out of the list for a while. Choose **Snooze** in the item's menu (right-click, or **⋯** on a phone), in the bar at the bottom of the [peek](/docs/peek), or in the bar for a selection. The choices:
+
+- **Until new activity**: the item comes back when something new happens on it on GitHub, such as a comment, a review, or a commit. This is {{key:dash.snooze}}.
+- **A time**: 1 hour, 3 hours, tomorrow at 9:00 ({{key:dash.snoozeTomorrow}}), or next Monday at 9:00. The item comes back at that time, also if something happens before.
+- **Until something happens**: CI passes, CI finishes, someone approves, a new review, new commits, someone replies, or it is merged or closed. The item comes back when that happens, when it is merged or closed, or after 7 days. A choice that is already true is greyed out.
+
+**Mute** takes an item out of the list until you unmute it.
+
+The **Snoozed** button at the top shows the number of snoozed and muted items. Choose it to list them, with until when each one sleeps. **Wake up** ({{key:dash.snooze}}) puts an item back in the list now; **Unmute** ({{key:dash.mute}}) ends a mute.
+
+Snooze and Mute stay in Hush. They do not change your notifications on GitHub, and they do not change the inbox.
+
+## Unread
+
+An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label alone does not count. An unread item has a dot on its avatar and a bold title.
+
+You look at an item when you keep it open in the peek for a moment, open its full page, or open it on GitHub from Hush. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
+
+The number on each view in the top bar is the number of its unread items that are not snoozed or muted.
 
 ### Select many
 
-Select many items to hide, mute, or copy them together, the same as in the [inbox](/docs/inbox#select-many).
+Select many items to snooze, mute, mark as read, or copy them together, the same as in the [inbox](/docs/inbox#select-many).
 
 ## Refresh
 

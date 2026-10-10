@@ -48,7 +48,7 @@ describe('keymap', () => {
 	it('finds the command for a key in the active scopes', () => {
 		const map = bindings();
 		expect(commandIn(map, 'e', ['list', 'inbox'])).toBe('inbox.done');
-		expect(commandIn(map, 'e', ['list', 'dash'])).toBe('dash.hide');
+		expect(commandIn(map, 'e', ['list', 'dash'])).toBe('dash.snooze');
 		expect(commandIn(map, 'Mod+k', ['global'])).toBe('palette');
 		expect(commandIn(map, 'q', ['list', 'inbox'])).toBeNull();
 	});
@@ -60,7 +60,7 @@ describe('keymap', () => {
 		expect(commandIn(map, 'c', ['list'])).toBeNull();
 		expect(conflicts(map, 'peek.approve', 'j').map((c) => c.id)).toEqual(['list.next']);
 		// The inbox and the dashboards are never active together.
-		expect(conflicts(map, 'dash.hide', 'd')).toEqual([]);
+		expect(conflicts(map, 'dash.snooze', 'd')).toEqual([]);
 	});
 
 	it('shows keys for people', () => {

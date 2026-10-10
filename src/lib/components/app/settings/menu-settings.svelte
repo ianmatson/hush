@@ -28,7 +28,6 @@
 	import SquareCheck from '@lucide/svelte/icons/square-check';
 	import Zap from '@lucide/svelte/icons/zap';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import ListFilter from '@lucide/svelte/icons/list-filter';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Minus from '@lucide/svelte/icons/minus';
@@ -72,7 +71,6 @@
 		copy: Link,
 		select: SquareCheck,
 		selectAll: SquareCheck,
-		hide: EyeOff,
 		rule: ListFilter
 	};
 	const iconOf = (id: string) =>
@@ -85,8 +83,7 @@
 		snooze: 'Snooze',
 		restore: 'Move to inbox',
 		read: 'Mark as read',
-		select: 'Select',
-		hide: 'Hide until it changes'
+		select: 'Select'
 	};
 	const SUBMENUS = new Set(['snooze']);
 

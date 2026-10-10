@@ -2,6 +2,13 @@ import { classify, globToRegExp, withOverride } from '../../src/lib/shared/class
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
+import {
+	eventSnoozeDeadline,
+	isUnread,
+	markState,
+	MUTED_AT,
+	type SnoozeChoice
+} from '../../src/lib/shared/item-snooze';
 import { FEED_TABS, parseCategoryFeed, parseViewFeed } from '../../src/lib/shared/views';
 import { itemFeedEntry, threadFeedEntry, type FeedEntry } from '../feed-entries';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
@@ -66,8 +73,6 @@ const THREAD_ACTIONS = new Set<ThreadAction>([
 ]);
 // Mute makes 2 GitHub calls per thread; 20 × 2 stays under the Free plan's 50 subrequests.
 const BULK_MAX = 20;
-/** A dashboard mark with no end: muted (hidden until you unmute it, not until it changes). */
-const MUTED_AT = '9999-12-31T23:59:59Z';
 
 /** Why a thread or item does not need you ("Doesn't need me…"): what each answer changes. */
 export type NotNeededAnswer = 'others-reviewed' | 'new-commits' | 'team' | 'bots' | 'once';
@@ -210,6 +215,17 @@ export abstract class PollerData extends PollerDashboard {
 			});
 		}
 		return out;
+	}
+
+	/** Unread again: Hush forgets your last look at these PRs or issues ("owner/repo#123"). */
+	async markUnseen(keys: string[]): Promise<{ ok: true }> {
+		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
+		if (keys.length)
+			this.run(
+				`DELETE FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
+				JSON.stringify(keys)
+			);
+		return { ok: true };
 	}
 
 	/** You looked at these PRs or issues ("owner/repo#123"): "since you looked" starts again. */
@@ -694,30 +710,45 @@ export abstract class PollerData extends PollerDashboard {
 		}));
 	}
 
-	// --- Dashboard marks: hidden ------------------------------------------------------------
+	// --- Dashboard marks: snoozed and muted ------------------------------------------------
 
-	/** A dashboard with your marks applied (hidden lasts until the item changes). */
+	/** A dashboard with your snoozes, mutes, and unread marks applied. */
 	async dashboardView(kind: DashKind, force: boolean): Promise<DashResponse> {
 		const data = await this.dashboard(kind, force);
-		const hidden = this.all<{ item_id: string; updated_at: string }>('SELECT * FROM dash_hidden');
-		// Hidden lasts "until it changes": a newer updatedAt undoes it.
-		const unchanged = (i: DashItem, at: string | undefined) =>
-			!!at && Date.parse(i.updatedAt) <= Date.parse(at);
-		const hiddenAt = new Map(hidden.map((h) => [h.item_id, h.updated_at]));
-		for (const i of data.items) {
-			i.dismissed = unchanged(i, hiddenAt.get(i.id));
-			i.muted = hiddenAt.get(i.id) === MUTED_AT;
-		}
-		// "Since you looked", from the stored facts of each item (the same record as the inbox's).
-		const facts = this.all<{ key: string; facts: string }>(
+		const me = await this.login();
+		const marks = new Map(
+			this.all<{
+				item_id: string;
+				updated_at: string;
+				snoozed_until: number | null;
+				snooze_event: SnoozeEvent | null;
+				snoozed_at: number | null;
+			}>('SELECT * FROM dash_snoozed').map((m) => [
+				m.item_id,
+				{
+					updatedAt: m.updated_at,
+					snoozedUntil: m.snoozed_until,
+					snoozeEvent: m.snooze_event,
+					snoozedAt: m.snoozed_at
+				}
+			])
+		);
+		const subjects = this.all<{ key: string; facts: string }>(
 			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
 			JSON.stringify(data.items.map((i) => i.id))
 		);
-		const since = this.sinceYouLooked(facts, await this.login());
+		const factsOf = new Map(subjects.map((s) => [s.key, JSON.parse(s.facts) as SubjectFacts]));
+		const since = this.sinceYouLooked(subjects, me);
+		const now = Date.now();
 		for (const i of data.items) {
+			const state = markState(marks.get(i.id), i.updatedAt, factsOf.get(i.id), me, now);
+			i.dismissed = state.kind !== 'none';
+			i.muted = state.kind === 'muted';
+			i.snooze = state.kind === 'snoozed' ? state.snooze : undefined;
 			const s = since.get(i.id);
 			i.changes = s?.changes ?? [];
 			i.seenAt = s?.seenAt ?? null;
+			i.unread = isUnread(i.seenAt, i.changes);
 		}
 		return data;
 	}
@@ -787,67 +818,48 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	/** Hide until it changes, on the dashboards only (the inbox has its own Done). */
-	async hide(items: ItemRef[]): Promise<{ ok: true }> {
+	/** Snooze until new activity, until a time, or until something happens (see markState). */
+	async snoozeItems(items: ItemRef[], choice: SnoozeChoice): Promise<{ ok: true }> {
+		const now = Date.now();
+		const until = choice.event ? eventSnoozeDeadline(now) : (choice.until ?? null);
 		this.transaction(() => {
 			for (const i of items)
 				this.run(
-					`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
-           ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
+					`INSERT INTO dash_snoozed (item_id, updated_at, snoozed_until, snooze_event, snoozed_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at,
+             snoozed_until = excluded.snoozed_until, snooze_event = excluded.snooze_event,
+             snoozed_at = excluded.snoozed_at`,
 					i.id,
-					i.updatedAt
+					i.updatedAt,
+					until,
+					choice.event ?? null,
+					now
 				);
 		});
 		return { ok: true };
 	}
 
-	async unhide(ids: string[]): Promise<{ ok: true }> {
+	/** Back in the list: ends a snooze or a mute. */
+	async unsnoozeItems(ids: string[]): Promise<{ ok: true }> {
 		this.transaction(() => {
-			for (const id of ids) this.run('DELETE FROM dash_hidden WHERE item_id = ?', id);
+			for (const id of ids) this.run('DELETE FROM dash_snoozed WHERE item_id = ?', id);
 		});
-		// Unmuted here: its threads you muted are unmuted too (one record).
-		const muted = this.all<{ id: string }>(
-			`SELECT id FROM threads WHERE subject_key IN (${marks(ids.length)}) AND rule = ?`,
-			...ids,
-			MUTED_BY_USER
-		);
-		if (muted.length)
-			await this.threadAction(
-				muted.map((t) => t.id),
-				'unmute',
-				{}
-			);
 		return { ok: true };
 	}
 
-	/**
-	 * Mute on a dashboard: hidden there until you unmute it, and its threads are muted (which
-	 * unsubscribes you on GitHub), the same as Mute in the inbox.
-	 */
-	async mute(ids: string[]): Promise<{ ok: true }> {
+	/** Mute: out of the list until you unmute it. Only in Hush: GitHub does not change. */
+	async muteItems(ids: string[]): Promise<{ ok: true }> {
 		this.transaction(() => {
 			for (const id of ids)
 				this.run(
-					`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
-           ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
+					`INSERT INTO dash_snoozed (item_id, updated_at) VALUES (?, ?)
+           ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at,
+             snoozed_until = NULL, snooze_event = NULL, snoozed_at = NULL`,
 					id,
 					MUTED_AT
 				);
 		});
-		const threads = this.all<{ id: string }>(
-			`SELECT id FROM threads WHERE subject_key IN (${marks(ids.length)}) AND category != 'muted'`,
-			...ids
-		);
-		if (threads.length)
-			await this.threadAction(
-				threads.map((t) => t.id),
-				'mute',
-				{}
-			);
-		else {
-			this.broadcast({ type: 'dash', kind: 'pr' });
-			this.broadcast({ type: 'dash', kind: 'issue' });
-		}
 		return { ok: true };
 	}
 
@@ -862,13 +874,14 @@ export abstract class PollerData extends PollerDashboard {
 			for (const key of keys)
 				if (muted)
 					this.run(
-						`INSERT INTO dash_hidden (item_id, updated_at) VALUES (?, ?)
-             ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at`,
+						`INSERT INTO dash_snoozed (item_id, updated_at) VALUES (?, ?)
+             ON CONFLICT (item_id) DO UPDATE SET updated_at = excluded.updated_at,
+               snoozed_until = NULL, snooze_event = NULL, snoozed_at = NULL`,
 						key,
 						MUTED_AT
 					);
 				else
-					this.run('DELETE FROM dash_hidden WHERE item_id = ? AND updated_at = ?', key, MUTED_AT);
+					this.run('DELETE FROM dash_snoozed WHERE item_id = ? AND updated_at = ?', key, MUTED_AT);
 		});
 		this.broadcast({ type: 'dash', kind: 'pr' });
 		this.broadcast({ type: 'dash', kind: 'issue' });

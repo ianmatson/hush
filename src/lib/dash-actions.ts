@@ -9,11 +9,17 @@ import type { CategoryPin } from '$lib/shared/categories';
 import { itemPagePath } from '$lib/shared/item-page';
 import type { CategoryGroup, DashItem, DashProject, GroupBy } from '$lib/shared/types';
 import { groupByOptions } from '$lib/shared/grouping';
+import type { SnoozeChoice } from '$lib/shared/item-snooze';
+import { alreadyTrue } from '$lib/shared/snooze';
+import { snoozeOptions } from '$lib/time';
 import FolderInput from '@lucide/svelte/icons/folder-input';
 import Sparkles from '@lucide/svelte/icons/sparkles';
 import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-import Eye from '@lucide/svelte/icons/eye';
-import EyeOff from '@lucide/svelte/icons/eye-off';
+import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
+import Mail from '@lucide/svelte/icons/mail';
+import MailOpen from '@lucide/svelte/icons/mail-open';
+import CheckCheck from '@lucide/svelte/icons/check-check';
 import Link from '@lucide/svelte/icons/link';
 import Rows3 from '@lucide/svelte/icons/rows-3';
 import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -25,6 +31,11 @@ import BellOff from '@lucide/svelte/icons/bell-off';
 /** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
 
+export const UNTIL_NEW_ACTIVITY: SnoozeChoice = {};
+
+export const anyUnread = (ctx: DashActionContext, ids: string[]) =>
+	ids.some((id) => ctx.byId(id)?.unread);
+
 /**
  * What the dashboard's menus and ⌘K commands act on. The component passes getters, so each call
  * reads the current list, groups, and selection.
@@ -32,7 +43,8 @@ const key = (id: string) => keysOf(id)[0];
 export interface DashActionContext {
 	/** "pull requests" or "issues". */
 	readonly noun: string;
-	readonly showHidden: boolean;
+	readonly showSnoozed: boolean;
+	readonly unreadCount: number;
 	readonly groupBy: GroupBy;
 	setGroupBy(by: GroupBy): void;
 	/** The visible items' ids, in list order. */
@@ -43,18 +55,21 @@ export interface DashActionContext {
 	byId(id: string): DashItem | undefined;
 	peek(i: DashItem): void;
 	open(i: DashItem, url: string): void;
-	toggleHide(ids: string[]): unknown;
-	/** Mute (hidden until unmuted, and its threads muted), or unmute. */
+	snooze(ids: string[], choice: SnoozeChoice): unknown;
+	unsnooze(ids: string[]): unknown;
+	snoozeSheet(ids: string[]): void;
 	toggleMute(ids: string[]): unknown;
+	setRead(ids: string[], read: boolean): unknown;
+	markAllRead(): unknown;
 	copyLinks(ids: string[]): unknown;
 	refresh(): unknown;
-	toggleShowHidden(): void;
+	toggleShowSnoozed(): void;
 	readonly categoryGroups: CategoryGroup[];
 	readonly projects: DashProject[];
 	pinCategory(ids: string[], pin: CategoryPin): unknown;
 }
 
-/** ⌘K commands: refresh, hidden items, and Group by, then actions on the cursor row or the selection. */
+/** ⌘K commands: refresh, snoozed items, and Group by, then actions on the cursor row or the selection. */
 export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteCommand[] {
 	const cmds: PaletteCommand[] = [
 		{
@@ -65,12 +80,23 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 			run: () => ctx.refresh()
 		},
 		{
-			id: 'act:hidden',
-			label: ctx.showHidden ? `Show ${ctx.noun}` : 'Show hidden items',
-			icon: ctx.showHidden ? Eye : EyeOff,
-			shortcut: key('dash.showHidden'),
-			run: () => ctx.toggleShowHidden()
+			id: 'act:snoozed',
+			label: ctx.showSnoozed ? `Show ${ctx.noun}` : 'Show snoozed and muted items',
+			icon: ctx.showSnoozed ? AlarmClockOff : AlarmClock,
+			shortcut: key('dash.showSnoozed'),
+			run: () => ctx.toggleShowSnoozed()
 		},
+		...(ctx.unreadCount
+			? [
+					{
+						id: 'act:read-all',
+						label: 'Mark all as read',
+						icon: CheckCheck,
+						keywords: ['unread', 'seen', 'clear'],
+						run: () => ctx.markAllRead()
+					}
+				]
+			: []),
 		...groupByOptions(ctx.categoryGroups, ctx.projects)
 			.filter((o) => o.id !== ctx.groupBy)
 			.map((o) => ({
@@ -93,13 +119,39 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 		shortcut: key('list.copy'),
 		run: () => ctx.copyLinks(ids)
 	});
+	const read = anyUnread(ctx, ids);
 	add({
-		id: 'act:hide',
-		label: ctx.showHidden ? 'Show again' : 'Hide until it changes',
-		icon: ctx.showHidden ? Eye : EyeOff,
-		shortcut: key('dash.hide'),
-		run: () => ctx.toggleHide(ids)
+		id: 'act:read',
+		label: read ? 'Mark as read' : 'Mark as unread',
+		icon: read ? MailOpen : Mail,
+		shortcut: key('dash.read'),
+		run: () => ctx.setRead(ids, read)
 	});
+	if (ctx.showSnoozed)
+		add({
+			id: 'act:wake',
+			label: 'Wake up',
+			icon: AlarmClockOff,
+			shortcut: key('dash.snooze'),
+			run: () => ctx.unsnooze(ids)
+		});
+	else {
+		for (const opt of [...snoozeOptions()].reverse())
+			add({
+				id: `act:snooze:${opt.id}`,
+				label: /^\d/.test(opt.label) ? `Snooze for ${opt.label}` : `Snooze until ${opt.label}`,
+				icon: AlarmClock,
+				shortcut: opt.id === 'tomorrow' ? key('dash.snoozeTomorrow') : undefined,
+				run: () => ctx.snooze(ids, { until: opt.until })
+			});
+		add({
+			id: 'act:snooze',
+			label: 'Snooze until new activity',
+			icon: AlarmClock,
+			shortcut: key('dash.snooze'),
+			run: () => ctx.snooze(ids, UNTIL_NEW_ACTIVITY)
+		});
+	}
 	add({
 		id: 'act:mute',
 		label: one?.muted ? 'Unmute' : 'Mute',
@@ -214,20 +266,34 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 				return ids.length
 					? ctx.categoryGroups.filter((g) => g.categories.length).map(groupMenu)
 					: null;
-			case 'hide':
-				return ctx.showHidden
-					? item(id, n('Show again'), Eye, () => ctx.toggleHide(ids), key('dash.hide'))
-					: item(
-							id,
-							n('Hide until it changes'),
-							EyeOff,
-							() => ctx.toggleHide(ids),
-							key('dash.hide')
-						);
+			case 'snooze':
+				if (ctx.showSnoozed)
+					return item(id, n('Wake up'), AlarmClockOff, () => ctx.unsnooze(ids), key('dash.snooze'));
+				return {
+					type: 'snooze',
+					key: id,
+					label: n('Snooze'),
+					icon: AlarmClock,
+					untilNewActivity: true,
+					subjects: ids.map((x) => ctx.byId(x)?.kind ?? 'other'),
+					disabled: ids.length === 1 && one ? alreadyTrue(one) : [],
+					onpick: (choice) => ctx.snooze(ids, choice),
+					sheet: () => ctx.snoozeSheet(ids)
+				};
+			case 'read': {
+				const read = anyUnread(ctx, ids);
+				return item(
+					id,
+					n(read ? 'Mark as read' : 'Mark as unread'),
+					read ? MailOpen : Mail,
+					() => ctx.setRead(ids, read),
+					key('dash.read')
+				);
+			}
 			case 'mute':
 				return item(
 					id,
-					n(one?.muted || (!one && ctx.showHidden) ? 'Unmute' : 'Mute'),
+					n(one?.muted || (!one && ctx.showSnoozed) ? 'Unmute' : 'Mute'),
 					BellOff,
 					() => ctx.toggleMute(ids),
 					key('dash.mute')

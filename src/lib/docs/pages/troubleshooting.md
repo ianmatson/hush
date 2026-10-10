@@ -59,7 +59,7 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 - A view's searches are GitHub searches. Choose the link button next to a search in **Settings → Views** to try it on GitHub.
 - Hush keeps the 100 most recently updated results of each search. Narrow a big search with `repo:`, `label:`, or `org:`.
 - `@team` searches need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
-- Hidden items: press {{key:dash.showHidden}} to show them.
+- Snoozed and muted items: press {{key:dash.showSnoozed}} to show them.
 - Drafts that others opened and PRs and issues that bots opened are hidden by default (**Settings → Views → Filters**): see [`dash.hideOthersDrafts`](/docs/settings#dash-hideothersdrafts) and [`dash.hideBots`](/docs/settings#dash-hidebots).
 
 ## An item is in the wrong category

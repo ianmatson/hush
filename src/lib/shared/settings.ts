@@ -2,7 +2,8 @@ import { DEFAULT_DASH } from './dashboard';
 import { DEFAULT_VIEWS, validateViews } from './item-views';
 import { DEFAULT_CATEGORY_GROUPS } from './categories';
 import { DEFAULT_MENUS, upgradeMenus } from './menus';
-import { DEFAULT_SWIPE } from './swipe';
+import { DEFAULT_SWIPE, knownSwipe } from './swipe';
+import { knownKeys } from './keymap';
 import { DEFAULT_ROWS, knownRowParts } from './row-parts';
 import type { Settings } from './types';
 
@@ -53,10 +54,8 @@ export function parseSettings(json: string | null | undefined): Settings {
 			views: validateViews(raw.views) ? DEFAULT_VIEWS : raw.views!,
 			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
-			swipe: {
-				inbox: { ...DEFAULT_SWIPE.inbox, ...(raw.swipe?.inbox ?? {}) },
-				dash: { ...DEFAULT_SWIPE.dash, ...(raw.swipe?.dash ?? {}) }
-			},
+			swipe: knownSwipe(raw.swipe),
+			keys: knownKeys(raw.keys),
 			rows: knownRowParts(raw.rows ?? {}),
 			alertChannels: { ...DEFAULT_SETTINGS.alertChannels, ...(raw.alertChannels ?? {}) }
 		};

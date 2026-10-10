@@ -52,7 +52,14 @@ describe('menus', () => {
 			'not-needed',
 			'done'
 		]);
-		expect(upgradeMenus(old).dash).toEqual(['peek', 'page', 'hide', 'categories', 'mute']);
+		expect(upgradeMenus(old).dash).toEqual([
+			'peek',
+			'page',
+			'mute',
+			'read',
+			'categories',
+			'snooze'
+		]);
 		// Saved after an item existed and without it: you removed it, so it stays out.
 		expect(upgradeMenus({ ...old, v: 2 }).inbox).toEqual([
 			'peek',
@@ -67,12 +74,30 @@ describe('menus', () => {
 		expect(upgradeMenus({ inbox: ['done'] }).inbox).toEqual(['done', 'rule', 'not-needed', 'page']);
 	});
 
-	it('drops items that are gone, and adds Categories after Hide', () => {
+	it('drops items that are gone, and adds the new ones', () => {
 		const saved = {
 			inbox: ['done'],
 			dash: ['move', 'category', 'tags', 'undoMove', 'hide', 'not-needed'],
 			v: 6
 		};
-		expect(upgradeMenus(saved).dash).toEqual(['hide', 'categories']);
+		expect(upgradeMenus(saved).dash).toEqual(['categories', 'snooze', 'read']);
+	});
+
+	it('turns the last default dashboard menu into the new default', () => {
+		const lastDefault = [
+			'peek',
+			'page',
+			'main',
+			'github',
+			SEP,
+			'categories',
+			'hide',
+			'mute',
+			'copy',
+			SEP,
+			'select',
+			'selectAll'
+		];
+		expect(upgradeMenus({ dash: lastDefault, v: 7 }).dash).toEqual(DEFAULT_MENUS.dash);
 	});
 });

@@ -25,6 +25,18 @@ describe('settings file', () => {
 		});
 	});
 
+	it('drops swipe actions and key commands that are gone', () => {
+		const s = parseSettings(
+			JSON.stringify({
+				swipe: { dash: { right: 'hide', left: 'read' } },
+				keys: { 'dash.hide': ['z'], 'dash.read': ['y'] }
+			})
+		);
+		expect(s.swipe.dash).toEqual({ right: 'snooze', left: 'read' });
+		expect(s.keys).toEqual({ 'dash.read': ['y'] });
+		expect(validateSettings(s, ['swipe', 'keys'])).toBeNull();
+	});
+
 	it('refuses other files', () => {
 		expect(settingsFromFile('{"hush":2,"settings":{"pushFyi":true,"nope":1}}')).toEqual({
 			pushFyi: true

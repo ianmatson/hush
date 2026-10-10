@@ -102,7 +102,7 @@ Each action works on the row under the cursor, or on every selected row.
 
 After each action, a message with **Undo** shows for a few seconds.
 
-**Done is for one event; Mute is for the whole PR or issue.** Done only clears the notification: a pull request or issue has many events, so it stays in your [views](/docs/pull-requests-and-issues#actions). Mute hides it there too, until you unmute it, and **Mute** there mutes its thread here. Unmute works on both.
+**Done is for one event; Mute is for the whole PR or issue.** Done only clears the notification: a pull request or issue has many events, so it stays in your [views](/docs/pull-requests-and-issues#actions). Mute takes it out of your views too, until you unmute it. **Mute** in a view stays in the view: it does not change the inbox.
 
 ### What comes back by itself
 

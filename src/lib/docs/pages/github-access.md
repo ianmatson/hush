@@ -24,16 +24,17 @@ For a [custom token](#custom-token) from the GitHub CLI, run `gh auth refresh -s
 
 ## What Hush does on GitHub
 
-| In Hush                             | On GitHub                                                                           |
-| ----------------------------------- | ----------------------------------------------------------------------------------- |
-| Done                                | Marks the notification as done.                                                     |
-| Mute                                | Unsubscribes you from the thread, and marks it as done.                             |
-| Read                                | Marks the notification as read.                                                     |
-| Unread                              | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
-| Snooze, Move to inbox, Unmute, Hide | Nothing. These stay in Hush.                                                        |
-| Actions in the peek                 | The action itself: a review, a comment, a merge, a re-run, a close.                 |
-| Project status in the peek          | Changes the item's status, moves it to another project, or removes it.              |
-| A reaction in the peek              | Adds your reaction, or removes it.                                                  |
+| In Hush                          | On GitHub                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| Done                             | Marks the notification as done.                                                     |
+| Mute in the inbox                | Unsubscribes you from the thread, and marks it as done.                             |
+| Read                             | Marks the notification as read.                                                     |
+| Unread                           | Nothing. GitHub has no way to mark a notification as unread, so this stays in Hush. |
+| Snooze, Move to inbox, Unmute    | Nothing. These stay in Hush.                                                        |
+| Snooze, Mute, and Read in a view | Nothing. These stay in Hush.                                                        |
+| Actions in the peek              | The action itself: a review, a comment, a merge, a re-run, a close.                 |
+| Project status in the peek       | Changes the item's status, moves it to another project, or removes it.              |
+| A reaction in the peek           | Adds your reaction, or removes it.                                                  |
 
 ## When an org is missing
 

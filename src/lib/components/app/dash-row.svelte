@@ -14,10 +14,11 @@
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
 	import Bell from '@lucide/svelte/icons/bell';
 	import BellOff from '@lucide/svelte/icons/bell-off';
-	import Eye from '@lucide/svelte/icons/eye';
+	import { snoozeLabel } from '$lib/shared/item-snooze';
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -40,7 +41,7 @@
 		marks = [],
 		hidden = [],
 		onopen,
-		onhide,
+		onsnooze,
 		onmute,
 		oncopy,
 		onrowclick,
@@ -58,8 +59,7 @@
 		marks?: RowMark[];
 		hidden?: string[];
 		onopen: (i: DashItem, url: string) => void;
-		onhide: (i: DashItem) => void;
-		/** Mute (hidden until unmuted, and its threads muted), or unmute. */
+		onsnooze: (i: DashItem) => void;
 		onmute: (i: DashItem) => void;
 		oncopy: (i: DashItem) => void;
 		onrowclick: (e: MouseEvent) => void;
@@ -154,7 +154,7 @@
 	data-selected={selected || undefined}
 	data-checked={checked || undefined}
 	class={cn(
-		'group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
+		'row group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
 		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]',
 		i.dismissed && 'opacity-60'
@@ -165,10 +165,20 @@
 	aria-selected={selected || checked}
 >
 	<SelectMark {checked} {selecting} label="Select {i.title}" {ontoggle}>
-		<Avatar.Root class="size-7 sm:size-8">
-			<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
-			<Avatar.Fallback class="text-[0.65rem]">{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback>
-		</Avatar.Root>
+		<span class="relative block size-7 sm:size-8">
+			<Avatar.Root class="size-7 sm:size-8">
+				<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
+				<Avatar.Fallback class="text-[0.65rem]"
+					>{i.author.slice(0, 2).toUpperCase()}</Avatar.Fallback
+				>
+			</Avatar.Root>
+			{#if i.unread}
+				<span
+					class="absolute top-0 right-0 size-2.5 rounded-full bg-signal-review ring-2 ring-(--row-bg)"
+					aria-label="Unread"
+				></span>
+			{/if}
+		</span>
 	</SelectMark>
 
 	<div class="min-w-0 flex-1">
@@ -178,9 +188,21 @@
 				target="_blank"
 				rel="noreferrer"
 				draggable="false"
-				class="line-clamp-2 text-[0.8125rem] font-medium sm:truncate sm:text-sm"
+				class={cn(
+					'line-clamp-2 text-[0.8125rem] sm:truncate sm:text-sm',
+					i.unread ? 'font-semibold' : 'font-medium'
+				)}
 				onclick={(e) => e.preventDefault()}>{i.title}</a
 			>
+			{#if i.muted}
+				<span class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+					><BellOff class="size-3" />Muted</span
+				>
+			{:else if i.snooze}
+				<span class="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
+					><AlarmClock class="size-3" />{snoozeLabel(i.snooze)}</span
+				>
+			{/if}
 			{#if show('time') && i.stale}
 				<span class="shrink-0 text-xs font-medium text-signal-warn tabular-nums"
 					>waiting {since(i.waitingSince)}</span
@@ -324,19 +346,19 @@
 							{...props}
 							variant="ghost"
 							size="icon-sm"
-							aria-label={i.dismissed ? 'Show again' : 'Hide until it changes'}
+							aria-label={i.dismissed ? 'Wake up' : 'Snooze until new activity'}
 							onclick={(e) => {
 								e.stopPropagation();
-								onhide(i);
+								onsnooze(i);
 							}}
 						>
-							{#if i.dismissed}<Eye />{:else}<EyeOff />{/if}
+							{#if i.dismissed}<AlarmClockOff />{:else}<AlarmClock />{/if}
 						</Button>
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content
-					>{i.dismissed ? 'Show again' : 'Hide until it changes'}
-					<kbd class="ml-1 opacity-60">{keysOf('dash.hide')[0] ?? ''}</kbd></Tooltip.Content
+					>{i.dismissed ? 'Wake up' : 'Snooze until new activity'}
+					<kbd class="ml-1 opacity-60">{keysOf('dash.snooze')[0] ?? ''}</kbd></Tooltip.Content
 				>
 			</Tooltip.Root>
 			<Tooltip.Root>
@@ -357,7 +379,7 @@
 					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content
-					>{i.muted ? 'Unmute' : 'Mute: hide until you unmute it'}
+					>{i.muted ? 'Unmute' : 'Mute: out of the list until you unmute it'}
 					<kbd class="ml-1 opacity-60">{keysOf('dash.mute')[0] ?? ''}</kbd></Tooltip.Content
 				>
 			</Tooltip.Root>
@@ -396,3 +418,18 @@
 		</Button>
 	</div>
 </div>
+
+<style>
+	.row {
+		--row-bg: var(--background);
+	}
+	.row:hover {
+		--row-bg: color-mix(in oklch, var(--muted) 50%, var(--background));
+	}
+	.row[data-selected] {
+		--row-bg: color-mix(in oklch, var(--muted) 60%, var(--background));
+	}
+	.row[data-checked] {
+		--row-bg: color-mix(in oklch, var(--primary) 6%, var(--background));
+	}
+</style>

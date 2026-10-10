@@ -104,7 +104,7 @@ A thread that stays open in the peek for a moment is marked as read, also on Git
 
 The bar at the bottom of the peek has two parts:
 
-1. The buttons of the page that you are on: **Done**, **Snooze**, **Mute**, and **Read** in the inbox; **Hide until it changes** and **Copy link** in a view.
+1. The buttons of the page that you are on: **Done**, **Snooze**, **Mute**, and **Read** in the inbox; **Snooze** and **Copy link** in a view.
 2. The **actions on GitHub**: a main button, and **More** for the rest.
 
 The main button is the action that fits what the thread asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).

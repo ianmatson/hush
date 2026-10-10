@@ -10,7 +10,7 @@ Hush works from the keyboard. Press {{key:list.help}} on any list to see the sho
 {{key:palette}} opens the command palette. Type to find:
 
 - **Threads, pull requests, and issues** by title or repository. Enter peeks at it; `Mod`+Enter opens it on GitHub.
-- **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Peek, Hide…
+- **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Mark as read, Peek…
 - **Group by** for the view you are in: type “group by”.
 - **Pages**: every view, every inbox tab, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
@@ -38,7 +38,7 @@ Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row
 
 ## Where keys work
 
-A key works in one scope. Keys can repeat across scopes that are never active together ({{key:inbox.done}} is Done in the inbox and {{key:dash.hide}} is Hide in a view), but not inside scopes that are active at the same time.
+A key works in one scope. Keys can repeat across scopes that are never active together ({{key:inbox.done}} is Done in the inbox and {{key:dash.snooze}} is Snooze in a view), but not inside scopes that are active at the same time.
 
 - **Everywhere**: on every page.
 - **Lists**: the inbox and the Pull requests and Issues tabs.

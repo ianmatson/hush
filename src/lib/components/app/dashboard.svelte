@@ -2,7 +2,17 @@
 	import PeekHost from '$lib/components/app/peek-host.svelte';
 	import { closeRowMenus } from '$lib/row-menus.svelte';
 	import { untrack } from 'svelte';
-	import { dashCommands, dashMenu, type DashActionContext } from '$lib/dash-actions';
+	import {
+		dashCommands,
+		dashMenu,
+		UNTIL_NEW_ACTIVITY,
+		type DashActionContext
+	} from '$lib/dash-actions';
+	import { snoozeLabel, type SnoozeChoice } from '$lib/shared/item-snooze';
+	import { alreadyTrue } from '$lib/shared/snooze';
+	import { snoozeOptions } from '$lib/time';
+	import SnoozeButton from './snooze-button.svelte';
+	import SnoozeSheet from './snooze-sheet.svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
@@ -86,9 +96,11 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import EyeOff from '@lucide/svelte/icons/eye-off';
-	import Eye from '@lucide/svelte/icons/eye';
+	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
+	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
 	import BellOff from '@lucide/svelte/icons/bell-off';
+	import Mail from '@lucide/svelte/icons/mail';
+	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Link from '@lucide/svelte/icons/link';
 	import Rows3 from '@lucide/svelte/icons/rows-3';
@@ -177,7 +189,8 @@
 	}
 	let refreshing = $state(false);
 	let categoryFilter = $state<CategoryFilter | null>(null);
-	let showHidden = $state(false);
+	let showSnoozed = $state(false);
+	let snoozeSheetIds = $state<string[] | null>(null);
 	let selectedId = $state<string | null>(null);
 	let helpOpen = $state(false);
 	const DEFAULT_COLLAPSED = new Set(['drafts']);
@@ -210,7 +223,8 @@
 		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
 	const hiddenPartsOf = (i: DashItem) => me.data?.settings.rows[i.kind] ?? [];
 
-	const hiddenCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
+	const snoozedCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
+	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
 
 	const peekOwner = $derived(`view:${view.id}:${showing}`);
 	const owns = $derived(peek.owner === peekOwner);
@@ -218,7 +232,7 @@
 	const filtered = $derived.by(() => {
 		const listed = (data?.items ?? []).filter(
 			(i) =>
-				i.dismissed === showHidden &&
+				i.dismissed === showSnoozed &&
 				inView(i) &&
 				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups))
 		);
@@ -308,8 +322,9 @@
 	// something to reset).
 	$effect(() => {
 		const i = peekItem;
-		if (!i || (i.seenAt && !i.changes?.length)) return;
-		const timer = setTimeout(() => api.seen([i.id]).catch(() => {}), 1500);
+		if (!i?.unread) return;
+		const id = i.id;
+		const timer = setTimeout(() => markSeenHere([id]), 1500);
 		return () => clearTimeout(timer);
 	});
 	$effect(() => {
@@ -489,7 +504,7 @@
 			palette.peekRequest = null;
 			if (!item) return;
 			categoryFilter = null;
-			showHidden = !!item.dismissed;
+			showSnoozed = !!item.dismissed;
 			sel.clear();
 			peekedOutsideKey = null;
 			const lead = stackOf.get(item.id)?.mostUrgentInList ?? item;
@@ -532,10 +547,6 @@
 			setSettings(settings);
 			toast.error((err as Error).message);
 		}
-	}
-
-	function setDismissed(ids: Set<string>, dismissed: boolean) {
-		patchItems(ids, (x) => ({ ...x, dismissed }));
 	}
 
 	async function pin(
@@ -581,29 +592,34 @@
 		);
 	}
 
-	/** Mute: hidden until you unmute it, and its threads muted (see PollerData.mute). */
+	function leaveRows(set: Set<string>) {
+		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
+		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
+		sel.clear();
+	}
+
+	const describe = (items: DashItem[]) =>
+		items.length === 1 ? items[0].title : `${items.length} items`;
+
 	async function toggleMute(ids: string[]) {
 		const items = ids.map(byId).filter((i): i is DashItem => !!i);
 		if (!items.length) return;
 		const mute = !items[0].muted;
 		const set = new Set(items.map((i) => i.id));
-		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
-		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
-		sel.clear();
+		leaveRows(set);
 		await cancelDash();
-		patchItems(set, (x) => ({ ...x, dismissed: mute, muted: mute }));
+		patchItems(set, (x) => ({ ...x, dismissed: mute, muted: mute, snooze: undefined }));
 		try {
 			if (mute) await api.muteItems([...set]);
-			else await api.unhide([...set]);
-			refetchUnlessLive(keys.threadsAll);
+			else await api.unsnoozeItems([...set]);
 			toast(mute ? 'Muted' : 'Unmuted', {
-				description: items.length === 1 ? items[0].title : `${items.length} items`,
+				description: describe(items),
 				action: mute
 					? {
 							label: 'Undo',
 							onClick: () => {
 								api
-									.unhide([...set])
+									.unsnoozeItems([...set])
 									.then(invalidateDash)
 									.catch((e) => toast.error(e.message));
 							}
@@ -616,43 +632,94 @@
 		}
 	}
 
-	async function toggleHide(ids: string[]) {
+	async function snooze(ids: string[], choice: SnoozeChoice) {
 		const items = ids.map(byId).filter((i): i is DashItem => !!i);
 		if (!items.length) return;
-		const hide = !items[0].dismissed;
 		const set = new Set(items.map((i) => i.id));
-		const after = navigable.slice(Math.max(0, selectedIndex)).find((i) => !set.has(i.id));
-		if (selectedId && set.has(selectedId)) selectedId = after?.id ?? null;
-		sel.clear();
+		leaveRows(set);
 		await cancelDash();
-		setDismissed(set, hide);
+		patchItems(set, (x) => ({ ...x, dismissed: true, muted: false, snooze: choice }));
 		try {
-			if (hide) await api.hide(items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })));
-			else await api.unhide([...set]);
-			toast(hide ? 'Hidden until it changes' : 'Shown again', {
-				description: items.length === 1 ? items[0].title : `${items.length} items`,
-				action: hide
-					? {
-							label: 'Undo',
-							onClick: () => {
-								setDismissed(set, false);
-								api.unhide([...set]).catch((e) => {
-									toast.error(e.message);
-									setDismissed(set, true);
-								});
-							}
-						}
-					: undefined
+			await api.snoozeItems(
+				items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })),
+				choice
+			);
+			toast(`Snoozed ${snoozeLabel(choice).replace(/^Until/, 'until')}`, {
+				description: describe(items),
+				action: {
+					label: 'Undo',
+					onClick: () => {
+						patchItems(set, (x) => ({ ...x, dismissed: false, snooze: undefined }));
+						api.unsnoozeItems([...set]).catch((e) => {
+							toast.error(e.message);
+							invalidateDash();
+						});
+					}
+				}
 			});
 		} catch (err) {
-			setDismissed(set, !hide);
+			invalidateDash();
 			toast.error((err as Error).message);
 		}
 	}
 
+	async function unsnooze(ids: string[]) {
+		const items = ids.map(byId).filter((i): i is DashItem => !!i);
+		if (!items.length) return;
+		const set = new Set(items.map((i) => i.id));
+		leaveRows(set);
+		await cancelDash();
+		patchItems(set, (x) => ({ ...x, dismissed: false, muted: false, snooze: undefined }));
+		try {
+			await api.unsnoozeItems([...set]);
+			toast('Back in the list', { description: describe(items) });
+		} catch (err) {
+			invalidateDash();
+			toast.error((err as Error).message);
+		}
+	}
+
+	const toggleSnooze = (ids: string[]) =>
+		showSnoozed ? unsnooze(ids) : snooze(ids, UNTIL_NEW_ACTIVITY);
+
+	const SEEN_BATCH = 50;
+	function sendInBatches(keys: string[], send: (batch: string[]) => Promise<unknown>) {
+		const batches = Array.from({ length: Math.ceil(keys.length / SEEN_BATCH) }, (_, k) =>
+			keys.slice(k * SEEN_BATCH, (k + 1) * SEEN_BATCH)
+		);
+		return Promise.all(batches.map(send));
+	}
+
+	function markSeenHere(ids: string[]) {
+		patchItems(new Set(ids), (x) => ({ ...x, unread: false }));
+		sendInBatches(ids, api.seen).catch(() => invalidateDash());
+	}
+
+	async function setRead(ids: string[], read: boolean) {
+		const set = new Set(ids);
+		patchItems(set, (x) => ({
+			...x,
+			unread: !read,
+			...(read ? { seenAt: Date.now(), changes: [] } : { seenAt: null })
+		}));
+		try {
+			await sendInBatches(ids, read ? api.seen : api.unseen);
+		} catch (err) {
+			invalidateDash();
+			toast.error((err as Error).message);
+		}
+	}
+
+	function markAllRead() {
+		const ids = visibleItems.filter((i) => i.unread).map((i) => i.id);
+		if (!ids.length) return;
+		setRead(ids, true);
+		toast(`Marked ${ids.length} as read`);
+	}
+
 	function open(i: DashItem, url: string) {
 		openOnGitHub(url);
-		api.seen([i.id]).catch(() => {});
+		markSeenHere([i.id]);
 	}
 
 	async function copyLinks(ids: string[]) {
@@ -727,9 +794,19 @@
 			'list.refresh': () => refresh(),
 			'list.search': () => (palette.open = true),
 			'list.help': () => (helpOpen = true),
-			'dash.hide': () => toggleHide(targets()),
-			'dash.showHidden': () => (showHidden = !showHidden),
+			'dash.snooze': () => toggleSnooze(targets()),
+			'dash.snoozeTomorrow': () =>
+				!showSnoozed &&
+				snooze(targets(), { until: snoozeOptions().find((o) => o.id === 'tomorrow')!.until }),
+			'dash.showSnoozed': () => (showSnoozed = !showSnoozed),
 			'dash.mute': () => toggleMute(targets()),
+			'dash.read': () => {
+				const ids = targets();
+				setRead(
+					ids,
+					ids.some((x) => byId(x)?.unread)
+				);
+			},
 			'dash.stackUp': () => stepStack(1),
 			'dash.stackDown': () => stepStack(-1),
 			'dash.kind': () =>
@@ -763,12 +840,19 @@
 	// Swipe actions on touch screens (Settings → General → Swipe actions; shared/swipe.ts).
 	function swipeSide(side: 'left' | 'right', i: DashItem): SwipeSide | null {
 		switch (me.data?.settings.swipe.dash[side] ?? 'none') {
-			case 'hide':
+			case 'snooze':
 				return {
-					label: i.dismissed ? 'Show again' : 'Hide',
-					icon: i.dismissed ? Eye : EyeOff,
+					label: i.dismissed ? 'Wake up' : 'Snooze',
+					icon: i.dismissed ? AlarmClockOff : AlarmClock,
 					tone: 'bg-signal-review text-white',
-					run: () => toggleHide([i.id])
+					run: () => (i.dismissed ? unsnooze([i.id]) : snooze([i.id], UNTIL_NEW_ACTIVITY))
+				};
+			case 'read':
+				return {
+					label: i.unread ? 'Read' : 'Unread',
+					icon: i.unread ? MailOpen : Mail,
+					tone: 'bg-primary text-primary-foreground',
+					run: () => setRead([i.id], !!i.unread)
 				};
 			case 'mute':
 				return {
@@ -785,8 +869,11 @@
 		get noun() {
 			return noun;
 		},
-		get showHidden() {
-			return showHidden;
+		get showSnoozed() {
+			return showSnoozed;
+		},
+		get unreadCount() {
+			return unreadCount;
 		},
 		get groupBy() {
 			return groupBy;
@@ -809,11 +896,15 @@
 		byId,
 		peek: peekThis,
 		open,
-		toggleHide,
 		toggleMute,
 		copyLinks,
 		refresh,
-		toggleShowHidden: () => (showHidden = !showHidden)
+		toggleShowSnoozed: () => (showSnoozed = !showSnoozed),
+		snooze,
+		unsnooze,
+		snoozeSheet: (ids) => (snoozeSheetIds = ids),
+		setRead,
+		markAllRead
 	};
 	const menuFor = (ids: string[]) => dashMenu(actions, ids);
 	$effect(() => palette.register(() => dashCommands(actions, targets())));
@@ -864,13 +955,15 @@
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 			<Button
-				variant={showHidden ? 'secondary' : 'ghost'}
+				variant={showSnoozed ? 'secondary' : 'ghost'}
 				size="sm"
-				onclick={() => (showHidden = !showHidden)}
-				disabled={!hiddenCount && !showHidden}
+				onclick={() => (showSnoozed = !showSnoozed)}
+				disabled={!snoozedCount && !showSnoozed}
 			>
-				<EyeOff /><span class="hidden sm:inline">{showHidden ? 'Showing hidden' : 'Hidden'}</span>
-				{#if hiddenCount}<span class="tabular-nums opacity-70">{hiddenCount}</span>{/if}
+				<AlarmClock /><span class="hidden sm:inline"
+					>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
+				>
+				{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
 			</Button>
 			<Button
 				variant="ghost"
@@ -947,8 +1040,8 @@
 			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
 		>
 			<CircleCheck class="mb-3 size-8 text-signal-merge" />
-			{#if showHidden}
-				<p class="font-medium">Nothing is hidden.</p>
+			{#if showSnoozed}
+				<p class="font-medium">Nothing is snoozed or muted.</p>
 			{:else}
 				<p class="font-medium">No open {noun} in {view.name}.</p>
 				<p class="mt-1 text-sm text-muted-foreground">
@@ -1034,16 +1127,25 @@
 </main>
 
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
+	<SnoozeButton
+		snoozed={showSnoozed}
+		subjects={targets().map((x) => byId(x)?.kind ?? 'other')}
+		labelClass="hidden sm:inline"
+		onpick={(choice) => snooze(targets(), choice)}
+		onwake={() => unsnooze(targets())}
+	/>
 	<Button
 		variant="ghost"
 		size="sm"
-		aria-label={showHidden ? 'Show again' : 'Hide until it changes'}
-		onclick={() => toggleHide(targets())}
+		aria-label="Mark as read or unread"
+		onclick={() => {
+			const ids = targets();
+			setRead(
+				ids,
+				ids.some((x) => byId(x)?.unread)
+			);
+		}}><MailOpen /><span class="hidden sm:inline">Read</span></Button
 	>
-		{#if showHidden}<Eye /><span class="hidden sm:inline">Show</span>{:else}<EyeOff /><span
-				class="hidden sm:inline">Hide</span
-			>{/if}
-	</Button>
 	<Button variant="ghost" size="sm" aria-label="Copy links" onclick={() => copyLinks(targets())}
 		><Link /><span class="hidden sm:inline">Copy links</span></Button
 	>
@@ -1059,7 +1161,7 @@
 			checked={sel.has(i.id)}
 			selecting={sel.size > 0}
 			onopen={open}
-			onhide={(x) => toggleHide([x.id])}
+			onsnooze={(x) => toggleSnooze([x.id])}
 			onmute={(x) => toggleMute([x.id])}
 			oncopy={(x) => copyLinks([x.id])}
 			onrowclick={(e) => onRowClick(e, i)}
@@ -1111,7 +1213,7 @@
 	{#if peekItem}
 		{@const i = peekItem}
 		<WhyLine
-			lead={i.muted ? 'Muted' : i.dismissed ? 'Hidden' : sectionLabelOf(i.id)}
+			lead={i.muted ? 'Muted' : i.dismissed ? 'Snoozed' : sectionLabelOf(i.id)}
 			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
 			changes={i.changes ?? []}
 			seenAt={i.seenAt ?? null}
@@ -1122,16 +1224,14 @@
 {#snippet peekFooter()}
 	{#if peekItem}
 		{@const i = peekItem}
-		<Button
-			variant="ghost"
-			size="sm"
-			aria-label={i.dismissed ? 'Show again' : 'Hide until it changes'}
-			onclick={() => toggleHide([i.id])}
-		>
-			{#if i.dismissed}<Eye /><span class="max-sm:sr-only">Show again</span>{:else}<EyeOff /><span
-					class="max-sm:sr-only">Hide</span
-				>{/if}
-		</Button>
+		<SnoozeButton
+			snoozed={!!i.dismissed}
+			subjects={[i.kind]}
+			disabled={alreadyTrue(i)}
+			labelClass="max-sm:sr-only"
+			onpick={(choice) => snooze([i.id], choice)}
+			onwake={() => unsnooze([i.id])}
+		/>
 		<Button variant="ghost" size="sm" aria-label="Copy link" onclick={() => copyLinks([i.id])}
 			><Link /><span class="max-sm:sr-only">Copy link</span></Button
 		>
@@ -1144,3 +1244,13 @@
 />
 
 <PeekHost />
+
+{#if snoozeSheetIds}
+	{@const ids = snoozeSheetIds}
+	<SnoozeSheet
+		bind:open={() => snoozeSheetIds !== null, (open) => !open && (snoozeSheetIds = null)}
+		subjects={ids.map((x) => byId(x)?.kind ?? 'other')}
+		untilNewActivity
+		onpick={(choice) => snooze(ids, choice)}
+	/>
+{/if}

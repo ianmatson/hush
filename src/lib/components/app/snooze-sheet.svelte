@@ -11,11 +11,13 @@
 		open = $bindable(false),
 		subjects,
 		disabled = [],
+		untilNewActivity = false,
 		onpick
 	}: {
 		open?: boolean;
 		subjects: ('pr' | 'issue' | 'other')[];
 		disabled?: SnoozeEvent[];
+		untilNewActivity?: boolean;
 		onpick: (body: { until?: number; event?: SnoozeEvent }) => void;
 	} = $props();
 
@@ -29,6 +31,13 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="gap-3 sm:max-w-sm">
 		<Dialog.Header><Dialog.Title>Snooze</Dialog.Title></Dialog.Header>
+		{#if untilNewActivity}
+			<section class="grid gap-0.5 border-b pb-3">
+				<Button variant="ghost" class="h-10 justify-start" onclick={() => pick({})}
+					>Until new activity</Button
+				>
+			</section>
+		{/if}
 		<section class="grid gap-0.5">
 			<h3 class="flex items-center gap-1.5 px-1 pb-1 text-xs text-muted-foreground">
 				<AlarmClock class="size-3.5" />Until a time

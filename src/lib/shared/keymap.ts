@@ -84,9 +84,16 @@ export const COMMANDS: KeyCommand[] = [
 		keys: [String(n)]
 	})),
 
-	{ id: 'dash.hide', label: 'Hide until it changes (or show again)', scope: 'dash', keys: ['e'] },
-	{ id: 'dash.showHidden', label: 'Show hidden items', scope: 'dash', keys: ['h'] },
+	{
+		id: 'dash.snooze',
+		label: 'Snooze until new activity (or wake it up)',
+		scope: 'dash',
+		keys: ['e']
+	},
+	{ id: 'dash.snoozeTomorrow', label: 'Snooze until tomorrow 9:00', scope: 'dash', keys: ['s'] },
+	{ id: 'dash.showSnoozed', label: 'Show snoozed and muted items', scope: 'dash', keys: ['h'] },
 	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'dash', keys: ['m'] },
+	{ id: 'dash.read', label: 'Mark as read / unread', scope: 'dash', keys: ['u'] },
 	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'dash', keys: [']'] },
 	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'dash', keys: ['['] },
 	...range(1, 9).map((n) => ({
@@ -237,6 +244,9 @@ export function keyText(chord: string, mac: boolean): string {
 		: { Mod: 'Ctrl', Alt: 'Alt', Shift: 'Shift' };
 	return [...parts.map((m) => mod[m]), shown].join(mac ? ' ' : ' + ');
 }
+
+export const knownKeys = (saved: Record<string, string[]> | undefined): Record<string, string[]> =>
+	Object.fromEntries(Object.entries(saved ?? {}).filter(([id]) => COMMAND.has(id)));
 
 /** Check the `keys` setting. Returns an error message, or null. */
 export function validateKeys(v: unknown): string | null {

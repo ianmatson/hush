@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import type { SnoozeChoice } from './item-snooze';
 // Types shared by the Worker (worker/) and the SPA (src/).
 
 export type Category = 'action' | 'fyi' | 'muted';
@@ -354,6 +355,8 @@ export interface DashItem {
 	changes?: Change[];
 	/** When you last looked at it, or null. */
 	seenAt?: number | null;
+	unread?: boolean;
+	snooze?: SnoozeChoice;
 	projectStatus?: Record<string, string | null>;
 }
 

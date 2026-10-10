@@ -83,8 +83,19 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 			note: 'One submenu for each category group',
 			group: 'main'
 		},
-		{ id: 'hide', label: 'Hide until it changes / Show again', group: 'main' },
-		{ id: 'mute', label: 'Mute / Unmute', note: 'Hidden until you unmute it', group: 'main' },
+		{
+			id: 'snooze',
+			label: 'Snooze… / Wake up',
+			note: 'Until new activity, a time, or an event',
+			group: 'main'
+		},
+		{
+			id: 'mute',
+			label: 'Mute / Unmute',
+			note: 'Out of the list until you unmute it',
+			group: 'main'
+		},
+		{ id: 'read', label: 'Mark as read / unread', group: 'main' },
 		{ id: 'copy', label: 'Copy link', group: 'main' },
 		{ id: 'select', label: 'Select / Deselect', group: 'main' },
 		{ id: 'selectAll', label: 'Select all', group: 'main' }
@@ -117,8 +128,9 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'github',
 		SEP,
 		'categories',
-		'hide',
+		'snooze',
 		'mute',
+		'read',
 		'copy',
 		SEP,
 		'select',
@@ -130,14 +142,16 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
  * Items added after a menu may have been saved. A saved menu older than an item's version gets
  * that item once (after `after`, or at the end); later choices are yours.
  */
-export const MENUS_VERSION = 7;
+export const MENUS_VERSION = 8;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
 	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
 	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
-	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 },
+	{ kind: 'dash', id: 'mute', after: 'snooze', version: 4 },
 	{ kind: 'inbox', id: 'page', after: 'peek', version: 6 },
 	{ kind: 'dash', id: 'page', after: 'peek', version: 6 },
-	{ kind: 'dash', id: 'categories', after: 'hide', version: 7 }
+	{ kind: 'dash', id: 'categories', after: SEP, version: 7 },
+	{ kind: 'dash', id: 'snooze', after: 'categories', version: 8 },
+	{ kind: 'dash', id: 'read', after: 'mute', version: 8 }
 ];
 
 /** Saved menus, upgraded to the current version. */

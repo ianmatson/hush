@@ -2,6 +2,7 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
+import type { SnoozeChoice } from '$lib/shared/item-snooze';
 import type { CategoryPin } from '$lib/shared/categories';
 import type { DashKind, MergeMethod, ReactionContent, Settings, View } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
@@ -121,6 +122,7 @@ export const api = {
 	onboarded: () => ok(client.api.onboarded.$post()),
 	/** You looked at these PRs or issues ("owner/repo#123"). */
 	seen: (keys: string[]) => ok(client.api.seen.$post({ json: { keys } })),
+	unseen: (keys: string[]) => ok(client.api.unseen.$post({ json: { keys } })),
 	/** "Doesn't need me": a thread id or a dashboard item ("owner/repo#123"), and why. */
 	notNeeded: (id: string, answer: NotNeededAnswer) =>
 		ok(client.api['not-needed'].$post({ json: { id, answer } })),
@@ -159,13 +161,12 @@ export const api = {
 				query: refresh ? { refresh: '1' } : {}
 			})
 		),
-	hide: (items: { id: string; updatedAt: string }[]) =>
-		ok(client.api.dashboard.hide.$post({ json: { items } })),
-	unhide: (ids: string[]) => ok(client.api.dashboard.unhide.$post({ json: { ids } })),
+	snoozeItems: (items: { id: string; updatedAt: string }[], choice: SnoozeChoice) =>
+		ok(client.api.dashboard.snooze.$post({ json: { items, ...choice } })),
+	unsnoozeItems: (ids: string[]) => ok(client.api.dashboard.unsnooze.$post({ json: { ids } })),
 	pinItems: (ids: string[], pin: CategoryPin) =>
 		ok(client.api.items.pin.$post({ json: { ids, ...pin } })),
 	reevaluateItems: () => ok(client.api.items.reevaluate.$post()),
-	/** Hidden until you unmute it; its threads are muted too (also on GitHub). */
 	muteItems: (ids: string[]) => ok(client.api.dashboard.mute.$post({ json: { ids } })),
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>

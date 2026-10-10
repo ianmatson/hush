@@ -110,12 +110,19 @@ describe('schema migrations', () => {
 		};
 	};
 
+	const beforeItemSnoozes = (sql: string) =>
+		sql.replace(
+			/CREATE TABLE dash_snoozed[^\n]*/,
+			'CREATE TABLE dash_hidden (item_id TEXT PRIMARY KEY, updated_at TEXT NOT NULL);'
+		);
+
 	it('schema 1 plus its steps equals a new schema', () => {
 		// Schema 1 is the current one without what the steps add.
-		const v1 = SCHEMA.replace(
-			/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*\n\s*api_url TEXT[^\n]*/,
-			''
-		)
+		const v1 = beforeItemSnoozes(SCHEMA)
+			.replace(
+				/,\n\s*override TEXT[^\n]*\n\s*override_updated_at TEXT[^\n]*\n\s*api_url TEXT[^\n]*/,
+				''
+			)
 			.replace(/\n-- "Since you looked"[^\n]*\nCREATE TABLE seen[^\n]*\n/, '\n')
 			.replace(/\nCREATE TABLE push_marks[^\n]*\n/, '\n')
 			// Schema 1 still had pushed_at (a later step drops it).
@@ -134,18 +141,21 @@ describe('schema migrations', () => {
 		['push_marks but no threads_triage', /\nCREATE INDEX threads_triage[^\n]*/],
 		['threads_triage but no push_marks', /\nCREATE TABLE push_marks[^\n]*/]
 	])('either schema 7 (%s) plus its steps equals a new schema', (_, missing) => {
-		const v7 = SCHEMA.replace(missing, '');
+		const v7 = beforeItemSnoozes(SCHEMA).replace(missing, '');
 		expect(v7).not.toEqual(SCHEMA);
 		const steps: string[] = [];
 		for (let v = 7; v < SCHEMA_VERSION; v = MIGRATIONS[v].to) steps.push(MIGRATIONS[v].sql);
 		expect(columns([v7, ...steps])).toEqual(columns([SCHEMA]));
 	});
 
-	const withoutItemPins = SCHEMA.replace(/\nCREATE TABLE IF NOT EXISTS item_pins[^\n]*/, '');
+	const withoutItemPins = beforeItemSnoozes(SCHEMA).replace(
+		/\nCREATE TABLE IF NOT EXISTS item_pins[^\n]*/,
+		''
+	);
 
 	it.each([
 		[9, withoutItemPins],
-		[10, SCHEMA],
+		[10, beforeItemSnoozes(SCHEMA)],
 		[11, withoutItemPins]
 	])('schema %i plus its steps equals a new schema', (from, start) => {
 		const steps: string[] = [];

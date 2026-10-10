@@ -62,7 +62,13 @@
 					>{#if e.icon}<e.icon />{/if}{e.label}</M.SubTrigger
 				>
 				<M.SubContent class="w-56">
-					<SnoozeItems menu={kind} subjects={e.subjects} disabled={e.disabled} onpick={e.onpick} />
+					<SnoozeItems
+						menu={kind}
+						subjects={e.subjects}
+						disabled={e.disabled}
+						untilNewActivity={e.untilNewActivity}
+						onpick={e.onpick}
+					/>
 				</M.SubContent>
 			</M.Sub>
 		{/if}
