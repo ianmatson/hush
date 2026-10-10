@@ -12,12 +12,14 @@ import {
 	MAX_SOURCE_COUNT_SEARCHES,
 	searchKinds,
 	sectionsFor,
+	viewsPassingFilters,
 	type SourceCount
 } from '../../src/lib/shared/item-views';
 import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
 import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
 import { boardCount, boardShort, itemStatuses } from '../projects';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
+import { itemQueryFacts } from '../../src/lib/shared/categories';
 import { DASH_TTL, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
@@ -182,35 +184,42 @@ export abstract class PollerDashboard extends PollerSync {
 		await this.decideSubjects(who, [...facts.values()]);
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const teamSet = new Set(teams.map((t) => t.slug));
-		const byId = new Map<string, { facts: DashFacts; sections: Set<string> }>();
+		const byId = new Map<string, { facts: DashFacts; filtersByView: Map<string, Set<string>> }>();
 		for (const h of hits) {
 			const subject = facts.get(h.key);
 			if (!subject || !forTeams(h.query, subject, who.me)) continue;
 			const e = byId.get(h.key) ?? {
 				facts: dashFactsOf(subject, who.me, teamSet, decided.get(h.key)),
-				sections: new Set<string>()
+				filtersByView: new Map<string, Set<string>>()
 			};
-			e.sections.add(h.query.section);
+			const filters = e.filtersByView.get(h.query.section) ?? new Set<string>();
+			filters.add(h.query.filter ?? '');
+			e.filtersByView.set(h.query.section, filters);
 			byId.set(h.key, e);
 		}
 		const boardSections = new Set(sections.filter((s) => readsBoard(s.query)).map((s) => s.id));
-		const placedOnBoard = (found: Set<string>) => [...found].some((id) => boardSections.has(id));
+		const placedOnBoard = (viewIds: Iterable<string>) =>
+			[...viewIds].some((id) => boardSections.has(id));
+		const finish = (dashFacts: DashFacts, viewIds: Set<string>) => {
+			const ordered = views.filter((v) => viewIds.has(v.id));
+			return finishItem(
+				dashFacts,
+				ordered.map((s) => s.id),
+				ordered.map((s) => s.name),
+				who.me,
+				dash.staleDays,
+				Date.now()
+			);
+		};
 		const items = sortItems(
 			[...byId.values()]
-				.filter(({ facts, sections }) => keepItem(facts, who.me, dash) || placedOnBoard(sections))
-				.map(({ facts, sections }) => {
-					const ordered = views.filter((v) => sections.has(v.id));
-					return finishItem(
-						facts,
-						ordered.map((s) => s.id),
-						ordered.map((s) => s.name),
-						who.me,
-						dash.staleDays,
-						Date.now()
-					);
-				})
+				.filter(
+					({ facts, filtersByView }) =>
+						keepItem(facts, who.me, dash) || placedOnBoard(filtersByView.keys())
+				)
+				.map(({ facts, filtersByView }) => finish(facts, new Set(filtersByView.keys())))
 		);
-		const placed = this.placeItems(who, items, facts);
+		const placed = this.keepHushMatches(who, this.placeItems(who, items, facts), byId, finish);
 		this.storeTracked(placed, true);
 		const complete = !searchErrors.length && !detailErrors.length;
 		if (cached && cached.sig !== sig && complete)
@@ -246,6 +255,33 @@ export abstract class PollerDashboard extends PollerSync {
 		await this.pushNewItems(who, kind, placed, complete);
 		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
+	}
+
+	private keepHushMatches(
+		who: Who,
+		items: DashItem[],
+		byId: Map<string, { facts: DashFacts; filtersByView: Map<string, Set<string>> }>,
+		finish: (dashFacts: DashFacts, viewIds: Set<string>) => DashItem
+	): DashItem[] {
+		const now = Date.now();
+		return items.flatMap((i) => {
+			const entry = byId.get(i.id);
+			if (!entry) return [i];
+			const viewIds = viewsPassingFilters(
+				i.sections,
+				entry.filtersByView,
+				itemQueryFacts(i, who.me, who.settings, now)
+			);
+			if (viewIds.size === i.sections.length) return [i];
+			if (!viewIds.size) return [];
+			return [
+				{
+					...finish(entry.facts, viewIds),
+					categories: i.categories,
+					pinnedCategories: i.pinnedCategories
+				}
+			];
+		});
 	}
 
 	private async pushNewItems(who: Who, kind: DashKind, items: DashItem[], complete: boolean) {

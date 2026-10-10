@@ -21,11 +21,12 @@ A view never mixes with another view: it shows only what its own searches find. 
 
 1. Choose **+** at the end of the top bar, or choose **Add view** in **Settings → Views**.
 2. Give the view a name. It is the label of its tab.
-3. Write one or more searches, as text or picked one by one. **Try on GitHub** opens the same search on GitHub, and Hush says how many results GitHub finds.
+3. Write one or more searches, as text or picked one by one. **Try on GitHub** opens the GitHub part of the search on GitHub, and Hush says how many results GitHub finds.
 4. Choose **Save**.
 
 ## Searches
 
+- A search uses the [query language](/docs/query-language): GitHub search words, and Hush words such as `size:<50`, `-author:bots`, or `category:low`. Hush sends the GitHub words to GitHub, then keeps the results that match the Hush words. See [In a view's search](/docs/query-language#in-a-views-search).
 - `@me` is you. `@team` runs the search once for each team that you track. `team-review-requested:@team` is one search for all of them: Hush searches `review-requested:@me` and keeps the PRs that ask one of your tracked teams (it leaves out your own PRs).
 - A search with `is:pr`, or a word that only pull requests have (such as `review-requested:` or `reviewed-by:`), finds pull requests. With `is:issue`, issues. With neither, both.
 - Hush adds `archived:false` to each search, unless the search says `archived:`.
@@ -113,5 +114,3 @@ Views are the [`views`](/docs/settings#views) setting:
 	]
 }
 ```
-
-Category rules can test a view's name with `view:`: `view:Website`.

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { parseExpr } from '$lib/shared/query';
+	import { queryError, type QueryPlace } from '$lib/shared/query';
 	import { Input } from '$lib/components/ui/input';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import QuerySuggest from './query-suggest.svelte';
@@ -12,11 +12,20 @@
 		value = $bindable(''),
 		id,
 		label = 'As text',
+		place = 'rule',
 		placeholder = 'repo:acme/* label:bug -author:bots'
-	}: { value: string; id: string; label?: string; placeholder?: string } = $props();
+	}: {
+		value: string;
+		id: string;
+		label?: string;
+		place?: QueryPlace;
+		placeholder?: string;
+	} = $props();
 
 	let el = $state<HTMLInputElement | null>(null);
-	const errors = $derived(parseExpr(value ?? '').errors);
+	const errors = $derived(
+		value?.trim() ? [queryError(value, place)].filter((e) => e !== null) : []
+	);
 	const oninput = (v: string) => (value = v);
 </script>
 
@@ -34,7 +43,7 @@
 			oninput={(e) => oninput(e.currentTarget.value)}
 			aria-invalid={errors.length > 0}
 		/>
-		<QuerySuggest input={el} value={value ?? ''} onpick={oninput} />
+		<QuerySuggest input={el} value={value ?? ''} {place} onpick={oninput} />
 	</div>
 	{#each errors as e (e)}
 		<p class="flex items-center gap-1.5 text-xs text-destructive">

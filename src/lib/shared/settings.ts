@@ -45,7 +45,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 		return {
 			...DEFAULT_SETTINGS,
 			...raw,
-			views: validateViews(raw.views) ? DEFAULT_VIEWS : raw.views!,
+			views: validateViews(raw.views, false) ? DEFAULT_VIEWS : raw.views!,
 			dash: { ...DEFAULT_DASH, ...withoutRetiredDashKeys(raw.dash) },
 			menus: raw.menus ? upgradeMenus(raw.menus) : DEFAULT_MENUS,
 			swipe: knownSwipe(raw.swipe),

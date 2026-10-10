@@ -1,14 +1,19 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import type { FeedDTO, ItemView } from '$lib/shared/types';
-	import { MAX_VIEW_NAME_CHARS, MAX_VIEW_SEARCHES, searchKinds } from '$lib/shared/item-views';
+	import {
+		githubSearchOf,
+		MAX_VIEW_NAME_CHARS,
+		MAX_VIEW_SEARCHES,
+		searchKinds
+	} from '$lib/shared/item-views';
 	import { viewFeedView } from '$lib/shared/views';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Switch } from '$lib/components/ui/switch';
-	import SearchBuilder from './rules/search-builder.svelte';
+	import RuleBuilder from './rules/rule-builder.svelte';
 	import SearchSize from './search-size.svelte';
 	import FeedButton from './feed-button.svelte';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
@@ -64,7 +69,7 @@
 	}
 
 	function onGitHub(query: string) {
-		const q = query.replaceAll('@team', previewTeam ?? '');
+		const q = githubSearchOf(query).replaceAll('@team', previewTeam ?? '');
 		const type = searchKinds(query).includes('issue') ? 'issues' : 'pullrequests';
 		return `https://github.com/search?type=${type}&q=${encodeURIComponent(q)}`;
 	}
@@ -161,7 +166,13 @@
 							data-search="{view.id}-{index}"
 							transition:slide={DRAWER}
 						>
-							<SearchBuilder bind:value={view.searches[index]} id="view-{view.id}-search-{index}" />
+							<RuleBuilder
+								bind:value={view.searches[index]}
+								id="view-{view.id}-search-{index}"
+								place="search"
+								label="Search"
+								templates={[]}
+							/>
 							<SearchSize query={view.searches[index]} />
 						</div>
 					{/if}

@@ -28,7 +28,7 @@ Hush checks the JSON and shows an error if something is wrong; nothing is saved 
 - **Saving replaces all settings.** Ask the user for their current settings.json first (they can copy it from the page), and change that. A file without their `categoryGroups` puts back the default Effort and Impact groups.
 - `categoryGroups`, `views`, and the menus are lists: write the whole list. `dash`, `menus`, and `swipe` are groups: write only the keys that you change.
 - Leave `"v"` in `menus` as it is.
-- Every key, type, default, and limit is in [settings.json](/docs/settings). The rules of categories are queries (text): every word is in the [query language](/docs/query-language#words). The searches of views are GitHub searches.
+- Every key, type, default, and limit is in [settings.json](/docs/settings). The searches of views and the rules of categories are queries (text) in one [query language](/docs/query-language#words). The table there says where each word works.
 
 To make a settings file to import, put the settings in this wrapper:
 
@@ -46,7 +46,7 @@ Check these, or Hush refuses the file:
 - Categories have no push settings. They mark items only; they do not change whose turn it is, snooze, mute, or pushes.
 - A category's `rule` uses only the words and values of the [query language](/docs/query-language#words), such as `repo:acme/*`, `label:bug`, `type:pr`. Up to 300 characters.
 - Category rules cannot use `category:`.
-- `views` has 1 to 12 views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to 40 characters), `searches` (up to 5 GitHub searches of 1 to 256 characters), and `groupBy` (`none`, `role`, `status`, `repo`, `author`, `label`, `assignee`, `category:<group id>`, or `project:<owner>/<number>` for the Status of a GitHub project), and optionally `pushNew` (`true` to push its new items). A view needs at least one search. The searches are GitHub search syntax, not the query language.
+- `views` has 1 to 12 views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to 40 characters), `searches` (up to 5 searches of 1 to 256 characters), and `groupBy` (`none`, `role`, `status`, `repo`, `author`, `label`, `assignee`, `category:<group id>`, or `project:<owner>/<number>` for the Status of a GitHub project), and optionally `pushNew` (`true` to push its new items). A view needs at least one search. A search sends its GitHub words to GitHub and checks its Hush words on the results; it cannot use `OR`, parentheses, or `about:`.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts). The `inbox.*` commands no longer exist: use `dash.*` and `list.*`.
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
 - `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.

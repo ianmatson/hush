@@ -21,6 +21,16 @@
 	} = $props();
 
 	const field = $derived(builderField(condition.word) ?? fields[0]);
+	const FIELD_GROUPS: { runs: BuilderField['runs']; heading: string }[] = [
+		{ runs: 'both', heading: 'GitHub and Hush' },
+		{ runs: 'hush', heading: 'Hush only' },
+		{ runs: 'github', heading: 'GitHub only' }
+	];
+	const fieldGroups = $derived(
+		FIELD_GROUPS.map((g) => ({ ...g, fields: fields.filter((f) => f.runs === g.runs) })).filter(
+			(g) => g.fields.length
+		)
+	);
 	const set = (patch: Partial<BuilderCondition>) => onchange({ ...condition, ...patch });
 
 	const SIZE_OPS = [
@@ -58,8 +68,13 @@
 			><span class="truncate">{field.label}</span></Select.Trigger
 		>
 		<Select.Content class="max-h-72">
-			{#each fields as f (f.word)}
-				<Select.Item value={f.word} label={f.label} />
+			{#each fieldGroups as g (g.runs)}
+				<Select.Group>
+					{#if fieldGroups.length > 1}<Select.GroupHeading>{g.heading}</Select.GroupHeading>{/if}
+					{#each g.fields as f (f.word)}
+						<Select.Item value={f.word} label={f.label} />
+					{/each}
+				</Select.Group>
 			{/each}
 		</Select.Content>
 	</Select.Root>
@@ -104,7 +119,7 @@
 				value={sizeParts.op}
 				onValueChange={(op) => setSize(op, sizeParts.a, sizeParts.b)}
 			>
-				<Select.Trigger size="sm" class="w-26" aria-label="Size comparison"
+				<Select.Trigger size="sm" class="w-26" aria-label="Comparison"
 					>{SIZE_OPS.find((o) => o.value === sizeParts.op)?.label}</Select.Trigger
 				>
 				<Select.Content>
@@ -116,8 +131,8 @@
 			<Input
 				type="number"
 				min={0}
-				class="h-7 w-20"
-				aria-label="Lines"
+				class="h-7 w-24"
+				aria-label="Number of {field.unit ?? 'lines'}"
 				value={sizeParts.a}
 				oninput={(e) => setSize(sizeParts.op, e.currentTarget.value, sizeParts.b)}
 			/>
@@ -126,13 +141,13 @@
 				<Input
 					type="number"
 					min={0}
-					class="h-7 w-20"
-					aria-label="Up to lines"
+					class="h-7 w-24"
+					aria-label="Up to this number of {field.unit ?? 'lines'}"
 					value={sizeParts.b}
 					oninput={(e) => setSize(sizeParts.op, sizeParts.a, e.currentTarget.value)}
 				/>
 			{/if}
-			<span class="text-xs text-muted-foreground">lines</span>
+			<span class="text-xs text-muted-foreground">{field.unit ?? 'lines'}</span>
 		{:else if field.input === 'about' || field.input === 'text'}
 			<Input
 				class="h-7 min-w-0 flex-1"

@@ -101,7 +101,10 @@ export function enrichmentOf(
 		commentsNeedMe: decisions.commentsNeedMe,
 		urgent: decisions.urgent,
 		smart: decisions.smart,
-		jevChoices: decisions.choices
+		jevChoices: decisions.choices,
+		createdAt: s.createdAt,
+		updatedAt: s.updatedAt,
+		comments: s.comments
 	};
 	if (s.kind === 'issue') return { ...base, state: s.state === 'closed' ? 'closed' : 'open' };
 	return {
@@ -116,6 +119,7 @@ export function enrichmentOf(
 		lastVerdict: lastVerdictOf(s, me),
 		myReview: s.myReview,
 		latestReview: s.latestReview,
+		reviewed: !!s.latestReview,
 		reviewRequestedFromMe: s.reviewRequests.some((r) => !r.team && r.name.toLowerCase() === meL),
 		// Short slugs; turnFactsFromEnrichment adds the org back.
 		requestedTeams: s.reviewRequests.filter((r) => r.team).map((r) => r.name.split('/').pop()!),

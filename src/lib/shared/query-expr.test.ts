@@ -6,7 +6,7 @@ import {
 	isSimpleQuery,
 	parseExpr,
 	queryError,
-	sizeMatches
+	numberMatches
 } from './query';
 import type { Enrichment, RuleFacts } from './types';
 
@@ -113,8 +113,8 @@ describe('@me and the new words', () => {
 		expect(queryError('size:small')).toMatch(/size:small/);
 	});
 	it('compares sizes', () => {
-		expect(sizeMatches('<=30', 30)).toBe(true);
-		expect(sizeMatches('>=31', 30)).toBe(false);
-		expect(sizeMatches('30', 30)).toBe(true);
+		expect(numberMatches('<=30', 30)).toBe(true);
+		expect(numberMatches('>=31', 30)).toBe(false);
+		expect(numberMatches('30', 30)).toBe(true);
 	});
 });

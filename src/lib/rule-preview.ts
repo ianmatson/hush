@@ -1,5 +1,5 @@
 import { keys, queryClient } from './queries';
-import { itemQueryFacts } from './shared/categories';
+import { allCategories, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/rules';
 import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
 import type { DashItem, DashResponse, RuleMatch, Settings } from './shared/types';
@@ -29,7 +29,7 @@ export function cachedItems(): DashItem[] {
 export function previewItems(
 	query: string,
 	me: string,
-	settings: Pick<Settings, 'views'>,
+	settings: Pick<Settings, 'categoryGroups'>,
 	items: DashItem[] = cachedItems()
 ): RulePreview | null {
 	if (!query.trim() || parseExpr(query).errors.length || !items.length) return null;
@@ -53,7 +53,7 @@ const uniq = (xs: (string | null | undefined)[]) =>
 	[...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
 
 export function ruleSuggestions(
-	settings: Pick<Settings, 'views'> | undefined
+	settings: Pick<Settings, 'categoryGroups'> | undefined
 ): Partial<Record<NonNullable<BuilderField['suggest']>, string[]>> {
 	const items = cachedItems();
 	const repos = uniq(items.map((i) => i.repo));
@@ -61,6 +61,6 @@ export function ruleSuggestions(
 		repo: [...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos],
 		person: ['@me', 'bots', ...uniq(items.map((i) => i.author))],
 		label: uniq(items.flatMap((i) => i.labels.map((l) => l.name))),
-		view: uniq(settings?.views.map((v) => v.name) ?? [])
+		category: uniq(allCategories(settings?.categoryGroups ?? []).map((c) => c.name))
 	};
 }

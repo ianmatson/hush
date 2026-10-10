@@ -2,6 +2,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
 	import { searchIsUnscoped, SOURCE_RESULTS_MAX, type SourceCount } from '$lib/shared/item-views';
+	import { splitSearch } from '$lib/shared/query';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	let { query }: { query: string } = $props();
@@ -19,12 +20,13 @@
 	const count = createQuery(() => ({
 		queryKey: ['search-count', settled.query],
 		queryFn: () => api.countSearch(settled.query),
-		enabled: !!settled.query,
+		enabled: !!settled.query && !splitSearch(settled.query).errors.length,
 		staleTime: COUNT_FRESH_MS,
 		retry: false
 	}));
 
 	const unscoped = $derived(!!query.trim() && searchIsUnscoped(query));
+	const hushWords = $derived(splitSearch(query).hush);
 	const fmt = (n: number) => n.toLocaleString();
 
 	function found(c: SourceCount): string {
@@ -70,4 +72,9 @@
 	{:else if count.data}
 		<p class="text-xs text-muted-foreground">GitHub finds {found(count.data)} now.</p>
 	{/if}
+{/if}
+{#if hushWords}
+	<p class="text-xs text-muted-foreground">
+		Then Hush keeps the results that match <code class="font-mono">{hushWords}</code>.
+	</p>
 {/if}

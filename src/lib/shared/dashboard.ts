@@ -15,6 +15,7 @@ const MAX_TEAMS_PER_SECTION = 15;
 
 export interface ExpandedQuery {
 	section: string;
+	filter?: string;
 	team?: string;
 	q: string;
 	/** Keep only results that request a review from one of these teams ("org/team"). */
@@ -45,11 +46,17 @@ export function expandSections(
 	for (const s of sections) {
 		const q = withoutArchivedRepos(s.query.trim());
 		if (REVIEW_REQUESTED_ME.test(q) && dash.excludedTeams.length && !q.includes('@team')) {
-			queries.push({ section: s.id, q, teams: tracked.map((t) => t.slug), orDirect: true });
+			queries.push({
+				section: s.id,
+				filter: s.filter,
+				q,
+				teams: tracked.map((t) => t.slug),
+				orDirect: true
+			});
 			continue;
 		}
 		if (!q.includes('@team')) {
-			queries.push({ section: s.id, q });
+			queries.push({ section: s.id, filter: s.filter, q });
 			continue;
 		}
 		if (!tracked.length) {
@@ -58,14 +65,19 @@ export function expandSections(
 		}
 		const one = q.replace(TEAM_REVIEW, 'review-requested:@me');
 		if (one !== q && !one.includes('@team')) {
-			queries.push({ section: s.id, q: one, teams: tracked.map((t) => t.slug) });
+			queries.push({ section: s.id, filter: s.filter, q: one, teams: tracked.map((t) => t.slug) });
 			continue;
 		}
 		const use = tracked.slice(0, MAX_TEAMS_PER_SECTION);
 		if (tracked.length > use.length)
 			skipped[s.id] = `Only the first ${use.length} teams are searched.`;
 		for (const t of use)
-			queries.push({ section: s.id, team: t.slug, q: q.replaceAll('@team', t.slug) });
+			queries.push({
+				section: s.id,
+				filter: s.filter,
+				team: t.slug,
+				q: q.replaceAll('@team', t.slug)
+			});
 	}
 	if (queries.length > MAX_QUERIES) {
 		for (const q of queries.slice(MAX_QUERIES))

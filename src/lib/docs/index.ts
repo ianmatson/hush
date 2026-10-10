@@ -99,6 +99,17 @@ export const docMarkdownPath = (d: Pick<DocPage, 'slug'>) => `/docs/${d.slug || 
 const esc = (s: string) =>
 	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+const ENTITIES: Record<string, string> = {
+	'&amp;': '&',
+	'&lt;': '<',
+	'&gt;': '>',
+	'&quot;': '"',
+	'&#39;': "'"
+};
+
+const plainText = (html: string) =>
+	html.replace(/<[^>]+>/g, '').replace(/&(?:amp|lt|gt|quot|#39);/g, (e) => ENTITIES[e]);
+
 export interface Rendered {
 	html: string;
 	/** The page's sections (its ## headings), for "On this page". */
@@ -118,7 +129,7 @@ export function renderMarkdown(markdown: string): Rendered {
 				const n = used.get(id) ?? 0;
 				used.set(id, n + 1);
 				if (n) id = `${id}-${n + 1}`;
-				if (depth === 2) toc.push({ id, text: inner.replace(/<[^>]+>/g, '') });
+				if (depth === 2) toc.push({ id, text: plainText(inner) });
 				return `<h${depth} id="${id}"><a class="anchor" href="#${id}">${inner}</a></h${depth}>\n`;
 			},
 			code({ text, lang }: Tokens.Code) {

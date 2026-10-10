@@ -59,6 +59,10 @@ export interface Enrichment {
 	urgent?: boolean;
 	smart?: string[];
 	jevChoices?: Record<string, string>;
+	createdAt?: string;
+	updatedAt?: string;
+	comments?: number;
+	reviewed?: boolean;
 }
 
 export interface RuleFacts {
@@ -68,8 +72,13 @@ export interface RuleFacts {
 	enrichment: Enrichment | null;
 	me: string;
 	activity?: Activity | null;
-	views?: string[];
+	categories?: { id: string; name: string }[];
+	now?: number;
 }
+
+export type ReviewWord = 'none' | 'required' | 'approved' | 'changes_requested';
+export type CiWord = 'success' | 'failure' | 'pending';
+export type NoWord = 'label' | 'assignee';
 
 export interface RuleMatch {
 	/** Glob(s) on "owner/repo", e.g. "acme/*". */
@@ -90,10 +99,17 @@ export interface RuleMatch {
 	/** The latest activity is by a bot (true) or by a person (false). */
 	byBot?: boolean;
 	about?: string[];
-	view?: string[];
 	assignee?: string | string[];
 	reviewRequested?: string[];
 	size?: string[];
+	org?: string | string[];
+	review?: ReviewWord[];
+	ci?: CiWord[];
+	comments?: string[];
+	created?: string[];
+	updated?: string[];
+	no?: NoWord[];
+	category?: string[];
 }
 
 export type MarkColor =
@@ -162,6 +178,7 @@ export interface DashSection {
 	id: string;
 	name: string;
 	query: string;
+	filter?: string;
 }
 
 export type GroupBy =

@@ -51,11 +51,14 @@ A category's rule is a [query](/docs/query-language), such as `repo:acme/website
 | `from:alice`                   | Who did the newest activity: a comment or a review. |
 | `label:bug`                    | Has this label (the exact name, any case).          |
 | `type:pr`                      | What it is: pr or issue.                            |
-| `view:Mine`                    | Which [view](/docs/views) has it.                   |
+| `review:approved`              | The review state of a pull request.                 |
+| `updated:<@today-14d`          | When it last changed.                               |
 | `size:<50`                     | Lines changed in a pull request.                    |
 | `about:"database migrations"`  | What it is about, in your words. Jev decides.       |
 
-Rules cannot use `category:`. Every word and value is in the [query language](/docs/query-language) reference.
+Rules cannot use `category:`, or words that only GitHub has, such as `mentions:`. Every word and value, and where it works, is in the [query language](/docs/query-language) reference.
+
+A [view's search](/docs/query-language#in-a-views-search) can use `category:`: for example, `is:open review-requested:@me category:low`.
 
 ## Jev and descriptions
 

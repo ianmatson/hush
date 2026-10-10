@@ -219,7 +219,6 @@ export abstract class PollerSubjects extends PollerDecisions {
 		for (const [k, f] of this.storedSubjectFacts(missing)) facts.set(k, f);
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const pins = this.itemPins(keys);
-		const viewNames = new Map(who.settings.views.map((v) => [v.id, v.name]));
 		return items.map((i) => {
 			const s = facts.get(i.id);
 			if (!s) return { ...i, categories: [], pinnedCategories: [] };
@@ -229,8 +228,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 				subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
 				title: s.title,
 				enrichment: enrichmentOf(s, who.me, d),
-				me: who.me,
-				views: i.sections.map((id) => viewNames.get(id) ?? id)
+				me: who.me
 			};
 			const placed = placeItem(t, pins.get(i.id), who.settings.categoryGroups);
 			return { ...i, categories: placed.categories, pinnedCategories: placed.pinned };

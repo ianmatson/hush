@@ -100,21 +100,3 @@ describe('validateViews', () => {
 		).toMatch(/Up to/);
 	});
 });
-
-describe('view: in rules', () => {
-	const t = (views: string[]): RuleFacts => ({
-		repo: 'acme/web',
-		subjectType: 'PullRequest',
-		title: 'Fix',
-		me: 'ian',
-		enrichment: { kind: 'pr' },
-		views
-	});
-	const matches = (q: string, facts: RuleFacts) => queryMatches(q, facts);
-	it('matches the name of a view that has the item', () => {
-		expect(matches('view:Mine', t(['Mine']))).toBe(true);
-		expect(matches('view:"web*"', t(['Website']))).toBe(true);
-		expect(matches('view:Website', t(['Mine']))).toBe(false);
-		expect(matches('-view:Website', t([]))).toBe(true);
-	});
-});

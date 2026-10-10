@@ -1,4 +1,14 @@
-import { formatQuery, IS_VALUES, parseExpr, WORDS, type QueryExpr } from './query';
+import {
+	formatQuery,
+	IS_VALUES,
+	parseExpr,
+	splitSearch,
+	WORDS,
+	wordWorksIn,
+	type QueryExpr,
+	type QueryPlace,
+	type WordRuns
+} from './query';
 
 export type BuilderMode = 'all' | 'any';
 
@@ -30,12 +40,17 @@ export interface BuilderField {
 	word: string;
 	label: string;
 	input: FieldInput;
+	runs: WordRuns;
 	placeholder?: string;
 	help?: string;
+	unit?: string;
 	options?: { value: string; label: string }[];
-	suggest?: 'repo' | 'person' | 'label' | 'view';
+	suggest?: 'repo' | 'person' | 'label' | 'category';
 	canNegate: boolean;
 }
+
+const DATE_PLACEHOLDER = '>2026-01-01 or <@today-7d';
+const PERSON_PLACEHOLDER = '@me or octocat';
 
 const LABELS: Record<
 	string,
@@ -51,47 +66,105 @@ const LABELS: Record<
 		placeholder: '@me, octocat, or acme/team',
 		suggest: 'person'
 	},
+	org: { label: 'Owner', placeholder: 'acme' },
+	draft: { label: 'Draft' },
+	review: { label: 'Review' },
+	status: { label: 'CI' },
+	comments: { label: 'Comments' },
+	created: { label: 'Opened', placeholder: DATE_PLACEHOLDER },
+	updated: { label: 'Updated', placeholder: DATE_PLACEHOLDER },
+	no: { label: 'Has no' },
 	size: { label: 'Size' },
-	view: { label: 'View', suggest: 'view' },
+	category: { label: 'Category', suggest: 'category' },
 	about: { label: 'About (Jev decides)', placeholder: 'database migrations' },
-	type: { label: 'Type' }
+	type: { label: 'Type' },
+	mentions: { label: 'Mentions', placeholder: PERSON_PLACEHOLDER, suggest: 'person' },
+	commenter: { label: 'Commented by', placeholder: PERSON_PLACEHOLDER, suggest: 'person' },
+	involves: { label: 'Involves', placeholder: PERSON_PLACEHOLDER, suggest: 'person' },
+	'reviewed-by': { label: 'Reviewed by', placeholder: PERSON_PLACEHOLDER, suggest: 'person' },
+	'user-review-requested': {
+		label: 'Review requested from person',
+		placeholder: PERSON_PLACEHOLDER,
+		suggest: 'person'
+	},
+	'team-review-requested': {
+		label: 'Review requested from team',
+		placeholder: '@team or acme/web'
+	},
+	team: { label: 'Mentions team', placeholder: 'acme/web' },
+	base: { label: 'Base branch', placeholder: 'main' },
+	head: { label: 'Head branch', placeholder: 'fix-login' },
+	milestone: { label: 'Milestone', placeholder: 'v2.0' },
+	project: { label: 'Project', placeholder: 'acme/5' },
+	archived: { label: 'Archived', placeholder: 'false' },
+	in: { label: 'Free words in', placeholder: 'title' },
+	linked: { label: 'Linked to', placeholder: 'pr' },
+	closed: { label: 'Closed', placeholder: DATE_PLACEHOLDER },
+	merged: { label: 'Merged', placeholder: DATE_PLACEHOLDER },
+	sort: { label: 'GitHub order', placeholder: 'created-desc' }
 };
 
-const CHOICE_INPUTS: Record<string, FieldInput> = { size: 'size', about: 'about' };
+const SINGLE_TEXT_INPUTS = new Set(['created', 'updated', 'closed', 'merged', 'sort', 'in']);
+const UNITS: Record<string, string> = { size: 'lines', comments: 'comments' };
+
+function inputOf(key: string, hasValues: boolean, format?: 'number' | 'date'): FieldInput {
+	if (key === 'about') return 'about';
+	if (format === 'number') return 'size';
+	if (format === 'date' || SINGLE_TEXT_INPUTS.has(key)) return 'text';
+	return hasValues ? 'choice' : 'list';
+}
+
+const wordField = (w: (typeof WORDS)[number]): BuilderField => {
+	const info = LABELS[w.key] ?? { label: w.key };
+	return {
+		word: w.key,
+		label: info.label,
+		input: inputOf(w.key, !!w.values, w.format),
+		runs: w.runs,
+		placeholder: info.placeholder,
+		help: w.help,
+		unit: UNITS[w.key],
+		options: w.values
+			? Object.entries(w.values).map(([value, v]) => ({ value, label: v.help }))
+			: undefined,
+		suggest: info.suggest,
+		canNegate: true
+	};
+};
+
+const IS_FIELD: BuilderField = {
+	word: IS_WORD,
+	label: 'Kind or state',
+	input: 'choice',
+	runs: 'both',
+	options: Object.entries(IS_VALUES).map(([value, label]) => ({ value, label })),
+	canNegate: true
+};
+
+const TEXT_FIELD: BuilderField = {
+	word: TEXT_WORD,
+	label: 'Has the words',
+	input: 'text',
+	runs: 'both',
+	placeholder: 'words',
+	canNegate: true
+};
+
+const WORD_FIELDS = WORDS.map(wordField);
+const typeFieldIndex = WORD_FIELDS.findIndex((f) => f.word === 'type');
 
 export const BUILDER_FIELDS: BuilderField[] = [
-	...WORDS.map((w): BuilderField => {
-		const info = LABELS[w.key] ?? { label: w.key };
-		return {
-			word: w.key,
-			label: info.label,
-			input: CHOICE_INPUTS[w.key] ?? (w.values ? 'choice' : 'list'),
-			placeholder: info.placeholder,
-			help: w.help,
-			options: w.values
-				? Object.entries(w.values).map(([value, v]) => ({ value, label: v.help }))
-				: undefined,
-			suggest: info.suggest,
-			canNegate: true
-		};
-	}),
-	{
-		word: IS_WORD,
-		label: 'State',
-		input: 'choice',
-		options: Object.entries(IS_VALUES).map(([value, label]) => ({ value, label })),
-		canNegate: true
-	},
-	{
-		word: TEXT_WORD,
-		label: 'Title, repository, or author contains',
-		input: 'text',
-		placeholder: 'words',
-		canNegate: true
-	}
+	...WORD_FIELDS.slice(0, typeFieldIndex),
+	IS_FIELD,
+	...WORD_FIELDS.slice(typeFieldIndex).filter((f) => f.runs === 'both'),
+	TEXT_FIELD,
+	...WORD_FIELDS.filter((f) => f.runs !== 'both')
 ];
 
 export const builderField = (word: string) => BUILDER_FIELDS.find((f) => f.word === word);
+
+export const fieldsFor = (place: QueryPlace) =>
+	BUILDER_FIELDS.filter((f) => wordWorksIn({ key: f.word, runs: f.runs }, place));
 
 export const emptyCondition = (word = 'repo'): BuilderCondition => ({
 	type: 'condition',
@@ -170,8 +243,19 @@ function groupOf(expr: QueryExpr): BuilderGroup | null {
 	return { type: 'group', mode: 'all', conditions: leaf };
 }
 
-export function queryToBuilder(query: string): BuilderState | null {
+function searchToBuilder(search: string): BuilderState | null {
+	if (splitSearch(search).errors.length) return null;
+	const conditions = conditionsOfText(search, false);
+	const shown = (c: BuilderCondition) =>
+		!!builderField(c.word) &&
+		(c.word !== IS_WORD || c.values.every((v) => v in IS_VALUES)) &&
+		(c.word !== TEXT_WORD || !/"[^"]*\s[^"]*"/.test(search));
+	return conditions.every(shown) ? { mode: 'all', items: conditions } : null;
+}
+
+export function queryToBuilder(query: string, place: QueryPlace = 'rule'): BuilderState | null {
 	if (!query.trim()) return { mode: 'all', items: [] };
+	if (place === 'search') return searchToBuilder(query);
 	const { expr, errors } = parseExpr(query);
 	if (errors.length) return null;
 	const mode: BuilderMode = expr.kind === 'or' ? 'any' : 'all';
@@ -210,6 +294,29 @@ function sizeWords(spec: string): string {
 	return m[1] ? `${words[m[1]]} ${m[2]}` : m[2];
 }
 
+const DATE_WORDS = new Set(['created', 'updated', 'closed', 'merged']);
+
+function dayWords(date: string): string {
+	const relative = /^@today(?:-(\d+)([dw]))?$/.exec(date);
+	if (!relative) return date;
+	if (!relative[1]) return 'today';
+	const unit = relative[2] === 'w' ? 'week' : 'day';
+	return `${relative[1]} ${unit}${relative[1] === '1' ? '' : 's'} ago`;
+}
+
+function dateWords(spec: string): string {
+	const range = /^(.+)\.\.(.+)$/.exec(spec);
+	if (range) return `between ${dayWords(range[1])} and ${dayWords(range[2])}`;
+	const m = /^(<=|>=|<|>)?(.+)$/.exec(spec)!;
+	const words: Record<string, string> = {
+		'<': 'before',
+		'<=': 'on or before',
+		'>': 'after',
+		'>=': 'on or after'
+	};
+	return `${m[1] ? words[m[1]] : 'on'} ${dayWords(m[2])}`;
+}
+
 export function describeCondition(c: BuilderCondition): string {
 	const field = builderField(c.word);
 	const values = c.values.filter((v) => v.trim());
@@ -227,6 +334,9 @@ export function describeCondition(c: BuilderCondition): string {
 	if (c.word === IS_WORD) return `${not}${list.toLowerCase()}`;
 	if (c.word === 'about') return `${not}about “${values.join('” or “')}”`;
 	if (c.word === 'size') return `${not}${values.map(sizeWords).join(' or ')} changed lines`;
+	if (field?.unit) return `${not}${values.map(sizeWords).join(' or ')} ${field.unit}`;
+	if (DATE_WORDS.has(c.word))
+		return `${not}${label.toLowerCase()} ${values.map(dateWords).join(' or ')}`;
 	return `${label.toLowerCase()} ${c.negate ? 'is not' : 'is'} ${list}`;
 }
 

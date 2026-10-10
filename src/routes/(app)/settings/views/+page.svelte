@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SITE_URL } from '$lib/site';
 	import { tick, untrack } from 'svelte';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -117,13 +118,15 @@
 	<div>
 		<h1 class="hidden text-lg font-semibold tracking-tight md:block">Views</h1>
 		<p class="text-sm text-muted-foreground">
-			Each view is a tab in the top bar. It shows the open pull requests and issues that its <a
+			Each view is a tab in the top bar. It shows the open pull requests and issues that its
+			searches find. Hush sends the GitHub words of a search to GitHub, then keeps the results that
+			match its Hush words, such as <code>size:&lt;50</code>. See the
+			<a
 				class="underline"
-				href="https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests"
+				href="{SITE_URL}/docs/query-language#in-a-views-search"
 				target="_blank"
-				rel="noreferrer">GitHub searches</a
-			>
-			find. <code>@me</code> is you, and <code>@team</code> is each tracked team.
+				rel="noreferrer">query language</a
+			>. <code>@me</code> is you, and <code>@team</code> is each tracked team.
 		</p>
 	</div>
 

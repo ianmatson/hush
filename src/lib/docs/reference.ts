@@ -17,7 +17,13 @@ import {
 } from '$lib/shared/categories';
 import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
-import { IS_VALUES, MAX_CONDITION_CHARS, WORDS } from '$lib/shared/query';
+import {
+	IS_VALUES,
+	MAX_CONDITION_CHARS,
+	WORDS,
+	wordWorksIn,
+	type QueryWord
+} from '$lib/shared/query';
 import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
 import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
@@ -192,9 +198,9 @@ A one-time notice on your views says that this is on. When you turn it on, or ad
 		type: 'array of views',
 		body: `The views in the top bar, in this order. Up to ${MAX_VIEWS}. A view shows the open PRs and issues that its searches find.
 
-- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`), feed, and the \`view:\` word use it.
-- \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label. Category rules can test it with \`view:\`.
-- \`searches\`: up to ${MAX_VIEW_SEARCHES} [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to ${MAX_SEARCH_CHARS} characters each. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
+- \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`) and feed use it.
+- \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label.
+- \`searches\`: up to ${MAX_VIEW_SEARCHES} searches in the [query language](/docs/query-language#in-a-views-search), 1 to ${MAX_SEARCH_CHARS} characters each. Hush sends the GitHub words to GitHub and checks the Hush words on the results. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
 - \`pushNew\` (optional, \`false\` when left out): push when a pull request or issue shows up in the view for the first time. Items that you opened do not push.
 - \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
 A view needs at least one search, and you keep at least one view.
@@ -412,48 +418,40 @@ function keybindsReference(): string {
 }
 
 function queryReference(): string {
+	const worksIn = (w: QueryWord) => {
+		const inSearch = wordWorksIn(w, 'search');
+		const inRules = wordWorksIn(w, 'rule');
+		const checker = w.runs === 'hush' ? 'Hush' : 'GitHub';
+		if (inSearch && inRules) return `Views (${checker}) and rules`;
+		return inSearch ? `Views (${checker})` : 'Rules';
+	};
 	const words = table(
-		['Word', 'Filters on', 'Example', 'JSON condition'],
+		['Word', 'Filters on', 'Works in'],
 		[
-			...WORDS.map((w) => [
-				code(`${w.key}:`),
-				w.help,
-				code(w.example),
-				w.bots ? `${code(w.field)}; ${code(`${w.key}:bots`)} sets ${code(w.bots)}` : code(w.field)
-			]),
+			...WORDS.map((w) => [code(`${w.key}:`), `${w.help}: ${code(w.example)}`, worksIn(w)]),
 			[
 				code('is:'),
-				'Draft, open, closed, or merged',
-				code('is:draft'),
-				`${code('draft')}, ${code('state')}`
+				`Pull request, issue, draft, open, closed, or merged: ${code('is:draft')}`,
+				'Views (GitHub) and rules'
 			],
 			[
 				'other words',
-				'Words that must all be in the title, repository, or author',
-				code('login bug'),
-				code('text')
+				"In a view's search, GitHub's text search. In a rule, words that must all be in the title, repository, or author",
+				'Views (GitHub) and rules'
 			]
 		]
 	);
 	const values = WORDS.filter((w) => w.values)
 		.map((w) => {
-			const rows = Object.entries(w.values!).map(([word, v]) => [
-				code(word),
-				v.help,
-				code(json(v.stored))
-			]);
-			return `### ${w.key}:\n\n${w.help}.\n\n${table(['Value', 'Means', 'In JSON'], rows)}`;
+			const rows = Object.entries(w.values!).map(([word, v]) => [code(word), v.help]);
+			return `### ${w.key}:\n\n${w.help}.\n\n${table(['Value', 'Means'], rows)}`;
 		})
 		.join('\n\n');
 	const is = table(
-		['Value', 'Means', 'In JSON'],
-		Object.entries(IS_VALUES).map(([k, help]) => [
-			code(`is:${k}`),
-			help,
-			code(k === 'draft' ? '"draft": true' : `"state": ["${k}"]`)
-		])
+		['Value', 'Means'],
+		Object.entries(IS_VALUES).map(([k, help]) => [code(`is:${k}`), help])
 	);
-	return `${words}\n\n## Values\n\n${values}\n\n### is:\n\n${is}\n\n${code('-is:draft')} is \`"draft": false\`.`;
+	return `${words}\n\n## Values\n\n${values}\n\n### is:\n\n${is}`;
 }
 
 function menusReference(): string {

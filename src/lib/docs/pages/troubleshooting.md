@@ -62,7 +62,7 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 
 ## A view is empty or incomplete
 
-- A view's searches are GitHub searches. Choose the link button next to a search in **Settings → Views** to try it on GitHub.
+- Hush sends the GitHub words of a search to GitHub, then checks its Hush words. Choose the link button next to a search in **Settings → Views** to try the GitHub part on GitHub. See [In a view's search](/docs/query-language#in-a-views-search).
 - Hush keeps the 100 most recently updated results of each search. Narrow a big search with `repo:`, `label:`, or `org:`.
 - `@team` searches need your teams. If **Teams** says “GitHub reports no teams for you”, the token needs `read:org`, and SAML orgs must authorize it. Choose **Look up teams again** after you join a team.
 - Snoozed and muted items: press {{key:dash.showSnoozed}} to show them.

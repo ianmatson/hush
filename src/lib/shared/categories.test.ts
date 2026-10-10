@@ -27,7 +27,6 @@ const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<RuleFacts> =
 			smart: [],
 			...enrichment
 		},
-		views: ['Mine'],
 		...over
 	}) satisfies RuleFacts;
 
@@ -44,7 +43,7 @@ const API: ItemCategory = {
 	id: 'api',
 	name: 'API',
 	color: 'blue',
-	rule: 'repo:acme/api OR view:"API bugs"',
+	rule: 'repo:acme/api OR label:api',
 	description: ''
 };
 const BUGS: ItemCategory = {
@@ -80,8 +79,8 @@ describe('placeItem', () => {
 		const t = thread({ labels: ['docs'], ...jevChose(area, 'bugs') }, { repo: 'acme/api' });
 		expect(place(t, [area]).categories).toEqual(['api']);
 	});
-	it('can use the view that has the item', () => {
-		expect(place(thread({}, { views: ['API bugs'] }), [area]).categories).toEqual(['api']);
+	it('can use any of the conditions of an OR rule', () => {
+		expect(place(thread({ labels: ['api'] }), [area]).categories).toEqual(['api']);
 	});
 	it("uses Jev's choice when no rule matches", () => {
 		expect(place(thread(jevChose(area, 'bugs')), [area]).categories).toEqual(['bugs']);
@@ -239,12 +238,12 @@ describe('rules on the facts of an item', () => {
 		expect(queryMatches('author:bots', facts)).toBe(false);
 	});
 
-	it.each(['category:bugs', 'needs:review', 'event:mentioned', 'in:fyi'])(
-		'rules cannot use removed words: %s',
-		(rule) => {
-			expect(validateCategoryGroups([group([{ ...API, rule }])])).toMatch(
-				/Unknown “(category|needs|event|in):”/
-			);
-		}
-	);
+	it.each([
+		['category:bugs', /Category rules cannot use category:/],
+		['mentions:@me', /“mentions:” works only in a view's search/],
+		['needs:review', /Unknown “needs:”/],
+		['event:mentioned', /Unknown “event:”/]
+	])('rules cannot use %s', (rule, error) => {
+		expect(validateCategoryGroups([group([{ ...API, rule }])])).toMatch(error);
+	});
 });

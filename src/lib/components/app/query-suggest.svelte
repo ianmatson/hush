@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { suggest, type Suggestion } from '$lib/shared/query';
+	import { suggest, type QueryPlace, type Suggestion } from '$lib/shared/query';
 	import { cn } from '$lib/utils';
 
 	/**
@@ -10,10 +10,12 @@
 	let {
 		input,
 		value,
+		place = 'rule',
 		onpick
 	}: {
 		input: HTMLInputElement | null;
 		value: string;
+		place?: QueryPlace;
 		onpick: (next: string) => void;
 	} = $props();
 
@@ -21,7 +23,7 @@
 	let caret = $state(0);
 	let active = $state(0);
 	const found = $derived(
-		open ? suggest(value, caret) : { from: 0, to: 0, items: [] as Suggestion[] }
+		open ? suggest(value, caret, place) : { from: 0, to: 0, items: [] as Suggestion[] }
 	);
 	const items = $derived(found.items.slice(0, 8));
 

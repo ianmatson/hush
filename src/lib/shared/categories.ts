@@ -185,9 +185,9 @@ export function matchesCategoryFilter(
 export function itemQueryFacts(
 	i: DashItem,
 	me: string,
-	settings: Pick<Settings, 'views'>
+	settings: Pick<Settings, 'categoryGroups'>,
+	now = Date.now()
 ): RuleFacts {
-	const viewNames = new Map(settings.views.map((v) => [v.id, v.name]));
 	return {
 		repo: i.repo,
 		subjectType: i.kind === 'pr' ? 'PullRequest' : 'Issue',
@@ -203,7 +203,13 @@ export function itemQueryFacts(
 			assignees: i.assignees,
 			reviewRequests: [...(i.requestedMe ? [me] : []), ...i.requestedTeams],
 			additions: i.kind === 'pr' ? i.additions : undefined,
-			deletions: i.kind === 'pr' ? i.deletions : undefined
+			deletions: i.kind === 'pr' ? i.deletions : undefined,
+			reviewDecision: i.kind === 'pr' ? i.reviewDecision : undefined,
+			ci: i.kind === 'pr' ? i.ci : undefined,
+			reviewed: i.reviewed,
+			createdAt: i.createdAt,
+			updatedAt: i.updatedAt,
+			comments: i.comments
 		},
 		activity: i.lastCommentBy
 			? {
@@ -213,7 +219,10 @@ export function itemQueryFacts(
 					at: i.lastCommentAt ?? i.updatedAt
 				}
 			: null,
-		views: i.sections.map((id) => viewNames.get(id) ?? id)
+		categories: allCategories(settings.categoryGroups)
+			.filter((c) => i.categories?.includes(c.id))
+			.map((c) => ({ id: c.id, name: c.name })),
+		now
 	};
 }
 
