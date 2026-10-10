@@ -38,7 +38,7 @@ Hush sees your own review, reply, or push within 15 minutes, because GitHub send
 
 1. In **Settings → Notifications**, check that this device says “Receives push notifications.”, and choose **Send test**.
 2. Check that your system allows notifications from the browser, and that focus modes or Do Not Disturb are off.
-3. Check [quiet hours](/docs/notifications#quiet-hours), and that the thread is one that gets pushed: by default only Needs you.
+3. Check [quiet hours](/docs/notifications#quiet-hours), and that the fact is one that pushes ([What gets pushed](/docs/notifications#what-gets-pushed)). Muted items never push.
 4. Check [How often](/docs/notifications#how-often):
    - An item pushes once, and then not again until you open Hush or act on it ([`pushRepeat`](/docs/settings#pushrepeat)).
    - While Hush is open and in use on any device, it does not push ([`pushWhileOpen`](/docs/settings#pushwhileopen)).

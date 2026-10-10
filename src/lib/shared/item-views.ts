@@ -75,7 +75,9 @@ function validateView(v: Partial<ItemView> | null, ids: Set<string>): string | n
 		if (typeof q !== 'string' || !q.trim() || q.length > MAX_SEARCH_CHARS)
 			return `"${v.name}": each search must have 1–${MAX_SEARCH_CHARS} characters.`;
 	if (!groupByOk(v.groupBy))
-		return `"${v.name}": "groupBy" must be none, role, status, repo, author, label, assignee, or category:<group id>.`;
+		return `"${v.name}": "groupBy" must be none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number>.`;
+	if (v.pushNew !== undefined && typeof v.pushNew !== 'boolean')
+		return `"${v.name}": "pushNew" must be true or false.`;
 	return null;
 }
 

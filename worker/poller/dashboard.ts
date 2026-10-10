@@ -5,7 +5,7 @@ import {
 	sortItems,
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
-import type { DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
+import type { DashItem, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
 import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
 import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
 import {
@@ -18,10 +18,12 @@ import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
 import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
 import { boardCount, boardShort, itemStatuses } from '../projects';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
-import { DASH_TTL } from './shared';
+import { DASH_TTL, type Who } from './shared';
+import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 
 const RETRY_AFTER = 60_000;
+const NEW_ITEM_REASON = 'new-item';
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
 
 async function findItems(token: string, queries: ExpandedQuery[]) {
@@ -246,9 +248,58 @@ export abstract class PollerDashboard extends PollerSync {
 			].slice(0, 3)
 		};
 		await this.ctx.storage.put(key, { sig, data });
+		await this.pushNewItems(who, kind, placed, complete);
 		// The search saw these PRs and issues now: the inbox follows (this cache is already new).
 		await this.record(who, [...fresh.values()], { dash: false });
 		return data;
+	}
+
+	private async pushNewItems(who: Who, kind: DashKind, items: DashItem[], complete: boolean) {
+		const now = Date.now();
+		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
+		const searchesKey = (viewId: string) => `viewItemsFor:${viewId}:${kind}`;
+		const remembered = await this.ctx.storage.get<string>(
+			who.settings.views.map((v) => searchesKey(v.id))
+		);
+		const candidates: PushCandidate[] = [];
+		const firstSeen: { viewId: string; itemId: string }[] = [];
+		const nowRemembered: Record<string, string> = {};
+		for (const v of who.settings.views) {
+			const found = items.filter((i) => i.sections.includes(v.id));
+			const known = new Set(
+				this.all<{ item_id: string }>(
+					'SELECT item_id FROM view_items WHERE view_id = ? AND kind = ?',
+					v.id,
+					kind
+				).map((r) => r.item_id)
+			);
+			const fresh = found.filter((i) => !known.has(i.id));
+			firstSeen.push(...fresh.map((i) => ({ viewId: v.id, itemId: i.id })));
+			const searches = JSON.stringify(v.searches);
+			const sameSearches = remembered.get(searchesKey(v.id)) === searches;
+			if (complete && !sameSearches) nowRemembered[searchesKey(v.id)] = searches;
+			if (!v.pushNew || !sameSearches || !initialized) continue;
+			for (const i of fresh)
+				if (i.author.toLowerCase() !== who.me.toLowerCase())
+					candidates.push({
+						itemKey: i.id,
+						reason: NEW_ITEM_REASON,
+						message: { title: `New in ${v.name}`, body: `${i.title}\n${i.repo}`, url: i.url }
+					});
+		}
+		if (firstSeen.length)
+			this.transaction(() => {
+				for (const f of firstSeen)
+					this.run(
+						`INSERT OR IGNORE INTO view_items (view_id, kind, item_id, first_seen_at) VALUES (?, ?, ?, ?)`,
+						f.viewId,
+						kind,
+						f.itemId,
+						now
+					);
+			});
+		if (Object.keys(nowRemembered).length) await this.ctx.storage.put(nowRemembered);
+		await this.deliver(candidates);
 	}
 
 	/** The stored facts of these PRs and issues ("owner/repo#123"). */

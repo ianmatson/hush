@@ -54,10 +54,10 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 ## In a view
 
 - At the top, a switch shows **Pull requests** or **Issues**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
-- The list groups the items by whose turn it is. See [Pull requests and issues](/docs/pull-requests-and-issues).
+- The list puts the items into sections, by the view's Group by. See [Pull requests and issues](/docs/pull-requests-and-issues#group-by).
 - The pencil button next to the switch opens the view in **Settings → Views**.
 - A view has no filter box. To find an item, press {{key:palette}} or {{key:list.search}} to search.
-- The number on a tab counts the items in the view that are your turn.
+- The number on a tab counts the unread items in the view that are not snoozed or muted. See [Unread](/docs/pull-requests-and-issues#unread).
 - {{key:dash.view.1}} to {{key:dash.view.9}} open your first nine views.
 - On a narrow window, views that do not fit go in **More**. On a phone, the top bar is one menu.
 
@@ -70,6 +70,7 @@ The [inbox](/docs/inbox#what-comes-in) gets only the notifications about the pul
 In **Settings → Views**:
 
 - Change a view's name and searches.
+- Turn on **Push new items** to get a push when a pull request or issue shows up in the view for the first time. See [What gets pushed](/docs/notifications#what-gets-pushed).
 - Move a view up or down. The top bar shows the views in this order.
 - Delete a view with the trash button. You keep at least one view.
 - **Defaults** puts back the Mine view and removes the others. Nothing changes until you choose **Save**.

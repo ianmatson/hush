@@ -1,4 +1,4 @@
-import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import { classify, withOverride } from '../../src/lib/shared/classify';
 import { snoozeEvent, snoozeOutcome } from '../../src/lib/shared/snooze';
 import { REOPEN_WINDOW_MS } from '../../src/lib/shared/watch';
 import type { DashKind, ThreadFacts } from '../../src/lib/shared/types';
@@ -30,6 +30,7 @@ import {
 import { PollerSubjects } from './subjects';
 
 const marks = (n: number) => Array(n).fill('?').join(',');
+const MENTION_REASONS = new Set(['mention', 'team_mention']);
 
 const TRACKED_BUILD_KEY = (kind: DashKind) => `trackedBuild:${kind}`;
 const TRACKED_REBUILD_KEY = 'trackedRebuildAt';
@@ -225,7 +226,7 @@ export abstract class PollerSync extends PollerSubjects {
 			let pushed = ex?.pushed_updated_at ?? null;
 			const itemKey = key ?? n.id;
 			const body = `${n.subject.title}\n${n.repository.full_name}`;
-			if (wokeBy && settings.pushAction) {
+			if (wokeBy && settings.pushFacts.includes('snooze-over')) {
 				candidates.push({
 					itemKey,
 					reason: SNOOZE_OVER_REASON,
@@ -237,14 +238,19 @@ export abstract class PollerSync extends PollerSubjects {
 				initialized &&
 				n.unread &&
 				triage === 'inbox' &&
-				shouldPush(c, settings) &&
+				MENTION_REASONS.has(n.reason) &&
+				settings.pushFacts.includes('mentioned') &&
 				pushed !== n.updated_at
 			) {
 				candidates.push({
 					itemKey,
-					reason: c.kind,
-					urgent: c.category === 'action' && !!enrichment?.urgent,
-					message: { title: c.summary, body, url: c.actionUrl }
+					reason: 'mentioned',
+					urgent: !!enrichment?.urgent,
+					message: {
+						title: n.reason === 'team_mention' ? 'Your team was mentioned' : 'You were mentioned',
+						body,
+						url: c.actionUrl
+					}
 				});
 				pushed = n.updated_at;
 			}

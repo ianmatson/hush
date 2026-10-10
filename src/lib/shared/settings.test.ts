@@ -11,17 +11,20 @@ import {
 
 describe('settings file', () => {
 	it('has only your changes', () => {
-		const s = mergeSettings(DEFAULT_SETTINGS, { pushFyi: true, dash: { staleDays: 5 } as never });
+		const s = mergeSettings(DEFAULT_SETTINGS, {
+			pushWhileOpen: true,
+			dash: { staleDays: 5 } as never
+		});
 		const file = settingsFile(s);
-		expect(file.settings).toEqual({ pushFyi: true, dash: { staleDays: 5 } });
+		expect(file.settings).toEqual({ pushWhileOpen: true, dash: { staleDays: 5 } });
 		expect(settingsFromFile(JSON.stringify(file))).toEqual(file.settings);
 		expect(parseSettings(JSON.stringify(file.settings))).toEqual(s);
 	});
 
 	it('drops settings that are gone', () => {
-		expect(parseSettings('{"digestHour":8,"pushFyi":true}')).toEqual({
+		expect(parseSettings('{"digestHour":8,"pushWhileOpen":true}')).toEqual({
 			...DEFAULT_SETTINGS,
-			pushFyi: true
+			pushWhileOpen: true
 		});
 	});
 
@@ -38,14 +41,14 @@ describe('settings file', () => {
 	});
 
 	it('refuses other files', () => {
-		expect(settingsFromFile('{"hush":2,"settings":{"pushFyi":true,"nope":1}}')).toEqual({
-			pushFyi: true
+		expect(settingsFromFile('{"hush":2,"settings":{"pushWhileOpen":true,"nope":1}}')).toEqual({
+			pushWhileOpen: true
 		});
 		expect(settingsFromFile('nope')).toMatch(/not JSON/);
 		expect(settingsFromFile('{"rules":[]}')).toMatch(/not a Hush settings file/);
 		expect(settingsFromFile('{"hush":2,"settings":{}}')).toMatch(/no settings/);
-		expect(settingsFromFile('{"hush":1,"settings":{"pushFyi":true}}')).toMatch(/older Hush/);
-		expect(settingsFromFile('{"hush":3,"settings":{"pushFyi":true}}')).toMatch(/newer Hush/);
+		expect(settingsFromFile('{"hush":1,"settings":{"pushWhileOpen":true}}')).toMatch(/older Hush/);
+		expect(settingsFromFile('{"hush":3,"settings":{"pushWhileOpen":true}}')).toMatch(/newer Hush/);
 		expect(settingsFile(DEFAULT_SETTINGS).hush).toBe(2);
 	});
 });
@@ -75,8 +78,8 @@ describe('settings schema', () => {
 	it('checks each setting', () => {
 		const check = (patch: object) =>
 			validateSettings(mergeSettings(DEFAULT_SETTINGS, patch), Object.keys(patch));
-		expect(check({ pushFyi: true })).toBeNull();
-		expect(check({ pushFyi: 'yes' })).toMatch(/true or false/);
+		expect(check({ pushWhileOpen: true })).toBeNull();
+		expect(check({ pushWhileOpen: 'yes' })).toMatch(/true or false/);
 		expect(check({ nope: 1 })).toMatch(/Unknown setting "nope"/);
 		expect(check({ dash: { nope: 1 } })).toMatch(/Unknown setting "dash.nope"/);
 		expect(check({ dash: { staleDays: 0 } })).toMatch(/Stale/);

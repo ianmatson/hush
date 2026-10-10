@@ -12,7 +12,7 @@ After you sign in, Hush runs the searches of your [views](/docs/views) and reads
 The first time, **Welcome to Hush** is at the top of the inbox. It says what Hush found (“From 47 notifications, Hush found 5 things that need you. It moved 6 to FYI, and 36 that are already finished to Done.”), and asks two questions:
 
 - **Review requests to my teams need me**: on or off. Off, team requests are FYI in the inbox.
-- **Push to this device**: pushes what needs you.
+- **Push to this device**: pushes the facts that you choose, such as a review request.
 
 Choose **Done** to save, or **Skip**. You can change all of it later.
 
@@ -39,7 +39,7 @@ Often you do not need Done: when you approve, reply, or push a fix, Hush sees it
 
 ## 4. Turn on push
 
-Go to **Settings → Notifications** and choose **Turn on** for this device. Hush pushes only “Needs you” threads by default, and each PR or issue only once until you open Hush. Do this on each browser or phone that should get pushes.
+Go to **Settings → Notifications** and choose **Turn on** for this device. By default, Hush pushes review requests, mentions, replies, reviews and failed CI on your pull requests, and assignments, and each PR or issue only once until you open Hush. See [What gets pushed](/docs/notifications#what-gets-pushed). Do this on each browser or phone that should get pushes.
 
 On iPhone and iPad, first add Hush to your Home Screen (Share → Add to Home Screen), open it from there, and then turn on push. See [Notifications](/docs/notifications).
 

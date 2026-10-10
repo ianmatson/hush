@@ -26,6 +26,7 @@ import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
 import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
+import { DEFAULT_PUSH_FACTS, PUSH_FACTS } from '$lib/shared/push-facts';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
 import { REOPEN_WINDOW_MS } from '$lib/shared/watch';
 import {
@@ -93,17 +94,20 @@ export function defaultOf(key: string): unknown {
  * one-line description in SETTINGS_DOCS. A test checks that every setting has an entry.
  */
 export const SETTING_DETAILS: Record<string, { type: string; body: string }> = {
-	pushAction: {
-		type: 'boolean',
-		body: `When a thread arrives in **Needs you**, Hush sends a push to every device that has push on.`
-	},
-	pushFyi: {
-		type: 'boolean',
-		body: `Also push FYI threads. Most people leave this off.`
-	},
-	pushTurnChanges: {
-		type: 'boolean',
-		body: `GitHub sends no notification for some changes that make a thread your turn: new commits after your review, CI that fails later, a snooze that ends. The inbox watcher looks at open threads every ${WATCH_EVERY / MIN} minutes. When one of them becomes your turn, Hush moves it to Needs you and, with this on, pushes it.`
+	pushFacts: {
+		type: 'list of strings',
+		body: `The facts that push. Each time Hush reads a pull request or issue from GitHub, it compares it with the last read, and pushes when one of these facts became true:
+
+${table(
+	['Fact', 'Pushes when'],
+	PUSH_FACTS.map((f) => [code(f.id), f.note ? `${f.label}. ${f.note}` : `${f.label}.`])
+)}
+
+The default: ${code(json(DEFAULT_PUSH_FACTS))}. An empty list pushes nothing (except the new items of views with \`pushNew\`). See [What gets pushed](/docs/notifications#what-gets-pushed).
+
+\`\`\`json settings
+{ "pushFacts": ["review-requested", "mentioned", "ci-failed"] }
+\`\`\``
 	},
 	quietHours: {
 		type: 'object or null',
@@ -224,6 +228,7 @@ A one-time notice on the inbox and on your views says that this is on. When you 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`), feed, and the \`view:\` word use it.
 - \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label. Category rules can test it with \`view:\`.
 - \`searches\`: up to ${MAX_VIEW_SEARCHES} [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to ${MAX_SEARCH_CHARS} characters each. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
+- \`pushNew\` (optional, \`false\` when left out): push when a pull request or issue shows up in the view for the first time. Items that you opened do not push.
 - \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
 A view needs at least one search, and you keep at least one view.
 

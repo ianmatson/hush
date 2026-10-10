@@ -65,7 +65,8 @@ When you approve or request changes, Hush moves the thread to **Done** by itself
 
 Team requests are **FYI** by default. In a view grouped by **Your role**, they are under **Reviews**, with “Review for acme/web” on the row (see [Group by](/docs/pull-requests-and-issues#group-by)). You can change this:
 
-- [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests go to Needs you, and push.
+- [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests go to Needs you.
+- [`pushFacts`](/docs/settings#pushfacts) with `team-review-requested`: team review requests push.
 - [`reviewResolution`](/docs/settings#reviewresolution) `"any_review"`: a review by someone else settles a request. Use it on teams where one review is enough.
 - [`dash.excludedTeams`](/docs/settings#dash-excludedteams): leave out big teams, such as "everyone".
 

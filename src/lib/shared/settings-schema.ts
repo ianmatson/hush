@@ -12,6 +12,7 @@ import { validateSwipe } from './swipe';
 import { validateRows } from './row-parts';
 import { validateKeys } from './keymap';
 import { validateQuietHours } from './quiet';
+import { PUSH_FACTS, validatePushFacts } from './push-facts';
 import {
 	DIGEST_MINUTES,
 	validateClearNotifications,
@@ -35,20 +36,9 @@ export interface SettingInfo {
 
 export const SETTINGS_DOCS: SettingInfo[] = [
 	{
-		key: 'pushAction',
+		key: 'pushFacts',
 		page: 'notifications',
-		description: 'Push “Needs you” threads: review requests, failed CI on your PRs, replies.'
-	},
-	{
-		key: 'pushFyi',
-		page: 'notifications',
-		description: 'Push FYI threads too. Usually noisy.'
-	},
-	{
-		key: 'pushTurnChanges',
-		page: null,
-		description:
-			'Push when a thread becomes your turn with no new notification from GitHub, for example new commits after your review.'
+		description: `What pushes: a list of facts. ${PUSH_FACTS.map((f) => `"${f.id}" (${f.label.toLowerCase()})`).join(', ')}.`
 	},
 	{
 		key: 'quietHours',
@@ -83,7 +73,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 		key: 'pushUrgentNow',
 		page: 'notifications',
 		description:
-			'With smart decisions on: push a “Needs you” item at once, also during a digest or over the push limit, when its text says it blocks something or is an incident. Quiet hours still hold it.'
+			'With smart decisions on: send a push at once, also during a digest or over the push limit, when the item’s text says it blocks something or is an incident. Quiet hours still hold it.'
 	},
 	{
 		key: 'alertChannels.push',
@@ -136,7 +126,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'views',
 		page: 'views',
-		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number> }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
+		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number>, "pushNew": optional, true to push new items }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
 	},
 	{
 		key: 'categoryGroups',
@@ -266,9 +256,7 @@ function validateAlertChannels(v: unknown): string | null {
 }
 
 const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
-	pushAction: bool('pushAction'),
-	pushFyi: bool('pushFyi'),
-	pushTurnChanges: bool('pushTurnChanges'),
+	pushFacts: validatePushFacts,
 	peekMarksRead: bool('peekMarksRead'),
 	botsAreFyi: bool('botsAreFyi'),
 	teamReviewsAreAction: bool('teamReviewsAreAction'),

@@ -1,4 +1,4 @@
-import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
+import { classify, withOverride } from '../../src/lib/shared/classify';
 import { placeItem } from '../../src/lib/shared/categories';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
@@ -10,6 +10,9 @@ import {
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
 import type { SubjectDecisions } from '../../src/lib/shared/decisions';
+import type { ItemMark } from '../../src/lib/shared/item-snooze';
+import { itemPush } from '../../src/lib/shared/push-facts';
+import type { SnoozeEvent } from '../../src/lib/shared/snooze';
 import { fetchSubjects } from '../github';
 import { SNOOZE_OVER_REASON, type PushCandidate } from './alerts';
 import { PollerDecisions } from './decisions';
@@ -20,6 +23,7 @@ import { MAX_INDIVIDUAL_PUSHES, TRACKED_SEEN_REFRESH, type Resolved, type Who } 
 const CHUNK = 90;
 const marks = (n: number) => Array(n).fill('?').join(',');
 const parse = (json: string | undefined) => (json ? (JSON.parse(json) as SubjectFacts) : null);
+const NEW_SUBJECT_WINDOW_MS = 60 * 60_000;
 
 /** A thread, and its subject's facts now and before this read. */
 type Apply = { row: ThreadRow; fresh: SubjectFacts; before: SubjectFacts | null };
@@ -65,6 +69,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		});
 		await this.decideSubjects(who, subjects);
 		const decided = this.decisionsOf(who, subjects);
+		if (!opts.quiet) await this.pushFactsOf(who, changed, stored, decided);
 		if (opts.dash !== false)
 			await this.patchDashCaches(
 				who,
@@ -89,6 +94,60 @@ export abstract class PollerSubjects extends PollerDecisions {
 		}
 		const out = await this.applyFacts(who, items, decided, opts);
 		return { changed: changed.length, ...out };
+	}
+
+	private async pushFactsOf(
+		who: Who,
+		changed: [string, SubjectFacts][],
+		stored: Map<string, string>,
+		decided: Map<string, SubjectDecisions>
+	) {
+		const wanted = new Set(who.settings.pushFacts);
+		if (!wanted.size || !changed.length) return;
+		if (!(await this.ctx.storage.get<boolean>('initialized'))) return;
+		const myTeams = new Set((await this.teams()).teams.map((t) => t.slug));
+		const keys = changed.map(([k]) => k);
+		const marksOf = new Map<string, ItemMark>();
+		for (let i = 0; i < keys.length; i += CHUNK) {
+			const chunk = keys.slice(i, i + CHUNK);
+			for (const m of this.all<{
+				item_id: string;
+				updated_at: string;
+				snoozed_until: number | null;
+				snooze_event: SnoozeEvent | null;
+				snoozed_at: number | null;
+			}>(`SELECT * FROM dash_snoozed WHERE item_id IN (${marks(chunk.length)})`, ...chunk))
+				marksOf.set(m.item_id, {
+					updatedAt: m.updated_at,
+					snoozedUntil: m.snoozed_until,
+					snoozeEvent: m.snooze_event,
+					snoozedAt: m.snoozed_at
+				});
+		}
+		const now = Date.now();
+		const candidates: PushCandidate[] = changed.flatMap(([key, after]) => {
+			const push = itemPush(
+				parse(stored.get(key)),
+				after,
+				marksOf.get(key),
+				wanted,
+				who.me,
+				myTeams,
+				now - NEW_SUBJECT_WINDOW_MS,
+				now
+			);
+			if (!push) return [];
+			return [
+				{
+					itemKey: key,
+					reason: push.reason,
+					ignoresRepeatSetting: push.reason === 'snooze-over',
+					urgent: !!decided.get(key)?.urgent,
+					message: { title: push.title, body: `${after.title}\n${after.repo}`, url: after.url }
+				}
+			];
+		});
+		await this.deliver(candidates);
 	}
 
 	/** Read these threads' PRs and issues again (the watcher, the refresh button). */
@@ -374,15 +433,11 @@ export abstract class PollerSubjects extends PollerDecisions {
 			);
 			if (out.resolvedNote) resolved.push({ id: r.id, title: r.title, note: out.resolvedNote });
 			const snoozeOver = out.push?.startsWith('Snooze over') ?? false;
-			const wanted = snoozeOver
-				? settings.pushAction
-				: settings.pushTurnChanges && shouldPush(c, settings);
-			if (out.push && wanted)
+			if (out.push && snoozeOver && settings.pushFacts.includes('snooze-over'))
 				candidates.push({
 					itemKey: r.subject_key ?? r.id,
-					reason: snoozeOver ? SNOOZE_OVER_REASON : c.kind,
-					ignoresRepeatSetting: snoozeOver,
-					urgent: !snoozeOver && c.category === 'action' && !!e.urgent,
+					reason: SNOOZE_OVER_REASON,
+					ignoresRepeatSetting: true,
 					message: { title: out.push, body: `${r.title}\n${r.repo}`, url: c.actionUrl }
 				});
 		}

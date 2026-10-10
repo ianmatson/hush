@@ -7,6 +7,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { Switch } from '$lib/components/ui/switch';
 	import SearchBuilder from './rules/search-builder.svelte';
 	import SearchSize from './search-size.svelte';
 	import FeedButton from './feed-button.svelte';
@@ -175,5 +176,18 @@
 				>
 			</div>
 		</div>
+		<label class="flex items-start justify-between gap-4 border-t pt-4">
+			<span class="grid gap-0.5">
+				<span class="text-sm font-medium">Push new items</span>
+				<span class="text-xs text-muted-foreground"
+					>A push when a pull request or issue shows up in this view for the first time. Items that
+					you opened do not push.</span
+				>
+			</span>
+			<Switch
+				bind:checked={() => view.pushNew ?? false, (on) => (view.pushNew = on || undefined)}
+				aria-label="Push new items in {view.name}"
+			/>
+		</label>
 	</Card.Content>
 </Card.Root>

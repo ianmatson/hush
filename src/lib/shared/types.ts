@@ -178,12 +178,7 @@ export interface AlertChannels {
 }
 
 export interface Settings {
-	/** Send Web Push for Action items. */
-	pushAction: boolean;
-	/** Send Web Push for FYI items too. */
-	pushFyi: boolean;
-	/** Push when a thread becomes your turn with no new notification (the inbox watcher). */
-	pushTurnChanges: boolean;
+	pushFacts: import('./push-facts').PushFact[];
 	/** No pushes during these hours (they still go in the alert history). Null: off. */
 	quietHours: QuietHours | null;
 	pushRepeat: import('./push-policy').PushRepeat;
@@ -250,6 +245,7 @@ export interface ItemView {
 	name: string;
 	searches: string[];
 	groupBy: GroupBy;
+	pushNew?: boolean;
 }
 
 export interface DashSettings {

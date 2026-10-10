@@ -12,6 +12,7 @@
 		type PushSupport
 	} from '$lib/push';
 	import { saveSettings } from '$lib/save-settings';
+	import { PUSH_FACTS, type PushFact } from '$lib/shared/push-facts';
 	import { fromClock, inQuietHours, toClock } from '$lib/shared/quiet';
 	import type { QuietHours } from '$lib/shared/types';
 	import {
@@ -72,6 +73,12 @@
 						...patch
 					};
 		return saveSettings({ quietHours: next }, next ? 'Quiet hours saved' : 'Quiet hours off');
+	}
+
+	function savePushFact(fact: PushFact, on: boolean) {
+		const current = settings?.pushFacts ?? [];
+		const next = on ? [...new Set([...current, fact])] : current.filter((f) => f !== fact);
+		return saveSettings({ pushFacts: next });
 	}
 
 	function setClock(key: 'from' | 'to', value: string) {
@@ -221,35 +228,22 @@
 			<Card.Header>
 				<Card.Title>What to push</Card.Title>
 				<Card.Description
-					>A category can always push, or never push, for its items (<a
-						class="underline"
-						href="/settings/categories">Categories & tags</a
-					>). More in settings.json (General).</Card.Description
+					>Hush pushes when one of these becomes true for a pull request or issue in your views.
+					Each view can also push its new items (<a class="underline" href="/settings/views"
+						>Views</a
+					>).</Card.Description
 				>
 			</Card.Header>
 			<Card.Content class="divide-y">
-				<SettingRow
-					id="push-action"
-					label="“Needs you” items"
-					description="Review requests, failed CI on your PRs, replies, direct mentions."
-				>
-					<SavedSwitch
-						id="push-action"
-						checked={settings.pushAction}
-						onsave={(v) => saveSettings({ pushAction: v })}
-					/>
-				</SettingRow>
-				<SettingRow
-					id="push-fyi"
-					label="FYI items"
-					description="Usually noisy. Set a category to always push instead."
-				>
-					<SavedSwitch
-						id="push-fyi"
-						checked={settings.pushFyi}
-						onsave={(v) => saveSettings({ pushFyi: v })}
-					/>
-				</SettingRow>
+				{#each PUSH_FACTS as fact (fact.id)}
+					<SettingRow id="push-{fact.id}" label={fact.label} description={fact.note}>
+						<SavedSwitch
+							id="push-{fact.id}"
+							checked={settings.pushFacts.includes(fact.id)}
+							onsave={(on) => savePushFact(fact.id, on)}
+						/>
+					</SettingRow>
+				{/each}
 			</Card.Content>
 		</Card.Root>
 
@@ -357,7 +351,7 @@
 					<SettingRow
 						id="push-urgent-now"
 						label="Push blocking items at once"
-						description="A “Needs you” item whose text says it blocks something or is an incident skips the digest and the limit. Quiet hours still hold it."
+						description="A push about an item whose text says it blocks something or is an incident skips the digest and the limit. Quiet hours still hold it."
 					>
 						<SavedSwitch
 							id="push-urgent-now"

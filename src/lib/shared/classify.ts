@@ -245,10 +245,3 @@ export function withOverride(
 		return c;
 	return { ...c, category: 'fyi', push: false };
 }
-
-export function shouldPush(c: Classification, settings: Settings): boolean {
-	if (c.push !== undefined) return c.push;
-	if (c.category === 'action') return settings.pushAction;
-	if (c.category === 'fyi') return settings.pushFyi;
-	return false;
-}

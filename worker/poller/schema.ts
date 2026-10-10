@@ -15,9 +15,10 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
 const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, pinned TEXT NOT NULL DEFAULT '[]');`;
+const VIEW_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS view_items (view_id TEXT NOT NULL, kind TEXT NOT NULL, item_id TEXT NOT NULL, first_seen_at INTEGER NOT NULL, PRIMARY KEY (view_id, kind, item_id));`;
 const TRACKED_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, categories TEXT NOT NULL DEFAULT '[]');`;
 export const SCHEMA = `
 CREATE TABLE threads (
@@ -91,6 +92,8 @@ ${DECISIONS_TABLE}
 ${ITEM_PINS_TABLE}
 
 ${TRACKED_ITEMS_TABLE}
+
+${VIEW_ITEMS_TABLE}
 `;
 
 /** How to get from an older version of this layout to SCHEMA_VERSION. */
@@ -170,7 +173,8 @@ ALTER TABLE dash_hidden RENAME TO dash_snoozed;
 ALTER TABLE dash_snoozed ADD COLUMN snoozed_until INTEGER;
 ALTER TABLE dash_snoozed ADD COLUMN snooze_event TEXT;
 ALTER TABLE dash_snoozed ADD COLUMN snoozed_at INTEGER;`
-	}
+	},
+	17: { to: 18, sql: VIEW_ITEMS_TABLE }
 };
 
 export interface ThreadRow {

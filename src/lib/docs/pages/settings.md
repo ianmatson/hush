@@ -20,7 +20,7 @@ A complete example:
 
 ```json settings
 {
-	"pushFyi": false,
+	"pushFacts": ["review-requested", "mentioned", "replied", "ci-failed"],
 	"quietHours": { "from": 1320, "to": 420, "weekends": true, "timeZone": "America/New_York" },
 	"reviewResolution": "any_review",
 	"teamReviewsAreAction": true,
