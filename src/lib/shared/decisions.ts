@@ -100,15 +100,11 @@ const normalizeCondition = (text: string) => text.trim().replace(/\s+/g, ' ').to
 
 export const conditionId = (text: string) => cyrb53(normalizeCondition(text));
 
-export function smartConditions(
-	views: SavedView[],
-	markQueries: string[] = [],
-	extraTexts: string[] = []
-): SmartCondition[] {
+export function smartConditions(views: SavedView[], markQueries: string[] = []): SmartCondition[] {
 	const byId = new Map<string, SmartCondition>();
 	const queries = [...views.map((v) => v.query ?? ''), ...markQueries];
-	const texts = [...queries.flatMap(aboutTexts), ...extraTexts];
-	for (const text of texts) byId.set(conditionId(text), { id: conditionId(text), text });
+	for (const text of queries.flatMap(aboutTexts))
+		byId.set(conditionId(text), { id: conditionId(text), text });
 	return [...byId.values()];
 }
 

@@ -1,7 +1,6 @@
 import { NEW_COMMITS_AFTER_REVIEW_OPTIONS, validateDash } from './dashboard';
 import { validateSources, validateTracked } from './sources';
 import {
-	categoryConditionTexts,
 	markQueries,
 	MAX_CATEGORIES,
 	MAX_CATEGORY_GROUPS,
@@ -152,7 +151,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'categoryGroups',
 		page: 'categories',
-		description: `Groups of categories for PRs and issues (up to ${MAX_CATEGORY_GROUPS}). Each is { "id", "name", "multiple", "categories" }, with up to ${MAX_CATEGORIES} categories of { "id", "name", "color", "icon", "rule": a query, "description": for Jev }. With "multiple": false, an item gets the first category whose rule matches, else the one Jev picks among the categories with a description, else none. With "multiple": true, an item gets every category whose rule matches or whose description Jev says fits.`
+		description: `Groups of categories for PRs and issues (up to ${MAX_CATEGORY_GROUPS}). Each is { "id", "name", "categories" }, with up to ${MAX_CATEGORIES} categories of { "id", "name", "color", "icon", "rule": a query, "description": for Jev }. An item gets one category from each group: the first whose rule matches, else the one Jev picks among the categories with a description, else none ("Not sorted").`
 	},
 	{
 		key: 'tracked',
@@ -338,10 +337,9 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 	}
 	if (
 		['views', 'categoryGroups'].some((k) => keys.includes(k)) &&
-		smartConditions(next.views, markQueries(next), categoryConditionTexts(next.categoryGroups))
-			.length > MAX_SMART_CONDITIONS
+		smartConditions(next.views, markQueries(next)).length > MAX_SMART_CONDITIONS
 	)
-		return `Views and categories can have up to ${MAX_SMART_CONDITIONS} different about: conditions and descriptions in groups with more than one category per item.`;
+		return `Views and category rules can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
 	return null;
 }
 

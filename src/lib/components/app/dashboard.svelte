@@ -40,7 +40,12 @@
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import type { Classification } from '$lib/shared/types';
-	import { groupOf, itemQueryFacts, type PinChange } from '$lib/shared/categories';
+	import {
+		itemQueryFacts,
+		matchesCategoryFilter,
+		type CategoryFilter,
+		type CategoryPin
+	} from '$lib/shared/categories';
 	import { exprMatches, NOTIFICATION_WORDS, parseExpr } from '$lib/shared/query';
 	import { ruleMatches } from '$lib/shared/classify';
 	import { rowMarks, type RowMark } from '$lib/marks';
@@ -98,7 +103,7 @@
 	const revalidatingAfterOpen = $derived(dashQ.isFetching && dashQ.dataUpdatedAt < pageOpenedAt);
 	let refreshing = $state(false);
 	let section = $state<string | null>(null);
-	let categoryFilter = $state<string | null>(null);
+	let categoryFilter = $state<CategoryFilter | null>(null);
 	let query = $state('');
 	let showHidden = $state(false);
 	let selectedId = $state<string | null>(null);
@@ -142,8 +147,8 @@
 	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.categories, me.data?.settings);
 
 	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed));
-	const categoryCount = (id: string) =>
-		visibleItems.filter((i) => i.categories?.includes(id)).length;
+	const categoryCount = (filter: CategoryFilter) =>
+		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
 	const hiddenParts = $derived(me.data?.settings.rows[kind] ?? []);
 
 	const sectionNames = $derived(
@@ -177,7 +182,7 @@
 			(i) =>
 				i.dismissed === showHidden &&
 				(!section || i.sections.includes(section)) &&
-				(!categoryFilter || !!i.categories?.includes(categoryFilter)) &&
+				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups)) &&
 				(!q || matchesQuery(i, q))
 		);
 		return keepHeldRow(
@@ -632,7 +637,7 @@
 
 	async function pin(
 		ids: string[],
-		change: PinChange,
+		categoryPin: CategoryPin,
 		patch: (x: DashItem) => DashItem,
 		message: string
 	) {
@@ -643,7 +648,7 @@
 		);
 		sel.clear();
 		try {
-			await api.pinItems(ids, change);
+			await api.pinItems(ids, categoryPin);
 			toast(message, {
 				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} ${noun}`
 			});
@@ -654,26 +659,25 @@
 		}
 	}
 
-	function pinCategory(ids: string[], change: PinChange) {
-		const groups = categoryGroups;
-		if ('group' in change) return pin(ids, change, (x) => x, 'Hush chooses the category again');
-		const group = groupOf(groups, change.category);
-		const name = group?.categories.find((c) => c.id === change.category)?.name ?? change.category;
-		const replaced = new Set(
-			group && !group.multiple ? group.categories.map((c) => c.id) : [change.category]
-		);
+	function pinCategory(ids: string[], categoryPin: CategoryPin) {
+		const group = categoryGroups.find((g) => g.id === categoryPin.group);
+		const chosen = group?.categories.find((c) => c.id === categoryPin.category);
+		if (!group || !chosen)
+			return pin(ids, categoryPin, (x) => x, 'Hush chooses the category again');
+		const inGroup = new Set(group.categories.map((c) => c.id));
+		const replace = (list: string[] | undefined) => [
+			...(list ?? []).filter((c) => !inGroup.has(c)),
+			chosen.id
+		];
 		return pin(
 			ids,
-			change,
+			categoryPin,
 			(x) => ({
 				...x,
-				categories: [
-					...(x.categories ?? []).filter((c) => !replaced.has(c)),
-					...(change.state === 'on' ? [change.category] : [])
-				],
-				pinnedCategories: [...(x.pinnedCategories ?? []), change.category]
+				categories: replace(x.categories),
+				pinnedCategories: replace(x.pinnedCategories)
 			}),
-			change.state === 'on' ? `Added “${name}”` : `Removed “${name}”`
+			`${group.name}: ${chosen.name}`
 		);
 	}
 

@@ -41,7 +41,7 @@ To make a settings file to import, put the settings in this wrapper:
 Check these, or Hush refuses the file:
 
 - There are no `rules`, `categories`, or `tags` settings: Hush refuses them as unknown. Categories are in `categoryGroups`.
-- `categoryGroups` has up to 10 groups. Each group has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to 40 characters), `multiple` (`false` for one category per item, `true` for any number), and `categories` (up to 20).
+- `categoryGroups` has up to 10 groups. Each group has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to 40 characters), and `categories` (up to 20). Each item gets one category from each group, or none (“Not sorted”).
 - Each category has `id` (1 to 40 lower-case letters, digits, or dashes; unique across all groups), `name` (up to 40 characters), `color` (`gray`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, or `pink`), `rule` (a query, or `""`), `description` (up to 200 characters, or `""`), and an optional `icon` (`"lucide:<name>"` or one emoji).
 - Categories have no inbox or push settings. They mark items only; they do not change Needs you, FYI, Muted, or pushes.
 - Queries (a category's `rule`, a view's `query`) use only the words and values of the [query language](/docs/query-language#words), such as `needs:fix-ci`, `event:review-requested`, `type:pr`. Up to 300 characters.
@@ -55,7 +55,7 @@ Check these, or Hush refuses the file:
 
 ## Recipes
 
-**“Mark what is about security, wherever it is.”** Add a group with any number per item, next to the default Effort and Impact groups:
+**“Mark what is about security, wherever it is.”** Add a Security group next to the default Effort and Impact groups. Its one category asks Jev with `about:` in its rule, so Jev answers yes or no. A description would not work here: with a description, Jev chooses between two or more categories of the group. Items that are not about security are Not sorted in this group:
 
 ```json settings
 {
@@ -63,7 +63,6 @@ Check these, or Hush refuses the file:
 		{
 			"id": "effort",
 			"name": "Effort",
-			"multiple": false,
 			"categories": [
 				{
 					"id": "low-effort",
@@ -94,7 +93,6 @@ Check these, or Hush refuses the file:
 		{
 			"id": "impact",
 			"name": "Impact",
-			"multiple": false,
 			"categories": [
 				{
 					"id": "low-impact",
@@ -123,17 +121,16 @@ Check these, or Hush refuses the file:
 			]
 		},
 		{
-			"id": "topics",
-			"name": "Topics",
-			"multiple": true,
+			"id": "security",
+			"name": "Security",
 			"categories": [
 				{
-					"id": "security",
+					"id": "security-related",
 					"name": "Security",
 					"color": "red",
 					"icon": "lucide:shield",
-					"rule": "label:security",
-					"description": "Vulnerabilities, secrets, permissions, or authentication"
+					"rule": "label:security OR about:\"vulnerabilities, secrets, permissions, or authentication\"",
+					"description": ""
 				}
 			]
 		}
@@ -141,7 +138,7 @@ Check these, or Hush refuses the file:
 }
 ```
 
-An item with the `security` label is in Security. Jev also puts an item there when its text fits the description. A list without the Effort or Impact group removes that group.
+An item with the `security` label is in Security. Jev also puts an item there when it is about vulnerabilities, secrets, permissions, or authentication. A list without the Effort or Impact group removes that group.
 
 **“A tab for my repositories.”** A notification view adds a tab and hides nothing:
 

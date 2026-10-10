@@ -2,7 +2,7 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
-import type { PinChange } from '$lib/shared/categories';
+import type { CategoryPin } from '$lib/shared/categories';
 import type {
 	DashKind,
 	MergeMethod,
@@ -170,8 +170,8 @@ export const api = {
 	hide: (items: { id: string; updatedAt: string }[]) =>
 		ok(client.api.dashboard.hide.$post({ json: { items } })),
 	unhide: (ids: string[]) => ok(client.api.dashboard.unhide.$post({ json: { ids } })),
-	pinItems: (ids: string[], change: PinChange) =>
-		ok(client.api.items.pin.$post({ json: { ids, ...change } })),
+	pinItems: (ids: string[], pin: CategoryPin) =>
+		ok(client.api.items.pin.$post({ json: { ids, ...pin } })),
 	reevaluateItems: () => ok(client.api.items.reevaluate.$post()),
 	/** Hidden until you unmute it; its threads are muted too (also on GitHub). */
 	muteItems: (ids: string[]) => ok(client.api.dashboard.mute.$post({ json: { ids } })),

@@ -259,7 +259,6 @@ Each group has:
 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique.
 - \`name\`: up to ${MAX_MARK_NAME_CHARS} characters.
-- \`multiple\`: \`false\` gives each item one category from the group, or none. \`true\` gives each item any number of them.
 - \`categories\`: up to ${MAX_CATEGORIES} categories, in order.
 
 Each category has:
@@ -271,9 +270,7 @@ Each category has:
 - \`rule\`: a [query](/docs/query-language), or \`""\` for none. \`about:"…"\` asks Jev. The rule looks only at the PR or issue: \`category:\`, \`event:\`, \`needs:\`, and \`in:\` do not work here.
 - \`description\`: up to ${MAX_DESCRIPTION_CHARS} characters, or \`""\`. With a description, Jev can choose this category.
 
-In a group with \`"multiple": false\`, Hush places an item in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description. When Jev is off or cannot answer, and no rule matches, the item has no category from the group.
-
-In a group with \`"multiple": true\`, an item gets every category you added to it, every category whose rule matches, and every category whose description Jev says fits (at least ${YES_AT * 100}% sure). A category you removed from the item stays off.
+An item gets one category from each group, in this order: a category you chose for it; the first category whose rule matches, top to bottom; Jev's choice among the categories with a description. When no rule matches and Jev is off or cannot answer, the item is **Not sorted** in that group: it has no category from the group.
 
 Jev reads each item once, and again when its title, description, or labels change, or when you change the descriptions of a group. **Re-evaluate items** asks again about every category for your open items.
 
@@ -285,16 +282,14 @@ A change to \`categoryGroups\` replaces the whole list. See [Categories](/docs/c
     {
       "id": "area",
       "name": "Area",
-      "multiple": false,
       "categories": [
         { "id": "website", "name": "Website", "color": "blue", "rule": "repo:acme/website", "description": "" },
         { "id": "api", "name": "API", "color": "violet", "rule": "", "description": "Changes to the public API" }
       ]
     },
     {
-      "id": "topics",
-      "name": "Topics",
-      "multiple": true,
+      "id": "risk",
+      "name": "Risk",
       "categories": [
         { "id": "security", "name": "Security", "color": "red", "icon": "lucide:shield", "rule": "label:security", "description": "Vulnerabilities, secrets, permissions, or authentication" }
       ]
@@ -600,10 +595,7 @@ function limitsReference(): string {
 			['Push devices', '10'],
 			['Category groups', String(MAX_CATEGORY_GROUPS)],
 			['Categories in a group', String(MAX_CATEGORIES)],
-			[
-				'Different about: conditions in categories and views, and descriptions in groups with any number per item',
-				String(MAX_SMART_CONDITIONS)
-			],
+			['Different about: conditions in categories and views', String(MAX_SMART_CONDITIONS)],
 			['Length of one about: condition', `${MAX_CONDITION_CHARS} characters`],
 			[
 				'Smart decisions per account',

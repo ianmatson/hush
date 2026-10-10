@@ -94,9 +94,7 @@ describe('settings schema', () => {
 			/"A"/
 		);
 		expect(check({ rules: [] } as never)).toMatch(/Unknown setting "rules"/);
-		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toMatch(
-			/"multiple"/
-		);
+		expect(check({ categoryGroups: [{ id: 'a', name: 'A', categories: [] }] })).toBeNull();
 	});
 });
 

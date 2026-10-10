@@ -83,9 +83,9 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 
 ## Categories
 
-An item can have [categories](/docs/categories), from one or more category groups. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, next to **Refresh from GitHub**, lists every group and its categories, with counts: choose one to see only its items, and **Every category** to see all. The turn groups stay the same.
+An item has one [category](/docs/categories) from each category group, or none when it is **Not sorted** there. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, next to **Refresh from GitHub**, lists every group and its categories, with counts: choose one to see only its items, **Not sorted** to see the items with no category from that group, and **Every category** to see all. The turn groups stay the same.
 
-To change an item's categories, right-click it and choose the name of a group, such as **Effort**. In a group with one category per item, choose a category. In a group with any number per item, choose a category to turn it on or off. **Choose automatically** removes your choices for that group. This works on a selection too.
+To change an item's category, right-click it, choose the name of a group, such as **Effort**, and choose a category. **Choose automatically** removes your choice for that group. This works on a selection too.
 
 Set up category groups, and how Hush places items, in **Settings → Categories**. See [Categories](/docs/categories).
 

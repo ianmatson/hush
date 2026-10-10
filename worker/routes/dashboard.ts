@@ -1,15 +1,13 @@
 import type { DashKind, Turn } from '../../src/lib/shared/types';
-import type { PinChange } from '../../src/lib/shared/categories';
+import type { CategoryPin } from '../../src/lib/shared/categories';
 import { routes, poller, json, query } from '../app';
 
 const TURNS = new Set<Turn>(['you', 'team', 'them', 'none']);
 
-function pinChangeOf(body: Record<string, unknown>): PinChange | null {
-	if (typeof body.category === 'string' && (body.state === 'on' || body.state === 'off'))
-		return { category: body.category, state: body.state };
-	if (typeof body.group === 'string' && body.state === 'auto')
-		return { group: body.group, state: 'auto' };
-	return null;
+function categoryPinOf(body: Record<string, unknown>): CategoryPin | null {
+	if (typeof body.group !== 'string') return null;
+	if (body.category !== null && typeof body.category !== 'string') return null;
+	return { group: body.group, category: body.category };
 }
 
 /**
@@ -95,7 +93,7 @@ const app = routes()
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
 		return c.json(await poller(c.env, c.get('user').id).mute(ids));
 	})
-	.post('/api/items/pin', json<{ ids: string[] } & PinChange>(), async (c) => {
+	.post('/api/items/pin', json<{ ids: string[] } & CategoryPin>(), async (c) => {
 		const body = c.req.valid('json') as { ids?: unknown } & Record<string, unknown>;
 		const ids = Array.isArray(body.ids)
 			? (body.ids as unknown[])
@@ -103,9 +101,9 @@ const app = routes()
 					.slice(0, 300)
 			: [];
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
-		const change = pinChangeOf(body);
-		if (!change) return c.json({ error: 'Invalid pin' }, 400);
-		const out = await poller(c.env, c.get('user').id).pinItems(ids, change);
+		const pin = categoryPinOf(body);
+		if (!pin) return c.json({ error: 'Invalid pin' }, 400);
+		const out = await poller(c.env, c.get('user').id).pinItems(ids, pin);
 		if ('error' in out) return c.json({ error: out.error }, out.status);
 		return c.json(out);
 	})

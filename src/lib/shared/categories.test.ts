@@ -1,18 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-	categoryConditionText,
-	categoryConditionTexts,
 	DEFAULT_CATEGORY_GROUPS,
 	groupChoice,
 	itemQueryFacts,
-	NO_PINS,
+	matchesCategoryFilter,
 	pinsAfter,
 	placeItem,
-	validateCategoryGroups,
-	type ItemPins
+	validateCategoryGroups
 } from './categories';
 import { classify, queryMatches } from './classify';
-import { conditionId } from './decisions';
 import { DEFAULT_SETTINGS } from './settings';
 import type {
 	CategoryGroup,
@@ -44,15 +40,14 @@ const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<ThreadFacts>
 		...over
 	}) satisfies ThreadFacts;
 
-const group = (categories: ItemCategory[], multiple = false, id = 'area'): CategoryGroup => ({
+const group = (categories: ItemCategory[], id = 'area'): CategoryGroup => ({
 	id,
 	name: id,
-	multiple,
 	categories
 });
 
-const place = (t: ThreadFacts, groups: CategoryGroup[], pins: ItemPins = NO_PINS) =>
-	placeItem(t, classify(t, DEFAULT_SETTINGS), pins, groups);
+const place = (t: ThreadFacts, groups: CategoryGroup[], pinned: string[] = []) =>
+	placeItem(t, classify(t, DEFAULT_SETTINGS), pinned, groups);
 
 const API: ItemCategory = {
 	id: 'api',
@@ -75,12 +70,19 @@ const DOCS: ItemCategory = {
 	rule: 'label:docs',
 	description: 'Documentation'
 };
+const BIG: ItemCategory = {
+	id: 'big',
+	name: 'Big',
+	color: 'red',
+	rule: 'size:>200',
+	description: ''
+};
 
 const jevChose = (g: CategoryGroup, id: string) => ({
 	jevChoices: { [groupChoice(g)!.key]: id }
 });
 
-describe('placeItem: one category per item', () => {
+describe('placeItem', () => {
 	const area = group([API, BUGS, DOCS]);
 
 	it('uses the first category whose rule matches', () => {
@@ -93,28 +95,17 @@ describe('placeItem: one category per item', () => {
 	it("uses Jev's choice when no rule matches", () => {
 		expect(place(thread(jevChose(area, 'bugs')), [area]).categories).toEqual(['bugs']);
 	});
-	it('gives no category when no rule matches and Jev did not answer', () => {
+	it('leaves the item not sorted when no rule matches and Jev did not answer', () => {
 		expect(place(thread(), [area]).categories).toEqual([]);
 	});
 	it('ignores a Jev answer for other options or for a category that is gone', () => {
-		const before = group([BUGS]);
+		const before = group([BUGS, { ...DOCS, description: 'Docs pages' }]);
 		expect(place(thread(jevChose(before, 'bugs')), [area]).categories).toEqual([]);
 		expect(place(thread(jevChose(area, 'gone')), [area]).categories).toEqual([]);
 	});
 	it('keeps a category you chose, over rules and Jev', () => {
 		const t = thread(jevChose(area, 'bugs'), { repo: 'acme/api' });
-		expect(place(t, [area], { on: ['docs'], off: [] })).toEqual({
-			categories: ['docs'],
-			pinned: ['docs']
-		});
-	});
-	it('skips a category you removed', () => {
-		const t = thread(jevChose(area, 'bugs'), { repo: 'acme/api' });
-		expect(place(t, [area], { on: [], off: ['api'] }).categories).toEqual(['bugs']);
-		expect(place(thread(jevChose(area, 'bugs')), [area], { on: [], off: ['bugs'] })).toEqual({
-			categories: [],
-			pinned: ['bugs']
-		});
+		expect(place(t, [area], ['docs'])).toEqual({ categories: ['docs'], pinned: ['docs'] });
 	});
 	it('lets a stored rule that is not valid now match nothing', () => {
 		const old = { ...API, rule: 'repo:acme/* type:ci' };
@@ -123,91 +114,69 @@ describe('placeItem: one category per item', () => {
 		expect(place(thread(), [group([notification])]).categories).toEqual([]);
 	});
 	it('ignores a pin to a deleted category', () => {
-		expect(place(thread(), [area], { on: ['gone'], off: [] })).toEqual({
-			categories: [],
-			pinned: []
-		});
+		expect(place(thread(), [area], ['gone'])).toEqual({ categories: [], pinned: [] });
 	});
-});
-
-describe('placeItem: any number per item', () => {
-	const big: ItemCategory = {
-		id: 'big',
-		name: 'Big',
-		color: 'red',
-		rule: 'size:>200',
-		description: ''
-	};
-	const blocked: ItemCategory = {
-		id: 'blocked',
-		name: 'Blocked',
-		color: 'amber',
-		rule: '',
-		description: 'It waits on something'
-	};
-	const topics = group([big, blocked], true, 'topics');
-
-	it('gives every category whose rule matches or whose description Jev says fits', () => {
-		const t = thread({ smart: [conditionId(categoryConditionText(blocked))] });
-		expect(place(t, [topics]).categories).toEqual(['big', 'blocked']);
-		expect(place(thread(), [topics]).categories).toEqual(['big']);
-	});
-	it('adds and removes categories you set by hand', () => {
-		expect(place(thread(), [topics], { on: ['blocked'], off: ['big'] }).categories).toEqual([
-			'blocked'
-		]);
-	});
-	it('places each group on its own', () => {
-		const area = group([API, BUGS]);
+	it('gives one category from each group', () => {
+		const size = group([BIG], 'size');
 		const t = thread(jevChose(area, 'bugs'));
-		expect(place(t, [area, topics]).categories).toEqual(['bugs', 'big']);
+		expect(place(t, [area, size]).categories).toEqual(['bugs', 'big']);
 	});
 });
 
 describe('Jev questions', () => {
-	it('ask one choice for a one-per-item group, among the categories with a description', () => {
+	it('ask one choice for a group, among the categories with a description', () => {
 		expect(groupChoice(group([API, BUGS, DOCS]))?.options).toEqual({
 			bugs: 'Bugs: Defects',
 			docs: 'Docs: Documentation'
 		});
+	});
+	it('ask nothing for a group with fewer than two descriptions', () => {
 		expect(groupChoice(group([API]))).toBeNull();
-		expect(groupChoice(group([BUGS], true))).toBeNull();
+		expect(groupChoice(group([API, BUGS]))).toBeNull();
+		expect(place(thread(), [group([API, BUGS])]).categories).toEqual([]);
 	});
 	it('ask again when the options change', () => {
-		const before = groupChoice(group([BUGS]))!.key;
-		expect(groupChoice(group([BUGS, DOCS]))!.key).not.toBe(before);
-		expect(groupChoice(group([{ ...BUGS, rule: 'label:bug' }]))!.key).toBe(before);
-	});
-	it('ask yes or no for each described category in an any-number group', () => {
-		expect(categoryConditionTexts([group([API, BUGS], true), group([DOCS])])).toEqual([
-			'Bugs: Defects'
-		]);
+		const before = groupChoice(group([BUGS, DOCS]))!.key;
+		expect(groupChoice(group([BUGS, { ...DOCS, description: 'Guides' }]))!.key).not.toBe(before);
+		expect(groupChoice(group([{ ...BUGS, rule: 'label:bug' }, DOCS]))!.key).toBe(before);
 	});
 });
 
 describe('pinsAfter', () => {
 	const area = group([API, BUGS]);
-	const topics = group([DOCS], true, 'topics');
-	const groups = [area, topics];
+	const size = group([DOCS, BIG], 'size');
+	const groups = [area, size];
 
-	it('replaces the other pins of a one-per-item group', () => {
-		expect(
-			pinsAfter({ on: ['api', 'docs'], off: [] }, { category: 'bugs', state: 'on' }, groups)
-		).toEqual({ on: ['docs', 'bugs'], off: [] });
-	});
-	it('changes only that category in an any-number group', () => {
-		expect(pinsAfter({ on: ['api'], off: [] }, { category: 'docs', state: 'off' }, groups)).toEqual(
-			{ on: ['api'], off: ['docs'] }
-		);
+	it('replaces the other pin of the same group', () => {
+		expect(pinsAfter(['api', 'docs'], { group: 'area', category: 'bugs' }, groups)).toEqual([
+			'docs',
+			'bugs'
+		]);
 	});
 	it('clears a group to let Hush choose again', () => {
-		expect(
-			pinsAfter({ on: ['api'], off: ['docs'] }, { group: 'area', state: 'auto' }, groups)
-		).toEqual({ on: [], off: ['docs'] });
+		expect(pinsAfter(['api', 'docs'], { group: 'area', category: null }, groups)).toEqual(['docs']);
 	});
-	it('refuses an unknown category or group', () => {
-		expect(pinsAfter(NO_PINS, { category: 'gone', state: 'on' }, groups)).toBeNull();
-		expect(pinsAfter(NO_PINS, { group: 'gone', state: 'auto' }, groups)).toBeNull();
+	it('refuses an unknown group, or a category from another group', () => {
+		expect(pinsAfter([], { group: 'gone', category: null }, groups)).toBeNull();
+		expect(pinsAfter([], { group: 'area', category: 'docs' }, groups)).toBeNull();
+	});
+});
+
+describe('matchesCategoryFilter', () => {
+	const area = group([API, BUGS]);
+	const size = group([BIG], 'size');
+	const groups = [area, size];
+
+	it('finds the items in a category', () => {
+		expect(matchesCategoryFilter(['api', 'big'], { category: 'api' }, groups)).toBe(true);
+		expect(matchesCategoryFilter(['bugs'], { category: 'api' }, groups)).toBe(false);
+		expect(matchesCategoryFilter(undefined, { category: 'api' }, groups)).toBe(false);
+	});
+	it('finds the items that are not sorted in a group', () => {
+		expect(matchesCategoryFilter(['big'], { notSortedIn: 'area' }, groups)).toBe(true);
+		expect(matchesCategoryFilter(undefined, { notSortedIn: 'area' }, groups)).toBe(true);
+		expect(matchesCategoryFilter(['api', 'big'], { notSortedIn: 'area' }, groups)).toBe(false);
+		expect(matchesCategoryFilter([], { notSortedIn: 'gone' }, groups)).toBe(false);
 	});
 });
 
@@ -218,7 +187,6 @@ describe('defaults', () => {
 	it('are an effort group and an impact group that Jev places', () => {
 		expect(DEFAULT_CATEGORY_GROUPS.map((g) => g.id)).toEqual(['effort', 'impact']);
 		for (const g of DEFAULT_CATEGORY_GROUPS) {
-			expect(g.multiple).toBe(false);
 			expect(g.categories.map((c) => c.name)).toEqual(['Low', 'Medium', 'High']);
 			expect(Object.keys(groupChoice(g)!.options)).toHaveLength(3);
 		}
@@ -242,13 +210,10 @@ describe('validation', () => {
 		expect(validateCategoryGroups([group([BUGS, BUGS])])).toMatch(/Two categories/);
 	});
 	it('needs category ids that are unique across groups', () => {
-		expect(validateCategoryGroups([group([BUGS]), group([BUGS], true, 'other')])).toMatch(
+		expect(validateCategoryGroups([group([BUGS]), group([BUGS], 'other')])).toMatch(
 			/Two categories/
 		);
 		expect(validateCategoryGroups([group([BUGS]), group([DOCS])])).toMatch(/Two category groups/);
-	});
-	it('needs "multiple" to be true or false', () => {
-		expect(validateCategoryGroups([{ ...group([]), multiple: 'yes' }])).toMatch(/"multiple"/);
 	});
 });
 

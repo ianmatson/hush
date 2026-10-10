@@ -1,5 +1,5 @@
 import { classify, shouldPush, withOverride } from '../../src/lib/shared/classify';
-import { placeItem, type ItemPins } from '../../src/lib/shared/categories';
+import { placeItem } from '../../src/lib/shared/categories';
 import { TRACKED_SOURCE } from '../../src/lib/shared/sources';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import { watchOutcome } from '../../src/lib/shared/watch';
@@ -170,18 +170,15 @@ export abstract class PollerSubjects extends PollerDecisions {
 		return out;
 	}
 
-	protected itemPins(keys: string[]): Map<string, ItemPins> {
-		const out = new Map<string, ItemPins>();
+	protected itemPins(keys: string[]): Map<string, string[]> {
+		const out = new Map<string, string[]>();
 		for (let i = 0; i < keys.length; i += CHUNK) {
 			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; pinned_on: string; pinned_off: string }>(
-				`SELECT key, pinned_on, pinned_off FROM item_pins WHERE key IN (${marks(chunk.length)})`,
+			for (const r of this.all<{ key: string; pinned: string }>(
+				`SELECT key, pinned FROM item_pins WHERE key IN (${marks(chunk.length)})`,
 				...chunk
 			))
-				out.set(r.key, {
-					on: JSON.parse(r.pinned_on) as string[],
-					off: JSON.parse(r.pinned_off) as string[]
-				});
+				out.set(r.key, JSON.parse(r.pinned) as string[]);
 		}
 		return out;
 	}

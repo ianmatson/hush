@@ -28,7 +28,6 @@ A complete example:
 		{
 			"id": "area",
 			"name": "Area",
-			"multiple": false,
 			"categories": [
 				{
 					"id": "website",
@@ -49,7 +48,6 @@ A complete example:
 		{
 			"id": "size",
 			"name": "Size",
-			"multiple": true,
 			"categories": [
 				{
 					"id": "quick",

@@ -1,9 +1,9 @@
 ---
 title: Categories
-description: Sort pull requests and issues into groups of categories, by rules or with Jev. A group gives each item one category, or any number of them.
+description: Sort pull requests and issues into groups of categories, by rules or with Jev. Each item gets one category from each group.
 ---
 
-A **category** marks a pull request or issue: its effort, its area, its topic. Categories are in **groups**. A group gives each item one category, or any number of them. Set them up in **Settings → Categories**.
+A **category** marks a pull request or issue: its effort, its area, its topic. Categories are in **groups**. Each item gets one category from each group. Set them up in **Settings → Categories**.
 
 A notification shows the categories of its PR or issue. Hush does not place notifications by themselves.
 
@@ -12,23 +12,19 @@ A notification shows the categories of its PR or issue. Hush does not place noti
 
 ## How Hush places an item
 
-Each group has a setting: **One category per item** or **Any number per item**.
-
-In a group with **One category per item**, Hush checks the categories **from top to bottom**:
+Hush checks the categories of each group **from top to bottom**:
 
 1. A category that you chose for the item (right-click → the group's name).
 2. The first category whose rule matches.
 3. Jev's choice among the categories that have a description. See [smart decisions](/docs/settings#smartdecisions).
 
-When Jev is off or cannot answer, and no rule matches, the item has no category from the group. There is no fallback category. To make one, add a category at the bottom of the group with a rule that matches everything, such as `type:pr OR type:issue`.
-
-In a group with **Any number per item**, Hush checks each category on its own. An item gets every category that you turned on for it, every category whose rule matches, and every category whose description Jev says fits (when Jev is at least 80% sure). A category that you turn off for an item stays off.
+When no rule matches, and Jev is off or cannot answer, the item is **Not sorted** in that group: it has no category from the group. To see these items, choose **Not sorted** under the group in the category filter of the [Pull requests and Issues tabs](/docs/pull-requests-and-issues#categories). There is no fallback category. To make one, add a category at the bottom of the group with a rule that matches everything, such as `type:pr OR type:issue`.
 
 Hush checks the rules on the PR or issue only, never on a notification. Categories that you choose for a PR or issue apply to its notifications too.
 
 ## The default group
 
-Hush starts with two groups, each with one category per item: **Low**, **Medium**, and **High**. These categories have a description and no rule, so Jev places each item.
+Hush starts with two groups, each with three categories: **Low**, **Medium**, and **High**. These categories have a description and no rule, so Jev places each item.
 
 - **Effort**: the review effort of a pull request, or the work for an issue.
 - **Impact**: how much the item changes for the people who use the product. A bug fix removes a problem, and a feature adds something. Both can have a low or a high impact.
@@ -41,8 +37,8 @@ In **Settings → Categories**:
 
 - **Add category** in a group adds an empty category. Give it a name, a color, an icon, and a rule, a description for Jev, or both.
 - Or right-click a thread in the inbox and choose **Make a category…**: the new category is in your first group, with the thread's repository and type as its rule. Change what you want, and choose **Save**.
-- Drag a category up or down to change its order. In a group with one category per item, order matters: the first rule that matches wins.
-- **Add category group** adds an empty group. Give it a name, and choose **One category per item** or **Any number per item**.
+- Drag a category up or down to change its order. Order matters: the first rule that matches wins.
+- **Add category group** adds an empty group. Give it a name.
 - **Defaults** puts back the Effort and Impact groups. Nothing changes until you choose **Save**.
 
 You can have up to 10 groups, with up to 20 categories in each group. A category's id is unique across all groups.
@@ -67,9 +63,9 @@ Rules cannot use `category:`. They also cannot use `event:`, `needs:`, and `in:`
 
 ## Jev and descriptions
 
-A description tells Jev what belongs in the category, in a few words. Jev reads each item once, when Hush first sees it, and again when its title, description, or labels change. A new comment does not change its categories. When you add or change a description, Jev asks again about that group. To ask again about every category of the items you have now, choose **Re-evaluate items**. Rules without `about:` apply at once.
+A description tells Jev what belongs in the category, in a few words. Jev chooses one of the categories in the group that have a description, so it needs two or more of them; with only one, Jev does not choose. For a yes-or-no category, such as “Security”, write `about:"…"` in its rule instead: Jev then answers yes or no for that category alone.
 
-In a group with any number per item, each description counts as one condition in the limit of 30 `about:` conditions. See [Limits](/docs/limits).
+Jev reads each item once, when Hush first sees it, and again when its title, description, or labels change. A new comment does not change its categories. When you add or change a description, Jev asks again about that group. To ask again about every category of the items you have now, choose **Re-evaluate items**. Rules without `about:` apply at once.
 
 ## Examples
 
@@ -83,7 +79,7 @@ The same categories as queries:
 | `label:security`             | Security      |
 | `type:pr size:<50`           | Quick         |
 
-In [settings.json](/docs/settings#categorygroups), with an Area group (one per item) and a Topics group (any number per item):
+In [settings.json](/docs/settings#categorygroups), with an Area group and a Risk group:
 
 ```json settings
 {
@@ -91,7 +87,6 @@ In [settings.json](/docs/settings#categorygroups), with an Area group (one per i
 		{
 			"id": "area",
 			"name": "Area",
-			"multiple": false,
 			"categories": [
 				{
 					"id": "website",
@@ -117,9 +112,8 @@ In [settings.json](/docs/settings#categorygroups), with an Area group (one per i
 			]
 		},
 		{
-			"id": "topics",
-			"name": "Topics",
-			"multiple": true,
+			"id": "risk",
+			"name": "Risk",
 			"categories": [
 				{
 					"id": "security",
@@ -128,13 +122,6 @@ In [settings.json](/docs/settings#categorygroups), with an Area group (one per i
 					"icon": "lucide:shield",
 					"rule": "label:security",
 					"description": "Vulnerabilities, secrets, permissions, or authentication"
-				},
-				{
-					"id": "quick",
-					"name": "Quick",
-					"color": "green",
-					"rule": "type:pr size:<50",
-					"description": ""
 				}
 			]
 		}
@@ -150,6 +137,6 @@ Each category can have an [Atom feed](/docs/feeds) of its open pull requests and
 
 ## Tips
 
-- In a group with one category per item, put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
+- Put narrow categories above wide ones. A wide rule at the top (such as `repo:acme/*`) catches everything below it.
 - To filter notifications by `in:`, `needs:`, or `event:`, use the inbox [Filter box](/docs/inbox#filter) or a [notification view](/docs/views). They can also use `category:`.
 - Give a category a description, and leave its rule empty, to let Jev fill it.

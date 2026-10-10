@@ -1,5 +1,5 @@
 import { queryMatches } from './classify';
-import { conditionId, cyrb53, type DecisionChoice } from './decisions';
+import { cyrb53, type DecisionChoice } from './decisions';
 import { queryError, usesItemMarks, usesNotificationWords } from './query';
 import { parseMarkIcon } from './mark-icons';
 import type {
@@ -16,6 +16,7 @@ export const MAX_CATEGORY_GROUPS = 10;
 export const MAX_CATEGORIES = 20;
 export const MAX_DESCRIPTION_CHARS = 200;
 export const MAX_MARK_NAME_CHARS = 40;
+export const MIN_JEV_OPTIONS = 2;
 
 export const MARK_COLORS: MarkColor[] = [
 	'gray',
@@ -33,7 +34,6 @@ export const DEFAULT_CATEGORY_GROUPS: CategoryGroup[] = [
 	{
 		id: 'effort',
 		name: 'Effort',
-		multiple: false,
 		categories: [
 			{
 				id: 'low-effort',
@@ -67,7 +67,6 @@ export const DEFAULT_CATEGORY_GROUPS: CategoryGroup[] = [
 	{
 		id: 'impact',
 		name: 'Impact',
-		multiple: false,
 		categories: [
 			{
 				id: 'low-impact',
@@ -100,39 +99,25 @@ export const DEFAULT_CATEGORY_GROUPS: CategoryGroup[] = [
 	}
 ];
 
-export interface ItemPins {
-	on: string[];
-	off: string[];
+export interface CategoryPin {
+	group: string;
+	category: string | null;
 }
-
-export const NO_PINS: ItemPins = { on: [], off: [] };
-
-export type PinChange =
-	{ category: string; state: 'on' | 'off' } | { group: string; state: 'auto' };
 
 export const allCategories = (groups: CategoryGroup[]) => groups.flatMap((g) => g.categories);
 
 export const groupOf = (groups: CategoryGroup[], categoryId: string) =>
 	groups.find((g) => g.categories.some((c) => c.id === categoryId));
 
-const described = (g: CategoryGroup) => g.categories.filter((c) => c.description.trim());
-
 export function groupChoice(g: CategoryGroup): DecisionChoice | null {
-	if (g.multiple) return null;
-	const options = Object.fromEntries(
-		described(g).map((c) => [c.id, `${c.name}: ${c.description}`])
-	);
-	if (!Object.keys(options).length) return null;
+	const described = g.categories.filter((c) => c.description.trim());
+	if (described.length < MIN_JEV_OPTIONS) return null;
+	const options = Object.fromEntries(described.map((c) => [c.id, `${c.name}: ${c.description}`]));
 	return { key: cyrb53(JSON.stringify(options)), options };
 }
 
 export const groupChoices = (groups: CategoryGroup[]) =>
 	groups.flatMap((g) => groupChoice(g) ?? []);
-
-export const categoryConditionText = (c: ItemCategory) => `${c.name}: ${c.description}`;
-
-export const categoryConditionTexts = (groups: CategoryGroup[]) =>
-	groups.filter((g) => g.multiple).flatMap((g) => described(g).map(categoryConditionText));
 
 const usableRules = new Map<string, boolean>();
 
@@ -149,43 +134,27 @@ function placeInGroup(
 	g: CategoryGroup,
 	t: ThreadFacts,
 	c: Classification,
-	pins: ItemPins
-): string[] {
-	const pinnedOn = g.categories.filter((x) => pins.on.includes(x.id));
-	const open = g.categories.filter((x) => !pins.on.includes(x.id) && !pins.off.includes(x.id));
-	const byRule = (x: ItemCategory) => ruleUsable(x.rule) && queryMatches(x.rule, t, c);
-	if (g.multiple) {
-		const smart = t.enrichment?.smart ?? [];
-		const byJev = (x: ItemCategory) =>
-			!!x.description.trim() && smart.includes(conditionId(categoryConditionText(x)));
-		const placed = new Set([...pinnedOn, ...open.filter((x) => byRule(x) || byJev(x))]);
-		return g.categories.filter((x) => placed.has(x)).map((x) => x.id);
-	}
-	if (pinnedOn.length) return [pinnedOn[0].id];
-	const ruled = open.find(byRule);
-	if (ruled) return [ruled.id];
+	pinned: string[]
+): string | null {
+	const chosenByYou = g.categories.find((x) => pinned.includes(x.id));
+	if (chosenByYou) return chosenByYou.id;
+	const ruled = g.categories.find((x) => ruleUsable(x.rule) && queryMatches(x.rule, t, c));
+	if (ruled) return ruled.id;
 	const choice = groupChoice(g);
-	const chosen = choice ? t.enrichment?.jevChoices?.[choice.key] : undefined;
-	return open.some((x) => x.id === chosen) ? [chosen!] : [];
+	const chosenByJev = choice ? t.enrichment?.jevChoices?.[choice.key] : undefined;
+	return g.categories.find((x) => x.id === chosenByJev)?.id ?? null;
 }
 
 export function pinsAfter(
-	pins: ItemPins,
-	change: PinChange,
+	pinned: string[],
+	pin: CategoryPin,
 	groups: CategoryGroup[]
-): ItemPins | null {
-	const group =
-		'group' in change
-			? groups.find((g) => g.id === change.group)
-			: groupOf(groups, change.category);
+): string[] | null {
+	const group = groups.find((g) => g.id === pin.group);
 	if (!group) return null;
+	if (pin.category !== null && !group.categories.some((c) => c.id === pin.category)) return null;
 	const inGroup = new Set(group.categories.map((c) => c.id));
-	const cleared = (id: string) =>
-		'group' in change || !group.multiple ? inGroup.has(id) : id === change.category;
-	const on = pins.on.filter((id) => !cleared(id));
-	const off = pins.off.filter((id) => !cleared(id));
-	if ('category' in change) (change.state === 'on' ? on : off).push(change.category);
-	return { on, off };
+	return [...pinned.filter((id) => !inGroup.has(id)), ...(pin.category ? [pin.category] : [])];
 }
 
 export interface Placement {
@@ -196,15 +165,28 @@ export interface Placement {
 export function placeItem(
 	t: ThreadFacts,
 	c: Classification,
-	pins: ItemPins | undefined,
+	pinned: string[] | undefined,
 	groups: CategoryGroup[]
 ): Placement {
-	const p = pins ?? NO_PINS;
 	const ids = new Set(allCategories(groups).map((x) => x.id));
+	const known = (pinned ?? []).filter((id) => ids.has(id));
 	return {
-		categories: groups.flatMap((g) => placeInGroup(g, t, c, p)),
-		pinned: [...p.on, ...p.off].filter((id) => ids.has(id))
+		categories: groups.flatMap((g) => placeInGroup(g, t, c, known) ?? []),
+		pinned: known
 	};
+}
+
+export type CategoryFilter = { category: string } | { notSortedIn: string };
+
+export function matchesCategoryFilter(
+	itemCategories: string[] | undefined,
+	filter: CategoryFilter,
+	groups: CategoryGroup[]
+): boolean {
+	const has = (id: string) => !!itemCategories?.includes(id);
+	if ('category' in filter) return has(filter.category);
+	const group = groups.find((g) => g.id === filter.notSortedIn);
+	return !!group && !group.categories.some((c) => has(c.id));
 }
 
 export function itemQueryFacts(
@@ -286,7 +268,6 @@ function validateGroup(
 	groupIds.add(g.id);
 	if (!validName(g.name))
 		return `Each category group needs a name (${MAX_MARK_NAME_CHARS} characters or fewer).`;
-	if (typeof g.multiple !== 'boolean') return `"${g.name}": "multiple" must be true or false.`;
 	if (!Array.isArray(g.categories)) return `"${g.name}": categories must be a list.`;
 	if (g.categories.length > MAX_CATEGORIES)
 		return `"${g.name}": up to ${MAX_CATEGORIES} categories are allowed.`;

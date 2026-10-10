@@ -55,13 +55,11 @@ describe('notification views', () => {
 				{
 					id: 'area',
 					name: 'Area',
-					multiple: false,
 					categories: [{ id: 'bugs', name: 'Bugs', color: 'red', rule: '', description: '' }]
 				},
 				{
-					id: 'topics',
-					name: 'Topics',
-					multiple: true,
+					id: 'size',
+					name: 'Size',
 					categories: [{ id: 'quick', name: 'Quick', color: 'green', rule: '', description: '' }]
 				}
 			]

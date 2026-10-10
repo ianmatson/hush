@@ -15,9 +15,9 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
-const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, pinned_on TEXT NOT NULL DEFAULT '[]', pinned_off TEXT NOT NULL DEFAULT '[]');`;
+const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, pinned TEXT NOT NULL DEFAULT '[]');`;
 const TRACKED_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, categories TEXT NOT NULL DEFAULT '[]');`;
 export const SCHEMA = `
 CREATE TABLE threads (
@@ -153,6 +153,13 @@ ${TRACKED_ITEMS_TABLE.replace('tracked_items', 'tracked_items_next')}
 INSERT INTO tracked_items_next (key, kind, seen_at) SELECT key, kind, seen_at FROM tracked_items;
 DROP TABLE tracked_items;
 ALTER TABLE tracked_items_next RENAME TO tracked_items;`,
+		resetKeys: ['dash:pr', 'dash:issue']
+	},
+	14: {
+		to: 15,
+		sql: `
+DROP TABLE IF EXISTS item_pins;
+${ITEM_PINS_TABLE}`,
 		resetKeys: ['dash:pr', 'dash:issue']
 	}
 };

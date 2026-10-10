@@ -461,8 +461,8 @@ describe('about: in queries and settings', () => {
 			description: ''
 		}));
 		const groups = (list: typeof categories): CategoryGroup[] => [
-			{ id: 'a', name: 'A', multiple: true, categories: list.slice(0, MAX_CATEGORIES) },
-			{ id: 'b', name: 'B', multiple: true, categories: list.slice(MAX_CATEGORIES) }
+			{ id: 'a', name: 'A', categories: list.slice(0, MAX_CATEGORIES) },
+			{ id: 'b', name: 'B', categories: list.slice(MAX_CATEGORIES) }
 		];
 		const next: Settings = { ...DEFAULT_SETTINGS, categoryGroups: groups(categories) };
 		expect(validateSettings(next, ['categoryGroups'])).toMatch(/up to 30 different about:/);
@@ -470,7 +470,7 @@ describe('about: in queries and settings', () => {
 		expect(validateSettings(fewer, ['categoryGroups'])).toBeNull();
 		const described = categories.map((c) => ({ ...c, rule: '', description: c.name }));
 		const byJev = { ...next, categoryGroups: groups(described) };
-		expect(validateSettings(byJev, ['categoryGroups'])).toMatch(/up to 30 different about:/);
+		expect(validateSettings(byJev, ['categoryGroups'])).toBeNull();
 	});
 });
 

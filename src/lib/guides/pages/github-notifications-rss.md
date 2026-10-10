@@ -73,7 +73,7 @@ The feed of a view stops working when you delete the view.
 
 ### A feed of open pull requests and issues
 
-Each [category](/docs/categories) can have a feed too, in **Settings → Categories**. It lists the open pull requests and issues in the category, newest update first. For example, a category for small pull requests, in a group with any number per item:
+Each [category](/docs/categories) can have a feed too, in **Settings → Categories**. It lists the open pull requests and issues in the category, newest update first. For example, a category for small pull requests, in a Size group:
 
 ```json settings
 {
@@ -81,7 +81,6 @@ Each [category](/docs/categories) can have a feed too, in **Settings → Categor
 		{
 			"id": "size",
 			"name": "Size",
-			"multiple": true,
 			"categories": [
 				{
 					"id": "quick",

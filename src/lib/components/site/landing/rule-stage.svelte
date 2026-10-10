@@ -5,10 +5,11 @@
 	const SETTINGS_JSON = `{
   "pushDigestMinutes": 30,
   "categoryGroups": [{
-    "id": "area", "name": "Area", "multiple": false,
+    "id": "area", "name": "Area",
     "categories": [
       { "id": "deps", "name": "Dependencies", "color": "teal",
-        "rule": "repo:PostHog/* author:dependabot*" },
+        "rule": "repo:PostHog/* author:dependabot*",
+        "description": "Dependency updates" },
       { "id": "docs", "name": "Docs", "color": "blue",
         "description": "Changes to the docs or the website" }
     ]

@@ -171,7 +171,6 @@ export interface ItemCategory {
 export interface CategoryGroup {
 	id: string;
 	name: string;
-	multiple: boolean;
 	categories: ItemCategory[];
 }
 

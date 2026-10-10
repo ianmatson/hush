@@ -48,7 +48,7 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 
 - Use it in the rules of [categories](/docs/categories#rules) and in [notification views](/docs/views). Hush checks the condition when you save, and again when an item's text changes. In a filter box, `about:` finds only what a saved category or view with the same words already checked.
 - Put exact words first where you can: in `repo:acme/api about:"migrations"`, Jev reads only the items of acme/api.
-- Up to 30 different `about:` conditions in all your categories and views, each up to 200 characters. In a category group with any number per item, each category description counts as one too.
+- Up to 30 different `about:` conditions in all your categories and views, each up to 200 characters.
 
 ## `category:`
 
@@ -58,7 +58,7 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 category:high-effort,medium-effort
 ```
 
-It works in the Filter boxes of the inbox and of the Pull requests and Issues tabs, and in [notification views](/docs/views). For a notification, it matches the categories of its PR or issue. The rules of categories cannot use it. `category:` is not an old name for `in:`. There is no `tag:`: tags are categories in a group with any number per item.
+It works in the Filter boxes of the inbox and of the Pull requests and Issues tabs, and in [notification views](/docs/views). For a notification, it matches the categories of its PR or issue. The rules of categories cannot use it. `category:` is not an old name for `in:`. There is no `tag:`: an item has one category from each group.
 
 ## Words for notifications
 
@@ -91,7 +91,6 @@ Categories and notification views store the query as text: the `rule` of a [cate
 		{
 			"id": "org",
 			"name": "Org",
-			"multiple": true,
 			"categories": [
 				{
 					"id": "acme-prs",

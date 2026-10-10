@@ -25,7 +25,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
 	import RuleBuilder from '$lib/components/app/rules/rule-builder.svelte';
 	import { previewItems, ruleSuggestions } from '$lib/rule-preview';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
@@ -45,11 +44,6 @@
 	const MARK_WORDS = ['category'];
 	const NO_RULE = 'No rule: only Jev, or your own choice, puts items here.';
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
-
-	const PER_ITEM_OPTIONS = [
-		{ id: 'one', label: 'One category per item' },
-		{ id: 'multiple', label: 'Any number per item' }
-	];
 
 	let groups = $state<CategoryGroup[] | null>(null);
 	let saved = $state('');
@@ -80,7 +74,6 @@
 		const fresh: CategoryGroup = {
 			id: newId('group'),
 			name: 'New group',
-			multiple: false,
 			categories: []
 		};
 		groups = [...(groups ?? []), fresh];
@@ -128,12 +121,6 @@
 			c.description.trim() && `Jev: ${c.description.trim()}`
 		].filter(Boolean);
 		return parts.length ? parts.join(' · ') : 'No rule or description yet';
-	}
-
-	function groupHelp(g: CategoryGroup): string {
-		return g.multiple
-			? 'Each category is checked on its own: an item gets every category whose rule matches, or whose description Jev says fits.'
-			: 'The first rule that matches wins, so drag specific categories above broad ones. With no match, Jev picks one that has a description. When Jev is off or unavailable, the item has no category from this group.';
 	}
 
 	function setIcon(c: ItemCategory, icon: string | undefined) {
@@ -261,11 +248,12 @@
 	<div>
 		<h1 class="hidden text-lg font-semibold tracking-tight md:block">Categories</h1>
 		<p class="text-sm text-muted-foreground">
-			Sort your PRs and issues into groups of categories. A group gives each item one category, or
-			any number of them. Rules use the
+			Sort your PRs and issues into groups. Each item gets one category from each group: the first
+			one whose rule matches, top to bottom, or else the one that Jev picks from the descriptions.
+			If neither works, the item is “Not sorted” in that group. Rules use the
 			<a class="underline" href="/docs/query-language" target="_blank" rel="noreferrer"
 				>query language</a
-			>; a description lets Jev decide.
+			>.
 		</p>
 	</div>
 
@@ -306,24 +294,6 @@
 							><Trash /></Button
 						>
 					</Card.Action>
-					<Card.Description class="col-span-2 grid gap-2">
-						<Select.Root
-							type="single"
-							value={g.multiple ? 'multiple' : 'one'}
-							onValueChange={(v) => (g.multiple = v === 'multiple')}
-						>
-							<Select.Trigger size="sm" class="w-full sm:w-56" aria-label="{g.name}: per item"
-								>{PER_ITEM_OPTIONS.find((o) => o.id === (g.multiple ? 'multiple' : 'one'))
-									?.label}</Select.Trigger
-							>
-							<Select.Content>
-								{#each PER_ITEM_OPTIONS as o (o.id)}
-									<Select.Item value={o.id} label={o.label} />
-								{/each}
-							</Select.Content>
-						</Select.Root>
-						<span>{groupHelp(g)}</span>
-					</Card.Description>
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-3">
 					<ReorderList

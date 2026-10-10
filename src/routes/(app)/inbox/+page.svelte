@@ -29,7 +29,7 @@
 	import { leavesOf, parseExpr } from '$lib/shared/query';
 	import { NEW_COMMITS_REASON } from '$lib/shared/dashboard';
 	import { conditionId, smartConditions } from '$lib/shared/decisions';
-	import { categoryConditionTexts, markQueries } from '$lib/shared/categories';
+	import { markQueries } from '$lib/shared/categories';
 	import { saveSettings } from '$lib/save-settings';
 	import ViewEditor from '$lib/components/app/view-editor.svelte';
 	import ViewTabs, { type ViewTab } from '$lib/components/app/view-tabs.svelte';
@@ -150,8 +150,7 @@
 		new Set(
 			smartConditions(
 				me.data?.settings.views ?? [],
-				me.data ? markQueries(me.data.settings) : [],
-				me.data ? categoryConditionTexts(me.data.settings.categoryGroups) : []
+				me.data ? markQueries(me.data.settings) : []
 			).map((c) => c.id)
 		)
 	);

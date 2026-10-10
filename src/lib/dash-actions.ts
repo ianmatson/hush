@@ -5,7 +5,7 @@ import { buildMenu, type MenuEntry } from '$lib/menu';
 import type { PaletteCommand } from '$lib/palette.svelte';
 import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS } from '$lib/shared/menus';
-import type { PinChange } from '$lib/shared/categories';
+import type { CategoryPin } from '$lib/shared/categories';
 import { itemPagePath } from '$lib/shared/item-page';
 import type { CategoryGroup, DashItem, Turn } from '$lib/shared/types';
 import FolderInput from '@lucide/svelte/icons/folder-input';
@@ -61,7 +61,7 @@ export interface DashActionContext {
 	/** Ask why an item in Your turn is not your turn ("Not my turn…"). */
 	notNeeded(i: DashItem): void;
 	readonly categoryGroups: CategoryGroup[];
-	pinCategory(ids: string[], change: PinChange): unknown;
+	pinCategory(ids: string[], pin: CategoryPin): unknown;
 }
 
 /** ⌘K commands: refresh and hidden items, then actions on the cursor row or the selection. */
@@ -186,26 +186,19 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 			label: n(g.name),
 			icon: FolderInput,
 			items: [
-				...g.categories.map((c): MenuEntry => {
-					const checked = has(c.id);
-					return {
-						type: 'item',
-						key: `category-${c.id}`,
-						label: c.name,
-						mark: { color: c.color, icon: c.icon },
-						checked,
-						run: () =>
-							ctx.pinCategory(ids, {
-								category: c.id,
-								state: g.multiple && checked ? 'off' : 'on'
-							})
-					};
-				}),
+				...g.categories.map((c): MenuEntry => ({
+					type: 'item',
+					key: `category-${c.id}`,
+					label: c.name,
+					mark: { color: c.color, icon: c.icon },
+					checked: has(c.id),
+					run: () => ctx.pinCategory(ids, { group: g.id, category: c.id })
+				})),
 				...(pinned
 					? ([
 							{ type: 'sep', key: `group-${g.id}-sep` },
 							item(`group-${g.id}-auto`, 'Choose automatically', Sparkles, () =>
-								ctx.pinCategory(ids, { group: g.id, state: 'auto' })
+								ctx.pinCategory(ids, { group: g.id, category: null })
 							)
 						] satisfies MenuEntry[])
 					: [])

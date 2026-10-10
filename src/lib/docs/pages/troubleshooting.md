@@ -65,9 +65,9 @@ Pushes can come a few minutes after the event: Hush checks GitHub every 5 minute
 ## An item is in the wrong category
 
 - A category that you chose by hand wins. Right-click the item, choose the group's name, and then **Choose automatically** to remove your choice.
-- In a group with one category per item, the first category whose rule matches wins. Check the order in **Settings → Categories**.
-- Jev chooses only among categories with a description. It reads an item again only when its title, description, or labels change, or when you change the descriptions of a group. Choose **Re-evaluate items** to ask again about every category.
-- When Jev is off or cannot answer, and no rule matches, the item has no category from that group.
+- The first category whose rule matches wins. Check the order in **Settings → Categories**.
+- Jev chooses only among categories with a description, and only when a group has two or more of them. It reads an item again only when its title, description, or labels change, or when you change the descriptions of a group. Choose **Re-evaluate items** to ask again about every category.
+- When Jev is off or cannot answer, and no rule matches, the item is Not sorted in that group: it has no category from the group.
 - Rules look only at the PR or issue. They cannot use `category:`, `event:`, `needs:`, or `in:`.
 - A notification has the categories of its PR or issue. To change them, change the categories of the PR or issue.
 

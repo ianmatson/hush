@@ -44,13 +44,7 @@ import {
 } from './schema';
 import { FILL_DONE_WITHIN_MS, FILL_MAX, MIN, MUTED_BY_USER, type PollStatus } from './shared';
 import { DECISION_FILL_KEY } from './decisions';
-import {
-	allCategories,
-	NO_PINS,
-	pinsAfter,
-	type ItemPins,
-	type PinChange
-} from '../../src/lib/shared/categories';
+import { allCategories, pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
 
 const DECISION_FILL_DELAY_MS = 2_000;
 const PLACEMENT_KEYS = ['categoryGroups', 'sources'] as const;
@@ -457,27 +451,26 @@ export abstract class PollerData extends PollerDashboard {
 		return { settings: next, reclassified };
 	}
 
-	async pinItems(ids: string[], change: PinChange): Promise<Refusal | { ok: true }> {
+	async pinItems(ids: string[], pin: CategoryPin): Promise<Refusal | { ok: true }> {
 		const groups = (await this.settings()).categoryGroups;
 		const pins = this.itemPins(ids);
-		const next = new Map<string, ItemPins>();
+		const next = new Map<string, string[]>();
 		for (const id of ids) {
-			const pin = pinsAfter(pins.get(id) ?? NO_PINS, change, groups);
-			if (!pin) return { error: 'Unknown category', status: 400 };
-			next.set(id, pin);
+			const pinned = pinsAfter(pins.get(id) ?? [], pin, groups);
+			if (!pinned) return { error: 'Unknown category', status: 400 };
+			next.set(id, pinned);
 		}
 		this.transaction(() => {
-			for (const [id, pin] of next) {
-				if (!pin.on.length && !pin.off.length) {
+			for (const [id, pinned] of next) {
+				if (!pinned.length) {
 					this.run('DELETE FROM item_pins WHERE key = ?', id);
 					continue;
 				}
 				this.run(
-					`INSERT INTO item_pins (key, pinned_on, pinned_off) VALUES (?, ?, ?)
-           ON CONFLICT (key) DO UPDATE SET pinned_on = excluded.pinned_on, pinned_off = excluded.pinned_off`,
+					`INSERT INTO item_pins (key, pinned) VALUES (?, ?)
+           ON CONFLICT (key) DO UPDATE SET pinned = excluded.pinned`,
 					id,
-					JSON.stringify(pin.on),
-					JSON.stringify(pin.off)
+					JSON.stringify(pinned)
 				);
 			}
 		});
