@@ -7,10 +7,11 @@
 		CUSTOM_GROUP_BY,
 		EVERYTHING_ELSE_SECTION,
 		groupByLabel,
-		groupByOptions
+		groupByOptions,
+		type GroupByKind
 	} from '$lib/shared/grouping';
 	import { cachedItems, cachedProjects, previewItems, ruleSuggestions } from '$lib/rule-preview';
-	import * as Select from '$lib/components/ui/select';
+	import SearchSelect, { type SearchSelectGroup } from './search-select.svelte';
 	import {
 		githubSearchOf,
 		MAX_SECTION_NAME_CHARS,
@@ -95,6 +96,20 @@
 						kind: 'project' as const
 					}
 				];
+	});
+	const GROUP_BY_HEADINGS: Partial<Record<GroupByKind, string>> = {
+		category: 'Category groups',
+		project: 'Projects'
+	};
+	const groupChoiceGroups = $derived.by(() => {
+		const byHeading = new Map<string | undefined, SearchSelectGroup>();
+		for (const o of groupChoices) {
+			const heading = GROUP_BY_HEADINGS[o.kind];
+			const group = byHeading.get(heading) ?? { heading, options: [] };
+			group.options.push({ value: o.id, label: o.label });
+			byHeading.set(heading, group);
+		}
+		return [...byHeading.values()];
 	});
 	const sections = $derived(view.sections ?? []);
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
@@ -251,21 +266,15 @@
 		<div class="grid grid-cols-[minmax(0,1fr)] gap-2 border-t pt-4">
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<span class="text-sm font-medium" id="view-{view.id}-group-by">Group by</span>
-				<Select.Root
-					type="single"
+				<SearchSelect
 					value={view.groupBy}
-					onValueChange={(v) => setGroupBy(v as GroupBy)}
-				>
-					<Select.Trigger size="sm" class="w-56" aria-labelledby="view-{view.id}-group-by"
-						><span class="truncate">{groupChoices.find((o) => o.id === view.groupBy)?.label}</span
-						></Select.Trigger
-					>
-					<Select.Content class="max-h-72">
-						{#each groupChoices as o (o.id)}
-							<Select.Item value={o.id} label={o.label} />
-						{/each}
-					</Select.Content>
-				</Select.Root>
+					groups={groupChoiceGroups}
+					onchange={(v) => setGroupBy(v as GroupBy)}
+					labelledby="view-{view.id}-group-by"
+					label="Group by"
+					size="sm"
+					class="w-56"
+				/>
 			</div>
 			{#if view.groupBy === CUSTOM_GROUP_BY}
 				<p class="text-xs text-muted-foreground">

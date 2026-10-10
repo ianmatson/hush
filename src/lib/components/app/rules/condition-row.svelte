@@ -8,6 +8,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import ChipInput from './chip-input.svelte';
+	import SearchSelect, { type SearchSelectGroup } from '../search-select.svelte';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import X from '@lucide/svelte/icons/x';
 
@@ -35,6 +36,12 @@
 		FIELD_GROUPS.map((g) => ({ ...g, fields: fields.filter((f) => f.runs === g.runs) })).filter(
 			(g) => g.fields.length
 		)
+	);
+	const fieldChoices = $derived<SearchSelectGroup[]>(
+		fieldGroups.map((g) => ({
+			heading: fieldGroups.length > 1 ? g.heading : undefined,
+			options: g.fields.map((f) => ({ value: f.word, label: f.label }))
+		}))
 	);
 	const set = (patch: Partial<BuilderCondition>) => onchange({ ...condition, ...patch });
 
@@ -64,25 +71,14 @@
 <div
 	class="flex flex-wrap items-start gap-1.5 rounded-md border bg-background p-1.5 sm:border-0 sm:bg-transparent sm:p-0"
 >
-	<Select.Root
-		type="single"
-		value={condition.word}
-		onValueChange={(word) => set({ word, values: [], negate: false })}
-	>
-		<Select.Trigger size="sm" class="w-full sm:w-44" aria-label="Field"
-			><span class="truncate">{field.label}</span></Select.Trigger
-		>
-		<Select.Content class="max-h-72">
-			{#each fieldGroups as g (g.runs)}
-				<Select.Group>
-					{#if fieldGroups.length > 1}<Select.GroupHeading>{g.heading}</Select.GroupHeading>{/if}
-					{#each g.fields as f (f.word)}
-						<Select.Item value={f.word} label={f.label} />
-					{/each}
-				</Select.Group>
-			{/each}
-		</Select.Content>
-	</Select.Root>
+	<SearchSelect
+		value={field.word}
+		groups={fieldChoices}
+		onchange={(word) => set({ word, values: [], negate: false })}
+		label="Field"
+		size="sm"
+		class="w-full sm:w-44"
+	/>
 
 	{#if field.canNegate}
 		<Select.Root
