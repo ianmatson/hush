@@ -162,6 +162,7 @@
 			lastReview={pr.lastReview ?? null}
 			canComment={!!q.data?.can.comment}
 			isAuthor={!!q.data?.can.author}
+			permission={q.data?.can.permission ?? null}
 			changedFiles={pr.files}
 			additions={pr.additions}
 			deletions={pr.deletions}

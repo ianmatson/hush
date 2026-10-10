@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import { DROP_TARGET_CLASS, Uploads, getAttachTarget } from '$lib/attachments.svelte';
 
 	let {
 		thread,
@@ -25,6 +26,7 @@
 	let editingId = $state<string | null>(null);
 	let editText = $state('');
 	let deletingId = $state<string | null>(null);
+	const uploads = new Uploads(getAttachTarget());
 	const isPending = $derived(thread.comments.some((c) => c.pending));
 
 	const hiddenComments = $derived(thread.totalComments - thread.comments.length);
@@ -45,7 +47,7 @@
 		kind: 'reply' | 'resolve' | 'edit' | 'delete',
 		action: () => Promise<unknown>
 	): Promise<boolean> {
-		if (sending) return false;
+		if (sending || uploads.pending) return false;
 		sending = kind;
 		try {
 			await action();
@@ -142,7 +144,11 @@
 							bind:value={editText}
 							rows="3"
 							aria-label="Edit the comment"
-							class="w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+							class={cn(
+								'w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+								DROP_TARGET_CLASS
+							)}
+							{@attach uploads.textarea}
 							onkeydown={(e) => {
 								if (commandFor(e, ['editor']) === 'editor.send') {
 									e.preventDefault();
@@ -156,7 +162,7 @@
 							<Button size="sm" variant="ghost" onclick={() => (editingId = null)}>Cancel</Button>
 							<Button
 								size="sm"
-								disabled={!editText.trim() || !!sending}
+								disabled={!editText.trim() || !!sending || !!uploads.pending}
 								onclick={() => void saveEdit(comment.id)}
 							>
 								{#if sending === 'edit'}<LoaderCircle class="animate-spin" />{/if}
@@ -187,7 +193,11 @@
 						rows="2"
 						placeholder="Reply…"
 						aria-label="Reply to the thread"
-						class="min-h-9 w-full resize-y rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+						class={cn(
+							'min-h-9 w-full resize-y rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+							DROP_TARGET_CLASS
+						)}
+						{@attach uploads.textarea}
 						onkeydown={(e) => {
 							if (commandFor(e, ['editor']) === 'editor.send') {
 								e.preventDefault();
@@ -216,7 +226,7 @@
 						{#if thread.canReply}
 							<Button
 								size="sm"
-								disabled={!reply.trim() || !!sending}
+								disabled={!reply.trim() || !!sending || !!uploads.pending}
 								onclick={() => void sendReply()}
 							>
 								{#if sending === 'reply'}<LoaderCircle class="animate-spin" />{/if}

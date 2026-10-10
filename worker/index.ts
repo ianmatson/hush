@@ -15,6 +15,7 @@ import settings from './routes/settings';
 import slack from './routes/slack';
 import subjects from './routes/subjects';
 import actions from './routes/actions';
+import attachments from './routes/attachments';
 import projects from './routes/projects';
 import diff from './routes/diff';
 import suggest from './routes/suggest';
@@ -96,6 +97,7 @@ const api = app
 	.route('/', alerts)
 	.route('/', subjects)
 	.route('/', actions)
+	.route('/', attachments)
 	.route('/', projects)
 	.route('/', diff)
 	.route('/', suggest)
