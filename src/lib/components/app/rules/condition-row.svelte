@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { builderField, type BuilderCondition, type BuilderField } from '$lib/shared/rule-builder';
+	import {
+		builderField,
+		type BuilderCondition,
+		type BuilderField,
+		type ValueSuggestions
+	} from '$lib/shared/rule-builder';
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
 	import ChipInput from './chip-input.svelte';
@@ -15,7 +20,7 @@
 	}: {
 		condition: BuilderCondition;
 		fields: BuilderField[];
-		suggestions?: Partial<Record<NonNullable<BuilderField['suggest']>, string[]>>;
+		suggestions?: ValueSuggestions;
 		onchange: (next: BuilderCondition) => void;
 		onremove: () => void;
 	} = $props();

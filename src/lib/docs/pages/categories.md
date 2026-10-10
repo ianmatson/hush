@@ -37,7 +37,7 @@ In **Settings → Categories**:
 - **Add category group** adds an empty group. Give it a name.
 - **Defaults** puts back the Effort and Impact groups. Nothing changes until you choose **Save**.
 
-You can have up to 10 groups, with up to 20 categories in each group. A category's id is unique across all groups.
+You can have up to 10 groups, with up to 20 categories in each group. A category's id is unique across all groups. Two groups cannot have the same name, and two categories in one group cannot have the same name. Categories in different groups can: Effort and Impact both have Low.
 
 ## Rules
 
@@ -58,7 +58,7 @@ A category's rule is a [query](/docs/query-language), such as `repo:acme/website
 
 Rules cannot use `category:`, or words that only GitHub has, such as `mentions:`. Every word and value, and where it works, is in the [query language](/docs/query-language) reference.
 
-A [view's search](/docs/query-language#in-a-views-search) can use `category:`: for example, `is:open review-requested:@me category:low`.
+A [view's search](/docs/query-language#in-a-views-search) can use `category:`: for example, `is:open review-requested:@me category:effort/low`. Give the group's name, then the category's name. When you rename a group or a category, change its name in your views too.
 
 ## Jev and descriptions
 

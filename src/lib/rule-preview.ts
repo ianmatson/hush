@@ -1,10 +1,10 @@
 import { keys, queryClient } from './queries';
-import { allCategories, itemQueryFacts } from './shared/categories';
+import { categoryQueryName, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/rules';
 import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
 import type { DashItem, DashProject, DashResponse, RuleMatch, Settings } from './shared/types';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
-import type { BuilderField } from './shared/rule-builder';
+import type { ValueSuggestion, ValueSuggestions } from './shared/rule-builder';
 
 const MAX_EXAMPLES = 20;
 
@@ -59,15 +59,20 @@ export function previewItems(
 const uniq = (xs: (string | null | undefined)[]) =>
 	[...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b));
 
+const plain = (values: string[]): ValueSuggestion[] =>
+	values.map((value) => ({ value, label: value }));
+
 export function ruleSuggestions(
 	settings: Pick<Settings, 'categoryGroups'> | undefined
-): Partial<Record<NonNullable<BuilderField['suggest']>, string[]>> {
+): ValueSuggestions {
 	const items = cachedItems();
 	const repos = uniq(items.map((i) => i.repo));
 	return {
-		repo: [...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos],
-		person: ['@me', 'bots', ...uniq(items.map((i) => i.author))],
-		label: uniq(items.flatMap((i) => i.labels.map((l) => l.name))),
-		category: uniq(allCategories(settings?.categoryGroups ?? []).map((c) => c.name))
+		repo: plain([...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos]),
+		person: plain(['@me', 'bots', ...uniq(items.map((i) => i.author))]),
+		label: plain(uniq(items.flatMap((i) => i.labels.map((l) => l.name)))),
+		category: (settings?.categoryGroups ?? []).flatMap((g) =>
+			g.categories.map((c) => ({ value: categoryQueryName(g, c), label: c.name, group: g.name }))
+		)
 	};
 }

@@ -77,10 +77,20 @@
 
 	const newId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
+	function unusedName(base: string, taken: string[]): string {
+		const used = new Set(taken.map((name) => name.trim().toLowerCase()));
+		let name = base;
+		for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base} ${n}`;
+		return name;
+	}
+
 	function addGroup(): CategoryGroup {
 		const fresh: CategoryGroup = {
 			id: newId('group'),
-			name: 'New group',
+			name: unusedName(
+				'New group',
+				(groups ?? []).map((g) => g.name)
+			),
 			categories: []
 		};
 		groups = [...(groups ?? []), fresh];
@@ -101,7 +111,10 @@
 	function addCategory(g: CategoryGroup, start: Partial<ItemCategory> = {}) {
 		const fresh: ItemCategory = {
 			id: newId('category'),
-			name: 'New category',
+			name: unusedName(
+				'New category',
+				g.categories.map((c) => c.name)
+			),
 			color: 'blue',
 			rule: '',
 			description: '',

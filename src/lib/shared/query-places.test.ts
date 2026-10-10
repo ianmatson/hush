@@ -33,9 +33,9 @@ function item(enrichment: Partial<Enrichment> = {}, over: Partial<RuleFacts> = {
 
 describe('splitSearch', () => {
 	it('sends GitHub words to GitHub and keeps Hush words for Hush', () => {
-		expect(splitSearch('is:pr review-requested:@me size:<50 category:low')).toEqual({
+		expect(splitSearch('is:pr review-requested:@me size:<50 category:effort/low')).toEqual({
 			github: 'is:pr review-requested:@me',
-			hush: 'size:<50 category:low',
+			hush: 'size:<50 category:effort/low',
 			errors: []
 		});
 	});
@@ -106,18 +106,21 @@ describe('the words that GitHub and Hush share', () => {
 		expect(queryMatches('draft:true', item({ draft: true }))).toBe(true);
 		expect(queryMatches('draft:false', item({ draft: true }))).toBe(false);
 	});
-	it('match categories by name or id', () => {
-		const t = item({}, { categories: [{ id: 'low', name: 'Low effort' }] });
-		expect(queryMatches('category:low', t)).toBe(true);
-		expect(queryMatches('category:"Low effort"', t)).toBe(true);
-		expect(queryMatches('-category:high', t)).toBe(true);
+	it('match categories by group and name', () => {
+		const t = item({}, { categories: ['Effort/Low', 'Review effort/High'] });
+		expect(queryMatches('category:effort/low', t)).toBe(true);
+		expect(queryMatches('category:"Review effort/High"', t)).toBe(true);
+		expect(queryMatches('category:impact/low', t)).toBe(false);
+		expect(queryMatches('category:*/low', t)).toBe(true);
+		expect(queryMatches('-category:effort/high', t)).toBe(true);
 	});
 });
 
 describe('queryError by place', () => {
 	it('lets each place use only the words that work there', () => {
-		expect(queryError('category:low', 'rule')).toMatch(/cannot use category:/);
-		expect(queryError('category:low', 'section')).toBeNull();
+		expect(queryError('category:effort/low', 'rule')).toMatch(/cannot use category:/);
+		expect(queryError('category:effort/low', 'section')).toBeNull();
+		expect(queryError('category:low', 'section')).toMatch(/must name its group too/);
 		expect(queryError('about:"x"', 'section')).toMatch(/Sections cannot use about:/);
 		expect(queryError('mentions:@me', 'rule')).toMatch(/works only in a view's search/);
 		expect(queryError('mentions:@me size:<50', 'search')).toBeNull();

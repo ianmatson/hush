@@ -49,6 +49,16 @@ export interface BuilderField {
 	canNegate: boolean;
 }
 
+export interface ValueSuggestion {
+	value: string;
+	label: string;
+	group?: string;
+}
+
+export type ValueSuggestions = Partial<
+	Record<NonNullable<BuilderField['suggest']>, ValueSuggestion[]>
+>;
+
 const DATE_PLACEHOLDER = '>2026-01-01 or <@today-7d';
 const PERSON_PLACEHOLDER = '@me or octocat';
 

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
+	import type { ValueSuggestion } from '$lib/shared/rule-builder';
+	import * as Popover from '$lib/components/ui/popover';
 	import X from '@lucide/svelte/icons/x';
 
 	let {
@@ -12,7 +14,7 @@
 		values: string[];
 		onchange: (values: string[]) => void;
 		placeholder?: string;
-		suggestions?: string[];
+		suggestions?: ValueSuggestion[];
 		label: string;
 	} = $props();
 
@@ -20,21 +22,27 @@
 	const MAX_SHOWN = 8;
 	const listId = `chips-${Math.random().toString(36).slice(2, 8)}`;
 
+	let anchor = $state<HTMLDivElement | null>(null);
 	let draft = $state('');
 	let open = $state(false);
 	const NONE = -1;
 	let active = $state(NONE);
 
+	const grouped = $derived(suggestions.some((s) => s.group));
 	const matches = $derived.by(() => {
 		const typed = draft.trim().toLowerCase();
-		const left = suggestions.filter((s) => !values.includes(s));
-		const starts = left.filter((s) => s.toLowerCase().startsWith(typed));
+		const left = suggestions.filter((s) => !values.includes(s.value));
+		const text = (s: ValueSuggestion) => s.value.toLowerCase();
+		if (grouped) return left.filter((s) => text(s).includes(typed));
+		const starts = left.filter((s) => text(s).startsWith(typed));
 		const contains = typed
-			? left.filter((s) => !starts.includes(s) && s.toLowerCase().includes(typed))
+			? left.filter((s) => !starts.includes(s) && text(s).includes(typed))
 			: [];
 		return [...starts, ...contains].slice(0, MAX_SHOWN);
 	});
 	const showList = $derived(open && matches.length > 0);
+	const startsGroup = (k: number) =>
+		!!matches[k].group && matches[k].group !== matches[k - 1]?.group;
 
 	function add(raw: string) {
 		const fresh = raw
@@ -57,10 +65,10 @@
 			open = false;
 		} else if (e.key === 'Tab' && showList && draft.trim()) {
 			e.preventDefault();
-			add(matches[active === NONE ? 0 : active]);
+			add(matches[active === NONE ? 0 : active].value);
 		} else if (e.key === 'Enter' || e.key === ',') {
 			e.preventDefault();
-			add(showList && active !== NONE ? matches[active] : draft);
+			add(showList && active !== NONE ? matches[active].value : draft);
 		} else if (e.key === 'Backspace' && !draft && values.length) {
 			onchange(values.slice(0, -1));
 		}
@@ -68,7 +76,8 @@
 </script>
 
 <div
-	class="relative flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-1 rounded-lg border border-input bg-transparent px-1.5 py-px focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30"
+	bind:this={anchor}
+	class="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-1 rounded-lg border border-input bg-transparent px-1.5 py-px focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30"
 >
 	{#each values as v (v)}
 		<span class="flex items-center gap-0.5 rounded-md bg-muted py-0.5 pr-0.5 pl-1.5 text-xs">
@@ -101,14 +110,28 @@
 			if (draft.trim()) add(draft);
 		}}
 	/>
-	{#if showList}
-		<ul
-			id={listId}
-			class="absolute top-full left-0 z-20 mt-1 grid max-h-64 w-full min-w-48 gap-0.5 overflow-y-auto rounded-md border bg-popover p-1 text-sm text-popover-foreground shadow-md"
-			role="listbox"
-			aria-label="Suggestions for {label}"
-		>
-			{#each matches as s, k (s)}
+</div>
+<Popover.Root open={showList} onOpenChange={(next) => (open = next)}>
+	<Popover.Content
+		customAnchor={anchor}
+		align="start"
+		trapFocus={false}
+		onOpenAutoFocus={(e) => e.preventDefault()}
+		onCloseAutoFocus={(e) => e.preventDefault()}
+		interactOutsideBehavior="ignore"
+		escapeKeydownBehavior="ignore"
+		class="max-h-64 w-(--bits-popover-anchor-width) min-w-48 gap-0 overflow-y-auto p-1"
+	>
+		<ul id={listId} class="grid gap-0.5" role="listbox" aria-label="Suggestions for {label}">
+			{#each matches as s, k (s.value)}
+				{#if startsGroup(k)}
+					<li
+						role="presentation"
+						class={cn('px-2 pb-0.5 text-xs text-muted-foreground', k > 0 ? 'pt-2' : 'pt-1')}
+					>
+						{s.group}
+					</li>
+				{/if}
 				<li role="option" aria-selected={k === active}>
 					<button
 						type="button"
@@ -116,12 +139,13 @@
 							'w-full truncate rounded px-2 py-1 text-left',
 							k === active && 'bg-accent text-accent-foreground'
 						)}
+						aria-label={s.group ? `${s.group}: ${s.label}` : undefined}
 						onmousedown={(e) => e.preventDefault()}
 						onmouseenter={() => (active = k)}
-						onclick={() => add(s)}>{s}</button
+						onclick={() => add(s.value)}>{s.label}</button
 					>
 				</li>
 			{/each}
 		</ul>
-	{/if}
-</div>
+	</Popover.Content>
+</Popover.Root>

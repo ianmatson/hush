@@ -205,6 +205,21 @@ describe('validation', () => {
 		);
 		expect(validateCategoryGroups([group([BUGS]), group([DOCS])])).toMatch(/Two category groups/);
 	});
+	it('needs names that a category: query can tell apart', () => {
+		const area = (categories: ItemCategory[], id: string, name: string) => ({
+			...group(categories, id),
+			name
+		});
+		expect(validateCategoryGroups([group([BUGS]), area([DOCS], 'other', 'Area')])).toMatch(
+			/Two category groups are called "Area"/
+		);
+		expect(validateCategoryGroups([group([BUGS, { ...DOCS, name: 'bugs ' }])])).toMatch(
+			/Two categories are called "area\/bugs "/
+		);
+		expect(
+			validateCategoryGroups([group([BUGS]), area([{ ...DOCS, name: 'Bugs' }], 'other', 'Other')])
+		).toBeNull();
+	});
 });
 
 describe('rules on the facts of an item', () => {
@@ -237,9 +252,14 @@ describe('rules on the facts of an item', () => {
 		expect(queryMatches('repo:acme/* author:alice', facts)).toBe(true);
 		expect(queryMatches('author:bots', facts)).toBe(false);
 	});
+	it('name each category with its group', () => {
+		expect(facts.categories).toEqual(['Effort/Low']);
+		expect(queryMatches('category:effort/low', facts)).toBe(true);
+		expect(queryMatches('category:impact/low', facts)).toBe(false);
+	});
 
 	it.each([
-		['category:bugs', /Category rules cannot use category:/],
+		['category:area/bugs', /Category rules cannot use category:/],
 		['mentions:@me', /“mentions:” works only in a view's search/],
 		['needs:review', /Unknown “needs:”/],
 		['event:mentioned', /Unknown “event:”/]

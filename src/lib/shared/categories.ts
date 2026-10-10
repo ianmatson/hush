@@ -1,6 +1,6 @@
 import { queryMatches } from './rules';
 import { cyrb53, type DecisionChoice } from './decisions';
-import { queryError } from './query';
+import { CATEGORY_SEPARATOR, queryError } from './query';
 import { parseMarkIcon } from './mark-icons';
 import type {
 	CategoryGroup,
@@ -104,6 +104,9 @@ export interface CategoryPin {
 }
 
 export const allCategories = (groups: CategoryGroup[]) => groups.flatMap((g) => g.categories);
+
+export const categoryQueryName = (group: CategoryGroup, category: ItemCategory) =>
+	`${group.name}${CATEGORY_SEPARATOR}${category.name}`;
 
 export const groupOf = (groups: CategoryGroup[], categoryId: string) =>
 	groups.find((g) => g.categories.some((c) => c.id === categoryId));
@@ -219,9 +222,9 @@ export function itemQueryFacts(
 					at: i.lastCommentAt ?? i.updatedAt
 				}
 			: null,
-		categories: allCategories(settings.categoryGroups)
-			.filter((c) => i.categories?.includes(c.id))
-			.map((c) => ({ id: c.id, name: c.name })),
+		categories: settings.categoryGroups.flatMap((g) =>
+			g.categories.filter((c) => i.categories?.includes(c.id)).map((c) => categoryQueryName(g, c))
+		),
 		now
 	};
 }
@@ -272,6 +275,11 @@ function validateGroup(
 	return null;
 }
 
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const firstRepeat = (names: string[]) =>
+	names.find((name, i) => names.findIndex((other) => sameName(other, name)) !== i);
+
 export function validateCategoryGroups(groups: unknown): string | null {
 	if (!Array.isArray(groups)) return 'Category groups must be a list.';
 	if (groups.length > MAX_CATEGORY_GROUPS)
@@ -282,5 +290,11 @@ export function validateCategoryGroups(groups: unknown): string | null {
 		const err = validateGroup(g, groupIds, categoryIds);
 		if (err) return err;
 	}
+	const groupName = firstRepeat((groups as CategoryGroup[]).map((g) => g.name));
+	if (groupName) return `Two category groups are called "${groupName}".`;
+	const categoryName = firstRepeat(
+		(groups as CategoryGroup[]).flatMap((g) => g.categories.map((c) => categoryQueryName(g, c)))
+	);
+	if (categoryName) return `Two categories are called "${categoryName}".`;
 	return null;
 }
