@@ -9,20 +9,30 @@ Each [view](/docs/views) lists its open pull requests and issues, also when GitH
 
 The **Group by** button, at the top right, puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.
 
-| Group by                         | Sections                                                                                                                                               |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **None**                         | One list, with no sections.                                                                                                                            |
-| **Your role**                    | **You opened**, **Reviews** (your review or your team's review is requested, or you reviewed it), **Assigned to you**, **Involved** (everything else). |
-| **Status**                       | Pull requests: **No review yet**, **In review**, **Changes requested**, **Approved**, **Drafts**. Issues: **Unassigned**, **Assigned**.                |
-| **Repository**, **Author**       | One section for each repository, or each author, in name order.                                                                                        |
-| **Label**, **Assignee**          | One section for each set of labels, or of assignees, such as “bug, docs”. An item with none is in **No labels** or **No assignee**.                    |
-| A category group, such as Effort | One section for each category, then **Not sorted** for the items that have no category from the group. See [Categories](/docs/categories).             |
+| Group by                          | Sections                                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **None**                          | One list, with no sections.                                                                                                                            |
+| **Your role**                     | **You opened**, **Reviews** (your review or your team's review is requested, or you reviewed it), **Assigned to you**, **Involved** (everything else). |
+| **Status**                        | Pull requests: **No review yet**, **In review**, **Changes requested**, **Approved**, **Drafts**. Issues: **Unassigned**, **Assigned**.                |
+| **Repository**, **Author**        | One section for each repository, or each author, in name order.                                                                                        |
+| **Label**, **Assignee**           | One section for each set of labels, or of assignees, such as “bug, docs”. An item with none is in **No labels** or **No assignee**.                    |
+| A category group, such as Effort  | One section for each category, then **Not sorted** for the items that have no category from the group. See [Categories](/docs/categories).             |
+| A project, such as Website status | One section for each Status of the project, in the board's order, then **No status**, then **Not in project**. See [Project status](#project-status).  |
 
 An item is in exactly one section. Sections with no items do not show. Choose the name of a section to close it or open it; **Drafts** is closed at first. This browser remembers your choice for each view and each Group by.
 
 With **Both**, Status shows the pull request sections first, then the issue sections.
 
 {{key:palette}} finds the Group by choices too: type “group by”.
+
+### Project status
+
+Group by lists each open GitHub project that holds an item of the view, with the most items first. Hush reads the project's **Status** field: its options are the sections, with the color of each option.
+
+- An item that is in the project with no Status is in **No status**.
+- An item that is not in the project is in **Not in project**.
+- To change an item's Status, open it in the [peek](/docs/peek). The list moves it when Hush reads the project again.
+- Hush needs project access: sign in with GitHub again if Group by says **Project status needs project access**. A custom token needs the `read:project` scope (`project` to change a Status).
 
 ## Order and reasons
 

@@ -20,7 +20,15 @@
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
 	import { sortItems } from '$lib/shared/dashboard';
-	import { groupByLabel, groupByOptions, groupItems } from '$lib/shared/grouping';
+	import {
+		groupByLabel,
+		groupByOptions,
+		groupItems,
+		projectsHolding,
+		type GroupByOption
+	} from '$lib/shared/grouping';
+	import { projectAccessOf, statusColor } from '$lib/shared/projects';
+	import { MARK_DOT } from '$lib/marks';
 	import {
 		findStacks,
 		rotateToFront,
@@ -32,7 +40,14 @@
 	} from '$lib/shared/stacks';
 	import StackStrip from './stack-strip.svelte';
 	import StackOutsideRow from './stack-outside-row.svelte';
-	import type { DashItem, DashKind, DashResponse, GroupBy, ItemView } from '$lib/shared/types';
+	import type {
+		DashItem,
+		DashKind,
+		DashProject,
+		DashResponse,
+		GroupBy,
+		ItemView
+	} from '$lib/shared/types';
 	import { viewKinds } from '$lib/shared/item-views';
 	import { page } from '$app/state';
 	import { ago } from '$lib/time';
@@ -135,7 +150,10 @@
 				...new Set(ds.flatMap((d) => d.sections.filter((s) => s.id === view.id && s.skipped)))
 			].map((s) => s.skipped!),
 			fetchedAt: Math.min(...ds.map((d) => d.fetchedAt)),
-			refreshing: ds.some((d) => d.refreshing)
+			refreshing: ds.some((d) => d.refreshing),
+			projects: ds.some((d) => d.projects)
+				? [...new Map(ds.flatMap((d) => d.projects ?? []).map((p) => [p.key, p] as const)).values()]
+				: undefined
 		};
 	});
 	const pageOpenedAt = Date.now();
@@ -217,10 +235,19 @@
 		id !== null && id === peek.heldId && owns && filtered.some((i) => i.id === id);
 
 	const groupBy = $derived(view.groupBy);
+	const projects = $derived<DashProject[]>(
+		projectsHolding(visibleItems, data?.projects ?? [], groupBy)
+	);
+	const noProjectAccess = $derived(!!me.data && projectAccessOf(me.data.scopes ?? []) === 'none');
+	const groupByChoices = $derived(groupByOptions(categoryGroups, projects));
+	const startsNewKind = (choices: GroupByOption[], k: number) =>
+		k > 0 && choices[k].kind !== choices[k - 1].kind;
+	const groupByName = $derived(groupByLabel(groupBy, categoryGroups, data?.projects ?? []));
 	const sections = $derived(
 		groupItems(sortItems(filtered), groupBy, {
 			me: me.data?.login ?? '',
-			categoryGroups
+			categoryGroups,
+			projects: data?.projects
 		})
 	);
 
@@ -774,6 +801,9 @@
 		get categoryGroups() {
 			return categoryGroups;
 		},
+		get projects() {
+			return projects;
+		},
 		pinCategory,
 		sel,
 		byId,
@@ -809,20 +839,15 @@
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="sm"
-							aria-label="Group by {groupByLabel(groupBy, categoryGroups)}"
-						>
-							<Rows3 /><span class="hidden sm:inline">{groupByLabel(groupBy, categoryGroups)}</span>
+						<Button {...props} variant="ghost" size="sm" aria-label="Group by {groupByName}">
+							<Rows3 /><span class="hidden max-w-48 truncate sm:inline">{groupByName}</span>
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="end" class="min-w-48">
+				<DropdownMenu.Content align="end" class="min-w-60">
 					<DropdownMenu.Label>Group by</DropdownMenu.Label>
-					{#each groupByOptions(categoryGroups) as o, k (o.id)}
-						{#if k === 3 || (o.id.startsWith('category:') && !groupByOptions(categoryGroups)[k - 1].id.startsWith('category:'))}
+					{#each groupByChoices as o, k (o.id)}
+						{#if startsNewKind(groupByChoices, k)}
 							<DropdownMenu.Separator />
 						{/if}
 						<DropdownMenu.Item onclick={() => setGroupBy(o.id)}>
@@ -830,6 +855,12 @@
 							{#if o.id === groupBy}<Check class="size-3.5" />{/if}
 						</DropdownMenu.Item>
 					{/each}
+					{#if noProjectAccess}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item disabled class="text-xs">
+							Project status needs project access
+						</DropdownMenu.Item>
+					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 			<Button
@@ -949,6 +980,14 @@
 												closed && '-rotate-90'
 											)}
 										/>
+										{#if section.color}
+											<span
+												class={cn(
+													'size-2 shrink-0 rounded-full',
+													MARK_DOT[statusColor(section.color)]
+												)}
+											></span>
+										{/if}
 										<h2 class="truncate text-xs font-semibold tracking-wide uppercase">
 											{section.label}
 										</h2>

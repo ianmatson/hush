@@ -234,7 +234,15 @@ export interface DashSection {
 }
 
 export type GroupBy =
-	'none' | 'role' | 'status' | 'repo' | 'author' | 'label' | 'assignee' | `category:${string}`;
+	| 'none'
+	| 'role'
+	| 'status'
+	| 'repo'
+	| 'author'
+	| 'label'
+	| 'assignee'
+	| `category:${string}`
+	| `project:${string}`;
 
 export interface ItemView {
 	id: string;
@@ -346,6 +354,20 @@ export interface DashItem {
 	changes?: Change[];
 	/** When you last looked at it, or null. */
 	seenAt?: number | null;
+	projectStatus?: Record<string, string | null>;
+}
+
+export interface DashProjectStatus {
+	id: string;
+	name: string;
+	color: string;
+}
+
+export interface DashProject {
+	key: string;
+	title: string;
+	url: string;
+	statuses: DashProjectStatus[];
 }
 
 export interface DashResponse {
@@ -357,6 +379,7 @@ export interface DashResponse {
 	errors: string[];
 	/** This is the saved list; a new one is on its way (a live message says when). */
 	refreshing?: boolean;
+	projects?: DashProject[];
 }
 
 /** A thread as the API returns it to the SPA. */

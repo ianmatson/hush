@@ -12,7 +12,7 @@ export function projectAccessOf(scopes: string[]): ProjectAccess {
 }
 
 export const PROJECT_ACCESS_NEEDED =
-	'A source reads a project board, but your GitHub token has no project access. Sign in with GitHub again, or add the project scope to your custom token.';
+	'A view reads a project board, but your GitHub token has no project access. Sign in with GitHub again, or add the project scope to your custom token.';
 
 const MISSING_PROJECT_SCOPE = /INSUFFICIENT_SCOPES|required scopes|read:project/i;
 export const lacksProjectScope = (message: string) => MISSING_PROJECT_SCOPE.test(message);

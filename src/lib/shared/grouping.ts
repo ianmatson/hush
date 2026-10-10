@@ -1,14 +1,16 @@
-import type { CategoryGroup, DashItem, GroupBy } from './types';
+import type { CategoryGroup, DashItem, DashProject, GroupBy } from './types';
 
 export interface Section {
 	key: string;
 	label: string;
 	items: DashItem[];
+	color?: string;
 }
 
 export interface GroupContext {
 	me: string;
 	categoryGroups: CategoryGroup[];
+	projects?: DashProject[];
 }
 
 interface FixedGrouping {
@@ -17,7 +19,10 @@ interface FixedGrouping {
 }
 
 export const NOT_SORTED_SECTION = 'Not sorted';
+export const NO_STATUS_SECTION = 'No status';
+export const NOT_IN_PROJECT_SECTION = 'Not in project';
 const CATEGORY_PREFIX = 'category:';
+const PROJECT_PREFIX = 'project:';
 const sameLogin = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 const ROLE: FixedGrouping = {
@@ -81,29 +86,79 @@ const joined = (values: string[]) =>
 	[...values].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).join(', ');
 
 export const categoryGroupBy = (groupId: string): GroupBy => `${CATEGORY_PREFIX}${groupId}`;
+export const projectGroupBy = (projectKey: string): GroupBy => `${PROJECT_PREFIX}${projectKey}`;
+export const projectKeyOf = (by: GroupBy) =>
+	by.startsWith(PROJECT_PREFIX) ? by.slice(PROJECT_PREFIX.length) : null;
+const projectLabel = (title: string) => `${title} status`;
 
 const categoryGroupOf = (by: GroupBy, groups: CategoryGroup[]) =>
 	by.startsWith(CATEGORY_PREFIX)
 		? groups.find((g) => g.id === by.slice(CATEGORY_PREFIX.length))
 		: undefined;
 
-export function groupByOptions(groups: CategoryGroup[]): { id: GroupBy; label: string }[] {
+export type GroupByKind = 'basic' | 'field' | 'category' | 'project';
+
+export interface GroupByOption {
+	id: GroupBy;
+	label: string;
+	kind: GroupByKind;
+}
+
+export function projectsHolding(
+	items: DashItem[],
+	projects: DashProject[],
+	keep: GroupBy
+): DashProject[] {
+	const count = new Map<string, number>();
+	for (const i of items)
+		for (const key of Object.keys(i.projectStatus ?? {})) count.set(key, (count.get(key) ?? 0) + 1);
+	const kept = projectKeyOf(keep);
+	return projects
+		.filter((p) => count.has(p.key) || p.key === kept)
+		.sort(
+			(a, b) =>
+				(count.get(b.key) ?? 0) - (count.get(a.key) ?? 0) ||
+				a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+		);
+}
+
+export function groupByOptions(
+	groups: CategoryGroup[],
+	projects: DashProject[] = []
+): GroupByOption[] {
 	return [
-		{ id: 'none', label: 'None' },
-		{ id: 'role', label: 'Your role' },
-		{ id: 'status', label: 'Status' },
-		...(Object.keys(FIELD_LABELS) as Field[]).map((id) => ({ id, label: FIELD_LABELS[id] })),
+		{ id: 'none', label: 'None', kind: 'basic' },
+		{ id: 'role', label: 'Your role', kind: 'basic' },
+		{ id: 'status', label: 'Status', kind: 'basic' },
+		...(Object.keys(FIELD_LABELS) as Field[]).map((id) => ({
+			id,
+			label: FIELD_LABELS[id],
+			kind: 'field' as const
+		})),
 		...groups
 			.filter((g) => g.categories.length)
-			.map((g) => ({ id: categoryGroupBy(g.id), label: g.name }))
+			.map((g) => ({ id: categoryGroupBy(g.id), label: g.name, kind: 'category' as const })),
+		...projects.map((p) => ({
+			id: projectGroupBy(p.key),
+			label: projectLabel(p.title),
+			kind: 'project' as const
+		}))
 	];
 }
 
-export function groupByLabel(by: GroupBy, groups: CategoryGroup[]): string {
-	return groupByOptions(groups).find((o) => o.id === by)?.label ?? 'Status';
+export function groupByLabel(
+	by: GroupBy,
+	groups: CategoryGroup[],
+	projects: DashProject[] = []
+): string {
+	const option = groupByOptions(groups, projects).find((o) => o.id === by);
+	if (option) return option.label;
+	const projectKey = projectKeyOf(by);
+	return projectKey ? projectLabel(projectKey) : 'Status';
 }
 
-const VALID_GROUP_BY = /^(none|role|status|repo|author|label|assignee|category:[a-z0-9-]{1,40})$/;
+const VALID_GROUP_BY =
+	/^(none|role|status|repo|author|label|assignee|category:[a-z0-9-]{1,40}|project:[A-Za-z0-9-]{1,39}\/[1-9][0-9]{0,8})$/;
 export const groupByOk = (v: unknown): v is GroupBy =>
 	typeof v === 'string' && VALID_GROUP_BY.test(v);
 
@@ -154,11 +209,40 @@ function categorySections(items: DashItem[], group: CategoryGroup): Section[] {
 	return sections.filter((s) => s.items.length);
 }
 
+function projectSections(items: DashItem[], projectKey: string, project?: DashProject): Section[] {
+	const statusSections = new Map<string, Section>(
+		(project?.statuses ?? []).map((s) => [
+			s.id,
+			{ key: `status:${s.id}`, label: s.name, color: s.color, items: [] }
+		])
+	);
+	const noStatus: Section = { key: NO_STATUS_SECTION, label: NO_STATUS_SECTION, items: [] };
+	const notInProject: Section = {
+		key: NOT_IN_PROJECT_SECTION,
+		label: NOT_IN_PROJECT_SECTION,
+		items: []
+	};
+	for (const i of items) {
+		const status = i.projectStatus?.[projectKey];
+		const inProject = status !== undefined;
+		const section = inProject ? (statusSections.get(status ?? '') ?? noStatus) : notInProject;
+		section.items.push(i);
+	}
+	return [...statusSections.values(), noStatus, notInProject].filter((s) => s.items.length);
+}
+
 export function groupItems(items: DashItem[], by: GroupBy, ctx: GroupContext): Section[] {
 	if (by === 'none') return items.length ? [{ key: 'all', label: '', items }] : [];
 	if (by === 'role') return fixedSections(items, ROLE, ctx.me);
 	if (by === 'status') return fixedSections(items, STATUS, ctx.me);
 	if (by in FIELD_VALUE) return valueSections(items, by as Field);
+	const projectKey = projectKeyOf(by);
+	if (projectKey && ctx.projects)
+		return projectSections(
+			items,
+			projectKey,
+			ctx.projects.find((p) => p.key === projectKey)
+		);
 	const group = categoryGroupOf(by, ctx.categoryGroups);
 	return group ? categorySections(items, group) : fixedSections(items, STATUS, ctx.me);
 }

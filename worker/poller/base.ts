@@ -3,6 +3,7 @@ import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types'
 import { settingsOverrides } from '../../src/lib/shared/settings-schema';
 import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
+import { projectAccessOf } from '../../src/lib/shared/projects';
 import { MIGRATIONS, SCHEMA, SCHEMA_VERSION, THREADS, type ThreadWithFacts } from './schema';
 import {
 	APP_BLUR_MESSAGE,
@@ -176,7 +177,10 @@ export abstract class PollerBase extends DurableObject<Env> {
 			me: user.login,
 			token: await userToken(this.env, user),
 			settings,
-			inboxTeams: settings.teamReviewsAreAction ? (await this.teams()).teams.map((t) => t.slug) : []
+			inboxTeams: settings.teamReviewsAreAction
+				? (await this.teams()).teams.map((t) => t.slug)
+				: [],
+			projectAccess: projectAccessOf(user.scopes ? user.scopes.split(',') : [])
 		};
 	}
 

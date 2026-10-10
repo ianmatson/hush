@@ -16,7 +16,8 @@ import {
 } from '../../src/lib/shared/item-views';
 import { boardQueryOf, readsBoard } from '../../src/lib/shared/projects';
 import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
-import { boardCount, boardShort } from '../projects';
+import { boardCount, boardShort, itemStatuses } from '../projects';
+import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { DASH_TTL } from './shared';
 import { PollerSync } from './sync';
 
@@ -109,8 +110,10 @@ export abstract class PollerDashboard extends PollerSync {
 	async rebuildBoards(): Promise<void> {
 		const who = await this.who();
 		if (!who) return;
-		const kinds = DASH_KINDS.filter((kind) =>
-			sectionsFor(kind, who.settings.views).some((s) => readsBoard(s.query))
+		const groupsByProject = who.settings.views.some((v) => projectKeyOf(v.groupBy));
+		const kinds = DASH_KINDS.filter(
+			(kind) =>
+				groupsByProject || sectionsFor(kind, who.settings.views).some((s) => readsBoard(s.query))
 		);
 		await Promise.all(kinds.map((kind) => this.rebuildTracked(kind)));
 	}
@@ -219,9 +222,17 @@ export abstract class PollerDashboard extends PollerSync {
 			);
 		await this.storeTrackedBuild(kind, complete);
 		if (marksChanged) await this.bumpVersion();
+		const nodeIdOf = (key: string) => latest.get(key)?.id ?? '';
+		const statuses =
+			who.projectAccess === 'none'
+				? null
+				: await itemStatuses(who.token, placed.map((i) => nodeIdOf(i.id)).filter(Boolean));
 		const data: DashResponse = {
 			kind,
-			items: placed,
+			items: statuses
+				? placed.map((i) => ({ ...i, projectStatus: statuses.statusOf.get(nodeIdOf(i.id)) ?? {} }))
+				: placed,
+			...(statuses && { projects: statuses.projects }),
 			sections: views.map((v) => ({
 				id: v.id,
 				name: v.name,
@@ -230,7 +241,9 @@ export abstract class PollerDashboard extends PollerSync {
 			})),
 			teams,
 			fetchedAt: Date.now(),
-			errors: teamError ? [teamError, ...errors] : errors
+			errors: [
+				...new Set([...(teamError ? [teamError] : []), ...errors, ...(statuses?.errors ?? [])])
+			].slice(0, 3)
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		// The search saw these PRs and issues now: the inbox follows (this cache is already new).

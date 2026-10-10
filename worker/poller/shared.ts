@@ -1,4 +1,5 @@
 import type { Settings } from '../../src/lib/shared/types';
+import type { ProjectAccess } from '../../src/lib/shared/projects';
 import { APP_FOCUS_LASTS_MS } from '../../src/lib/shared/push-policy';
 
 export { APP_BLUR_MESSAGE, APP_FOCUS_MESSAGE } from '../../src/lib/shared/push-policy';
@@ -62,6 +63,7 @@ export interface Who {
 	settings: Settings;
 	/** Team slugs whose review requests count in the inbox (Settings → Inbox). */
 	inboxTeams: string[];
+	projectAccess: ProjectAccess;
 }
 
 export type Resolved = { id: string; title: string; note: string };

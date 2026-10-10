@@ -7,7 +7,7 @@ import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS } from '$lib/shared/menus';
 import type { CategoryPin } from '$lib/shared/categories';
 import { itemPagePath } from '$lib/shared/item-page';
-import type { CategoryGroup, DashItem, GroupBy } from '$lib/shared/types';
+import type { CategoryGroup, DashItem, DashProject, GroupBy } from '$lib/shared/types';
 import { groupByOptions } from '$lib/shared/grouping';
 import FolderInput from '@lucide/svelte/icons/folder-input';
 import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -50,6 +50,7 @@ export interface DashActionContext {
 	refresh(): unknown;
 	toggleShowHidden(): void;
 	readonly categoryGroups: CategoryGroup[];
+	readonly projects: DashProject[];
 	pinCategory(ids: string[], pin: CategoryPin): unknown;
 }
 
@@ -70,11 +71,11 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 			shortcut: key('dash.showHidden'),
 			run: () => ctx.toggleShowHidden()
 		},
-		...groupByOptions(ctx.categoryGroups)
+		...groupByOptions(ctx.categoryGroups, ctx.projects)
 			.filter((o) => o.id !== ctx.groupBy)
 			.map((o) => ({
 				id: `act:group-by:${o.id}`,
-				label: `Group by ${o.label.toLowerCase()}`,
+				label: `Group by ${o.kind === 'basic' || o.kind === 'field' ? o.label.toLowerCase() : o.label}`,
 				icon: Rows3,
 				keywords: ['group', 'sections', 'sort'],
 				run: () => ctx.setGroupBy(o.id)
