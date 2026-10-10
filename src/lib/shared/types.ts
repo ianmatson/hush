@@ -72,7 +72,7 @@ export interface RuleFacts {
 	enrichment: Enrichment | null;
 	me: string;
 	activity?: Activity | null;
-	categories?: { id: string; name: string }[];
+	categories?: string[];
 	now?: number;
 }
 

@@ -255,7 +255,7 @@ describe('Group by choices', () => {
 describe('custom sections', () => {
 	const sections = [
 		{ name: 'Failing', rule: 'status:failure' },
-		{ name: 'Quick', rule: 'size:<50 OR category:low' },
+		{ name: 'Quick', rule: 'size:<50 OR category:effort/low' },
 		{ name: 'Mine', rule: 'author:@me' }
 	];
 	const custom = (items: DashItem[]) =>

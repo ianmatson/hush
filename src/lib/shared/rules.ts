@@ -60,7 +60,7 @@ function githubFactsMatch(m: RuleMatch, t: RuleFacts): boolean {
 }
 
 const hasCategory = (globs: string[], t: RuleFacts) =>
-	!!t.categories?.some((c) => matchGlobs(c.id, globs) || matchGlobs(c.name, globs));
+	!!t.categories?.some((name) => matchGlobs(name, globs));
 
 export function ruleMatches(m: RuleMatch, t: RuleFacts): boolean {
 	const e = t.enrichment;

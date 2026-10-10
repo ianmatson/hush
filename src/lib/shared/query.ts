@@ -6,6 +6,7 @@ type Field = keyof RuleMatch;
 
 export const MAX_CONDITION_CHARS = 200;
 export const ME = '@me';
+export const CATEGORY_SEPARATOR = '/';
 const NUMBER_PATTERN = /^(?:(?:<|>|<=|>=)?\d+|\d+\.\.\d+)$/;
 const DATE = String.raw`(?:\d{4}-\d{2}-\d{2}|@today(?:-\d{1,4}[dw])?)`;
 const DATE_PATTERN = new RegExp(
@@ -180,8 +181,8 @@ export const WORDS: QueryWord[] = [
 		key: 'category',
 		field: 'category',
 		runs: 'hush',
-		help: 'Has this category (its name or id)',
-		example: 'category:low'
+		help: 'Has this category, as group/category',
+		example: 'category:effort/low'
 	},
 	{
 		key: 'about',
@@ -327,6 +328,10 @@ export function parseQuery(query: string): ParsedQuery {
 				errors.push(
 					`“${key}:${x}” must be a date such as >2026-01-01, <@today-7d, or 2026-01-01..2026-02-01.`
 				);
+				continue;
+			}
+			if (field === 'category' && !x.includes(CATEGORY_SEPARATOR)) {
+				errors.push(`“${key}:${x}” must name its group too, such as category:effort/low.`);
 				continue;
 			}
 			if (field === 'about' && x.length > MAX_CONDITION_CHARS) {

@@ -109,7 +109,7 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 
 ## `category:`
 
-`category:` matches an item's category, by its name or its id: `category:low` or `category:"Low effort"`. Use it in a view's search. There is no `tag:`: an item has one category from each group.
+`category:` matches an item's category by its group and its name, with a `/` between them: `category:effort/low`. Many groups can have a category with the same name (Effort and Impact both have Low), so a name alone is an error. Put quotes around a name with spaces: `category:"Review effort/Low"`. A `*` matches any group: `category:*/low`. Use it in a view's search or in a section's rule. There is no `tag:`: an item has one category from each group.
 
 ## Examples
 
@@ -136,7 +136,7 @@ Searches for views:
 | Search                                             | Finds                                                  |
 | -------------------------------------------------- | ------------------------------------------------------ |
 | `is:open review-requested:@me size:<50`            | Small pull requests that wait for your review.         |
-| `is:open involves:@me category:low`                | Open items that involve you, in the category Low.      |
+| `is:open involves:@me category:effort/low`         | Open items that involve you, with Low effort.          |
 | `repo:acme/web is:pr -author:bots status:failure`  | Pull requests by people in acme/web whose CI failed.   |
 | `org:acme is:issue no:assignee created:>@today-7d` | New issues in the acme org that nobody is assigned to. |
 

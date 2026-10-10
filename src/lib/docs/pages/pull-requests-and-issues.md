@@ -28,7 +28,7 @@ With **Both**, Status shows the pull request sections first, then the issue sect
 
 ### Custom sections
 
-A view can have its own sections. Each one is a name and a rule in the [query language](/docs/query-language), such as `status:failure` or `size:<50 OR category:low`:
+A view can have its own sections. Each one is a name and a rule in the [query language](/docs/query-language), such as `status:failure` or `size:<50 OR category:effort/low`:
 
 ```query
 review-requested:@me review:none

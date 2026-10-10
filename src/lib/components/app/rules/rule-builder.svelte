@@ -72,10 +72,10 @@
 		emptyCondition,
 		queryToBuilder,
 		type BuilderCondition,
-		type BuilderField,
 		type BuilderGroup,
 		type BuilderMode,
-		type BuilderState
+		type BuilderState,
+		type ValueSuggestions
 	} from '$lib/shared/rule-builder';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
@@ -104,7 +104,7 @@
 		id: string;
 		label?: string;
 		place?: QueryPlace;
-		suggestions?: Partial<Record<NonNullable<BuilderField['suggest']>, string[]>>;
+		suggestions?: ValueSuggestions;
 		preview?: (query: string) => RulePreview | null;
 		templates?: RuleTemplate[];
 		emptyText?: string;
