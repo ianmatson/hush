@@ -63,7 +63,7 @@ GitHub's searches know who was asked. They do not know if the request still wait
 
 When you approve or request changes, Hush moves the thread to **Done** by itself. See [what needs you](/docs/inbox#what-needs-you).
 
-Team requests are **FYI** by default. In your [views](/docs/pull-requests-and-issues), they are in their own group, **Your team's turn**. You can change this:
+Team requests are **FYI** by default. In a view grouped by **Your role**, they are under **Reviews**, with “Review for acme/web” on the row (see [Group by](/docs/pull-requests-and-issues#group-by)). You can change this:
 
 - [`teamReviewsAreAction`](/docs/settings#teamreviewsareaction): team review requests go to Needs you, and push.
 - [`reviewResolution`](/docs/settings#reviewresolution) `"any_review"`: a review by someone else settles a request. Use it on teams where one review is enough.
@@ -80,12 +80,14 @@ A [view](/docs/views) with only your review requests, next to the default Mine v
 		{
 			"id": "mine",
 			"name": "Mine",
-			"searches": ["is:open involves:@me", "is:pr is:open reviewed-by:@me -author:@me"]
+			"searches": ["is:open involves:@me", "is:pr is:open reviewed-by:@me -author:@me"],
+			"groupBy": "role"
 		},
 		{
 			"id": "reviews",
 			"name": "Reviews",
-			"searches": ["is:pr is:open user-review-requested:@me"]
+			"searches": ["is:pr is:open user-review-requested:@me"],
+			"groupBy": "status"
 		}
 	]
 }

@@ -12,7 +12,6 @@ const ITEM_PARTS: RowPart[] = [
 	{ id: 'author', label: 'Author' },
 	{ id: 'external', label: 'External contributor' },
 	{ id: 'comments', label: 'Comment count' },
-	{ id: 'moved', label: 'Moved by you' },
 	{ id: 'changes', label: 'Changes since you looked' },
 	{ id: 'categories', label: 'Categories' },
 	{ id: 'categoryNames', label: 'Category names' },

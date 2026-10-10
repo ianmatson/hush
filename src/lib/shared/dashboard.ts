@@ -95,9 +95,6 @@ export type DashFacts = Omit<
 	| 'actionUrl'
 	| 'dismissed'
 	| 'priority'
-	| 'autoTurn'
-	| 'movedByYou'
-	| 'rank'
 >;
 
 export interface TurnResult {
@@ -464,10 +461,7 @@ export function finishItem(
 		...t,
 		sections,
 		stale,
-		dismissed: false,
-		autoTurn: t.turn,
-		movedByYou: false,
-		rank: null
+		dismissed: false
 	};
 }
 
@@ -500,38 +494,6 @@ export function sortItems<
 			urgentFirst(a) - urgentFirst(b) ||
 			Date.parse(a.waitingSince) - Date.parse(b.waitingSince)
 	);
-}
-
-/**
- * Order inside one turn group: new (unranked) items first in Hush's order, then your manual order.
- * `items` must already be in Hush's order (see sortItems).
- */
-export function arrangeGroup<T extends Pick<DashItem, 'rank'>>(items: T[]): T[] {
-	const fresh = items.filter((i) => i.rank === null);
-	const ranked = items.filter((i) => i.rank !== null).sort((a, b) => a.rank! - b.rank!);
-	return [...fresh, ...ranked];
-}
-
-/**
- * The full group order after a drop. `visible` is the (maybe filtered) list the user dropped into,
- * with the moved items as one block. Items hidden by a filter keep their places; the block goes
- * next to its visible neighbours.
- */
-export function orderAfterDrop(full: string[], visible: string[], moved: string[]): string[] {
-	const block = new Set(moved);
-	const rest = full.filter((id) => !block.has(id));
-	const first = visible.findIndex((id) => block.has(id));
-	const last = visible.length - 1 - [...visible].reverse().findIndex((id) => block.has(id));
-	const before = visible
-		.slice(0, first)
-		.reverse()
-		.find((id) => rest.includes(id));
-	const after = visible.slice(last + 1).find((id) => rest.includes(id));
-	let index = 0;
-	if (before !== undefined) index = rest.indexOf(before) + 1;
-	else if (after !== undefined) index = rest.indexOf(after);
-	rest.splice(index, 0, ...moved);
-	return rest;
 }
 
 export function validateDash(d: unknown): string | null {

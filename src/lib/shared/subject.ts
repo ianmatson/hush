@@ -172,6 +172,8 @@ export function dashFactsOf(
 		requestedMe,
 		requestedTeams,
 		requestedAt: requestedMe || requestedTeams.length ? (ev?.at ?? null) : null,
+		reviewRequestCount: pr ? s.reviewRequests.length : 0,
+		reviewed: pr && !!s.latestReview,
 		myLastReviewAt: s.myReview?.at ?? null,
 		myLastReviewState: s.myReview?.state ?? null,
 		openThreads: pr ? s.openThreads : 0,

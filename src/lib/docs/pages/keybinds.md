@@ -10,7 +10,8 @@ Hush works from the keyboard. Press {{key:list.help}} on any list to see the sho
 {{key:palette}} opens the command palette. Type to find:
 
 - **Threads, pull requests, and issues** by title or repository. Enter peeks at it; `Mod`+Enter opens it on GitHub.
-- **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Peek, Move to…
+- **Actions** on the item under the cursor or the selection: Mark as done, Snooze, Mute, Peek, Hide…
+- **Group by** for the view you are in: type “group by”.
 - **Pages**: every view, every inbox tab, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
 - **Settings** that are on or off: type a word from the setting, for example “bots”, “drafts”, or “push”. Enter turns it on or off.
@@ -33,7 +34,7 @@ Your keys are saved at once, and follow you to every device. In settings.json th
 { "keys": { "inbox.done": ["d"], "inbox.mute": [], "list.peek": ["Space", "p"] } }
 ```
 
-Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row to the selection, Shift-click selects a range, and on the Pull requests and Issues tabs you drag ⋮⋮ to move an item.
+Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row to the selection, and Shift-click selects a range.
 
 ## Where keys work
 

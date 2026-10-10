@@ -29,7 +29,7 @@ description: gh-dash is a terminal dashboard for GitHub pull requests, issues, a
 
 **gh-dash** has three views: pull requests, issues, and notifications. Each view has sections that you define in a YAML file. Notification sections filter by GitHub's reason (`reason:review-requested`, `reason:mention`, `reason:participating`, and more), by repository, and by read state. It can limit a view to the repository of the folder you run it in. It does not decide which threads need you; you build sections that come near to that.
 
-**Hush** reads the pull request or issue behind each notification and decides if you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you. Those threads go to **Needs you**, and Hush moves them to Done by itself when they stop needing you. Its [views](/docs/views) also use saved GitHub searches, but group the results into Your turn, Your team's turn, and Waiting on others, and give each item its categories.
+**Hush** reads the pull request or issue behind each notification and decides if you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you. Those threads go to **Needs you**, and Hush moves them to Done by itself when they stop needing you. Its [views](/docs/views) also use saved GitHub searches, put the results into sections by your role, review status, a field, or a category, and give each item its categories.
 
 ## Pull requests
 

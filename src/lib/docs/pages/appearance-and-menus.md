@@ -22,7 +22,7 @@ The counts on the browser tab and the app icon are here too: see [Tab title and 
 The right-click menu of a row (and its “⋯” menu on a phone) has the actions for it. You choose its items and their order, in **Settings → General → Menus**, for **Inbox** and for **PRs & issues**:
 
 - Drag items to change the order. The × removes one.
-- **Add item…** adds an item or a separator. Besides the main items, you can add one-click copies of choices from submenus, such as “Snooze until tomorrow 9:00” or “Move to Your turn”.
+- **Add item…** adds an item or a separator. Besides the main items, you can add one-click copies of choices from submenus, such as “Snooze until tomorrow 9:00”.
 - **Preview** shows the menu as it will look.
 - **Reset to default** puts back the default menu. Nothing changes until you choose **Save**.
 
@@ -43,4 +43,4 @@ On a phone or tablet, swipe a row to the right or to the left:
 
 You choose the action of each direction, for the inbox and for views, in **Settings → General → Swipe actions**. The defaults: in the inbox, swipe right is **Done** and swipe left is **Snooze**; in views, swipe right is **Hide until it changes** and swipe left is **Mute**. An action that does not apply to a row (Done on a thread that is done) does nothing there.
 
-Only a finger swipes. A mouse or a pen never does, so in views they still drag rows. In settings.json, the actions are [`swipe.inbox`](/docs/settings#swipe-inbox) and [`swipe.dash`](/docs/settings#swipe-dash).
+Only a finger swipes. A mouse or a pen never does. In settings.json, the actions are [`swipe.inbox`](/docs/settings#swipe-inbox) and [`swipe.dash`](/docs/settings#swipe-dash).

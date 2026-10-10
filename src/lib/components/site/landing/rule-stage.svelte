@@ -16,7 +16,7 @@
   }],
   "views": [
     { "id": "website", "name": "Website",
-      "searches": ["repo:PostHog/posthog.com is:open"], "items": [] }
+      "searches": ["repo:PostHog/posthog.com is:open"], "groupBy": "status" }
   ],
   "dash": { "staleDays": 5 },
   "keys": { "inbox.done": ["d"] },

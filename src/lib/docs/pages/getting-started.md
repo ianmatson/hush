@@ -11,7 +11,7 @@ After you sign in, Hush runs the searches of your [views](/docs/views) and reads
 
 The first time, **Welcome to Hush** is at the top of the inbox. It says what Hush found (“From 47 notifications, Hush found 5 things that need you. It moved 6 to FYI, and 36 that are already finished to Done.”), and asks two questions:
 
-- **Review requests to my teams need me**: on or off. Off, team requests are FYI, and show under “Your team's turn” on the Pull requests tab.
+- **Review requests to my teams need me**: on or off. Off, team requests are FYI in the inbox.
 - **Push to this device**: pushes what needs you.
 
 Choose **Done** to save, or **Skip**. You can change all of it later.

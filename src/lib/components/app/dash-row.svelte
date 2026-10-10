@@ -22,8 +22,6 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import GripVertical from '@lucide/svelte/icons/grip-vertical';
-	import X from '@lucide/svelte/icons/x';
 	import Layers from '@lucide/svelte/icons/layers';
 	import SelectMark from './select-mark.svelte';
 	import AppMenu from './app-menu.svelte';
@@ -39,7 +37,6 @@
 		selected = false,
 		checked = false,
 		selecting = false,
-		draggable = true,
 		marks = [],
 		hidden = [],
 		onopen,
@@ -48,7 +45,6 @@
 		oncopy,
 		onrowclick,
 		ontoggle,
-		onundomove,
 		menu,
 		stack
 	}: {
@@ -59,7 +55,6 @@
 		checked?: boolean;
 		/** Some row is checked: show checkboxes on every row. */
 		selecting?: boolean;
-		draggable?: boolean;
 		marks?: RowMark[];
 		hidden?: string[];
 		onopen: (i: DashItem, url: string) => void;
@@ -69,7 +64,6 @@
 		oncopy: (i: DashItem) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
-		onundomove: (i: DashItem) => void;
 		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
 		menu?: () => MenuEntry[];
 		stack?: { position: number; size: number };
@@ -170,15 +164,6 @@
 	tabindex="-1"
 	aria-selected={selected || checked}
 >
-	{#if draggable}
-		<!-- A hint only: the whole card drags. Mouse hover on wide screens; touch has no drag. -->
-		<span
-			aria-hidden="true"
-			class="sm:[@media(hover:hover)]:flex\ pointer-events-none absolute top-1/2 -left-5 hidden h-8 w-4 -translate-y-1/2 items-center justify-center text-muted-foreground/50 opacity-0 transition-opacity group-hover:opacity-100"
-		>
-			<GripVertical class="size-4" />
-		</span>
-	{/if}
 	<SelectMark {checked} {selecting} label="Select {i.title}" {ontoggle}>
 		<Avatar.Root class="size-7 sm:size-8">
 			<Avatar.Image src={i.authorAvatar} alt="" draggable={false} />
@@ -265,21 +250,6 @@
 						<kbd class="opacity-60">{keysOf('dash.stackUp')[0] ?? ''}</kbd></Tooltip.Content
 					>
 				</Tooltip.Root>
-			{/if}
-			{#if i.movedByYou && show('moved')}
-				<span
-					class="flex items-center gap-0.5 rounded-md border border-dashed py-0.5 pr-0.5 pl-1.5 text-muted-foreground"
-				>
-					Moved by you
-					<button
-						class="rounded p-0.5 hover:bg-muted hover:text-foreground"
-						aria-label="Undo move"
-						onclick={(e) => {
-							e.stopPropagation();
-							onundomove(i);
-						}}><X class="size-3" /></button
-					>
-				</span>
 			{/if}
 			{#if changes.length && show('changes')}<ChangeChips {changes} />{/if}
 			{#if ci && !said.has('ci') && show('ci')}

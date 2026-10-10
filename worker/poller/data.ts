@@ -25,7 +25,6 @@ import type {
 	DashResponse,
 	Settings,
 	ThreadDTO,
-	Turn,
 	View
 } from '../../src/lib/shared/types';
 import { userToken } from '../db';
@@ -695,30 +694,19 @@ export abstract class PollerData extends PollerDashboard {
 		}));
 	}
 
-	// --- Dashboard marks: hidden, moved, and your order -----------------------------------
+	// --- Dashboard marks: hidden ------------------------------------------------------------
 
-	/** A dashboard with your marks applied (hidden and moved last until the item changes). */
+	/** A dashboard with your marks applied (hidden lasts until the item changes). */
 	async dashboardView(kind: DashKind, force: boolean): Promise<DashResponse> {
 		const data = await this.dashboard(kind, force);
 		const hidden = this.all<{ item_id: string; updated_at: string }>('SELECT * FROM dash_hidden');
-		const moves = this.all<{ item_id: string; turn: Turn; updated_at: string }>(
-			'SELECT * FROM dash_moves'
-		);
-		const order = this.all<{ item_id: string; rank: number }>('SELECT * FROM dash_order');
-		// Hidden and moved last "until it changes": a newer updatedAt undoes them.
+		// Hidden lasts "until it changes": a newer updatedAt undoes it.
 		const unchanged = (i: DashItem, at: string | undefined) =>
 			!!at && Date.parse(i.updatedAt) <= Date.parse(at);
 		const hiddenAt = new Map(hidden.map((h) => [h.item_id, h.updated_at]));
-		const moved = new Map(moves.map((m) => [m.item_id, m]));
-		const ranks = new Map(order.map((o) => [o.item_id, o.rank]));
 		for (const i of data.items) {
 			i.dismissed = unchanged(i, hiddenAt.get(i.id));
 			i.muted = hiddenAt.get(i.id) === MUTED_AT;
-			const m = moved.get(i.id);
-			i.autoTurn = i.turn;
-			i.movedByYou = !!m && unchanged(i, m.updated_at) && m.turn !== i.turn;
-			if (i.movedByYou) i.turn = m!.turn;
-			i.rank = ranks.get(i.id) ?? null;
 		}
 		// "Since you looked", from the stored facts of each item (the same record as the inbox's).
 		const facts = this.all<{ key: string; facts: string }>(
@@ -734,37 +722,10 @@ export abstract class PollerData extends PollerDashboard {
 		return data;
 	}
 
-	/** Save a drop: moves to another group (`turn`, or null to undo a move) and the new order. */
-	arrange(items: (ItemRef & { turn?: Turn | null })[], order: string[]): { ok: true } {
-		this.transaction(() => {
-			for (const item of items) {
-				if (item.turn === null) this.run('DELETE FROM dash_moves WHERE item_id = ?', item.id);
-				else if (item.turn)
-					this.run(
-						`INSERT INTO dash_moves (item_id, turn, updated_at) VALUES (?, ?, ?)
-             ON CONFLICT (item_id) DO UPDATE SET turn = excluded.turn, updated_at = excluded.updated_at`,
-						item.id,
-						item.turn,
-						item.updatedAt
-					);
-			}
-			order.forEach((id, rank) =>
-				this.run(
-					`INSERT INTO dash_order (item_id, rank) VALUES (?, ?)
-           ON CONFLICT (item_id) DO UPDATE SET rank = excluded.rank`,
-					id,
-					rank
-				)
-			);
-		});
-		return { ok: true };
-	}
-
 	/**
-	 * "Doesn't need me": Hush was wrong about a thread (its id) or a dashboard item (its
-	 * "owner/repo#123"). Each answer changes what would have been right: a setting, or a rule to
-	 * FYI; or only this PR or issue, until it changes ("once": FYI in the inbox, Other on the
-	 * dashboards). Returns how to undo it.
+	 * "Doesn't need me": Hush was wrong about a thread (its id). Each answer changes what would
+	 * have been right: a setting; or only this PR or issue, until it changes ("once": FYI in the
+	 * inbox). Returns how to undo it.
 	 */
 	async notNeeded(
 		id: string,
@@ -800,8 +761,7 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/**
-	 * "Only this one", on both sides of the one record: the PR or issue's threads are FYI until
-	 * they change, and its dashboard item is in Other until it changes. `on: false` undoes it.
+	 * "Only this one": the PR or issue's threads are FYI until they change. `on: false` undoes it.
 	 */
 	async onlyThisOne(id: string, on: boolean): Promise<{ ok: true }> {
 		const key = id.includes('#')
@@ -824,18 +784,6 @@ export abstract class PollerData extends PollerDashboard {
 				...ids
 			);
 		await this.reclassify(await this.settings());
-		if (key) {
-			if (on)
-				this.run(
-					`INSERT INTO dash_moves (item_id, turn, updated_at) VALUES (?, 'none', ?)
-           ON CONFLICT (item_id) DO UPDATE SET turn = excluded.turn, updated_at = excluded.updated_at`,
-					key,
-					new Date().toISOString()
-				);
-			else this.run('DELETE FROM dash_moves WHERE item_id = ?', key);
-			this.broadcast({ type: 'dash', kind: 'pr' });
-			this.broadcast({ type: 'dash', kind: 'issue' });
-		}
 		return { ok: true };
 	}
 

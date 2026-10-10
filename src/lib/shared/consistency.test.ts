@@ -90,6 +90,8 @@ function both(s: Subject, reason: Reason = 'subscribed', settings: Partial<Setti
 		requestedMe: e.reviewRequestedFromMe!,
 		requestedTeams: [],
 		requestedAt: null,
+		reviewRequestCount: e.reviewRequestedFromMe ? 1 : 0,
+		reviewed: !!s.myReview,
 		myLastReviewAt: s.myReview?.at ?? null,
 		myLastReviewState: s.myReview?.state ?? null,
 		openThreads: s.openThreads ?? 0,

@@ -15,7 +15,7 @@ import type { SubjectRef } from '../github';
  * Settings and the list version are Durable Object values (ctx.storage.kv), not tables.
  */
 // Schema 2 was the "lanes" layout (reverted and wiped; see migrate()).
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 const DECISIONS_TABLE = `CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, answers TEXT NOT NULL, at INTEGER NOT NULL);`;
 const ITEM_PINS_TABLE = `CREATE TABLE IF NOT EXISTS item_pins (key TEXT PRIMARY KEY, pinned TEXT NOT NULL DEFAULT '[]');`;
 const TRACKED_ITEMS_TABLE = `CREATE TABLE IF NOT EXISTS tracked_items (key TEXT PRIMARY KEY, kind TEXT NOT NULL, seen_at INTEGER NOT NULL, categories TEXT NOT NULL DEFAULT '[]');`;
@@ -79,11 +79,9 @@ CREATE TABLE push_devices (
   created_at INTEGER NOT NULL
 );
 
--- Your dashboard marks, by PR or issue ("owner/repo#123", the threads' subject_key): hidden and
--- moved last until the item changes (its updatedAt moves).
+-- Your dashboard marks, by PR or issue ("owner/repo#123", the threads' subject_key): hidden
+-- until the item changes (its updatedAt moves).
 CREATE TABLE dash_hidden (item_id TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
-CREATE TABLE dash_moves (item_id TEXT PRIMARY KEY, turn TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE dash_order (item_id TEXT PRIMARY KEY, rank INTEGER NOT NULL);
 
 -- "Since you looked": each PR or issue's facts when you last looked at it (shared/changes.ts).
 CREATE TABLE seen (key TEXT PRIMARY KEY, at INTEGER NOT NULL, snapshot TEXT NOT NULL);
@@ -105,8 +103,6 @@ export const MIGRATIONS: Record<number, { to: number; sql: string; resetKeys?: s
 		to: 3,
 		sql: `
 DELETE FROM dash_hidden;
-DELETE FROM dash_moves;
-DELETE FROM dash_order;
 ALTER TABLE threads ADD COLUMN override TEXT;
 ALTER TABLE threads ADD COLUMN override_updated_at TEXT;`,
 		// The cached dashboards have the old ids.
@@ -160,6 +156,13 @@ ALTER TABLE tracked_items_next RENAME TO tracked_items;`,
 		sql: `
 DROP TABLE IF EXISTS item_pins;
 ${ITEM_PINS_TABLE}`,
+		resetKeys: ['dash:pr', 'dash:issue']
+	},
+	15: {
+		to: 16,
+		sql: `
+DROP TABLE IF EXISTS dash_moves;
+DROP TABLE IF EXISTS dash_order;`,
 		resetKeys: ['dash:pr', 'dash:issue']
 	}
 };

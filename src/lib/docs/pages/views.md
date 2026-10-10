@@ -88,12 +88,14 @@ Views are the [`views`](/docs/settings#views) setting:
 		{
 			"id": "mine",
 			"name": "Mine",
-			"searches": ["is:pr is:open review-requested:@me", "is:open involves:@me"]
+			"searches": ["is:pr is:open review-requested:@me", "is:open involves:@me"],
+			"groupBy": "role"
 		},
 		{
 			"id": "website",
 			"name": "Website",
-			"searches": ["repo:acme/website is:open"]
+			"searches": ["repo:acme/website is:open"],
+			"groupBy": "status"
 		}
 	]
 }

@@ -5,7 +5,7 @@ import {
 	sortItems,
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
-import type { DashKind, DashResponse } from '../../src/lib/shared/types';
+import type { DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
 import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
 import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
 import {
@@ -77,7 +77,7 @@ export abstract class PollerDashboard extends PollerSync {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
 		const { teams } = await this.teams();
-		const view = { id: 'count', name: '', searches: [query] };
+		const view: ItemView = { id: 'count', name: '', searches: [query], groupBy: 'none' };
 		const searches = searchKinds(query).flatMap((kind) =>
 			expandSections(sectionsFor(kind, [view]), who.settings.dash, teams).queries.map((q) => ({
 				kind,

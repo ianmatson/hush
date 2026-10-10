@@ -191,7 +191,7 @@ This also applies to team review requests.`
 		body: `When new commits on a PR that you reviewed make it your turn again (“New commits since your review”). Settings → Inbox → **New commits after my review need me**.
 
 - \`"always"\` (default): after any review.
-- \`"changes_requested"\`: only when your last review requested changes. After an approval or a comment, the PR stays in Waiting on others.
+- \`"changes_requested"\`: only when your last review requested changes. After an approval or a comment, the PR waits on others.
 - \`"never"\`: new commits never make it your turn. A new review request still does.`
 	},
 	botsAreFyi: {
@@ -215,7 +215,7 @@ A one-time notice on the inbox and on your views says that this is on. When you 
 	},
 	teamReviewsAreAction: {
 		type: 'boolean',
-		body: `A review request to a team you are in goes to **Needs you** (and is pushed). Off, it is FYI in the inbox, and it shows under “Your team's turn” on the Pull requests tab.`
+		body: `A review request to a team you are in goes to **Needs you** (and is pushed). Off, it is FYI in the inbox. In a view grouped by **Your role**, it is under **Reviews** either way.`
 	},
 	views: {
 		type: 'array of views',
@@ -224,6 +224,7 @@ A one-time notice on the inbox and on your views says that this is on. When you 
 - \`id\`: 1 to 40 lower-case letters, digits, or dashes. Unique. The view's page (\`/v/<id>\`), feed, and the \`view:\` word use it.
 - \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label. Category rules can test it with \`view:\`.
 - \`searches\`: up to ${MAX_VIEW_SEARCHES} [GitHub searches](https://docs.github.com/en/search-github/searching-on-github/searching-issues-and-pull-requests), 1 to ${MAX_SEARCH_CHARS} characters each. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
+- \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, or \`"category:<group id>"\`. See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
 A view needs at least one search, and you keep at least one view.
 
 Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once, and Hush removes their notifications.
@@ -236,9 +237,9 @@ A change to \`views\` replaces the whole list. To add a view, write the defaults
     {
       "id": "mine",
       "name": "Mine",
-      "searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"]
+      "searches": ["is:open involves:@me", "is:pr is:open review-requested:@me"], "groupBy": "role"
     },
-    { "id": "website", "name": "Website", "searches": ["repo:acme/website is:open"] }
+    { "id": "website", "name": "Website", "searches": ["repo:acme/website is:open"], "groupBy": "status" }
   ]
 }
 \`\`\`
@@ -339,7 +340,7 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	},
 	'swipe.inbox': {
 		type: '{ "left": action, "right": action }',
-		body: `On a phone or tablet, swipe an inbox thread to the right or to the left to act on it: the row moves with your finger, shows the action, and acts when you let go past the line. A mouse or pen never swipes (on the dashboards it drags). The actions: ${SWIPE_ACTIONS.inbox.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.
+		body: `On a phone or tablet, swipe an inbox thread to the right or to the left to act on it: the row moves with your finger, shows the action, and acts when you let go past the line. A mouse or pen never swipes. The actions: ${SWIPE_ACTIONS.inbox.map((a) => `\`"${a.id}"\` (${a.label})`).join(', ')}.
 
 \`\`\`json settings
 { "swipe": { "inbox": { "right": "done", "left": "mute" } } }

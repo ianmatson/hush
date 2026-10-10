@@ -77,24 +77,17 @@ export const MENU_ITEMS: Record<MenuKind, MenuItemInfo[]> = {
 			note: 'When it differs from the main action',
 			group: 'main'
 		},
-		{ id: 'move', label: 'Move to', note: 'Every group', group: 'main' },
 		{
 			id: 'categories',
 			label: 'Categories',
 			note: 'One submenu for each category group',
 			group: 'main'
 		},
-		{ id: 'undoMove', label: 'Undo move', note: 'Items you moved', group: 'main' },
 		{ id: 'hide', label: 'Hide until it changes / Show again', group: 'main' },
 		{ id: 'mute', label: 'Mute / Unmute', note: 'Hidden until you unmute it', group: 'main' },
-		{ id: 'not-needed', label: 'Not my turn…', note: 'Your turn', group: 'main' },
 		{ id: 'copy', label: 'Copy link', group: 'main' },
 		{ id: 'select', label: 'Select / Deselect', group: 'main' },
-		{ id: 'selectAll', label: 'Select all', group: 'main' },
-		{ id: 'move:you', label: 'Move to Your turn', group: 'shortcut' },
-		{ id: 'move:team', label: "Move to Your team's turn", group: 'shortcut' },
-		{ id: 'move:them', label: 'Move to Waiting on others', group: 'shortcut' },
-		{ id: 'move:none', label: 'Move to Other', group: 'shortcut' }
+		{ id: 'selectAll', label: 'Select all', group: 'main' }
 	]
 };
 
@@ -123,12 +116,9 @@ export const DEFAULT_MENUS: Record<MenuKind, string[]> = {
 		'main',
 		'github',
 		SEP,
-		'move',
 		'categories',
-		'undoMove',
 		'hide',
 		'mute',
-		'not-needed',
 		'copy',
 		SEP,
 		'select',
@@ -144,11 +134,10 @@ export const MENUS_VERSION = 7;
 const ADDED: { kind: MenuKind; id: string; after: string; version: number }[] = [
 	{ kind: 'inbox', id: 'rule', after: 'copy', version: 2 },
 	{ kind: 'inbox', id: 'not-needed', after: 'read', version: 3 },
-	{ kind: 'dash', id: 'not-needed', after: 'hide', version: 3 },
 	{ kind: 'dash', id: 'mute', after: 'hide', version: 4 },
 	{ kind: 'inbox', id: 'page', after: 'peek', version: 6 },
 	{ kind: 'dash', id: 'page', after: 'peek', version: 6 },
-	{ kind: 'dash', id: 'categories', after: 'move', version: 7 }
+	{ kind: 'dash', id: 'categories', after: 'hide', version: 7 }
 ];
 
 /** Saved menus, upgraded to the current version. */

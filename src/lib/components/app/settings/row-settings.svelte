@@ -69,14 +69,12 @@
 						item={previewItem(kind)}
 						marks={PREVIEW_MARKS}
 						hidden={rows[kind]}
-						draggable={false}
 						onopen={noop}
 						onhide={noop}
 						onmute={noop}
 						oncopy={noop}
 						onrowclick={noop}
 						ontoggle={noop}
-						onundomove={noop}
 						menu={() => []}
 					/>
 				{/key}

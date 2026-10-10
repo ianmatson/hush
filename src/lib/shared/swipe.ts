@@ -21,8 +21,7 @@ export const SWIPE_ACTIONS: Record<SwipeKind, { id: string; label: string }[]> =
 	dash: [
 		{ id: 'none', label: 'Nothing' },
 		{ id: 'hide', label: 'Hide until it changes' },
-		{ id: 'mute', label: 'Mute' },
-		{ id: 'not-needed', label: 'Not my turn…' }
+		{ id: 'mute', label: 'Mute' }
 	]
 };
 

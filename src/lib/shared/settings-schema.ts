@@ -136,7 +136,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'views',
 		page: 'views',
-		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "items": single PRs and issues as "owner/repo#123" }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
+		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, or category:<group id> }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
 	},
 	{
 		key: 'categoryGroups',

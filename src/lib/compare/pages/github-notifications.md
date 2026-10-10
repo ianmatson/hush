@@ -41,7 +41,7 @@ You can change the defaults with settings, for example whether bots are FYI, and
 
 **GitHub** is the full tool. You read the diff, comment on lines, and submit reviews on github.com and in GitHub Mobile. Since July 2026, the pull requests dashboard at github.com/pulls has an inbox of review requests, pull requests that need a fix, and pull requests that are ready to merge, with saved views and `AND`/`OR` search. It covers pull requests, not issues or other notifications.
 
-**Hush** has [views](/docs/views) of pull requests and issues, grouped by whose turn it is: Your turn, Your team's turn, Waiting on others. The [peek](/docs/peek) shows the description, comments, reviews, and checks, and lets you approve, request changes, comment, merge, close, and re-run failed jobs. It does not show the diff, and it counts inline review comments without showing them. For a real code review, Hush sends you to GitHub.
+**Hush** has [views](/docs/views) of pull requests and issues, in sections by your role (You opened, Reviews, Assigned to you), by review status, or by your categories. The [peek](/docs/peek) shows the description, comments, reviews, and checks, and lets you approve, request changes, comment, merge, close, and re-run failed jobs. It does not show the diff, and it counts inline review comments without showing them. For a real code review, Hush sends you to GitHub.
 
 ## Push and alerts
 

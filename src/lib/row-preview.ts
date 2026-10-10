@@ -37,6 +37,8 @@ const PREVIEW_ITEM: DashItem = {
 	requestedMe: true,
 	requestedTeams: [],
 	requestedAt: hoursAgo(30),
+	reviewRequestCount: 1,
+	reviewed: false,
 	myLastReviewAt: null,
 	openThreads: 2,
 	stackBelowNearestFirst: [],
@@ -54,9 +56,6 @@ const PREVIEW_ITEM: DashItem = {
 	actionUrl: 'https://github.com/acme/web/pull/128/files',
 	priority: 0,
 	dismissed: false,
-	autoTurn: 'you',
-	movedByYou: true,
-	rank: null,
 	changes: [{ kind: 'commits', text: '2 new commits', tone: null }]
 };
 

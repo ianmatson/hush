@@ -46,7 +46,7 @@ Check these, or Hush refuses the file:
 - Categories have no inbox or push settings. They mark items only; they do not change Needs you, FYI, Muted, or pushes.
 - A category's `rule` uses only the words and values of the [query language](/docs/query-language#words), such as `repo:acme/*`, `label:bug`, `type:pr`. Up to 300 characters.
 - Category rules look only at the PR or issue. They cannot use `category:`, and they must not use `event:`, `needs:`, or `in:`, which are about notifications.
-- `views` has 1 to 12 views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to 40 characters), `searches` (up to 5 GitHub searches of 1 to 256 characters), and `items` (single PRs and issues as `"owner/repo#123"`). A view needs a search or an item. The searches are GitHub search syntax, not the query language.
+- `views` has 1 to 12 views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to 40 characters), `searches` (up to 5 GitHub searches of 1 to 256 characters), and `groupBy` (`none`, `role`, `status`, `repo`, `author`, `label`, `assignee`, or `category:<group id>`). A view needs at least one search. The searches are GitHub search syntax, not the query language.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
 - `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.
@@ -151,12 +151,14 @@ An item with the `security` label is in Security. Jev also puts an item there wh
 				"is:pr is:open review-requested:@me",
 				"is:open involves:@me",
 				"is:pr is:open reviewed-by:@me -author:@me"
-			]
+			],
+			"groupBy": "role"
 		},
 		{
 			"id": "my-repos",
 			"name": "My repos",
-			"searches": ["repo:acme/web is:open", "repo:acme/api is:open"]
+			"searches": ["repo:acme/web is:open", "repo:acme/api is:open"],
+			"groupBy": "status"
 		}
 	]
 }
@@ -188,6 +190,6 @@ An item with the `security` label is in Security. Jev also puts an item there wh
 
 ## Explain Hush to a user
 
-When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#groups). The thread's row also says it: its summary (“CI failed on your PR”). Its category icons are those of its PR or issue; categories do not change the list. In a view, each row shows its categories too.
+When a user asks why a thread is in Needs you, the answer is in [What needs you](/docs/inbox#what-needs-you) and the [turn reasons](/docs/pull-requests-and-issues#order-and-reasons). The thread's row also says it: its summary (“CI failed on your PR”). Its category icons are those of its PR or issue; categories do not change the list. In a view, each row shows its categories too.
 
 When a user asks why a notification is missing, see [What comes in](/docs/inbox#what-comes-in): Hush keeps only the notifications about the PRs and issues of the user's views.

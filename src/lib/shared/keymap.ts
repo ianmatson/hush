@@ -87,7 +87,6 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'dash.hide', label: 'Hide until it changes (or show again)', scope: 'dash', keys: ['e'] },
 	{ id: 'dash.showHidden', label: 'Show hidden items', scope: 'dash', keys: ['h'] },
 	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'dash', keys: ['m'] },
-	{ id: 'dash.notNeeded', label: 'Not my turn…', scope: 'dash', keys: ['n'] },
 	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'dash', keys: [']'] },
 	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'dash', keys: ['['] },
 	...range(1, 9).map((n) => ({

@@ -3,14 +3,7 @@ import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeEvent } from '$lib/shared/snooze';
 import type { CategoryPin } from '$lib/shared/categories';
-import type {
-	DashKind,
-	MergeMethod,
-	ReactionContent,
-	Settings,
-	Turn,
-	View
-} from '$lib/shared/types';
+import type { DashKind, MergeMethod, ReactionContent, Settings, View } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
 import type {
@@ -174,8 +167,6 @@ export const api = {
 	reevaluateItems: () => ok(client.api.items.reevaluate.$post()),
 	/** Hidden until you unmute it; its threads are muted too (also on GitHub). */
 	muteItems: (ids: string[]) => ok(client.api.dashboard.mute.$post({ json: { ids } })),
-	arrange: (items: { id: string; updatedAt: string; turn?: Turn | null }[], order: string[]) =>
-		ok(client.api.dashboard.arrange.$post({ json: { items, order } })),
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),
@@ -274,7 +265,7 @@ export const api = {
 	editProject: (edit: ProjectEdit) => ok(client.api.projects.item.$post({ json: edit })),
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),
-	/** Turn on the feed of a tab: 'action', 'fyi', 'inbox', or 'v:<notification view id>'. */
+	/** Turn on a feed: an inbox tab ('action', 'fyi', 'inbox'), 'v:<view id>', or 'c:<category id>'. */
 	feedOn: (view: string) => ok(client.api.feeds[':view'].$put({ param: { view } })),
 	feedOff: (view: string) => ok(client.api.feeds[':view'].$delete({ param: { view } })),
 	sessions: () => ok(client.api.account.sessions.$get()),

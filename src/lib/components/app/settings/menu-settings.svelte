@@ -72,8 +72,6 @@
 		copy: Link,
 		select: SquareCheck,
 		selectAll: SquareCheck,
-		move: ArrowRightLeft,
-		undoMove: Undo,
 		hide: EyeOff,
 		rule: ListFilter
 	};
@@ -88,14 +86,13 @@
 		restore: 'Move to inbox',
 		read: 'Mark as read',
 		select: 'Select',
-		hide: 'Hide until it changes',
-		move: 'Move to'
+		hide: 'Hide until it changes'
 	};
-	const SUBMENUS = new Set(['snooze', 'move']);
+	const SUBMENUS = new Set(['snooze']);
 
 	const unused = $derived(MENU_ITEMS[kind].filter((i) => !ids(kind).includes(i.id)));
-	// The preview shows a typical open thread: "Needs you" in the inbox, not moved on a dashboard.
-	const NOT_TYPICAL = new Set(['restore', 'undoMove']);
+	// The preview shows a typical open thread: "Needs you" in the inbox.
+	const NOT_TYPICAL = new Set(['restore']);
 	const preview = $derived(
 		tidySeparators(
 			ids(kind).filter((id) => !NOT_TYPICAL.has(id)),

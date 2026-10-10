@@ -15,11 +15,6 @@ export const LIST_MOUSE: Shortcut[] = [
 	['⌘ / Ctrl + click', 'Add to selection'],
 	['Shift + click', 'Select a range']
 ];
-export const DASH_MOUSE: Shortcut[] = [
-	...LIST_MOUSE,
-	['Drag ⋮⋮', 'Move to another group or position']
-];
-
 /** The shortcuts of these scopes, with your keys (Settings → Keybinds). */
 export function shortcutsFor(scopes: KeyScope[], extra: Shortcut[] = []): Shortcut[] {
 	const out: Shortcut[] = [];

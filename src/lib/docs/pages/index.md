@@ -19,7 +19,7 @@ Hush is a web app for your GitHub notifications. It replaces the notifications p
 
 - **Needs you** is short on purpose. A thread is there only when you are the next person who must act: your review is requested, CI fails on your PR, someone replied to you, your approved PR is ready to merge. See [what needs you](/docs/inbox#what-needs-you).
 - **FYI** is everything else: team mentions, watched repositories, bots, merged and closed work.
-- **Whose turn** is one set of rules for the inbox and the [Pull requests and Issues tabs](/docs/pull-requests-and-issues). An item is in Needs you exactly when it is “Your turn”.
+- **Views** are tabs of open pull requests and issues from your GitHub searches, in sections by your role, review status, or category. See [Views](/docs/views).
 - **Hush follows up by itself.** When you approve, push a fix, or reply, the thread leaves Needs you with a note such as “✓ You approved”. When it needs you again, it comes back.
 - **Categories sort your work.** [Category groups](/docs/categories) mark each PR and issue, such as its effort, by your rules or with Jev. Its notifications show the same categories.
 - **Everything is a setting.** Views, categories, menus, and keys are in one [settings.json](/docs/settings) that you can edit, export, and share.

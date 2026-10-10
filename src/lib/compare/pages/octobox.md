@@ -37,7 +37,7 @@ Both apps bring a finished thread back when there is new activity, and in both, 
 
 **Octobox** has a thread view, in public beta, that shows the comments of a notification inside Octobox. You can post a comment from it. Approve and merge are not documented.
 
-**Hush** has [views](/docs/views) of pull requests and issues, grouped by Your turn, Your team's turn, and Waiting on others, also for items with no notification. The [peek](/docs/peek) shows the description, comments, reviews, and checks, with Approve, Request changes, Comment, Merge, Close, and Re-run failed jobs. Hush does not show the diff.
+**Hush** has [views](/docs/views) of pull requests and issues, in sections by your role, review status, or category, also for items with no notification. The [peek](/docs/peek) shows the description, comments, reviews, and checks, with Approve, Request changes, Comment, Merge, Close, and Re-run failed jobs. Hush does not show the diff.
 
 ## Alerts
 

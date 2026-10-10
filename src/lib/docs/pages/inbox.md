@@ -58,7 +58,7 @@ Everything else is **FYI**: team mentions, repositories that you watch, merged a
 
 Turn the bot, team, and smart decisions settings on or off in **Settings → Inbox → Defaults**.
 
-The same rules make the “Your turn” group in your [views](/docs/pull-requests-and-issues), so an item is in Needs you exactly when it is your turn there. The one difference: with `teamReviewsAreAction` on, a team review request is in Needs you, and in “Your team's turn” in a view. To change where threads go, use [Doesn't need me](#doesnt-need-me), or a setting such as [`botsAreFyi`](/docs/settings#botsarefyi). Categories do not change where threads go.
+The same rules put the items that need you first in each section of your [views](/docs/pull-requests-and-issues#order-and-reasons). To change where threads go, use [Doesn't need me](#doesnt-need-me), or a setting such as [`botsAreFyi`](/docs/settings#botsarefyi). Categories do not change where threads go.
 
 ## Rows
 

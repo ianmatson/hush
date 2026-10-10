@@ -18,6 +18,7 @@ const view = (over: Partial<ItemView> = {}): ItemView => ({
 	id: 'web',
 	name: 'Web',
 	searches: ['repo:acme/web is:open'],
+	groupBy: 'status',
 	...over
 });
 

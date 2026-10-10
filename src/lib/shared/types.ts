@@ -233,10 +233,14 @@ export interface DashSection {
 	query: string;
 }
 
+export type GroupBy =
+	'none' | 'role' | 'status' | 'repo' | 'author' | 'label' | 'assignee' | `category:${string}`;
+
 export interface ItemView {
 	id: string;
 	name: string;
 	searches: string[];
+	groupBy: GroupBy;
 }
 
 export interface DashSettings {
@@ -309,6 +313,8 @@ export interface DashItem {
 	/** Your teams whose review is requested. */
 	requestedTeams: string[];
 	requestedAt: string | null;
+	reviewRequestCount: number;
+	reviewed: boolean;
 	myLastReviewAt: string | null;
 	/** Review threads nobody resolved yet (up to 50). */
 	openThreads: number;
@@ -336,12 +342,6 @@ export interface DashItem {
 	dismissed: boolean;
 	/** You muted it: hidden until you unmute it (not until it changes). */
 	muted?: boolean;
-	/** The turn Hush computed, before any move by you. */
-	autoTurn: Turn;
-	/** You dragged this into its group; lasts until the item changes. */
-	movedByYou: boolean;
-	/** Your manual position inside the group, or null (new items go on top). */
-	rank: number | null;
 	/** What changed since you last looked (none before your first look). */
 	changes?: Change[];
 	/** When you last looked at it, or null. */

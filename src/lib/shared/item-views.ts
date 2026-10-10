@@ -1,3 +1,4 @@
+import { groupByOk } from './grouping';
 import type { DashKind, DashSection, ItemView } from './types';
 
 export const MAX_VIEWS = 12;
@@ -28,7 +29,8 @@ export const DEFAULT_VIEWS: ItemView[] = [
 			'is:pr is:open review-requested:@me',
 			'is:open involves:@me',
 			'is:pr is:open reviewed-by:@me -author:@me'
-		]
+		],
+		groupBy: 'role'
 	}
 ];
 
@@ -72,6 +74,8 @@ function validateView(v: Partial<ItemView> | null, ids: Set<string>): string | n
 	for (const q of v.searches)
 		if (typeof q !== 'string' || !q.trim() || q.length > MAX_SEARCH_CHARS)
 			return `"${v.name}": each search must have 1–${MAX_SEARCH_CHARS} characters.`;
+	if (!groupByOk(v.groupBy))
+		return `"${v.name}": "groupBy" must be none, role, status, repo, author, label, assignee, or category:<group id>.`;
 	return null;
 }
 

@@ -61,7 +61,10 @@
 	function addView() {
 		if (!draft) return;
 		const id = `view-${Math.random().toString(36).slice(2, 8)}`;
-		draft.views = [...draft.views, { id, name: 'New view', searches: ['is:open'] }];
+		draft.views = [
+			...draft.views,
+			{ id, name: 'New view', searches: ['is:open'], groupBy: 'status' }
+		];
 		void tick().then(() => {
 			scrollTo(`view-${id}`);
 			document.querySelector<HTMLInputElement>(`[data-view="${id}"]`)?.select();
