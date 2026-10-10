@@ -108,7 +108,7 @@ Snooze and Mute stay in Hush. They do not change your notifications on GitHub, a
 
 An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label alone does not count. An unread item has a dot on its avatar and a bold title.
 
-You look at an item when you keep it open in the peek for a moment, open its full page, or open it on GitHub from Hush. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
+You look at an item when you open it in the peek, open its full page, or open it on GitHub from Hush. If you opened one by mistake, press {{key:dash.read}} to make it unread again: the peek does not mark it as read again until you open it again. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
 
 The number on each view in the top bar is the number of its unread items that are not snoozed or muted.
 

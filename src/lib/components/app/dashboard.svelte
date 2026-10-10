@@ -318,14 +318,12 @@
 	});
 	const peekCurrentKey = $derived(peekedOutsideMember?.key ?? peekItem?.id ?? null);
 	const peekStack = $derived(peekCurrentKey ? (stackOf.get(peekCurrentKey) ?? null) : null);
-	// Looking at it in the peek for a moment: "since you looked" starts again (when there is
-	// something to reset).
+	let readByPeek: string | null = null;
 	$effect(() => {
 		const i = peekItem;
-		if (!i?.unread) return;
-		const id = i.id;
-		const timer = setTimeout(() => markSeenHere([id]), 1500);
-		return () => clearTimeout(timer);
+		if (i?.id === readByPeek) return;
+		readByPeek = i?.id ?? null;
+		if (i?.unread) untrack(() => markSeenHere([i.id]));
 	});
 	$effect(() => {
 		void showing;
