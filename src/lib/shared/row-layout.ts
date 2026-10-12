@@ -64,14 +64,7 @@ export function fitTableColumns(
 	return columns.filter((c) => !dropped.has(c.id));
 }
 
-export const DEFAULT_TABLE_COLUMNS: TableColumn[] = [
-	'reason',
-	'repo',
-	'categories',
-	'ci',
-	'size',
-	'time'
-];
+export const DEFAULT_TABLE_COLUMNS: TableColumn[] = ['reason', 'categories', 'ci', 'size', 'time'];
 
 const isTableColumn = (id: unknown): id is TableColumn => TABLE_COLUMNS.some((c) => c.id === id);
 
