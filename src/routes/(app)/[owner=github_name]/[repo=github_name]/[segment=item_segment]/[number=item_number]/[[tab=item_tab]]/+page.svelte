@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -8,6 +9,7 @@
 	import { noteOpened } from '$lib/recheck';
 	import { clearNotificationsFor } from '$lib/notification-clear';
 	import { itemCommands, type ItemActionContext } from '$lib/dash-actions';
+	import { composer, focusComposer } from '$lib/gh-act.svelte';
 	import {
 		UNTIL_NEW_ACTIVITY,
 		copyLinks,
@@ -64,7 +66,7 @@
 
 	function showTab(files: boolean) {
 		if (kind !== 'pr' || files === onFilesTab) return;
-		goto(files ? filesPath : conversationPath, {
+		return goto(files ? filesPath : conversationPath, {
 			replaceState: true,
 			noScroll: true,
 			keepFocus: true
@@ -100,6 +102,22 @@
 		if (!wrongSegment && !filesOnIssue) return;
 		const path = itemPagePath(repo, number, loadedKind);
 		replaceState(onFilesTab ? `${path}/${FILES_TAB}${page.url.hash}` : path, page.state);
+	});
+
+	async function focusComposerOnConversationTab() {
+		await showTab(false);
+		await tick();
+		focusComposer(composer.intent);
+	}
+
+	let composerRequestsSeen = composer.focus;
+	$effect(() => {
+		const requests = composer.focus;
+		if (requests === composerRequestsSeen) return;
+		composerRequestsSeen = requests;
+		untrack(() => {
+			if (onFilesTab) focusComposerOnConversationTab();
+		});
 	});
 
 	let seenTimer: ReturnType<typeof setTimeout> | undefined;
