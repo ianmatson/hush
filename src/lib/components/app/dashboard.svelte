@@ -94,7 +94,6 @@
 	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
-	import JevNotice from './jev-notice.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -1001,7 +1000,6 @@
 		{:else}Loading from GitHub…{/if}
 	</p>
 
-	<JevNotice />
 	{#if loadError}
 		<Alert.Root variant="destructive" class="mb-3"
 			><Alert.Description>{loadError.message}</Alert.Description></Alert.Root

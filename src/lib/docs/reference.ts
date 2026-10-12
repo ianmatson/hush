@@ -191,7 +191,7 @@ iPhone and iPad can ignore this: Safari on iOS does not always remove a notifica
 - **\`about:\` conditions** in category rules: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
 - **Order:** in your views, items whose text says they block something or are about an incident come first inside their section.
 
-A one-time notice on your views says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
+When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
 	},
 	pushUrgentNow: {
 		type: 'boolean',
