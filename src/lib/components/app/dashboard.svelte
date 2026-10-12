@@ -909,15 +909,25 @@
 <svelte:window onkeydown={onKey} />
 
 <main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
-	<div class="flex items-center gap-2">
-		<div class="min-w-0 flex-1">
-			<KindSelect
-				kinds={viewKinds(view)}
-				shown={kinds}
-				count={countIn}
-				onchange={(next) => show(next.length > 1 ? 'both' : next[0])}
-			/>
-		</div>
+	<div class="mb-2 flex items-center gap-2">
+		<p
+			class="flex min-w-0 flex-1 items-center px-1 text-xs whitespace-nowrap text-muted-foreground"
+		>
+			{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
+				<span class="inline-flex items-center gap-1"
+					><RefreshCw class="size-3 animate-spin" />Updating…</span
+				>
+			{:else if data}
+				Updated {ago(data.fetchedAt)}
+				<button
+					type="button"
+					class="ml-1 rounded p-0.5 hover:bg-muted hover:text-foreground"
+					aria-label="Refresh from GitHub"
+					title="Refresh from GitHub"
+					onclick={refresh}><RefreshCw class="size-3" /></button
+				>
+			{:else}Loading from GitHub…{/if}
+		</p>
 		<div class="ml-auto flex items-center gap-1">
 			{#if snoozedCount || showSnoozed}
 				<Button
@@ -963,26 +973,15 @@
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
+			<KindSelect
+				kinds={viewKinds(view)}
+				shown={kinds}
+				count={countIn}
+				onchange={(next) => show(next.length > 1 ? 'both' : next[0])}
+			/>
 			<MarkFilter groups={categoryGroups} count={categoryCount} bind:value={categoryFilter} />
 		</div>
 	</div>
-
-	<p class="mt-2 mb-2 flex h-4 items-center px-1 text-xs text-muted-foreground">
-		{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
-			<span class="inline-flex items-center gap-1"
-				><RefreshCw class="size-3 animate-spin" />Updating…</span
-			>
-		{:else if data}
-			Updated {ago(data.fetchedAt)}
-			<button
-				type="button"
-				class="ml-1 rounded p-0.5 hover:bg-muted hover:text-foreground"
-				aria-label="Refresh from GitHub"
-				title="Refresh from GitHub"
-				onclick={refresh}><RefreshCw class="size-3" /></button
-			>
-		{:else}Loading from GitHub…{/if}
-	</p>
 
 	{#if loadError}
 		<Alert.Root variant="destructive" class="mb-3"

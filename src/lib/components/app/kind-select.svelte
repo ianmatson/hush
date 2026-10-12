@@ -39,7 +39,9 @@
 		<DropdownMenu.Trigger>
 			{#snippet child({ props })}
 				<Button {...props} variant="ghost" size="sm" aria-label="Show: {trigger.label}">
-					<trigger.icon />{trigger.label}<span class="tabular-nums opacity-60">{total}</span>
+					<trigger.icon /><span class="hidden sm:inline">{trigger.label}</span><span
+						class="tabular-nums opacity-60">{total}</span
+					>
 				</Button>
 			{/snippet}
 		</DropdownMenu.Trigger>
