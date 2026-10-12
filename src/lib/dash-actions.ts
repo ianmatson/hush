@@ -11,6 +11,8 @@ import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSort } from '$l
 import { groupByOptions } from '$lib/shared/grouping';
 import { SORT_BY, SORT_BY_ORDER, dirLabel, reversedSort, sortWithBy } from '$lib/shared/sorting';
 import type { SnoozeChoice } from '$lib/shared/item-snooze';
+import { UNTIL_NEW_ACTIVITY } from '$lib/item-actions';
+import { COMMAND, type KeyScope } from '$lib/shared/keymap';
 import { alreadyTrue } from '$lib/shared/snooze';
 import { snoozeOptions } from '$lib/time';
 import FolderInput from '@lucide/svelte/icons/folder-input';
@@ -33,16 +35,25 @@ import BellOff from '@lucide/svelte/icons/bell-off';
 /** A command's first key, for the hints in menus and the palette (Settings → Keybinds). */
 const key = (id: string) => keysOf(id)[0];
 
-export const UNTIL_NEW_ACTIVITY: SnoozeChoice = {};
+export const VIEW_KEY_SCOPES: KeyScope[] = ['list', 'item', 'dash'];
 
-export const anyUnread = (ctx: DashActionContext, ids: string[]) =>
+export const anyUnread = (ctx: ItemActionContext, ids: string[]) =>
 	ids.some((id) => ctx.byId(id)?.unread);
+
+export interface ItemActionContext {
+	byId(id: string): DashItem | undefined;
+	snooze(ids: string[], choice: SnoozeChoice): unknown;
+	unsnooze(ids: string[]): unknown;
+	toggleMute(ids: string[]): unknown;
+	setRead(ids: string[], read: boolean): unknown;
+	copyLinks(ids: string[]): unknown;
+}
 
 /**
  * What the dashboard's menus and ⌘K commands act on. The component passes getters, so each call
  * reads the current list, groups, and selection.
  */
-export interface DashActionContext {
+export interface DashActionContext extends ItemActionContext {
 	/** "pull requests" or "issues". */
 	readonly noun: string;
 	readonly showSnoozed: boolean;
@@ -57,16 +68,10 @@ export interface DashActionContext {
 	/** Your menu order (Settings → Menus). */
 	readonly menu: string[] | undefined;
 	readonly sel: Selection;
-	byId(id: string): DashItem | undefined;
 	peek(i: DashItem): void;
 	open(i: DashItem, url: string): void;
-	snooze(ids: string[], choice: SnoozeChoice): unknown;
-	unsnooze(ids: string[]): unknown;
 	snoozeSheet(ids: string[]): void;
-	toggleMute(ids: string[]): unknown;
-	setRead(ids: string[], read: boolean): unknown;
 	markAllRead(): unknown;
-	copyLinks(ids: string[]): unknown;
 	refresh(): unknown;
 	toggleShowSnoozed(): void;
 	readonly categoryGroups: CategoryGroup[];
@@ -128,80 +133,103 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 	if (!ids.length) return cmds;
 	const one = ids.length === 1 ? ctx.byId(ids[0]) : undefined;
 	const detail = one ? one.title : `${ids.length} selected`;
-	const add = (c: Omit<PaletteCommand, 'detail'>) => cmds.unshift({ ...c, detail });
-	// unshift: added in reverse, so row actions come first, in this ctx.order.
-	add({
-		id: 'act:copy',
-		label: ids.length > 1 ? 'Copy links' : 'Copy link',
-		icon: Link,
-		shortcut: key('list.copy'),
-		run: () => ctx.copyLinks(ids)
+	const rowCommands = itemCommands(ctx, ids, {
+		snoozed: ctx.showSnoozed,
+		detail,
+		keyScopes: VIEW_KEY_SCOPES
 	});
-	const read = anyUnread(ctx, ids);
-	add({
-		id: 'act:read',
-		label: read ? 'Mark as read' : 'Mark as unread',
-		icon: read ? MailOpen : Mail,
-		shortcut: key('dash.read'),
-		run: () => ctx.setRead(ids, read)
-	});
-	if (ctx.showSnoozed)
-		add({
-			id: 'act:wake',
-			label: 'Wake up',
-			icon: AlarmClockOff,
-			shortcut: key('dash.snooze'),
-			run: () => ctx.unsnooze(ids)
-		});
-	else {
-		for (const opt of [...snoozeOptions()].reverse())
-			add({
-				id: `act:snooze:${opt.id}`,
-				label: /^\d/.test(opt.label) ? `Snooze for ${opt.label}` : `Snooze until ${opt.label}`,
-				icon: AlarmClock,
-				shortcut: opt.id === 'tomorrow' ? key('dash.snoozeTomorrow') : undefined,
-				run: () => ctx.snooze(ids, { until: opt.until })
-			});
-		add({
-			id: 'act:snooze',
-			label: 'Snooze until new activity',
-			icon: AlarmClock,
-			shortcut: key('dash.snooze'),
-			run: () => ctx.snooze(ids, UNTIL_NEW_ACTIVITY)
-		});
-	}
-	add({
-		id: 'act:mute',
-		label: one?.muted ? 'Unmute' : 'Mute',
-		icon: BellOff,
-		shortcut: key('dash.mute'),
-		keywords: ['hide', 'forever', 'ignore'],
-		run: () => ctx.toggleMute(ids)
-	});
-	if (one) {
-		add({
-			id: 'act:open',
-			label: one.actionLabel,
-			icon: ExternalLink,
-			shortcut: key('list.open'),
-			run: () => ctx.open(one, one.actionUrl)
-		});
-		add({
-			id: 'act:peek',
-			label: 'Peek',
-			icon: PanelRightOpen,
-			shortcut: key('list.peek'),
-			run: () => ctx.peek(one)
-		});
-		add({
+	if (!one) return [...rowCommands, ...cmds];
+	const oneRowCommands: PaletteCommand[] = [
+		{
 			id: 'act:page',
 			label: 'Open full page',
 			icon: Maximize2,
 			shortcut: key('list.fullPage'),
 			run: () => goto(itemPagePath(one.repo, one.number, one.kind))
-		});
-	}
-	return cmds;
+		},
+		{
+			id: 'act:peek',
+			label: 'Peek',
+			icon: PanelRightOpen,
+			shortcut: key('list.peek'),
+			run: () => ctx.peek(one)
+		},
+		{
+			id: 'act:open',
+			label: one.actionLabel,
+			icon: ExternalLink,
+			shortcut: key('list.open'),
+			run: () => ctx.open(one, one.actionUrl)
+		}
+	];
+	return [...oneRowCommands.map((c) => ({ ...c, detail })), ...rowCommands, ...cmds];
+}
+
+export function itemCommands(
+	ctx: ItemActionContext,
+	ids: string[],
+	{ snoozed, detail, keyScopes }: { snoozed: boolean; detail: string; keyScopes: KeyScope[] }
+): PaletteCommand[] {
+	const shortcut = (id: string) => {
+		const scope = COMMAND.get(id)?.scope;
+		return scope && keyScopes.includes(scope) ? key(id) : undefined;
+	};
+	const one = ids.length === 1 ? ctx.byId(ids[0]) : undefined;
+	const read = anyUnread(ctx, ids);
+	const snoozeCommands: PaletteCommand[] = snoozed
+		? [
+				{
+					id: 'act:wake',
+					label: 'Wake up',
+					icon: AlarmClockOff,
+					shortcut: shortcut('dash.snooze'),
+					run: () => ctx.unsnooze(ids)
+				}
+			]
+		: [
+				{
+					id: 'act:snooze',
+					label: 'Snooze until new activity',
+					icon: AlarmClock,
+					shortcut: shortcut('dash.snooze'),
+					run: () => ctx.snooze(ids, UNTIL_NEW_ACTIVITY)
+				},
+				...snoozeOptions().map((opt) => ({
+					id: `act:snooze:${opt.id}`,
+					label: /^\d/.test(opt.label) ? `Snooze for ${opt.label}` : `Snooze until ${opt.label}`,
+					icon: AlarmClock,
+					shortcut: opt.id === 'tomorrow' ? shortcut('dash.snoozeTomorrow') : undefined,
+					run: () => ctx.snooze(ids, { until: opt.until })
+				}))
+			];
+	const markCommands: PaletteCommand[] = [
+		{
+			id: 'act:mute',
+			label: one?.muted ? 'Unmute' : 'Mute',
+			icon: BellOff,
+			shortcut: shortcut('dash.mute'),
+			keywords: ['hide', 'forever', 'ignore'],
+			run: () => ctx.toggleMute(ids)
+		},
+		...snoozeCommands,
+		{
+			id: 'act:read',
+			label: read ? 'Mark as read' : 'Mark as unread',
+			icon: read ? MailOpen : Mail,
+			shortcut: shortcut('dash.read'),
+			run: () => ctx.setRead(ids, read)
+		}
+	];
+	const copyCommand: PaletteCommand = {
+		id: 'act:copy',
+		label: ids.length > 1 ? 'Copy links' : 'Copy link',
+		icon: Link,
+		shortcut: shortcut('list.copy'),
+		run: () => ctx.copyLinks(ids)
+	};
+	const itemsInViews = ids.some((id) => ctx.byId(id));
+	const commands = itemsInViews ? [...markCommands, copyCommand] : [copyCommand];
+	return commands.map((c) => ({ ...c, detail }));
 }
 
 /** The menu for these items, in your saved ctx.order, with only the items that apply. */

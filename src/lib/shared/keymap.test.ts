@@ -47,18 +47,22 @@ describe('keymap', () => {
 
 	it('finds the command for a key in the active scopes', () => {
 		const map = bindings();
-		expect(commandIn(map, 'e', ['list', 'dash'])).toBe('dash.snooze');
+		expect(commandIn(map, 'e', ['list', 'item', 'dash'])).toBe('dash.snooze');
+		expect(commandIn(map, 'e', ['list', 'item', 'page'])).toBe('dash.snooze');
+		expect(commandIn(map, 's', ['list', 'item', 'dash'])).toBe('dash.snoozeTomorrow');
+		expect(commandIn(map, 's', ['list', 'item', 'page'])).toBe('page.splitView');
 		expect(commandIn(map, 'Mod+k', ['global'])).toBe('palette');
-		expect(commandIn(map, 'q', ['list', 'dash'])).toBeNull();
+		expect(commandIn(map, 'q', ['list', 'item', 'dash'])).toBeNull();
 	});
 
 	it('applies your changes and sees conflicts', () => {
 		const map = bindings({ 'dash.snooze': ['d'], 'list.copy': [] });
-		expect(commandIn(map, 'd', ['dash'])).toBe('dash.snooze');
-		expect(commandIn(map, 'e', ['dash'])).toBeNull();
-		expect(commandIn(map, 'c', ['list'])).toBeNull();
+		expect(commandIn(map, 'd', ['item'])).toBe('dash.snooze');
+		expect(commandIn(map, 'e', ['item'])).toBeNull();
+		expect(commandIn(map, 'c', ['item'])).toBeNull();
 		expect(conflicts(map, 'peek.approve', 'j').map((c) => c.id)).toEqual(['list.next']);
-		expect(conflicts(map, 'page.files', 'd')).toEqual([]);
+		expect(conflicts(map, 'page.files', 'd').map((c) => c.id)).toEqual(['dash.snooze']);
+		expect(conflicts(map, 'page.splitView', 's')).toEqual([]);
 	});
 
 	it('shows keys for people', () => {
