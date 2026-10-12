@@ -1,4 +1,10 @@
-import { QueryCache, QueryClient, queryOptions, type QueryKey } from '@tanstack/svelte-query';
+import {
+	QueryCache,
+	QueryClient,
+	infiniteQueryOptions,
+	queryOptions,
+	type QueryKey
+} from '@tanstack/svelte-query';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { browser } from '$app/environment';
 import { live } from '$lib/live-state.svelte';
@@ -133,9 +139,11 @@ export const pushDevicesQuery = () =>
 	queryOptions({ queryKey: keys.pushDevices, queryFn: api.subscriptions });
 export const slackQuery = () => queryOptions({ queryKey: keys.slack, queryFn: api.slack });
 export const slackMentionsQuery = (repo: string, number: number, kind: 'pr' | 'issue') =>
-	queryOptions({
+	infiniteQueryOptions({
 		queryKey: keys.slackMentions(repo, number, kind),
-		queryFn: () => api.slackMentions(repo, number, kind),
+		queryFn: ({ pageParam }) => api.slackMentions(repo, number, kind, pageParam ?? undefined),
+		initialPageParam: null as string | null,
+		getNextPageParam: (page) => page.nextCursor,
 		staleTime: 5 * MIN,
 		gcTime: 5 * MIN,
 		refetchOnWindowFocus: false,

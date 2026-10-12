@@ -1,6 +1,6 @@
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
-import type { SlackMentionDTO, SlackStatusDTO } from '../../src/lib/shared/types';
+import type { SlackMentionsPageDTO, SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
 import { poller, query, routes, type AppEnv } from '../app';
 import {
@@ -41,6 +41,7 @@ const MENTIONS_STATE_COOKIE_PATH = '/api/slack/mentions';
 const STATE_MAX_AGE_SECONDS = 600;
 const SETTINGS_PATH = '/settings/notifications';
 const GITHUB_NAME = /^[A-Za-z0-9_.-]{1,100}$/;
+const SLACK_CURSOR = /^[A-Za-z0-9+/=_-]{1,500}$/;
 
 function startOAuth(
 	c: Context<AppEnv>,
@@ -165,34 +166,45 @@ const app = routes()
 		await removeSlackMentions(c.env, c.get('user').id);
 		return c.json({ ok: true });
 	})
-	.get('/api/slack/mentions/:owner/:repo/:number', query<{ kind: string }>(), async (c) => {
-		const noStore = { 'Cache-Control': 'private, no-store' };
-		const { owner, repo } = c.req.param();
-		const number = Number(c.req.param('number'));
-		const { kind } = c.req.valid('query');
-		if (
-			!GITHUB_NAME.test(owner) ||
-			!GITHUB_NAME.test(repo) ||
-			!Number.isSafeInteger(number) ||
-			!isGitHubKind(kind)
-		)
-			return c.json({ error: 'Bad PR or issue.' }, 400, noStore);
-		const userId = c.get('user').id;
-		if (!slackMentionsConfigured(c.env) || !(await slackMentionsAllowed(c.env, userId)))
-			return c.json({ error: 'Slack mentions are not available for you.' }, 404, noStore);
-		const token = await slackMentionsToken(c.env, userId);
-		if (!token) return c.json({ error: 'Connect Slack mentions first.' }, 409, noStore);
-		const found = await searchMentions(token, { owner, repo, number, kind });
-		if (found.ok)
-			return c.json({ mentions: found.mentions satisfies SlackMentionDTO[] }, 200, noStore);
-		if (tokenWasRevoked(found.error)) {
-			await removeSlackMentions(c.env, userId);
-			return c.json({ error: 'Slack removed the connection. Connect again.' }, 410, noStore);
+	.get(
+		'/api/slack/mentions/:owner/:repo/:number',
+		query<{ kind: string; cursor: string }>(),
+		async (c) => {
+			const noStore = { 'Cache-Control': 'private, no-store' };
+			const { owner, repo } = c.req.param();
+			const number = Number(c.req.param('number'));
+			const { kind, cursor } = c.req.valid('query');
+			if (cursor !== undefined && !SLACK_CURSOR.test(cursor))
+				return c.json({ error: 'Bad page cursor.' }, 400, noStore);
+			if (
+				!GITHUB_NAME.test(owner) ||
+				!GITHUB_NAME.test(repo) ||
+				!Number.isSafeInteger(number) ||
+				!isGitHubKind(kind)
+			)
+				return c.json({ error: 'Bad PR or issue.' }, 400, noStore);
+			const userId = c.get('user').id;
+			if (!slackMentionsConfigured(c.env) || !(await slackMentionsAllowed(c.env, userId)))
+				return c.json({ error: 'Slack mentions are not available for you.' }, 404, noStore);
+			const token = await slackMentionsToken(c.env, userId);
+			if (!token) return c.json({ error: 'Connect Slack mentions first.' }, 409, noStore);
+			const found = await searchMentions(token, { owner, repo, number, kind }, cursor);
+			if (found.ok) {
+				const page: SlackMentionsPageDTO = {
+					mentions: found.mentions,
+					nextCursor: found.nextCursor
+				};
+				return c.json(page, 200, noStore);
+			}
+			if (tokenWasRevoked(found.error)) {
+				await removeSlackMentions(c.env, userId);
+				return c.json({ error: 'Slack removed the connection. Connect again.' }, 410, noStore);
+			}
+			if (found.error === 'ratelimited' || found.error === 'rate_limited')
+				return c.json({ error: 'Slack search is busy. Try again in a minute.' }, 429, noStore);
+			return c.json({ error: `Slack search failed (${found.error}).` }, 502, noStore);
 		}
-		if (found.error === 'ratelimited' || found.error === 'rate_limited')
-			return c.json({ error: 'Slack search is busy. Try again in a minute.' }, 429, noStore);
-		return c.json({ error: `Slack search failed (${found.error}).` }, 502, noStore);
-	})
+	)
 	.post('/api/slack/events', async (c) => {
 		const body = await c.req.text();
 		const signed = await slackSignatureIsValid(c.env.SLACK_SIGNING_SECRET ?? '', {

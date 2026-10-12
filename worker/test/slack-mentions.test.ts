@@ -7,6 +7,7 @@ import {
 	mentionsInstallFrom,
 	membershipByAnyToken,
 	mentionsOf,
+	slackAppUrl,
 	plainSlackText,
 	searchMentions
 } from '../slack-mentions';
@@ -113,6 +114,8 @@ describe('extractAround', () => {
 describe('mentionsOf', () => {
 	const message = {
 		author_name: 'Ana',
+		team_id: 'T1',
+		channel_id: 'C1',
 		channel_name: 'team-replay',
 		message_ts: '1800000000.000100',
 		content: 'can someone review PostHog/posthog#123',
@@ -129,13 +132,42 @@ describe('mentionsOf', () => {
 			authorName: 'Ana',
 			at: 1_800_000_000_000,
 			extract: 'can someone review PostHog/posthog#123',
-			permalink: message.permalink
+			permalink: message.permalink,
+			appUrl: 'slack://channel?team=T1&id=C1&message=1800000000.000100'
 		});
 	});
 
 	it('drops a message with no permalink or time', () => {
 		expect(mentionsOf([{ ...message, permalink: undefined }], REF)).toEqual([]);
 		expect(mentionsOf([{ ...message, message_ts: undefined }], REF)).toEqual([]);
+	});
+});
+
+describe('slackAppUrl', () => {
+	const message = {
+		team_id: 'T1',
+		channel_id: 'C1',
+		message_ts: '1800000000.000200',
+		permalink: 'https://posthog.slack.com/archives/C1/p1800000000000200'
+	};
+
+	it('opens the message in the Slack app', () => {
+		expect(slackAppUrl(message)).toBe('slack://channel?team=T1&id=C1&message=1800000000.000200');
+	});
+
+	it('opens a thread reply in its thread', () => {
+		const reply = {
+			...message,
+			permalink: `${message.permalink}?thread_ts=1800000000.000100&cid=C1`
+		};
+		expect(slackAppUrl(reply)).toBe(
+			'slack://channel?team=T1&id=C1&message=1800000000.000200&thread_ts=1800000000.000100'
+		);
+	});
+
+	it('has no app link without the team or the channel', () => {
+		expect(slackAppUrl({ ...message, team_id: undefined })).toBeNull();
+		expect(slackAppUrl({ ...message, channel_id: undefined })).toBeNull();
 	});
 });
 
@@ -168,6 +200,35 @@ describe('searchMentions', () => {
 		expect(body.get('channel_types')).toBe('public_channel,private_channel,mpim,im');
 		expect(body.get('disable_semantic_search')).toBe('true');
 		expect(body.get('sort')).toBe('timestamp');
+		expect(body.has('cursor')).toBe(false);
+	});
+
+	it('asks for the next page with the cursor, and passes on the next cursor', async () => {
+		const fetch = vi.fn().mockResolvedValue(
+			Response.json({
+				ok: true,
+				results: { messages: [] },
+				response_metadata: { next_cursor: 'bmV4dA==' }
+			})
+		);
+		vi.stubGlobal('fetch', fetch);
+		const found = await searchMentions('xoxp-1', REF, 'Zmlyc3Q=');
+		expect(found).toEqual({ ok: true, mentions: [], nextCursor: 'bmV4dA==' });
+		expect(new URLSearchParams(fetch.mock.calls[0][1].body).get('cursor')).toBe('Zmlyc3Q=');
+	});
+
+	it('has no next cursor on the last page', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(
+				Response.json({
+					ok: true,
+					results: { messages: [] },
+					response_metadata: { next_cursor: '' }
+				})
+			)
+		);
+		expect(await searchMentions('xoxp-1', REF)).toMatchObject({ nextCursor: null });
 	});
 
 	it('passes on a Slack error', async () => {

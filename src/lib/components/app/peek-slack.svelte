@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { createQuery } from '@tanstack/svelte-query';
+	import { tick } from 'svelte';
+	import { fly } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { prefersReducedMotion } from 'svelte/motion';
+	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { slackMentionsQuery, slackQuery } from '$lib/queries';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import * as Popover from '$lib/components/ui/popover';
-	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import SlackLogo from './slack-logo.svelte';
-	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
 	let {
 		repo,
@@ -17,98 +19,122 @@
 		class: className
 	}: { repo: string; number: number; kind: 'pr' | 'issue'; class?: string } = $props();
 
-	const PAGE_SIZE = 5;
-
 	const slack = createQuery(slackQuery);
 	const mentionsConnected = $derived(slack.data?.mentions.connected ?? false);
-	const mentions = createQuery(() => ({
+	const mentions = createInfiniteQuery(() => ({
 		...slackMentionsQuery(repo, number, kind),
 		enabled: mentionsConnected
 	}));
-	const found = $derived(mentions.data?.mentions ?? []);
-	const searching = $derived(mentions.isPending);
-	const shown = $derived(mentionsConnected && (searching || found.length > 0));
+	const found = $derived(mentions.data?.pages.flatMap((p) => p.mentions) ?? []);
+	const shown = $derived(mentionsConnected && found.length > 0);
+	const countLabel = $derived(`${found.length}${mentions.hasNextPage ? '+' : ''}`);
+	const label = $derived(
+		`Mentioned in Slack: ${countLabel} ${found.length === 1 && !mentions.hasNextPage ? 'message' : 'messages'}`
+	);
+
+	const LOAD_AHEAD_PX = 120;
+	const APPEAR = $derived({
+		x: 8,
+		duration: prefersReducedMotion.current ? 0 : 220,
+		easing: cubicOut
+	});
 
 	let open = $state(false);
-	let page = $state(0);
-	const pageCount = $derived(Math.max(1, Math.ceil(found.length / PAGE_SIZE)));
-	const pageStart = $derived(page * PAGE_SIZE);
-	const pageItems = $derived(found.slice(pageStart, pageStart + PAGE_SIZE));
-	const label = $derived(
-		searching
-			? 'Searching Slack'
-			: `Mentioned in Slack: ${found.length} ${found.length === 1 ? 'message' : 'messages'}`
-	);
+	let scroller = $state<HTMLElement | null>(null);
+	let sentinel = $state<HTMLElement | null>(null);
 
 	$effect(() => {
 		void repo;
 		void number;
 		open = false;
 	});
+
+	function sentinelNearEnd() {
+		if (!scroller || !sentinel) return false;
+		const end = scroller.getBoundingClientRect().bottom + LOAD_AHEAD_PX;
+		return sentinel.getBoundingClientRect().top < end;
+	}
+
+	async function loadMore() {
+		if (!mentions.hasNextPage || mentions.isFetchingNextPage) return;
+		await mentions.fetchNextPage();
+		await tick();
+		if (sentinelNearEnd()) loadMore();
+	}
+
 	$effect(() => {
-		if (open) page = 0;
+		if (!scroller || !sentinel) return;
+		const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && loadMore(), {
+			root: scroller,
+			rootMargin: `0px 0px ${LOAD_AHEAD_PX}px 0px`
+		});
+		observer.observe(sentinel);
+		return () => observer.disconnect();
 	});
 </script>
 
-{#if shown}
-	<Popover.Root bind:open>
-		<Popover.Trigger
-			class={cn(
-				'flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:hover:bg-transparent',
-				className
-			)}
-			disabled={searching}
-			aria-label={label}
-			title={label}
-		>
-			<SlackLogo class={cn('size-3.5', searching && 'animate-pulse')} />
-		</Popover.Trigger>
-		<Popover.Content align="end" class="grid w-80 gap-2 p-2.5 text-sm">
-			<div class="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
-				<SlackLogo class="size-3" />Mentioned in Slack
-				<span class="ml-auto tabular-nums">{found.length}</span>
-			</div>
-			<ul class="grid gap-2">
-				{#each pageItems as m (m.permalink)}
-					<li class="grid gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[0.8rem]">
-						<div class="flex items-center gap-2 text-xs">
-							<span class="truncate font-medium">{m.authorName}</span>
-							{#if m.channelName}
-								<span class="truncate text-muted-foreground">in #{m.channelName}</span>
-							{/if}
-							<a
-								href={m.permalink}
-								target="_blank"
-								rel="noreferrer"
-								class="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground tabular-nums hover:text-foreground"
-								>{ago(m.at)}<ExternalLink class="size-3" /></a
-							>
+{#if mentionsConnected}
+	<div class={cn('relative h-5 w-14 shrink-0', className)}>
+		{#if shown}
+			<div class="absolute inset-y-0 right-0 flex items-center" in:fly={APPEAR}>
+				<Popover.Root bind:open>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props: tooltipProps })}
+								<Popover.Trigger
+									{...tooltipProps}
+									class="flex h-6 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+									aria-label={label}
+								>
+									<SlackLogo class="size-3.5" />
+									<span
+										class="rounded-full bg-muted px-1.5 text-[0.7rem] font-medium text-foreground tabular-nums"
+										>{countLabel}</span
+									>
+								</Popover.Trigger>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content>{label}</Tooltip.Content>
+					</Tooltip.Root>
+					<Popover.Content align="end" class="grid w-80 gap-2 p-2.5 text-sm">
+						<div class="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
+							<SlackLogo class="size-3" />Mentioned in Slack
+							<span class="ml-auto tabular-nums">{countLabel}</span>
 						</div>
-						<p class="line-clamp-4 break-words text-muted-foreground">{m.extract}</p>
-					</li>
-				{/each}
-			</ul>
-			{#if pageCount > 1}
-				<div class="flex items-center justify-between text-xs text-muted-foreground">
-					<Button
-						variant="ghost"
-						size="icon-xs"
-						aria-label="Newer messages"
-						disabled={page === 0}
-						onclick={() => (page -= 1)}><ChevronLeft /></Button
-					>
-					<span class="tabular-nums"
-						>{pageStart + 1}–{pageStart + pageItems.length} of {found.length}</span
-					>
-					<Button
-						variant="ghost"
-						size="icon-xs"
-						aria-label="Older messages"
-						disabled={page >= pageCount - 1}
-						onclick={() => (page += 1)}><ChevronRight /></Button
-					>
-				</div>
-			{/if}
-		</Popover.Content>
-	</Popover.Root>
+						<ul
+							bind:this={scroller}
+							class="-mx-1 grid max-h-96 gap-2 overflow-y-auto overscroll-contain px-1"
+						>
+							{#each found as m (m.permalink)}
+								<li>
+									<a
+										href={m.appUrl ?? m.permalink}
+										target={m.appUrl ? undefined : '_blank'}
+										rel="noreferrer"
+										class="grid gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[0.8rem] transition-colors hover:bg-muted"
+									>
+										<span class="flex items-center gap-2 text-xs">
+											<span class="truncate font-medium">{m.authorName}</span>
+											{#if m.channelName}
+												<span class="truncate text-muted-foreground">in #{m.channelName}</span>
+											{/if}
+											<span class="ml-auto shrink-0 text-muted-foreground tabular-nums"
+												>{ago(m.at)}</span
+											>
+										</span>
+										<span class="line-clamp-4 break-words text-muted-foreground">{m.extract}</span>
+									</a>
+								</li>
+							{/each}
+							{#if mentions.hasNextPage}
+								<li bind:this={sentinel} class="flex justify-center py-1 text-muted-foreground">
+									<LoaderCircle class="size-3.5 animate-spin" aria-label="Loading more messages" />
+								</li>
+							{/if}
+						</ul>
+					</Popover.Content>
+				</Popover.Root>
+			</div>
+		{/if}
+	</div>
 {/if}

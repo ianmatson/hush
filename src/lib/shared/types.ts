@@ -398,6 +398,12 @@ export interface SlackMentionDTO {
 	at: number;
 	extract: string;
 	permalink: string;
+	appUrl: string | null;
+}
+
+export interface SlackMentionsPageDTO {
+	mentions: SlackMentionDTO[];
+	nextCursor: string | null;
 }
 
 export type OrgAccess =

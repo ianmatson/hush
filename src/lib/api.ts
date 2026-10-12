@@ -103,12 +103,12 @@ export const api = {
 	disconnectSlack: () => ok(client.api.slack.$delete()),
 	testSlack: () => ok(client.api.slack.test.$post()),
 	disconnectSlackMentions: () => ok(client.api.slack.mentions.$delete()),
-	slackMentions: (repo: string, number: number, kind: 'pr' | 'issue') => {
+	slackMentions: (repo: string, number: number, kind: 'pr' | 'issue', cursor?: string) => {
 		const [owner, name] = repo.split('/');
 		return ok(
 			client.api.slack.mentions[':owner'][':repo'][':number'].$get({
 				param: { owner, repo: name, number: String(number) },
-				query: { kind }
+				query: cursor ? { kind, cursor } : { kind }
 			})
 		);
 	},
