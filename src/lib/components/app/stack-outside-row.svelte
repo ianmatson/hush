@@ -9,12 +9,14 @@
 		position,
 		size,
 		selected = false,
+		table = false,
 		onclick
 	}: {
 		member: StackMember;
 		position: number;
 		size: number;
 		selected?: boolean;
+		table?: boolean;
 		onclick: () => void;
 	} = $props();
 
@@ -24,37 +26,79 @@
 	});
 </script>
 
-<button
-	bind:this={row}
-	type="button"
-	data-selected={selected || undefined}
-	class={cn(
-		'flex w-full items-start gap-3 rounded-xl border border-transparent bg-background px-3 py-3 text-left transition-colors select-none',
-		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60'
-	)}
-	aria-current={selected || undefined}
-	{onclick}
->
-	<span
-		class="flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground"
+{#if table}
+	<button
+		bind:this={row}
+		type="button"
+		data-selected={selected || undefined}
+		class="outside-row flex h-9 w-full items-center gap-2 border-b border-border/50 bg-(--row-bg) px-2 text-left text-[0.8rem] text-muted-foreground select-none"
+		aria-current={selected || undefined}
+		{onclick}
 	>
-		<GitPullRequest class="size-3.5" />
-	</span>
-	<span class="min-w-0 flex-1">
-		<span class="block truncate text-sm font-medium text-muted-foreground">{member.title}</span>
-		<span class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.8rem] text-muted-foreground">
-			<span class="truncate font-mono text-[0.75rem]">{member.repo}#{member.number}</span>
-			<span class="opacity-50">·</span>
-			<span class="shrink-0 truncate">@{member.author}</span>
+		<span
+			class="flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed"
+		>
+			<GitPullRequest class="size-3" />
 		</span>
-		<span class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">
-			<span class="rounded-md bg-muted px-1.5 py-0.5 font-medium">Not in this list</span>
-			<span class="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 tabular-nums"
-				><Layers class="size-3" />{position} of {size}</span
+		<span class="min-w-0 truncate font-medium">{member.title}</span>
+		<span class="flex shrink-0 items-center gap-0.5 text-xs tabular-nums"
+			><Layers class="size-3" />{position}/{size}</span
+		>
+		<span class="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.7rem] font-medium sm:inline"
+			>Not in this list</span
+		>
+		{#if member.draft}
+			<span class="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.7rem] sm:inline"
+				>Draft</span
 			>
-			{#if member.draft}
-				<span class="rounded-md bg-muted px-1.5 py-0.5">Draft</span>
-			{/if}
+		{/if}
+		<span class="ml-auto hidden shrink-0 truncate text-xs md:block">@{member.author}</span>
+	</button>
+{:else}
+	<button
+		bind:this={row}
+		type="button"
+		data-selected={selected || undefined}
+		class={cn(
+			'flex w-full items-start gap-3 rounded-xl border border-transparent bg-background px-3 py-3 text-left transition-colors select-none',
+			'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60'
+		)}
+		aria-current={selected || undefined}
+		{onclick}
+	>
+		<span
+			class="flex size-8 shrink-0 items-center justify-center rounded-full border border-dashed text-muted-foreground"
+		>
+			<GitPullRequest class="size-3.5" />
 		</span>
-	</span>
-</button>
+		<span class="min-w-0 flex-1">
+			<span class="block truncate text-sm font-medium text-muted-foreground">{member.title}</span>
+			<span class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.8rem] text-muted-foreground">
+				<span class="truncate font-mono text-[0.75rem]">{member.repo}#{member.number}</span>
+				<span class="opacity-50">·</span>
+				<span class="shrink-0 truncate">@{member.author}</span>
+			</span>
+			<span class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-muted-foreground">
+				<span class="rounded-md bg-muted px-1.5 py-0.5 font-medium">Not in this list</span>
+				<span class="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 tabular-nums"
+					><Layers class="size-3" />{position} of {size}</span
+				>
+				{#if member.draft}
+					<span class="rounded-md bg-muted px-1.5 py-0.5">Draft</span>
+				{/if}
+			</span>
+		</span>
+	</button>
+{/if}
+
+<style>
+	.outside-row {
+		--row-bg: var(--background);
+	}
+	.outside-row:hover {
+		--row-bg: color-mix(in oklch, var(--muted) 50%, var(--background));
+	}
+	.outside-row[data-selected] {
+		--row-bg: color-mix(in oklch, var(--muted) 70%, var(--background));
+	}
+</style>

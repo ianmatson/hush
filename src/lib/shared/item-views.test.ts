@@ -86,6 +86,16 @@ describe('validateViews', () => {
 	it('accepts the defaults', () => {
 		expect(validateViews(DEFAULT_VIEWS)).toBeNull();
 	});
+	it('accepts a view sort, and refuses a bad one', () => {
+		expect(
+			validateViews([view({ sort: { by: 'updated', dir: 'desc', turnFirst: true } })])
+		).toBeNull();
+		const bad = (sort: unknown) => validateViews([view({ sort } as Partial<ItemView>)]);
+		expect(bad({ by: 'stars', dir: 'asc', turnFirst: false })).toMatch(/sort\.by/);
+		expect(bad({ by: 'size', dir: 'up', turnFirst: false })).toMatch(/sort\.dir/);
+		expect(bad({ by: 'size', dir: 'asc' })).toMatch(/sort\.turnFirst/);
+		expect(bad('size')).toMatch(/"sort" must be an object/);
+	});
 	it('refuses bad views', () => {
 		expect(validateViews([])).toMatch(/at least one/);
 		expect(validateViews([view(), view()])).toMatch(/Two views/);

@@ -33,6 +33,7 @@ import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
 import { THEMES } from '$lib/themes/list';
+import { SORT_BY, SORT_BY_ORDER } from '$lib/shared/sorting';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { DEFAULT_PUSH_FACTS, PUSH_FACTS } from '$lib/shared/push-facts';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
@@ -205,7 +206,8 @@ When you turn it on, or add an \`about:\` condition, Hush checks the PRs and iss
 - \`name\`: up to ${MAX_VIEW_NAME_CHARS} characters. The tab label.
 - \`searches\`: up to ${MAX_VIEW_SEARCHES} searches in the [query language](/docs/query-language#in-a-views-search), 1 to ${MAX_SEARCH_CHARS} characters each. Hush sends the GitHub words to GitHub and checks the Hush words on the results. \`@me\` is you. \`@team\` runs the search once for each team you track. A search with \`is:pr\` (or a PR-only word such as \`review-requested:\`) finds pull requests; with \`is:issue\`, issues; with neither, both. Hush adds \`archived:false\` unless the search says \`archived:\`.
 - \`pushNew\` (optional, \`false\` when left out): push when a pull request or issue shows up in the view for the first time. Items that you opened do not push.
-- \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"custom"\` (the view's own \`sections\`), \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Group by** button on the view changes it.
+- \`groupBy\`: how the view puts its list into sections: \`"none"\`, \`"role"\` (your role), \`"status"\`, \`"repo"\`, \`"author"\`, \`"label"\`, \`"assignee"\`, \`"custom"\` (the view's own \`sections\`), \`"category:<group id>"\`, or \`"project:<owner>/<number>"\` (the Status of a GitHub project, such as \`"project:acme/7"\`). See [Group by](/docs/pull-requests-and-issues#group-by). The **Display** button on the view changes it.
+- \`sort\` (optional, whose turn when left out): how the view orders the items in each section, \`{ "by", "dir", "turnFirst" }\`. \`by\` is ${SORT_BY_ORDER.map((by) => `\`"${by}"\` (${SORT_BY[by].label.toLowerCase()})`).join(', ')}. \`dir\` is \`"asc"\` or \`"desc"\`. \`turnFirst\`: \`true\` keeps your turn, then your team's, then theirs, and sorts each part. See [Sort](/docs/pull-requests-and-issues#sort). The **Display** button on the view changes it.
 - \`sections\` (optional): up to ${MAX_VIEW_SECTIONS} custom sections, each \`{ "name", "rule" }\`: a unique name of up to ${MAX_SECTION_NAME_CHARS} characters, and a rule in the [query language](/docs/query-language). An item goes into the first section whose rule matches, then **Everything else**. \`"groupBy": "custom"\` needs at least one. See [Custom sections](/docs/pull-requests-and-issues#custom-sections).
 A view needs at least one search, and you keep at least one view.
 

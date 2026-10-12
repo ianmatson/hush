@@ -1,6 +1,6 @@
 ---
 title: Pull requests and issues
-description: The list in each view, and how Group by puts it into sections.
+description: The list in each view, how Group by puts it into sections, and how Sort orders them.
 ---
 
 Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. When the view finds both types, a menu at the top has **Pull requests** and **Issues**: check one, or both to see all. {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
@@ -13,7 +13,7 @@ The settings under the layout are for the layout you use. With cards, **Row cont
 
 ## Group by
 
-The **Group by** button, at the top right, puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.
+The **Display** button, at the top right, has **Group by** and [Sort](#sort). Group by puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.
 
 | Group by                          | Sections                                                                                                                                               |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -31,6 +31,26 @@ An item is in exactly one section. Sections with no items do not show. Choose th
 With **Both**, Status shows the pull request sections first, then the issue sections.
 
 {{key:palette}} finds the Group by choices too: type “group by”.
+
+## Sort
+
+**Sort by**, in the **Display** button, orders the items in each section. Each view keeps its own sort (the [`sort`](/docs/settings#views) of the view). The sections stay in the order of Group by.
+
+| Sort by           | Order                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| **Whose turn**    | The default: the items that need you first. See [Order and reasons](#order-and-reasons).        |
+| **Updated**       | The time of the last change on GitHub.                                                          |
+| **Created**       | The time the pull request or issue was opened.                                                  |
+| **Waiting since** | The time the current turn started.                                                              |
+| **Comments**      | The number of comments.                                                                         |
+| **Size**          | Lines added and removed. Issues have no size: they come after the pull requests, in turn order. |
+| **Title**         | The title, from A to Z.                                                                         |
+
+**Order** reverses the sort, for example **Newest first** or **Oldest first**. Each sort starts in its usual order.
+
+**Your turn first** is on at first. It keeps your turn at the top of each section, then your team's turn, then theirs, and the sort orders each part. Turn it off to order the items by the sort only.
+
+{{key:palette}} finds the sorts too: type “sort”.
 
 ### Custom sections
 
@@ -57,7 +77,7 @@ Group by lists each open GitHub project that holds an item of the view, with the
 
 ## Order and reasons
 
-Inside a section, the items that need you come first, the most urgent first (failing CI before a comment), then the ones that waited longest. Each row says what is going on, in a few words:
+With **Sort by Whose turn**, the items in a section that need you come first, the most urgent first (failing CI before a comment), then the ones that waited longest. Each row says what is going on, in a few words:
 
 - **Pull requests:** CI failing · Changes requested · Merge conflict · 2 open threads · Ready to merge · @alice commented · Review requested · Re-review requested · Assigned to you · New commits since your review · Review for acme/web · CI running · Waiting for review · Waiting on author · You approved · Draft · Bot PR.
 - **Issues:** Assigned to you · @alice replied · Waiting for replies · No replies yet · Waiting for a reply.

@@ -1,6 +1,7 @@
 import { CUSTOM_GROUP_BY, EVERYTHING_ELSE_SECTION, groupByOk } from './grouping';
 import { queryError, resolveToday, splitSearch } from './query';
 import { queryMatches } from './rules';
+import { viewSortError } from './sorting';
 import type { DashKind, DashSection, ItemView, RuleFacts } from './types';
 
 export const MAX_VIEWS = 12;
@@ -135,6 +136,8 @@ function validateView(
 		return `"${v.name}": "groupBy" must be none, role, status, repo, author, label, assignee, custom, category:<group id>, or project:<owner>/<number>.`;
 	const sectionsErr = sectionsError(v, checkSearches);
 	if (sectionsErr) return sectionsErr;
+	const sortErr = v.sort === undefined ? null : viewSortError(v.sort);
+	if (sortErr) return `"${v.name}": ${sortErr}`;
 	if (v.pushNew !== undefined && typeof v.pushNew !== 'boolean')
 		return `"${v.name}": "pushNew" must be true or false.`;
 	return null;

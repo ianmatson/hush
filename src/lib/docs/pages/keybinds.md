@@ -11,7 +11,7 @@ Hush works from the keyboard. Press {{key:list.help}} on any list to see the sho
 
 - **Pull requests and issues** of your views, by title, repository, number, or author. Enter peeks at it; `Mod`+Enter opens it on GitHub.
 - **Actions** on the item under the cursor or the selection: Snooze, Mute, Mark as read, Peek…, and **Mark all as read** for the view.
-- **Group by** for the view you are in: type “group by”.
+- **Group by** and **Sort by** for the view you are in: type “group by” or “sort”.
 - **Pages**: every view, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
 - **Settings** that are on or off: type a word from the setting, for example “bots”, “drafts”, or “push”. Enter turns it on or off.

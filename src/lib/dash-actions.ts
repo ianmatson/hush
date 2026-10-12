@@ -7,8 +7,9 @@ import type { Selection } from '$lib/selection.svelte';
 import { DEFAULT_MENUS } from '$lib/shared/menus';
 import type { CategoryPin } from '$lib/shared/categories';
 import { itemPagePath } from '$lib/shared/item-page';
-import type { CategoryGroup, DashItem, DashProject, GroupBy } from '$lib/shared/types';
+import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSort } from '$lib/shared/types';
 import { groupByOptions } from '$lib/shared/grouping';
+import { SORT_BY, SORT_BY_ORDER, dirLabel, reversedSort, sortWithBy } from '$lib/shared/sorting';
 import type { SnoozeChoice } from '$lib/shared/item-snooze';
 import { alreadyTrue } from '$lib/shared/snooze';
 import { snoozeOptions } from '$lib/time';
@@ -22,6 +23,7 @@ import MailOpen from '@lucide/svelte/icons/mail-open';
 import CheckCheck from '@lucide/svelte/icons/check-check';
 import Link from '@lucide/svelte/icons/link';
 import Rows3 from '@lucide/svelte/icons/rows-3';
+import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
 import ExternalLink from '@lucide/svelte/icons/external-link';
 import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 import Maximize2 from '@lucide/svelte/icons/maximize-2';
@@ -48,6 +50,8 @@ export interface DashActionContext {
 	readonly groupBy: GroupBy;
 	readonly hasSections: boolean;
 	setGroupBy(by: GroupBy): void;
+	readonly sort: ViewSort;
+	setSort(sort: ViewSort): void;
 	/** The visible items' ids, in list order. */
 	readonly order: string[];
 	/** Your menu order (Settings → Menus). */
@@ -105,7 +109,21 @@ export function dashCommands(ctx: DashActionContext, ids: string[]): PaletteComm
 				icon: Rows3,
 				keywords: ['group', 'sections', 'sort'],
 				run: () => ctx.setGroupBy(o.id)
-			}))
+			})),
+		...SORT_BY_ORDER.filter((by) => by !== ctx.sort.by).map((by) => ({
+			id: `act:sort-by:${by}`,
+			label: `Sort by ${SORT_BY[by].label.toLowerCase()}`,
+			icon: ArrowUpDown,
+			keywords: ['sort', 'order'],
+			run: () => ctx.setSort(sortWithBy(ctx.sort, by))
+		})),
+		{
+			id: 'act:sort-reverse',
+			label: `Sort: ${dirLabel(reversedSort(ctx.sort))}`,
+			icon: ArrowUpDown,
+			keywords: ['sort', 'order', 'reverse'],
+			run: () => ctx.setSort(reversedSort(ctx.sort))
+		}
 	];
 	if (!ids.length) return cmds;
 	const one = ids.length === 1 ? ctx.byId(ids[0]) : undefined;
