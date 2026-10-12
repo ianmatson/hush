@@ -61,6 +61,13 @@ function startOAuth(
 	return c.redirect(url.toString());
 }
 
+const signedBySlack = (c: Context<AppEnv>, body: string) =>
+	slackSignatureIsValid(c.env.SLACK_SIGNING_SECRET ?? '', {
+		timestamp: c.req.header('X-Slack-Request-Timestamp'),
+		signature: c.req.header('X-Slack-Signature'),
+		body
+	});
+
 const settingsUrl = (c: Context<AppEnv>, params: Record<string, string>) =>
 	`${c.env.APP_URL}${SETTINGS_PATH}?${new URLSearchParams(params)}`;
 
@@ -205,14 +212,14 @@ const app = routes()
 			return c.json({ error: `Slack search failed (${found.error}).` }, 502, noStore);
 		}
 	)
+	.post('/api/slack/interactions', async (c) => {
+		if (!(await signedBySlack(c, await c.req.text())))
+			return c.json({ error: 'Bad signature' }, 401);
+		return c.body(null, 200);
+	})
 	.post('/api/slack/events', async (c) => {
 		const body = await c.req.text();
-		const signed = await slackSignatureIsValid(c.env.SLACK_SIGNING_SECRET ?? '', {
-			timestamp: c.req.header('X-Slack-Request-Timestamp'),
-			signature: c.req.header('X-Slack-Signature'),
-			body
-		});
-		if (!signed) return c.json({ error: 'Bad signature' }, 401);
+		if (!(await signedBySlack(c, body))) return c.json({ error: 'Bad signature' }, 401);
 		let payload: Parameters<typeof slackEventOutcome>[0];
 		try {
 			payload = JSON.parse(body);
