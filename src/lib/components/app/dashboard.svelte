@@ -64,6 +64,7 @@
 	import { cn } from '$lib/utils';
 	import {
 		matchesCategoryFilter,
+		matchesCategoryFilters,
 		type CategoryFilter,
 		type CategoryPin
 	} from '$lib/shared/categories';
@@ -189,7 +190,7 @@
 			);
 	}
 	let refreshing = $state(false);
-	let categoryFilter = $state<CategoryFilter | null>(null);
+	let categoryFilter = $state<CategoryFilter[]>([]);
 	let showSnoozed = $state(false);
 	let snoozeSheetIds = $state<string[] | null>(null);
 	let selectedId = $state<string | null>(null);
@@ -237,7 +238,7 @@
 			(i) =>
 				i.dismissed === showSnoozed &&
 				inView(i) &&
-				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups))
+				matchesCategoryFilters(i.categories, categoryFilter, categoryGroups)
 		);
 		return keepHeldRow(
 			listed,
@@ -335,7 +336,7 @@
 		void showing;
 		const v = view;
 		untrack(() => {
-			categoryFilter = null;
+			categoryFilter = [];
 			selectedId = null;
 			sel.clear();
 			groupMotion = false;
@@ -507,7 +508,7 @@
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
-			categoryFilter = null;
+			categoryFilter = [];
 			showSnoozed = !!item.dismissed;
 			sel.clear();
 			peekedOutsideKey = null;

@@ -185,6 +185,24 @@ export function matchesCategoryFilter(
 	return !!group && !group.categories.some((c) => has(c.id));
 }
 
+const filterGroupId = (filter: CategoryFilter, groups: CategoryGroup[]) =>
+	'notSortedIn' in filter
+		? filter.notSortedIn
+		: groups.find((g) => g.categories.some((c) => c.id === filter.category))?.id;
+
+export function matchesCategoryFilters(
+	itemCategories: string[] | undefined,
+	filters: CategoryFilter[],
+	groups: CategoryGroup[]
+): boolean {
+	const groupIds = new Set(filters.map((f) => filterGroupId(f, groups)));
+	return [...groupIds].every((groupId) =>
+		filters
+			.filter((f) => filterGroupId(f, groups) === groupId)
+			.some((f) => matchesCategoryFilter(itemCategories, f, groups))
+	);
+}
+
 export function itemQueryFacts(
 	i: DashItem,
 	me: string,

@@ -116,7 +116,7 @@ Hush finds up to 3 open pull requests under each pull request in your list, in t
 
 ## Categories
 
-An item has one [category](/docs/categories) from each category group, or none when it is **Not sorted** there. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, next to **Refresh from GitHub**, lists every group and its categories, with counts: choose one to see only its items, **Not sorted** to see the items with no category from that group, and **Every category** to see all.
+An item has one [category](/docs/categories) from each category group, or none when it is **Not sorted** there. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, next to **Refresh from GitHub**, lists every group and its categories, with counts. Choose one or more to see only their items: in one group, an item needs any of your choices (Low or Medium effort); across groups, it needs one choice from each (Low effort and High impact). **Not sorted** chooses the items with no category from that group, and **Every category** clears your choices.
 
 To change an item's category, right-click it, choose the name of a group, such as **Effort**, and choose a category. **Choose automatically** removes your choice for that group. This works on a selection too.
 
