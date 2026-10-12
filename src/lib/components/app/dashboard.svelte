@@ -934,6 +934,18 @@
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">
+			{#if snoozedCount || showSnoozed}
+				<Button
+					variant={showSnoozed ? 'secondary' : 'ghost'}
+					size="sm"
+					onclick={() => (showSnoozed = !showSnoozed)}
+				>
+					<AlarmClock /><span class="hidden sm:inline"
+						>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
+					>
+					{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
+				</Button>
+			{/if}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -966,17 +978,6 @@
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
-			<Button
-				variant={showSnoozed ? 'secondary' : 'ghost'}
-				size="sm"
-				onclick={() => (showSnoozed = !showSnoozed)}
-				disabled={!snoozedCount && !showSnoozed}
-			>
-				<AlarmClock /><span class="hidden sm:inline"
-					>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
-				>
-				{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
-			</Button>
 			<Button
 				variant="ghost"
 				size="icon-sm"

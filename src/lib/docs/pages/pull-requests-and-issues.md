@@ -157,7 +157,7 @@ Snooze takes an item out of the list for a while. Choose **Snooze** in the item'
 
 **Mute** takes an item out of the list until you unmute it.
 
-The **Snoozed** button at the top shows the number of snoozed and muted items. Choose it to list them, with until when each one sleeps. **Wake up** ({{key:dash.snooze}}) puts an item back in the list now; **Unmute** ({{key:dash.mute}}) ends a mute.
+The **Snoozed** button at the top shows the number of snoozed and muted items. It shows only when an item is snoozed or muted. Choose it to list them, with until when each one sleeps. **Wake up** ({{key:dash.snooze}}) puts an item back in the list now; **Unmute** ({{key:dash.mute}}) ends a mute.
 
 When a snooze ends because the thing happened, Hush pushes, for example “Snooze over: CI passed”. See [What gets pushed](/docs/notifications#what-gets-pushed).
 
