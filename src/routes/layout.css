@@ -193,6 +193,10 @@
 		--page-margin: max(0px, calc((100% - var(--peek-w) - var(--page-max-w)) / 2));
 		margin-right: calc(var(--peek-w) + var(--page-margin));
 	}
+	html:has([data-wide-page]) [data-header-bar] {
+		--page-max-w: 100rem;
+		max-width: 100rem;
+	}
 	html.peek-docked [data-bulk-bar] {
 		padding-right: calc(var(--peek-w) + 1rem);
 	}

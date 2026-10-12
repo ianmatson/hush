@@ -478,7 +478,7 @@
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 px-3 pt-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
 	<nav
 		aria-label="Changed files"
-		class="hidden self-start lg:sticky lg:top-[calc(6.75rem+1px)] lg:block lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto"
+		class="hidden self-start lg:sticky lg:top-[calc(4rem+1px)] lg:block lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto"
 	>
 		<ul class="grid grid-cols-[minmax(0,1fr)] text-xs">
 			{@render treeNodes(tree, 0)}
@@ -569,7 +569,7 @@
 		</div>
 		{#if pendingReview}
 			<div
-				class="sticky top-[6.25rem] z-10 grid gap-2 rounded-lg border border-signal-review/40 bg-background p-2 text-xs shadow-sm"
+				class="sticky top-[calc(3.5rem+1px)] z-10 grid gap-2 rounded-lg border border-signal-review/40 bg-background p-2 text-xs shadow-sm"
 			>
 				<div class="flex flex-wrap items-center gap-2">
 					<span class="font-medium text-foreground"

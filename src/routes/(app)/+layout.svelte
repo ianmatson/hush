@@ -3,6 +3,7 @@
 	import { Toaster } from '$lib/components/ui/sonner';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import AppShell from '$lib/components/app/app-shell.svelte';
+	import ItemTransition from '$lib/components/app/item-transition.svelte';
 	import { persistOptions, queryClient } from '$lib/queries';
 	import { ui } from '$lib/ui.svelte';
 	import { onMount } from 'svelte';
@@ -35,5 +36,6 @@
 <PersistQueryClientProvider client={queryClient} {persistOptions}>
 	<Tooltip.Provider delayDuration={300}>
 		<AppShell>{@render children()}</AppShell>
+		<ItemTransition />
 	</Tooltip.Provider>
 </PersistQueryClientProvider>

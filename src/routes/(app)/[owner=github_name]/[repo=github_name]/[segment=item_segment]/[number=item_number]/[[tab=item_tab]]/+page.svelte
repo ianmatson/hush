@@ -108,11 +108,48 @@
 <svelte:head><title>{title} · Hush</title></svelte:head>
 <svelte:window onkeydown={onKey} />
 
-<div class="mx-auto max-w-[100rem] pb-20">
+<div
+	data-item-page
+	data-wide-page={onFilesTab ? '' : undefined}
+	class="mx-auto min-h-dvh max-w-[100rem] bg-background pb-24"
+>
+	{#if onFilesTab && pr}
+		<PullFiles
+			{repo}
+			{number}
+			pullRequestId={q.data?.can.id ?? ''}
+			head={q.data?.can.pr?.headOid ?? ''}
+			lastReview={pr.lastReview ?? null}
+			canComment={!!q.data?.can.comment}
+			isAuthor={!!q.data?.can.author}
+			permission={q.data?.can.permission ?? null}
+			changedFiles={pr.files}
+			additions={pr.additions}
+			deletions={pr.deletions}
+		/>
+	{:else if !onFilesTab}
+		<div class="mx-auto max-w-4xl">
+			<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
+		</div>
+	{/if}
+</div>
+
+<div
+	class="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 flex justify-center px-2 sm:px-4"
+	data-item-dock
+>
 	<div
-		class="sticky top-12 z-10 flex h-11 items-center gap-1 border-b bg-background/85 px-2 backdrop-blur"
+		class="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl border bg-popover/95 p-1 text-sm shadow-lg backdrop-blur sm:gap-1 sm:p-1.5"
 	>
-		<Button variant="ghost" size="sm" onclick={back}><ArrowLeft />Back</Button>
+		<Button
+			variant="ghost"
+			size="sm"
+			onclick={back}
+			aria-label="Back"
+			title="Back ({keysOf('list.escape')[0] ?? ''})"
+			><ArrowLeft /><span class="hidden sm:inline">Back</span></Button
+		>
+		<span class="mx-1 h-5 w-px bg-border"></span>
 		{#if kind === 'pr'}
 			<nav aria-label="Pull request" class="flex items-center gap-1 text-sm">
 				<a
@@ -139,11 +176,9 @@
 				>
 			</nav>
 		{/if}
-		<span class="hidden px-2 text-xs text-muted-foreground lg:inline"
-			><kbd class="font-sans">{keysOf('list.escape')[0] ?? ''}</kbd> to go back</span
-		>
+		<span class="mx-1 h-5 w-px bg-border"></span>
+		<GhActions {repo} {number} need={null} />
 		<Button
-			class="ml-auto"
 			variant="ghost"
 			size="icon-sm"
 			href={githubUrl}
@@ -152,30 +187,5 @@
 			rel="noreferrer"
 			aria-label="Open on GitHub"><ExternalLink /></Button
 		>
-	</div>
-	{#if onFilesTab && pr}
-		<PullFiles
-			{repo}
-			{number}
-			pullRequestId={q.data?.can.id ?? ''}
-			head={q.data?.can.pr?.headOid ?? ''}
-			lastReview={pr.lastReview ?? null}
-			canComment={!!q.data?.can.comment}
-			isAuthor={!!q.data?.can.author}
-			permission={q.data?.can.permission ?? null}
-			changedFiles={pr.files}
-			additions={pr.additions}
-			deletions={pr.deletions}
-		/>
-	{:else if !onFilesTab}
-		<div class="mx-auto max-w-4xl">
-			<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
-		</div>
-	{/if}
-</div>
-
-<div class="fixed inset-x-0 bottom-0 z-20 border-t bg-background pb-[env(safe-area-inset-bottom)]">
-	<div class="mx-auto flex max-w-[100rem] flex-wrap items-center gap-1 p-2">
-		<GhActions {repo} {number} need={null} />
 	</div>
 </div>
