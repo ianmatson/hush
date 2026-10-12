@@ -912,10 +912,11 @@
 	<div class="flex items-center gap-2">
 		<div class="min-w-0 flex-1">
 			<KindToggle
-				kinds={viewKinds(view)}
-				shown={kinds}
-				count={countIn}
-				onchange={(next) => show(next.length > 1 ? 'both' : next[0])}
+				options={showingOptions(view)}
+				value={showing}
+				count={(option) =>
+					option === 'both' ? viewKinds(view).reduce((n, k) => n + countIn(k), 0) : countIn(option)}
+				onchange={show}
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">

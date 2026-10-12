@@ -1,48 +1,48 @@
-<script lang="ts">
+<script lang="ts" module>
 	import type { DashKind } from '$lib/shared/types';
+	export type Showing = DashKind | 'both';
+</script>
+
+<script lang="ts">
 	import { cn } from '$lib/utils';
 
 	let {
-		kinds,
-		shown,
+		options,
+		value,
 		count,
 		onchange
 	}: {
-		kinds: DashKind[];
-		shown: DashKind[];
-		count: (kind: DashKind) => number;
-		onchange: (shown: DashKind[]) => void;
+		options: Showing[];
+		value: Showing;
+		count: (option: Showing) => number;
+		onchange: (option: Showing) => void;
 	} = $props();
 
-	const LABELS: Record<DashKind, string> = { pr: 'PRs', issue: 'Issues' };
-
-	function toggle(kind: DashKind) {
-		const on = shown.includes(kind);
-		if (on && shown.length === 1) return;
-		onchange(
-			on ? shown.filter((k) => k !== kind) : kinds.filter((k) => k === kind || shown.includes(k))
-		);
-	}
+	const LABELS: Record<Showing, string> = { both: 'All', pr: 'PRs', issue: 'Issues' };
+	const ordered = $derived([...options].sort((a, b) => (a === 'both' ? -1 : b === 'both' ? 1 : 0)));
 </script>
 
-{#if kinds.length > 1}
+{#if options.length > 1}
 	<div
-		class="inline-flex rounded-lg bg-muted p-0.5 text-xs"
-		role="group"
+		class="flex items-center gap-3 px-1 text-sm"
+		role="radiogroup"
 		aria-label="Show pull requests or issues"
 	>
-		{#each kinds as kind (kind)}
-			{@const on = shown.includes(kind)}
+		{#each ordered as option (option)}
+			{@const on = option === value}
 			<button
 				type="button"
-				aria-pressed={on}
+				role="radio"
+				aria-checked={on}
 				class={cn(
-					'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground',
-					on && 'bg-background font-medium text-foreground shadow-xs'
+					'flex items-baseline gap-1 text-muted-foreground transition-colors hover:text-foreground',
+					on && 'font-semibold text-foreground'
 				)}
-				onclick={() => toggle(kind)}
+				onclick={() => onchange(option)}
 			>
-				{LABELS[kind]}<span class="tabular-nums opacity-60">{count(kind)}</span>
+				{LABELS[option]}<span class="text-xs font-normal tabular-nums opacity-60"
+					>{count(option)}</span
+				>
 			</button>
 		{/each}
 	</div>
