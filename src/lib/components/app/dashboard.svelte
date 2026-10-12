@@ -19,7 +19,7 @@
 	import { itemPagePath } from '$lib/shared/item-page';
 	import { goto } from '$app/navigation';
 	import { flip } from 'svelte/animate';
-	import { fly, slide } from 'svelte/transition';
+	import { fade, fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -129,6 +129,7 @@
 	);
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
+	const LIST_SWAP = { duration: 160, easing: cubicOut };
 
 	const prQ = createQuery(() => ({
 		...dashQuery('pr'),
@@ -242,6 +243,7 @@
 
 	const groupBy = $derived(view.groupBy);
 	const viewSort = $derived(sortOfView(view));
+	const listShape = $derived(JSON.stringify([showing, showSnoozed, categoryFilter, groupBy]));
 	const projects = $derived<DashProject[]>(
 		projectsHolding(visibleItems, data?.projects ?? [], groupBy)
 	);
@@ -1025,69 +1027,73 @@
 		<ContextMenu.Root bind:open={contextOpen}>
 			<ContextMenu.Trigger>
 				{#snippet child({ props })}
-					<div {...props} class="grid gap-5" oncontextmenucapture={onContextMenu}>
-						{#each listed as section (section.key)}
-							{@const closed = isCollapsed(section.key)}
-							<section>
-								{#if section.label}
-									<button
-										class="mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left"
-										onclick={() => {
-											groupMotion = true;
-											setCollapsed(section.key, !closed);
-										}}
-										aria-expanded={!closed}
-									>
-										<ChevronDown
-											class={cn(
-												'size-3.5 text-muted-foreground',
-												groupMotion && 'transition-transform',
-												closed && '-rotate-90'
-											)}
-										/>
-										{#if section.color}
-											<span
-												class={cn(
-													'size-2 shrink-0 rounded-full',
-													MARK_DOT[statusColor(section.color)]
-												)}
-											></span>
-										{/if}
-										<h2 class="truncate text-xs font-semibold tracking-wide uppercase">
-											{section.label}
-										</h2>
-										<span class="text-xs text-muted-foreground tabular-nums"
-											>{section.units.length}</span
-										>
-									</button>
-								{/if}
-								{#if !closed}
-									<!-- Opening or closing a section slides it; the rows' own transitions are local,
-									     so they do not also play. -->
-									<ul
-										transition:slide={groupMotion ? SECTION_SLIDE : { duration: 0 }}
-										class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
-										role="listbox"
-										aria-multiselectable="true"
-										aria-label={section.label || view.name}
-									>
-										{#each section.units as unit (unit.key)}
-											<li
-												animate:flip={FLIP}
-												in:fly={{ y: -8, duration: 200 }}
-												out:slide={{ duration: 200, easing: cubicOut }}
+					<div {...props} oncontextmenucapture={onContextMenu}>
+						{#key listShape}
+							<div class="grid gap-5" in:fade={LIST_SWAP}>
+								{#each listed as section (section.key)}
+									{@const closed = isCollapsed(section.key)}
+									<section>
+										{#if section.label}
+											<button
+												class="mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left"
+												onclick={() => {
+													groupMotion = true;
+													setCollapsed(section.key, !closed);
+												}}
+												aria-expanded={!closed}
 											>
-												{#if unit.stack}
-													{@render stackRow(unit.stack)}
-												{:else}
-													{@render itemRow(unit.item)}
+												<ChevronDown
+													class={cn(
+														'size-3.5 text-muted-foreground',
+														groupMotion && 'transition-transform',
+														closed && '-rotate-90'
+													)}
+												/>
+												{#if section.color}
+													<span
+														class={cn(
+															'size-2 shrink-0 rounded-full',
+															MARK_DOT[statusColor(section.color)]
+														)}
+													></span>
 												{/if}
-											</li>
-										{/each}
-									</ul>
-								{/if}
-							</section>
-						{/each}
+												<h2 class="truncate text-xs font-semibold tracking-wide uppercase">
+													{section.label}
+												</h2>
+												<span class="text-xs text-muted-foreground tabular-nums"
+													>{section.units.length}</span
+												>
+											</button>
+										{/if}
+										{#if !closed}
+											<!-- Opening or closing a section slides it; the rows' own transitions are local,
+									     so they do not also play. -->
+											<ul
+												transition:slide={groupMotion ? SECTION_SLIDE : { duration: 0 }}
+												class="relative grid grid-cols-[minmax(0,1fr)] gap-0.5"
+												role="listbox"
+												aria-multiselectable="true"
+												aria-label={section.label || view.name}
+											>
+												{#each section.units as unit (unit.key)}
+													<li
+														animate:flip={FLIP}
+														in:fly={{ y: -8, duration: 200 }}
+														out:slide={{ duration: 200, easing: cubicOut }}
+													>
+														{#if unit.stack}
+															{@render stackRow(unit.stack)}
+														{:else}
+															{@render itemRow(unit.item)}
+														{/if}
+													</li>
+												{/each}
+											</ul>
+										{/if}
+									</section>
+								{/each}
+							</div>
+						{/key}
 					</div>
 				{/snippet}
 			</ContextMenu.Trigger>
