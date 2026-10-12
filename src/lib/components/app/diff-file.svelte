@@ -107,14 +107,30 @@
 	}
 	const language = $derived(languageForPath(file.filename));
 
-	let highlighted = $state<{ hunks: DiffHunk[]; tokens: HighlightedToken[][][] | null } | null>(
-		null
-	);
+	let highlighted = $state.raw<{
+		hunks: DiffHunk[];
+		tokens: HighlightedToken[][][] | null;
+	} | null>(null);
 	const tokens = $derived(highlighted?.hunks === hunks ? highlighted.tokens : null);
+	const NEAR_VIEW_MARGIN = '1200px 0px';
+	let section = $state<HTMLElement | null>(null);
+	let nearView = $state(false);
+	$effect(() => {
+		if (!section || nearView) return;
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) nearView = true;
+			},
+			{ rootMargin: NEAR_VIEW_MARGIN }
+		);
+		observer.observe(section);
+		return () => observer.disconnect();
+	});
+
 	$effect(() => {
 		const forHunks = hunks;
 		const forLanguage = language;
-		if (folded || !forLanguage || !forHunks.length) return;
+		if (!nearView || folded || !forLanguage || !forHunks.length) return;
 		if (untrack(() => highlighted?.hunks === forHunks)) return;
 		let current = true;
 		void highlightHunks(forHunks, forLanguage)
@@ -234,6 +250,7 @@
 <svelte:window onpointerup={() => (dragging = null)} />
 
 <section
+	bind:this={section}
 	id={fileAnchor(file.filename)}
 	class={cn(
 		'scroll-mt-28 rounded-lg border [contain-intrinsic-size:auto_20rem] [content-visibility:auto]',

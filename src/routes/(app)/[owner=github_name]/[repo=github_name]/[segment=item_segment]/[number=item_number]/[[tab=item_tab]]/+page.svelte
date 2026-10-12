@@ -51,13 +51,24 @@
 		});
 	}
 
-	let cameFromApp = false;
+	const SVELTEKIT_HISTORY_INDEX = 'sveltekit:history';
+
+	function historyIndex(): number | null {
+		const index = history.state?.[SVELTEKIT_HISTORY_INDEX];
+		return typeof index === 'number' ? index : null;
+	}
+
+	let listHistoryIndex: number | null = null;
 	afterNavigate(({ from }) => {
-		cameFromApp = !!from;
+		if (from?.route.id === page.route.id) return;
+		const here = historyIndex();
+		listHistoryIndex = from && here !== null ? here - 1 : null;
 	});
 
 	function back() {
-		if (cameFromApp) history.back();
+		const here = historyIndex();
+		if (listHistoryIndex !== null && here !== null && here > listHistoryIndex)
+			history.go(listHistoryIndex - here);
 		else goto(`/v?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
 	}
 

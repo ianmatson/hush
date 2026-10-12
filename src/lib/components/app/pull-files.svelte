@@ -347,11 +347,95 @@
 	let cursor = $state(-1);
 
 	const SETTLE_MS = 300;
+	const FIRST_RENDERED_FILES = 8;
+	const FILES_PER_RENDER_STEP = 6;
+	const RENDER_STEP_TIMEOUT_MS = 200;
+	const FIRST_RENDER_STEP_DELAY_MS = 400;
 
-	function reveal(index: number, behavior: ScrollBehavior = 'smooth') {
+	let renderedCount = $state(FIRST_RENDERED_FILES);
+	const renderedFiles = $derived(files.slice(0, renderedCount));
+
+	$effect(() => {
+		if (renderedCount >= files.length) return;
+		const step = () => (renderedCount += FILES_PER_RENDER_STEP);
+		const firstStep = renderedCount === FIRST_RENDERED_FILES;
+		let idle = 0;
+		const timer = setTimeout(
+			() => {
+				if (typeof requestIdleCallback !== 'function') return step();
+				idle = requestIdleCallback(step, { timeout: RENDER_STEP_TIMEOUT_MS });
+			},
+			firstStep ? FIRST_RENDER_STEP_DELAY_MS : 0
+		);
+		return () => {
+			clearTimeout(timer);
+			if (idle) cancelIdleCallback(idle);
+		};
+	});
+
+	const CURRENT_FILE_OFFSET_PX = 120;
+	const PAGE_END_SLACK_PX = 2;
+	let treeNav = $state<HTMLElement | null>(null);
+
+	function fileInView(): number {
+		const atPageEnd =
+			window.innerHeight + window.scrollY >=
+			document.documentElement.scrollHeight - PAGE_END_SLACK_PX;
+		const line = atPageEnd ? window.innerHeight : CURRENT_FILE_OFFSET_PX;
+		let current = 0;
+		renderedFiles.forEach((file, index) => {
+			const top = document.getElementById(fileAnchor(file.filename))?.getBoundingClientRect().top;
+			if (top !== undefined && top <= line) current = index;
+		});
+		return current;
+	}
+
+	$effect(() => {
+		if (!renderedFiles.length) return;
+		let frame = 0;
+		const follow = () => {
+			frame = 0;
+			cursor = fileInView();
+		};
+		const onScroll = () => {
+			if (!frame) frame = requestAnimationFrame(follow);
+		};
+		onScroll();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		return () => {
+			window.removeEventListener('scroll', onScroll);
+			if (frame) cancelAnimationFrame(frame);
+		};
+	});
+
+	$effect(() => {
+		void cursor;
+		const nav = treeNav;
+		if (!nav) return;
+		void tick().then(() => {
+			const row = nav.querySelector<HTMLElement>('[aria-current="location"]');
+			if (!row) return;
+			const navBox = nav.getBoundingClientRect();
+			const rowBox = row.getBoundingClientRect();
+			if (rowBox.top < navBox.top || rowBox.bottom > navBox.bottom)
+				nav.scrollTo({
+					top: nav.scrollTop + rowBox.top - navBox.top - navBox.height / 2,
+					behavior: 'smooth'
+				});
+		});
+	});
+
+	async function renderThrough(index: number) {
+		if (index < renderedCount) return;
+		renderedCount = index + 1;
+		await tick();
+	}
+
+	async function reveal(index: number, behavior: ScrollBehavior = 'smooth') {
 		const file = files[index];
 		if (!file) return;
 		cursor = index;
+		await renderThrough(index);
 		document
 			.getElementById(fileAnchor(file.filename))
 			?.scrollIntoView({ block: 'start', behavior });
@@ -359,7 +443,8 @@
 
 	let targetLine = $state<{ filename: string; line: DiffLineTarget } | null>(null);
 
-	function revealLine(index: number, line: DiffLineTarget) {
+	async function revealLine(index: number, line: DiffLineTarget) {
+		await renderThrough(index);
 		const file = files[index];
 		const row = file && document.getElementById(lineElementId(file.filename, line));
 		if (!row) return reveal(index, 'instant');
@@ -438,27 +523,22 @@
 			{@const open = !closedFolders.has(node.path)}
 			{@const FolderIcon = open ? FolderOpen : Folder}
 			<li class="grid grid-cols-[minmax(0,1fr)]">
-				<Tip text={node.path}>
-					{#snippet children(props)}
-						<button
-							{...props}
-							type="button"
-							class="flex min-w-0 items-center gap-1 rounded-md py-1 pr-2 text-left hover:bg-muted"
-							style:padding-left="{depth * TREE_INDENT_PX + 4}px"
-							aria-expanded={open}
-							onclick={() => toggleFolder(node.path)}
-						>
-							<ChevronRight
-								class={cn(
-									'size-3 shrink-0 text-muted-foreground transition-transform',
-									open && 'rotate-90'
-								)}
-							/>
-							<FolderIcon class="size-3.5 shrink-0 text-muted-foreground" />
-							<span class="min-w-0 truncate font-mono">{node.name}</span>
-						</button>
-					{/snippet}
-				</Tip>
+				<button
+					type="button"
+					class="flex min-w-0 items-center gap-1 rounded-md py-1 pr-2 text-left hover:bg-muted"
+					style:padding-left="{depth * TREE_INDENT_PX + 4}px"
+					aria-expanded={open}
+					onclick={() => toggleFolder(node.path)}
+				>
+					<ChevronRight
+						class={cn(
+							'size-3 shrink-0 text-muted-foreground transition-transform',
+							open && 'rotate-90'
+						)}
+					/>
+					<FolderIcon class="size-3.5 shrink-0 text-muted-foreground" />
+					<span class="min-w-0 truncate font-mono">{node.name}</span>
+				</button>
 				{#if open}
 					<ul
 						class="relative grid grid-cols-[minmax(0,1fr)] before:absolute before:inset-y-0 before:left-(--tree-guide) before:w-px before:bg-border"
@@ -471,54 +551,51 @@
 		{:else}
 			{@const index = indexByFilename.get(node.file.filename) ?? -1}
 			<li class="grid grid-cols-[minmax(0,1fr)]">
-				<Tip text={node.file.filename}>
-					{#snippet children(props)}
-						<a
-							{...props}
-							href="#{fileAnchor(node.file.filename)}"
-							onclick={(e) => {
-								e.preventDefault();
-								foldChoices.set(node.file.filename, false);
-								void tick().then(() => reveal(index));
-							}}
-							class={cn(
-								'flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 hover:bg-muted',
-								index === cursor && 'bg-muted'
-							)}
-							style:padding-left="{depth * TREE_INDENT_PX + 20}px"
-						>
-							{#if viewed[node.file.filename] === 'VIEWED'}
-								<FileCheck class="size-3.5 shrink-0 text-signal-merge" aria-label="Viewed" />
-							{:else if viewed[node.file.filename] === 'DISMISSED'}
-								<FileDiff
-									class="size-3.5 shrink-0 text-signal-warn"
-									aria-label="Changed since you viewed it"
-								/>
-							{:else}
-								<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
-							{/if}
-							<span
-								class={cn(
-									'min-w-0 flex-1 truncate font-mono',
-									viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground'
-								)}>{node.name}</span
-							>
-							{#if openThreadsOf(node.file)}
-								<Tip focusable={false} text="{openThreadsOf(node.file)} open review threads">
-									{#snippet children(threadProps)}
-										<span
-											{...threadProps}
-											class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
-											><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
-										>
-									{/snippet}
-								</Tip>
-							{/if}
-							<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
-							<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
-						</a>
-					{/snippet}
-				</Tip>
+				<a
+					href="#{fileAnchor(node.file.filename)}"
+					onclick={(e) => {
+						e.preventDefault();
+						foldChoices.set(node.file.filename, false);
+						void tick().then(() => reveal(index));
+					}}
+					aria-current={index === cursor ? 'location' : undefined}
+					class={cn(
+						'flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 transition-colors duration-200 ease-out hover:bg-muted',
+						index === cursor && 'bg-muted text-foreground'
+					)}
+					style:padding-left="{depth * TREE_INDENT_PX + 20}px"
+				>
+					{#if viewed[node.file.filename] === 'VIEWED'}
+						<FileCheck class="size-3.5 shrink-0 text-signal-merge" aria-label="Viewed" />
+					{:else if viewed[node.file.filename] === 'DISMISSED'}
+						<FileDiff
+							class="size-3.5 shrink-0 text-signal-warn"
+							aria-label="Changed since you viewed it"
+						/>
+					{:else}
+						<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
+					{/if}
+					<span
+						class={cn(
+							'min-w-0 flex-1 truncate font-mono transition-[font-weight,color] duration-200 ease-out',
+							viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground',
+							index === cursor && 'font-semibold text-foreground'
+						)}>{node.name}</span
+					>
+					{#if openThreadsOf(node.file)}
+						<Tip focusable={false} text="{openThreadsOf(node.file)} open review threads">
+							{#snippet children(threadProps)}
+								<span
+									{...threadProps}
+									class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
+									><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
+								>
+							{/snippet}
+						</Tip>
+					{/if}
+					<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
+					<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
+				</a>
 			</li>
 		{/if}
 	{/each}
@@ -526,6 +603,7 @@
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 px-3 pt-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
 	<nav
+		bind:this={treeNav}
 		aria-label="Changed files"
 		class="hidden self-start lg:sticky lg:top-[calc(4rem+1px)] lg:block lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto"
 	>
@@ -739,7 +817,7 @@
 				Hush cannot show the changes. <span class="text-muted-foreground">{q.error.message}</span>
 			</p>
 		{:else}
-			{#each files as file, i (file.filename)}
+			{#each renderedFiles as file, i (file.filename)}
 				<DiffFile
 					{file}
 					folded={isFolded(file)}
