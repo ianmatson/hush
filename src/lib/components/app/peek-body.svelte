@@ -155,6 +155,9 @@
 					rel="noreferrer">{p.repo}#{p.number}</a
 				>
 				<PeekProjects repo={p.repo} number={p.number} />
+				{#if p.kind === 'pr' || p.kind === 'issue'}
+					<PeekSlack {repo} {number} kind={p.kind} class="ml-auto" />
+				{/if}
 			</div>
 			<h2 class="text-base leading-snug font-semibold text-balance">
 				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
@@ -306,10 +309,6 @@
 			{/if}
 			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
-
-		{#if p.kind === 'pr' || p.kind === 'issue'}
-			<PeekSlack {repo} {number} kind={p.kind} />
-		{/if}
 
 		<section class="grid">
 			<h3 class="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
