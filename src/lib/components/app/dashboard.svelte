@@ -70,7 +70,7 @@
 	} from '$lib/shared/categories';
 	import { rowMarks, type RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
-	import KindToggle from './kind-toggle.svelte';
+	import KindSelect from './kind-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
@@ -911,7 +911,7 @@
 <main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
 	<div class="flex items-center gap-2">
 		<div class="min-w-0 flex-1">
-			<KindToggle
+			<KindSelect
 				options={showingOptions(view)}
 				value={showing}
 				count={(option) =>
