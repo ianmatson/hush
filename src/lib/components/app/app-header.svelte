@@ -115,7 +115,7 @@
 {/snippet}
 
 <header class="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
-	<div class="mx-auto flex h-12 max-w-4xl items-center gap-3 px-3 sm:gap-4 sm:px-4">
+	<div data-header-bar class="mx-auto flex h-12 max-w-4xl items-center gap-3 px-3 sm:gap-4 sm:px-4">
 		<a
 			href={SITE_URL}
 			aria-label="Hush for GitHub home page"

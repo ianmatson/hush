@@ -81,11 +81,11 @@
 
 {#if open && wide.current}
 	<aside
-		class="fixed top-12 right-0 bottom-0 z-20 flex w-(--peek-w) flex-col border-l bg-background shadow-[-12px_0_32px_-24px_rgb(0_0_0/0.25)]"
+		class="fixed inset-y-0 right-0 z-30 flex w-(--peek-w) flex-col border-l bg-background"
 		aria-label={label}
-		transition:fly={{ x: 40, duration: 200, easing: cubicOut }}
+		transition:fly={{ x: '100%', opacity: 1, duration: 200, easing: cubicOut }}
 	>
-		<div class="flex h-11 shrink-0 items-center gap-1 border-b px-2">
+		<div class="flex h-[calc(3rem+1px)] shrink-0 items-center gap-1 border-b px-2">
 			{@render start?.(true)}
 			<span class="ml-auto flex items-center gap-1">
 				{@render actions?.('icon-sm')}
