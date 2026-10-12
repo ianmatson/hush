@@ -18,6 +18,9 @@
 	import PeekFiles from './peek-files.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import ExternalBadge from './external-badge.svelte';
+	import GhLink from './gh-link.svelte';
+	import { branchUrl, labelUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
+	import { FILES_TAB, itemPagePath } from '$lib/shared/item-page';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import GitPullRequestDraft from '@lucide/svelte/icons/git-pull-request-draft';
@@ -157,10 +160,10 @@
 				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
 			</h2>
 			<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-				<span class="flex items-center gap-1.5"
-					>{@render avatar(p.author.avatar, 'size-4')}<span class="text-foreground"
-						>{p.author.login}</span
-					></span
+				<GhLink
+					href={profileUrl(p.author.login, p.author.bot)}
+					class="flex items-center gap-1.5 text-foreground"
+					>{@render avatar(p.author.avatar, 'size-4')}{p.author.login}</GhLink
 				>
 				{#if external}<ExternalBadge contributor={external} class="py-0 text-[0.7rem]" />{/if}
 				<span>opened {ago(p.createdAt)}</span>
@@ -172,19 +175,27 @@
 				{/if}
 			</div>
 			{#if p.pr}
+				{@const headRepo = p.pr.headRepo}
+				{@const fromFork = !!headRepo && headRepo !== p.repo}
+				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${p.pr.head}` : p.pr.head}
 				<p
 					class="truncate font-mono text-[0.7rem] text-muted-foreground"
-					title="{p.pr.base} ← {p.pr.head}"
+					title="{p.pr.base} ← {headLabel}"
 				>
-					{p.pr.base} ← {p.pr.head}
+					<GhLink href={branchUrl(p.repo, p.pr.base)}>{p.pr.base}</GhLink> ←
+					{#if headRepo}<GhLink href={branchUrl(headRepo, p.pr.head)}>{headLabel}</GhLink
+						>{:else}{headLabel}{/if}
 				</p>
 			{/if}
 			{#if p.labels.length}
 				<div class="flex flex-wrap gap-1">
 					{#each p.labels as l (l.name)}
-						<span
-							class="rounded-full border px-2 py-0.5 text-[0.7rem]"
-							style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</span
+						<a
+							href={labelUrl(p.repo, l.name)}
+							target="_blank"
+							rel="noreferrer"
+							class="rounded-full border px-2 py-0.5 text-[0.7rem] hover:brightness-95 dark:hover:brightness-125"
+							style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
 						>
 					{/each}
 				</div>
@@ -202,17 +213,27 @@
 					{#each pr.reviews as r (r.who.login)}
 						{@const rv = REVIEW[r.state] ?? REVIEW.COMMENTED}
 						<div class="flex items-center gap-2">
-							{@render avatar(r.who.avatar)}
-							<span class="truncate">{r.who.login}</span>
+							<GhLink
+								href={profileUrl(r.who.login, r.who.bot)}
+								class="flex min-w-0 items-center gap-2"
+								>{@render avatar(r.who.avatar)}<span class="truncate">{r.who.login}</span></GhLink
+							>
 							<span class={cn('ml-auto shrink-0', rv.tone)}>{rv.label}</span>
 						</div>
 					{/each}
 					{#each pr.requested as r (r.name)}
+						{@const requestedUrl = r.team ? (r.slug ? teamUrl(r.slug) : null) : profileUrl(r.name)}
 						<div class="flex items-center gap-2">
 							{#if r.team}<Users class="size-5 p-0.5 text-muted-foreground" />{:else}<span
 									class="size-5 rounded-full border border-dashed"
 								></span>{/if}
-							<span class="truncate">{r.name}</span>
+							{#if requestedUrl}
+								<GhLink href={requestedUrl} class="truncate" title={r.slug ?? undefined}
+									>{r.name}</GhLink
+								>
+							{:else}
+								<span class="truncate">{r.name}</span>
+							{/if}
 							<span class="ml-auto shrink-0 text-muted-foreground">requested</span>
 						</div>
 					{/each}
@@ -317,11 +338,21 @@
 				{@const tone = e.type === 'review' ? (REVIEW[e.state ?? '']?.tone ?? '') : ''}
 				<div class="grid gap-1.5 pb-3" in:revealEntry>
 					<div class="flex items-center gap-2 text-xs">
-						{@render avatar(e.author.avatar)}
-						<span class="truncate font-medium">{e.author.login}</span>
+						<GhLink
+							href={profileUrl(e.author.login, e.author.bot)}
+							class="flex min-w-0 items-center gap-2 font-medium"
+							>{@render avatar(e.author.avatar)}<span class="truncate">{e.author.login}</span
+							></GhLink
+						>
 						<span class={cn('shrink-0 text-muted-foreground', tone)}>{entryVerb(e)}</span>
 						{#if e.inline}
-							<span class="shrink-0 text-muted-foreground">· {e.inline} on the diff</span>
+							<span class="shrink-0 text-muted-foreground"
+								>· <a
+									href="{itemPagePath(p.repo, p.number, 'pr')}/{FILES_TAB}"
+									class="underline-offset-2 hover:text-foreground hover:underline"
+									>{e.inline} on the diff</a
+								></span
+							>
 						{/if}
 						<a
 							href={e.url}

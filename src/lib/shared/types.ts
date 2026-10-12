@@ -460,6 +460,7 @@ export interface PeekDTO {
 	pr?: {
 		base: string;
 		head: string;
+		headRepo: string | null;
 		additions: number;
 		deletions: number;
 		files: number;
@@ -469,7 +470,7 @@ export interface PeekDTO {
 		mergeable: string | null;
 		/** The latest review from each person who approved or asked for changes. */
 		reviews: { who: PeekPerson; state: string }[];
-		requested: { name: string; team: boolean }[];
+		requested: { name: string; team: boolean; slug: string | null }[];
 		ci: CiState | null;
 		checks: { name: string; state: CheckState; url: string | null }[];
 		checksTotal: number;

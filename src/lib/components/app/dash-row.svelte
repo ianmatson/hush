@@ -31,6 +31,8 @@
 	import ExternalBadge from './external-badge.svelte';
 	import { externalContributor } from '$lib/shared/contributors';
 	import { MAX_ROW_LABELS } from '$lib/shared/row-parts';
+	import { labelUrl, profileUrl, repoUrl } from '$lib/shared/github-links';
+	import GhLink from './gh-link.svelte';
 	import type { RowMark } from '$lib/marks';
 
 	let {
@@ -216,13 +218,17 @@
 			class="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:text-[0.8rem]"
 		>
 			<span class="flex min-w-0 font-mono text-[0.7rem] sm:text-[0.75rem]"
-				><span class="truncate"><span class="hidden sm:inline">{owner}/</span>{repoName}</span><span
-					class="shrink-0">#{i.number}</span
-				></span
+				><GhLink href={repoUrl(i.repo)} class="truncate" insideRow
+					><span class="hidden sm:inline">{owner}/</span>{repoName}</GhLink
+				><GhLink href={i.url} class="shrink-0" insideRow>#{i.number}</GhLink></span
 			>
 			{#if show('author')}
 				<span class="opacity-50">·</span>
-				<span class="max-w-[45%] min-w-0 truncate">@{i.author}</span>
+				<GhLink
+					href={profileUrl(i.author, i.authorIsBot)}
+					class="max-w-[45%] min-w-0 truncate"
+					insideRow>@{i.author}</GhLink
+				>
 			{/if}
 			{#if i.kind === 'pr' && show('size')}
 				<span class="hidden opacity-50 sm:inline">·</span>
@@ -301,13 +307,15 @@
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
 			{#each show('labels') ? i.labels.slice(0, MAX_ROW_LABELS) : [] as l (l.name)}
 				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}
-				<span
+				<GhLink
+					href={labelUrl(i.repo, l.name)}
 					class={cn(
-						'max-w-40 truncate rounded-full px-1.5 py-0.5',
+						'max-w-40 truncate rounded-full px-1.5 py-0.5 hover:text-inherit hover:no-underline hover:brightness-95',
 						added && 'ring-2 ring-signal-review ring-offset-1 ring-offset-background'
 					)}
+					title={added ? 'Added since you last looked' : undefined}
 					style="background:#{l.color}; color:{ink(l.color)}"
-					title={added ? 'Added since you last looked' : undefined}>{l.name}</span
+					insideRow>{l.name}</GhLink
 				>
 			{/each}
 		</div>
