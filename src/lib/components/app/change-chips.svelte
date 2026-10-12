@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Change } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
+	import Tip from './tip.svelte';
 
 	/** What changed since you last looked ("+2 commits", "CI fails", "@alice approved"). The row
 	 *  leaves out what it already says (see badges.ts). */
@@ -14,7 +15,10 @@
 </script>
 
 {#each changes.slice(0, max) as c (c.kind + c.text)}
-	<span class={cn('rounded-md px-1.5 py-0.5', TONE[c.tone ?? 'none'])} title="Since you last looked"
-		>{c.text}</span
-	>
+	<Tip focusable={false} text="Since you last looked">
+		{#snippet children(props)}
+			<span {...props} class={cn('rounded-md px-1.5 py-0.5', TONE[c.tone ?? 'none'])}>{c.text}</span
+			>
+		{/snippet}
+	</Tip>
 {/each}

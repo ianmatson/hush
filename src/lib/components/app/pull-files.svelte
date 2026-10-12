@@ -55,6 +55,7 @@
 	import FileDiff from '@lucide/svelte/icons/file-diff';
 	import { DROP_TARGET_CLASS, Uploads, setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
+	import Tip from './tip.svelte';
 
 	let {
 		repo,
@@ -401,23 +402,27 @@
 			{@const open = !closedFolders.has(node.path)}
 			{@const FolderIcon = open ? FolderOpen : Folder}
 			<li class="grid grid-cols-[minmax(0,1fr)]">
-				<button
-					type="button"
-					class="flex min-w-0 items-center gap-1 rounded-md py-1 pr-2 text-left hover:bg-muted"
-					style:padding-left="{depth * TREE_INDENT_PX + 4}px"
-					aria-expanded={open}
-					title={node.path}
-					onclick={() => toggleFolder(node.path)}
-				>
-					<ChevronRight
-						class={cn(
-							'size-3 shrink-0 text-muted-foreground transition-transform',
-							open && 'rotate-90'
-						)}
-					/>
-					<FolderIcon class="size-3.5 shrink-0 text-muted-foreground" />
-					<span class="min-w-0 truncate font-mono">{node.name}</span>
-				</button>
+				<Tip text={node.path}>
+					{#snippet children(props)}
+						<button
+							{...props}
+							type="button"
+							class="flex min-w-0 items-center gap-1 rounded-md py-1 pr-2 text-left hover:bg-muted"
+							style:padding-left="{depth * TREE_INDENT_PX + 4}px"
+							aria-expanded={open}
+							onclick={() => toggleFolder(node.path)}
+						>
+							<ChevronRight
+								class={cn(
+									'size-3 shrink-0 text-muted-foreground transition-transform',
+									open && 'rotate-90'
+								)}
+							/>
+							<FolderIcon class="size-3.5 shrink-0 text-muted-foreground" />
+							<span class="min-w-0 truncate font-mono">{node.name}</span>
+						</button>
+					{/snippet}
+				</Tip>
 				{#if open}
 					<ul
 						class="relative grid grid-cols-[minmax(0,1fr)] before:absolute before:inset-y-0 before:left-(--tree-guide) before:w-px before:bg-border"
@@ -430,46 +435,54 @@
 		{:else}
 			{@const index = indexByFilename.get(node.file.filename) ?? -1}
 			<li class="grid grid-cols-[minmax(0,1fr)]">
-				<a
-					href="#{fileAnchor(node.file.filename)}"
-					onclick={(e) => {
-						e.preventDefault();
-						foldChoices.set(node.file.filename, false);
-						void tick().then(() => reveal(index));
-					}}
-					class={cn(
-						'flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 hover:bg-muted',
-						index === cursor && 'bg-muted'
-					)}
-					style:padding-left="{depth * TREE_INDENT_PX + 20}px"
-					title={node.file.filename}
-				>
-					{#if viewed[node.file.filename] === 'VIEWED'}
-						<FileCheck class="size-3.5 shrink-0 text-signal-merge" aria-label="Viewed" />
-					{:else if viewed[node.file.filename] === 'DISMISSED'}
-						<FileDiff
-							class="size-3.5 shrink-0 text-signal-warn"
-							aria-label="Changed since you viewed it"
-						/>
-					{:else}
-						<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
-					{/if}
-					<span
-						class={cn(
-							'min-w-0 flex-1 truncate font-mono',
-							viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground'
-						)}>{node.name}</span
-					>
-					{#if openThreadsOf(node.file)}
-						<span
-							class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
-							title="{openThreadsOf(node.file)} open review threads"
-							><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
+				<Tip text={node.file.filename}>
+					{#snippet children(props)}
+						<a
+							{...props}
+							href="#{fileAnchor(node.file.filename)}"
+							onclick={(e) => {
+								e.preventDefault();
+								foldChoices.set(node.file.filename, false);
+								void tick().then(() => reveal(index));
+							}}
+							class={cn(
+								'flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 hover:bg-muted',
+								index === cursor && 'bg-muted'
+							)}
+							style:padding-left="{depth * TREE_INDENT_PX + 20}px"
 						>
-					{/if}
-					<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
-					<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
-				</a>
+							{#if viewed[node.file.filename] === 'VIEWED'}
+								<FileCheck class="size-3.5 shrink-0 text-signal-merge" aria-label="Viewed" />
+							{:else if viewed[node.file.filename] === 'DISMISSED'}
+								<FileDiff
+									class="size-3.5 shrink-0 text-signal-warn"
+									aria-label="Changed since you viewed it"
+								/>
+							{:else}
+								<FileIcon class="size-3.5 shrink-0 text-muted-foreground" />
+							{/if}
+							<span
+								class={cn(
+									'min-w-0 flex-1 truncate font-mono',
+									viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground'
+								)}>{node.name}</span
+							>
+							{#if openThreadsOf(node.file)}
+								<Tip focusable={false} text="{openThreadsOf(node.file)} open review threads">
+									{#snippet children(threadProps)}
+										<span
+											{...threadProps}
+											class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
+											><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
+										>
+									{/snippet}
+								</Tip>
+							{/if}
+							<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
+							<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
+						</a>
+					{/snippet}
+				</Tip>
 			</li>
 		{/if}
 	{/each}
@@ -499,17 +512,21 @@
 							!sinceReview && 'bg-muted text-foreground'
 						)}>All changes</a
 					>
-					<a
-						href={rangeHref(true)}
-						data-sveltekit-replacestate
-						data-sveltekit-noscroll
-						aria-current={sinceReview ? 'page' : undefined}
-						title="Since your review {ago(reviewBase.at)}"
-						class={cn(
-							'rounded px-2 py-0.5 hover:text-foreground',
-							sinceReview && 'bg-muted text-foreground'
-						)}>Since your review</a
-					>
+					<Tip text="Since your review {ago(reviewBase.at)}">
+						{#snippet children(props)}
+							<a
+								{...props}
+								href={rangeHref(true)}
+								data-sveltekit-replacestate
+								data-sveltekit-noscroll
+								aria-current={sinceReview ? 'page' : undefined}
+								class={cn(
+									'rounded px-2 py-0.5 hover:text-foreground',
+									sinceReview && 'bg-muted text-foreground'
+								)}>Since your review</a
+							>
+						{/snippet}
+					</Tip>
 				</nav>
 			{/if}
 			<span

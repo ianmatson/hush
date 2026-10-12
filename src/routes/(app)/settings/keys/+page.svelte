@@ -23,6 +23,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Tip from '$lib/components/app/tip.svelte';
 
 	/**
 	 * Every keyboard shortcut, editable (the table: shared/keymap.ts). A change is saved at once as
@@ -193,14 +194,18 @@
 									}}><Plus /></Button
 								>
 							{/if}
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								class={cn(!edited && 'invisible')}
-								aria-label="Reset {c.label}"
-								title="Reset to {c.keys.map(text).join(', ') || 'no key'}"
-								onclick={() => setKeys(c.id, c.keys)}><RotateCcw /></Button
-							>
+							<Tip text="Reset to {c.keys.map(text).join(', ') || 'no key'}">
+								{#snippet children(props)}
+									<Button
+										{...props}
+										variant="ghost"
+										size="icon-xs"
+										class={cn(!edited && 'invisible')}
+										aria-label="Reset {c.label}"
+										onclick={() => setKeys(c.id, c.keys)}><RotateCcw /></Button
+									>
+								{/snippet}
+							</Tip>
 						</div>
 					</div>
 				{/each}

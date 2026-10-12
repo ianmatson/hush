@@ -7,12 +7,15 @@
 	import { cn } from '$lib/utils';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import SmilePlus from '@lucide/svelte/icons/smile-plus';
+	import Tip from './tip.svelte';
 
 	/**
 	 * The reactions under a comment, as on GitHub: a click on one adds yours or takes it back, and
 	 * the smile adds another. The row changes at once, and goes back if GitHub refuses.
 	 */
 	let { r, class: className }: { r: Reactions; class?: string } = $props();
+
+	type ReactionGroup = Reactions['groups'][number];
 
 	// The peek's copy until the peek loads again.
 	let groups = $derived(r.groups);
@@ -42,25 +45,37 @@
 		mine ? (count === 1 ? 'You' : `You and ${count - 1} more`) : `${count}`;
 </script>
 
+{#snippet reaction(g: ReactionGroup, props: Record<string, unknown>)}
+	<button
+		{...props}
+		type="button"
+		disabled={!r.canReact}
+		aria-pressed={g.mine}
+		class={cn(
+			'flex h-6 items-center gap-1 rounded-full border px-2 text-xs tabular-nums transition-colors',
+			g.mine
+				? 'border-primary/40 bg-primary/10 text-foreground'
+				: 'border-border text-muted-foreground hover:bg-muted',
+			!r.canReact && 'cursor-default'
+		)}
+		onclick={() => toggle(g.content)}
+	>
+		<span class="text-[0.8rem] leading-none">{EMOJI[g.content].emoji}</span>{g.count}
+	</button>
+{/snippet}
+
 {#if groups.length || r.canReact}
 	<div class={cn('flex flex-wrap items-center gap-1', className)}>
 		{#each groups as g (g.content)}
-			<button
-				type="button"
-				disabled={!r.canReact}
-				title="{EMOJI[g.content].label}: {who(g.count, g.mine)}"
-				aria-pressed={g.mine}
-				class={cn(
-					'flex h-6 items-center gap-1 rounded-full border px-2 text-xs tabular-nums transition-colors',
-					g.mine
-						? 'border-primary/40 bg-primary/10 text-foreground'
-						: 'border-border text-muted-foreground hover:bg-muted',
-					!r.canReact && 'cursor-default'
-				)}
-				onclick={() => toggle(g.content)}
-			>
-				<span class="text-[0.8rem] leading-none">{EMOJI[g.content].emoji}</span>{g.count}
-			</button>
+			<Tip text="{EMOJI[g.content].label}: {who(g.count, g.mine)}" focusable={r.canReact}>
+				{#snippet children(props)}
+					{#if r.canReact}
+						{@render reaction(g, props)}
+					{:else}
+						<span {...props} class="inline-flex">{@render reaction(g, {})}</span>
+					{/if}
+				{/snippet}
+			</Tip>
 		{/each}
 		{#if r.canReact}
 			<DropdownMenu.Root>
@@ -73,12 +88,16 @@
 				<DropdownMenu.Content align="start" class="flex w-auto min-w-0 gap-0.5 p-1">
 					{#each REACTIONS as x (x.content)}
 						{@const mine = groups.some((g) => g.content === x.content && g.mine)}
-						<DropdownMenu.Item
-							class={cn('size-8 justify-center p-0 text-base', mine && 'bg-primary/10')}
-							title={x.label}
-							aria-label={x.label}
-							onSelect={() => toggle(x.content)}>{x.emoji}</DropdownMenu.Item
-						>
+						<Tip text={x.label}>
+							{#snippet children(props)}
+								<DropdownMenu.Item
+									{...props}
+									class={cn('size-8 justify-center p-0 text-base', mine && 'bg-primary/10')}
+									aria-label={x.label}
+									onSelect={() => toggle(x.content)}>{x.emoji}</DropdownMenu.Item
+								>
+							{/snippet}
+						</Tip>
 					{/each}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>

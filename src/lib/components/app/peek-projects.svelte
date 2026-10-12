@@ -16,6 +16,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import SquareKanban from '@lucide/svelte/icons/square-kanban';
+	import Tip from './tip.svelte';
 
 	let { repo, number }: { repo: string; number: number } = $props();
 
@@ -81,19 +82,23 @@
 {#each q.data?.items ?? [] as item (item.id)}
 	{@const status = statusOf(item.status)}
 	<Popover.Root>
-		<Popover.Trigger
-			class="flex max-w-48 items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium hover:bg-muted"
-			aria-label="{item.project.title}: {status?.name ?? 'No status'}"
-			title={item.project.title}
-		>
-			<span
-				class={cn(
-					'size-2 shrink-0 rounded-full',
-					status ? MARK_DOT[statusColor(status.color)] : 'border border-muted-foreground'
-				)}
-			></span>
-			<span class="truncate">{status?.name ?? 'No status'}</span>
-		</Popover.Trigger>
+		<Tip text={item.project.title}>
+			{#snippet children(props)}
+				<Popover.Trigger
+					{...props}
+					class="flex max-w-48 items-center gap-1.5 rounded-full border px-2 py-0.5 font-medium hover:bg-muted"
+					aria-label="{item.project.title}: {status?.name ?? 'No status'}"
+				>
+					<span
+						class={cn(
+							'size-2 shrink-0 rounded-full',
+							status ? MARK_DOT[statusColor(status.color)] : 'border border-muted-foreground'
+						)}
+					></span>
+					<span class="truncate">{status?.name ?? 'No status'}</span>
+				</Popover.Trigger>
+			{/snippet}
+		</Tip>
 		<Popover.Content align="start" class="grid w-72 gap-3 p-3 text-sm">
 			<a
 				href={item.project.url}

@@ -23,6 +23,7 @@
 	import { itemPagePathFromGitHubUrl } from '$lib/shared/item-page';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Maximize2 from '@lucide/svelte/icons/maximize-2';
+	import Tip from './tip.svelte';
 
 	/**
 	 * Read a PR or issue without leaving Hush (in the side panel). On wide screens the list stays
@@ -80,13 +81,13 @@
 	{/snippet}
 	{#snippet actions(size)}
 		{#if fullPagePath}
-			<Button
-				variant="ghost"
-				{size}
-				href={fullPagePath}
-				title="Open full page ({keysOf('list.fullPage')[0] ?? ''})"
-				aria-label="Open full page"><Maximize2 /></Button
-			>
+			<Tip text="Open full page ({keysOf('list.fullPage')[0] ?? ''})">
+				{#snippet children(props)}
+					<Button {...props} variant="ghost" {size} href={fullPagePath} aria-label="Open full page"
+						><Maximize2 /></Button
+					>
+				{/snippet}
+			</Tip>
 		{/if}
 		{#if target}
 			<Button

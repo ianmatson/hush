@@ -23,6 +23,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { palette } from '$lib/palette.svelte';
+	import Tip from './tip.svelte';
 
 	const me = createQuery(meQuery);
 	const prs = createQuery(() => dashQuery('pr'));
@@ -149,46 +150,58 @@
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 				{/if}
-				<a
-					href="/settings/views?new=1"
-					class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-					aria-label="New view"
-					title="New view"><Plus class="size-4" /></a
-				>
+				<Tip text="New view">
+					{#snippet children(props)}
+						<a
+							{...props}
+							href="/settings/views?new=1"
+							class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+							aria-label="New view"><Plus class="size-4" /></a
+						>
+					{/snippet}
+				</Tip>
 			</nav>
 		</div>
 		<div class="ml-auto flex items-center gap-1">
-			<button
-				type="button"
-				aria-label="Search and commands ({keysOf('palette')[0] ?? ''})"
-				title="Search and commands ({keysOf('palette')[0] ?? ''})"
-				class="flex h-7 items-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-md:w-7 max-md:justify-center md:border md:pr-1 md:pl-2 md:text-xs"
-				onclick={() => (palette.open = true)}
-			>
-				<Search class="size-4 md:size-3.5" /><span class="hidden md:inline">Search</span><kbd
-					class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline"
-					>{keysOf('palette')[0] ?? ''}</kbd
-				>
-			</button>
-			<button
-				type="button"
-				aria-label={newAlerts ? `Alerts, ${newAlerts} new` : 'Alerts'}
-				aria-pressed={ui.alertsOpen}
-				title="Alerts"
-				class={cn(
-					'relative flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground',
-					ui.alertsOpen && 'bg-muted text-foreground'
-				)}
-				onclick={() => (ui.alertsOpen = !ui.alertsOpen)}
-			>
-				<Bell class="size-4" />
-				{#if newAlerts}
-					<span
-						class="absolute -top-0.5 -right-0.5 min-w-3.5 rounded-full bg-primary px-0.5 text-center text-[0.6rem] leading-3.5 text-primary-foreground tabular-nums"
-						>{newAlerts > 9 ? '9+' : newAlerts}</span
+			<Tip text="Search and commands ({keysOf('palette')[0] ?? ''})">
+				{#snippet children(props)}
+					<button
+						{...props}
+						type="button"
+						aria-label="Search and commands ({keysOf('palette')[0] ?? ''})"
+						class="flex h-7 items-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-md:w-7 max-md:justify-center md:border md:pr-1 md:pl-2 md:text-xs"
+						onclick={() => (palette.open = true)}
 					>
-				{/if}
-			</button>
+						<Search class="size-4 md:size-3.5" /><span class="hidden md:inline">Search</span><kbd
+							class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline"
+							>{keysOf('palette')[0] ?? ''}</kbd
+						>
+					</button>
+				{/snippet}
+			</Tip>
+			<Tip text="Alerts">
+				{#snippet children(props)}
+					<button
+						{...props}
+						type="button"
+						aria-label={newAlerts ? `Alerts, ${newAlerts} new` : 'Alerts'}
+						aria-pressed={ui.alertsOpen}
+						class={cn(
+							'relative flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground',
+							ui.alertsOpen && 'bg-muted text-foreground'
+						)}
+						onclick={() => (ui.alertsOpen = !ui.alertsOpen)}
+					>
+						<Bell class="size-4" />
+						{#if newAlerts}
+							<span
+								class="absolute -top-0.5 -right-0.5 min-w-3.5 rounded-full bg-primary px-0.5 text-center text-[0.6rem] leading-3.5 text-primary-foreground tabular-nums"
+								>{newAlerts > 9 ? '9+' : newAlerts}</span
+							>
+						{/if}
+					</button>
+				{/snippet}
+			</Tip>
 			{#if me.data}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger

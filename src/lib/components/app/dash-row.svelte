@@ -3,6 +3,7 @@
 	import { rowMenus } from '$lib/row-menus.svelte';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
+	import Tip from './tip.svelte';
 	import { newChanges, saidBy } from '$lib/shared/badges';
 	import type { DashItem } from '$lib/shared/types';
 	import { ago, since } from '$lib/time';
@@ -254,11 +255,18 @@
 		<div
 			class="mt-1 flex flex-wrap items-center gap-1 text-[0.68rem] sm:mt-1.5 sm:gap-1.5 sm:text-[0.7rem]"
 		>
-			<span
-				class={cn('relative rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
-				title={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
-				>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
+			<Tip
+				focusable={false}
+				text={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
 			>
+				{#snippet children(props)}
+					<span
+						{...props}
+						class={cn('relative rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
+						>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
+					>
+				{/snippet}
+			</Tip>
 			{#if external}<ExternalBadge contributor={external} />{/if}
 			{#if stack && show('stack')}
 				<Tooltip.Root>
@@ -281,13 +289,20 @@
 			{/if}
 			{#if changes.length && show('changes')}<ChangeChips {changes} />{/if}
 			{#if ci && !said.has('ci') && show('ci')}
-				<span
-					class={cn('relative flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5', ci.tone)}
-					title={ciNew ? 'Changed since you last looked' : undefined}
-				>
-					<ci.icon class="size-3" />{ci.label}
-					{#if ciNew}{@render newDot()}{/if}
-				</span>
+				<Tip focusable={false} text={ciNew ? 'Changed since you last looked' : undefined}>
+					{#snippet children(props)}
+						<span
+							{...props}
+							class={cn(
+								'relative flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5',
+								ci.tone
+							)}
+						>
+							<ci.icon class="size-3" />{ci.label}
+							{#if ciNew}{@render newDot()}{/if}
+						</span>
+					{/snippet}
+				</Tip>
 			{/if}
 			{#if review && !said.has('review') && show('review')}
 				<span class={cn('rounded-md bg-muted px-1.5 py-0.5', review.tone)}>{review.label}</span>
@@ -307,16 +322,20 @@
 			<!-- A label added since you last looked has a ring (no chip of its own). -->
 			{#each show('labels') ? i.labels.slice(0, MAX_ROW_LABELS) : [] as l (l.name)}
 				{@const added = newLabels.some((n) => n.toLowerCase() === l.name.toLowerCase())}
-				<GhLink
-					href={labelUrl(i.repo, l.name)}
-					class={cn(
-						'max-w-40 truncate rounded-full px-1.5 py-0.5 hover:text-inherit hover:no-underline hover:brightness-95',
-						added && 'ring-2 ring-signal-review ring-offset-1 ring-offset-background'
-					)}
-					title={added ? 'Added since you last looked' : undefined}
-					style="background:#{l.color}; color:{ink(l.color)}"
-					insideRow>{l.name}</GhLink
-				>
+				<Tip text={added ? 'Added since you last looked' : undefined}>
+					{#snippet children(props)}
+						<GhLink
+							{...props}
+							href={labelUrl(i.repo, l.name)}
+							class={cn(
+								'max-w-40 truncate rounded-full px-1.5 py-0.5 hover:text-inherit hover:no-underline hover:brightness-95',
+								added && 'ring-2 ring-signal-review ring-offset-1 ring-offset-background'
+							)}
+							style="background:#{l.color}; color:{ink(l.color)}"
+							insideRow>{l.name}</GhLink
+						>
+					{/snippet}
+				</Tip>
 			{/each}
 		</div>
 	</div>

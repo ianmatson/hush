@@ -17,6 +17,7 @@
 	import { cn } from '$lib/utils';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Tip from '$lib/components/app/tip.svelte';
 
 	const SEEN_AFTER_MS = 1500;
 
@@ -141,14 +142,13 @@
 	<div
 		class="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl border bg-popover/95 p-1 text-sm shadow-lg backdrop-blur sm:gap-1 sm:p-1.5"
 	>
-		<Button
-			variant="ghost"
-			size="sm"
-			onclick={back}
-			aria-label="Back"
-			title="Back ({keysOf('list.escape')[0] ?? ''})"
-			><ArrowLeft /><span class="hidden sm:inline">Back</span></Button
-		>
+		<Tip text="Back ({keysOf('list.escape')[0] ?? ''})">
+			{#snippet children(props)}
+				<Button {...props} variant="ghost" size="sm" onclick={back} aria-label="Back"
+					><ArrowLeft /><span class="hidden sm:inline">Back</span></Button
+				>
+			{/snippet}
+		</Tip>
 		<span class="mx-1 h-5 w-px bg-border"></span>
 		{#if kind === 'pr'}
 			<nav aria-label="Pull request" class="flex items-center gap-1 text-sm">

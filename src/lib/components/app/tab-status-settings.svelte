@@ -21,6 +21,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Select from '$lib/components/ui/select';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import Tip from './tip.svelte';
 
 	let prefs = $state(loadPrefs());
 	// Save on every change; the live component in the shell listens for it.
@@ -118,15 +119,19 @@
 				<span class="truncate text-sm">{previewTitle}</span>
 			</div>
 			{#if prefs.appBadge.enabled}
-				<div class="relative ml-auto shrink-0" title="App icon badge">
-					<img src="/icon.svg" alt="" class="size-9 rounded-lg" />
-					{#if previewBadge}
-						<span
-							class="absolute -top-1.5 -right-1.5 min-w-5 rounded-full bg-red-500 px-1 text-center text-[0.68rem] leading-5 font-semibold text-white tabular-nums"
-							>{previewBadge}</span
-						>
-					{/if}
-				</div>
+				<Tip focusable={false} text="App icon badge">
+					{#snippet children(props)}
+						<div {...props} class="relative ml-auto shrink-0">
+							<img src="/icon.svg" alt="" class="size-9 rounded-lg" />
+							{#if previewBadge}
+								<span
+									class="absolute -top-1.5 -right-1.5 min-w-5 rounded-full bg-red-500 px-1 text-center text-[0.68rem] leading-5 font-semibold text-white tabular-nums"
+									>{previewBadge}</span
+								>
+							{/if}
+						</div>
+					{/snippet}
+				</Tip>
 			{/if}
 		</div>
 

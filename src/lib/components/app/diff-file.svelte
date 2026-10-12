@@ -27,6 +27,7 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import ReviewThread from './review-thread.svelte';
+	import Tip from './tip.svelte';
 
 	let {
 		file,
@@ -246,22 +247,31 @@
 			onclick={ontoggle}
 		>
 			<ChevronRight class={cn('size-3.5 shrink-0 transition-transform', !folded && 'rotate-90')} />
-			<span class="flex min-w-0 font-mono" title={file.filename}>
-				<span class="min-w-0 truncate text-muted-foreground"
-					>{#if file.previous_filename}{file.previous_filename} →
-					{/if}{path.directory}</span
-				><span class="max-w-full shrink-0 truncate font-medium text-foreground">{path.name}</span>
-			</span>
+			<Tip focusable={false} text={file.filename}>
+				{#snippet children(props)}
+					<span {...props} class="flex min-w-0 font-mono">
+						<span class="min-w-0 truncate text-muted-foreground"
+							>{#if file.previous_filename}{file.previous_filename} →
+							{/if}{path.directory}</span
+						><span class="max-w-full shrink-0 truncate font-medium text-foreground"
+							>{path.name}</span
+						>
+					</span>
+				{/snippet}
+			</Tip>
 		</button>
 		{#if threads.length}
-			<span
-				class={cn(
-					'flex shrink-0 items-center gap-1 tabular-nums',
-					openThreadCount ? 'text-signal-reply' : 'text-muted-foreground'
-				)}
-				title="{openThreadCount} open of {threads.length} review threads"
-				><MessageSquare class="size-3.5" />{openThreadCount || threads.length}</span
-			>
+			<Tip focusable={false} text="{openThreadCount} open of {threads.length} review threads">
+				{#snippet children(props)}
+					<span
+						{...props}
+						class={cn(
+							'flex shrink-0 items-center gap-1 tabular-nums',
+							openThreadCount ? 'text-signal-reply' : 'text-muted-foreground'
+						)}><MessageSquare class="size-3.5" />{openThreadCount || threads.length}</span
+					>
+				{/snippet}
+			</Tip>
 		{/if}
 		{#if status}<span class={cn('shrink-0', status.tone)}>{status.label}</span>{/if}
 		<span class="shrink-0 text-signal-merge tabular-nums">+{file.additions}</span>

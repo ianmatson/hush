@@ -9,6 +9,7 @@
 	import Check from '@lucide/svelte/icons/check';
 	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 	import Settings2 from '@lucide/svelte/icons/settings-2';
+	import Tip from '$lib/components/app/tip.svelte';
 
 	let {
 		groups,
@@ -44,26 +45,29 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger>
-		{#snippet child({ props })}
-			<Button
-				{...props}
-				variant={activeLabel ? 'secondary' : 'ghost'}
-				size={activeLabel ? 'sm' : 'icon-sm'}
-				aria-label={activeLabel ? `Category: ${activeLabel}` : 'Filter by category'}
-				title={activeLabel ? undefined : 'Filter by category'}
-			>
-				{#if activeCategory}
-					<MarkIcon color={activeCategory.color} icon={activeCategory.icon} class="size-3.5" />
-				{:else if notSortedGroup}
-					<CircleDashed class="size-3.5 text-muted-foreground" />
-				{:else}
-					<Shapes />
-				{/if}
-				{#if activeLabel}<span class="max-w-36 truncate">{activeLabel}</span>{/if}
-			</Button>
+	<Tip text={activeLabel ? undefined : 'Filter by category'}>
+		{#snippet children(tipProps)}
+			<DropdownMenu.Trigger {...tipProps}>
+				{#snippet child({ props })}
+					<Button
+						{...props}
+						variant={activeLabel ? 'secondary' : 'ghost'}
+						size={activeLabel ? 'sm' : 'icon-sm'}
+						aria-label={activeLabel ? `Category: ${activeLabel}` : 'Filter by category'}
+					>
+						{#if activeCategory}
+							<MarkIcon color={activeCategory.color} icon={activeCategory.icon} class="size-3.5" />
+						{:else if notSortedGroup}
+							<CircleDashed class="size-3.5 text-muted-foreground" />
+						{:else}
+							<Shapes />
+						{/if}
+						{#if activeLabel}<span class="max-w-36 truncate">{activeLabel}</span>{/if}
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
 		{/snippet}
-	</DropdownMenu.Trigger>
+	</Tip>
 	<DropdownMenu.Content align="end" class="max-h-[70vh] w-60 overflow-y-auto">
 		<DropdownMenu.Item onclick={() => (value = [])}>
 			<span class="flex-1">Every category</span>

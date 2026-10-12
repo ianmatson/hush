@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import Tip from './tip.svelte';
 
 	let { uploads, box }: { uploads: Uploads; box: HTMLTextAreaElement | null } = $props();
 
@@ -26,15 +27,19 @@
 		tabindex="-1"
 		onchange={attachPicked}
 	/>
-	<Button
-		type="button"
-		size="icon-sm"
-		variant="ghost"
-		class="text-muted-foreground"
-		title="Attach images or videos (or paste or drop them)"
-		aria-label="Attach images or videos"
-		onclick={() => picker?.click()}
-	>
-		{#if uploads.pending}<LoaderCircle class="animate-spin" />{:else}<Paperclip />{/if}
-	</Button>
+	<Tip text="Attach images or videos (or paste or drop them)">
+		{#snippet children(props)}
+			<Button
+				{...props}
+				type="button"
+				size="icon-sm"
+				variant="ghost"
+				class="text-muted-foreground"
+				aria-label="Attach images or videos"
+				onclick={() => picker?.click()}
+			>
+				{#if uploads.pending}<LoaderCircle class="animate-spin" />{:else}<Paperclip />{/if}
+			</Button>
+		{/snippet}
+	</Tip>
 {/if}

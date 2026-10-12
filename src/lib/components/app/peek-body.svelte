@@ -35,6 +35,7 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Tip from './tip.svelte';
 
 	/** The contents of the peek panel: one PR or issue, fetched when shown. */
 	let {
@@ -178,17 +179,18 @@
 				{/if}
 			</div>
 			{#if p.pr}
-				{@const headRepo = p.pr.headRepo}
+				{@const { base, head, headRepo } = p.pr}
 				{@const fromFork = !!headRepo && headRepo !== p.repo}
-				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${p.pr.head}` : p.pr.head}
-				<p
-					class="truncate font-mono text-[0.7rem] text-muted-foreground"
-					title="{p.pr.base} ← {headLabel}"
-				>
-					<GhLink href={branchUrl(p.repo, p.pr.base)}>{p.pr.base}</GhLink> ←
-					{#if headRepo}<GhLink href={branchUrl(headRepo, p.pr.head)}>{headLabel}</GhLink
-						>{:else}{headLabel}{/if}
-				</p>
+				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${head}` : head}
+				<Tip focusable={false} text="{base} ← {headLabel}">
+					{#snippet children(props)}
+						<p {...props} class="truncate font-mono text-[0.7rem] text-muted-foreground">
+							<GhLink href={branchUrl(p.repo, base)}>{base}</GhLink> ←
+							{#if headRepo}<GhLink href={branchUrl(headRepo, head)}>{headLabel}</GhLink
+								>{:else}{headLabel}{/if}
+						</p>
+					{/snippet}
+				</Tip>
 			{/if}
 			{#if p.labels.length}
 				<div class="flex flex-wrap gap-1">
@@ -231,9 +233,11 @@
 									class="size-5 rounded-full border border-dashed"
 								></span>{/if}
 							{#if requestedUrl}
-								<GhLink href={requestedUrl} class="truncate" title={r.slug ?? undefined}
-									>{r.name}</GhLink
-								>
+								<Tip text={r.slug}>
+									{#snippet children(props)}
+										<GhLink {...props} href={requestedUrl} class="truncate">{r.name}</GhLink>
+									{/snippet}
+								</Tip>
 							{:else}
 								<span class="truncate">{r.name}</span>
 							{/if}
