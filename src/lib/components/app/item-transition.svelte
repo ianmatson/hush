@@ -247,9 +247,10 @@
 </script>
 
 <style>
-	:global(html.item-transition *),
-	:global(html.item-transition *::before),
-	:global(html.item-transition *::after) {
+	:global(html.item-transition [data-page]),
+	:global(html.item-transition [data-header-bar]),
+	:global(html.item-transition [data-item-dock]),
+	:global(html.item-transition aside[aria-label='peek']) {
 		transition: none !important;
 	}
 	:global(html.item-transition [data-header-bar] > a) {

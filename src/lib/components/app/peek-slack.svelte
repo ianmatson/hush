@@ -62,6 +62,11 @@
 		if (sentinelNearEnd()) loadMore();
 	}
 
+	function openInSlackApp(event: MouseEvent, appUrl: string) {
+		event.preventDefault();
+		location.assign(appUrl);
+	}
+
 	$effect(() => {
 		if (!scroller || !sentinel) return;
 		const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && loadMore(), {
@@ -106,11 +111,13 @@
 							class="-mx-1 grid max-h-96 gap-2 overflow-y-auto overscroll-contain px-1"
 						>
 							{#each found as m (m.permalink)}
+								{@const appUrl = m.appUrl}
 								<li>
 									<a
-										href={m.appUrl ?? m.permalink}
-										target={m.appUrl ? undefined : '_blank'}
+										href={appUrl ?? m.permalink}
+										target={appUrl ? undefined : '_blank'}
 										rel="noreferrer"
+										onclick={appUrl ? (e) => openInSlackApp(e, appUrl) : undefined}
 										class="grid gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[0.8rem] transition-colors hover:bg-muted"
 									>
 										<span class="flex items-center gap-2 text-xs">

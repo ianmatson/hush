@@ -52,7 +52,8 @@ app.use('/api/*', async (c, next) => {
 		'/api/auth/callback',
 		'/api/push/vapid-key',
 		'/api/health',
-		'/api/slack/events'
+		'/api/slack/events',
+		'/api/slack/interactions'
 	];
 	if (open.includes(c.req.path)) return next();
 	const sid = getCookie(c, SESSION_COOKIE);
