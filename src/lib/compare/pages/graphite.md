@@ -1,6 +1,6 @@
 ---
 title: Hush vs. Graphite for pull requests and GitHub notifications
-description: Graphite's pull request inbox next to Hush. Graphite is a full code review platform for teams; Hush is a web app for one person's GitHub pull requests and issues, in views you define, with pushes for the facts you choose. Who should use which.
+description: Graphite is a code review platform for teams. Hush is a web app for one person's GitHub PRs and issues, in views you define. Who should use which.
 ---
 
 ## Summary

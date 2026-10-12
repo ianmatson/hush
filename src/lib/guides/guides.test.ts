@@ -36,7 +36,6 @@ describe('guides', () => {
 		for (const guide of GUIDES) {
 			expect(guide.title, guide.slug).toMatch(/^How to .*GitHub/);
 			expect(guide.description.length, guide.slug).toBeGreaterThan(60);
-			expect(guide.description.length, guide.slug).toBeLessThanOrEqual(240);
 		}
 	});
 

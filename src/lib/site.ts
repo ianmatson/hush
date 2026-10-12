@@ -14,3 +14,5 @@ export const APP_URL = import.meta.env.DEV ? '' : 'https://app.hush-gh.com';
 export const REPO_URL = 'https://github.com/ianmatson/hush';
 
 export const SUPPORT_EMAIL = 'support@hush-gh.com';
+
+export const SEARCH_SNIPPET_LENGTH = 160;

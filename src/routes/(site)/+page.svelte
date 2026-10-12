@@ -20,7 +20,7 @@
 
 	const SIGN_IN_URL = `${APP_URL}/login`;
 	const DESCRIPTION =
-		'Hush for GitHub is an open-source web app for the pull requests and issues that you work on: GitHub searches that stay live as views, grouped your way, with pushes for the facts that you choose, and a side panel to approve, comment, and merge.';
+		'An open-source web app for your GitHub pull requests and issues: live searches as views, grouped your way, with pushes for the facts that you choose.';
 
 	const FACTS = [
 		{ name: 'Review requested', on: true },
@@ -30,6 +30,7 @@
 		{ name: 'Changes requested', on: true },
 		{ name: 'CI failed', on: true },
 		{ name: 'Assigned', on: true },
+		{ name: 'A snooze ends', on: true },
 		{ name: 'CI passed', on: false },
 		{ name: 'New in a view', on: false }
 	];
@@ -211,8 +212,8 @@
 					or merge. Your draft waits if you close it.
 				</p>
 				<p>
-					Not now? <kbd>S</kbd> snoozes until there is new activity, <kbd>M</kbd> mutes, and
-					<kbd>U</kbd> marks it unread. They stay in Hush.
+					Not now? <kbd>E</kbd> snoozes until there is new activity, <kbd>S</kbd> until tomorrow,
+					<kbd>M</kbd> mutes, and <kbd>U</kbd> marks it unread. They stay in Hush.
 				</p>
 				<p class="note">Hush writes to GitHub only when you do.</p>
 				<a class="link" href="/docs/peek"

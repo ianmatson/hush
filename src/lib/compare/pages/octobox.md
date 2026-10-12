@@ -1,6 +1,6 @@
 ---
 title: Hush vs. Octobox for GitHub notifications
-description: Octobox is a mature, self-hostable web inbox for GitHub notifications, with rich search. Hush is a web app for your GitHub pull requests and issues, in views you define, with pushes for the facts you choose.
+description: Octobox is a mature, self-hostable web inbox for GitHub notifications. Hush is a web app for your PRs and issues, in views you define, with pushes.
 ---
 
 ## Summary

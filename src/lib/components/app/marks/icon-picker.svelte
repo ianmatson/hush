@@ -67,7 +67,7 @@
 <Popover.Root bind:open>
 	<Popover.Trigger
 		class="flex size-8 shrink-0 items-center justify-center rounded-md border hover:bg-muted"
-		aria-label="{label}: icon and colour"
+		aria-label="{label}: icon and color"
 	>
 		<MarkIcon {color} {icon} class="size-4" />
 	</Popover.Trigger>

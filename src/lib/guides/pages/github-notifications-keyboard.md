@@ -1,6 +1,6 @@
 ---
 title: How to triage GitHub notifications with the keyboard
-description: GitHub's notification shortcuts (E, Shift+I, Shift+U, Shift+M), and a full keyboard flow in Hush to move, read, approve, merge, snooze, and mute your pull requests without the mouse.
+description: GitHub's notification shortcuts (E, Shift+I, Shift+U, Shift+M), and a keyboard flow in Hush to move, approve, merge, snooze, and mute without the mouse.
 ---
 
 ## Short answer

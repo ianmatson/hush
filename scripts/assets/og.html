@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Hush link preview</title>
+		<style>
+			@font-face {
+				font-family: 'Geist';
+				src: url('../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2')
+					format('woff2');
+				font-weight: 100 900;
+			}
+			@font-face {
+				font-family: 'Newsreader';
+				src: url('../../node_modules/@fontsource-variable/newsreader/files/newsreader-latin-opsz-italic.woff2')
+					format('woff2');
+				font-style: italic;
+			}
+			html,
+			body {
+				margin: 0;
+				width: 1200px;
+				height: 630px;
+				overflow: hidden;
+				background: #0a0a0a;
+				color: #fafafa;
+				font-family: 'Geist', sans-serif;
+			}
+			main {
+				box-sizing: border-box;
+				height: 100%;
+				padding: 80px 96px;
+				display: flex;
+				flex-direction: column;
+			}
+			.brand {
+				display: flex;
+				align-items: center;
+				gap: 16px;
+				font-size: 44px;
+				font-weight: 650;
+				letter-spacing: -0.02em;
+			}
+			h1 {
+				margin: auto 0;
+				font-size: 104px;
+				font-weight: 560;
+				line-height: 1;
+				letter-spacing: -0.045em;
+			}
+			h1 em {
+				display: block;
+				font-family: 'Newsreader', Georgia, serif;
+				font-weight: 400;
+				font-size: 1.06em;
+				letter-spacing: -0.015em;
+			}
+			.domain {
+				font-size: 32px;
+				color: #a1a1aa;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<div class="brand">
+				<svg width="48" height="56" viewBox="105 105 302 335" aria-hidden="true">
+					<path
+						d="M256 120c-62 0-104 46-104 106v58l-30 50c-6 10 1 22 13 22h242c12 0 19-12 13-22l-30-50v-58c0-60-42-106-104-106z"
+						fill="none"
+						stroke="#fafafa"
+						stroke-width="30"
+						stroke-linejoin="round"
+					/>
+					<path
+						d="M214 392c8 20 24 32 42 32s34-12 42-32"
+						fill="none"
+						stroke="#fafafa"
+						stroke-width="30"
+						stroke-linecap="round"
+					/>
+				</svg>
+				hush
+			</div>
+			<h1>Your GitHub work, <em>in views you define.</em></h1>
+			<div class="domain">hush-gh.com</div>
+		</main>
+	</body>
+</html>

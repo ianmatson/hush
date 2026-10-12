@@ -1,6 +1,6 @@
 ---
 title: Hush vs. gh-dash for GitHub pull requests and notifications
-description: gh-dash and Hush both put GitHub pull requests and issues into sections built from searches. gh-dash runs in the terminal and also lists GitHub notifications; Hush is a web app with pushes for the facts you choose.
+description: gh-dash and Hush both put pull requests and issues into sections from searches. gh-dash runs in the terminal and lists GitHub notifications; Hush is a web app.
 ---
 
 ## Summary

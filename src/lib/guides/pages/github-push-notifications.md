@@ -1,6 +1,6 @@
 ---
 title: How to get push notifications for GitHub review requests and CI failures on your phone
-description: GitHub Mobile pushes review requests, mentions, assignments, and failed runs that you started. Hush pushes the facts that you choose from any browser, including CI that fails on your pull requests. How to set up both, also on iPhone.
+description: GitHub Mobile pushes review requests, mentions, and assignments. Hush pushes the facts you choose to any browser, failing CI too. How to set up both.
 ---
 
 ## Short answer

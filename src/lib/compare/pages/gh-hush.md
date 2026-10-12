@@ -1,6 +1,6 @@
 ---
 title: Hush vs. gh-hush for GitHub notifications
-description: gh-hush is a GitHub CLI extension that clears GitHub notifications by your rules; Hush (hush-gh.com) is a web app for your pull requests and issues, in views you define, with pushes for the facts you choose. Two different tools with similar names.
+description: gh-hush is a GitHub CLI extension that clears notifications by your rules. Hush is a web app for your PRs and issues. Two different tools with similar names.
 ---
 
 ## Summary

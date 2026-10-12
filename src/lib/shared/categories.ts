@@ -243,7 +243,7 @@ function validateCategory(c: Partial<ItemCategory> | null, ids: Set<string>): st
 	ids.add(c.id);
 	if (!validName(c.name))
 		return `Each category needs a name (${MAX_MARK_NAME_CHARS} characters or fewer).`;
-	if (!MARK_COLORS.includes(c.color as MarkColor)) return `"${c.name}": unknown colour.`;
+	if (!MARK_COLORS.includes(c.color as MarkColor)) return `"${c.name}": unknown color.`;
 	if (typeof c.rule !== 'string') return `"${c.name}": the rule must be text.`;
 	const err = c.rule.trim() ? queryError(c.rule) : null;
 	if (err) return `"${c.name}": ${err}`;

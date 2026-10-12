@@ -43,7 +43,7 @@ export const COMPARE_INDEX: ComparePage & { path: string } = {
 	path: '/compare',
 	title: 'GitHub notification and pull request tools compared',
 	description:
-		'Hush next to GitHub’s own notifications, Gitify, Octobox, Graphite, gh-dash, Neat, Notifier for GitHub, and gh-hush: what each one does well, and who should choose which.',
+		'Hush next to GitHub’s own notifications, Gitify, Octobox, Graphite, gh-dash, Neat, Notifier for GitHub, and gh-hush: what each does well, and who it suits.',
 	markdown: `## Summary
 
 **GitHub's own inbox is free and built in, and sorts by time. Other tools add a desktop app (Gitify, Neat), a self-hosted web inbox (Octobox), terminal sections of pull requests and issues (gh-dash), a toolbar badge (Notifier for GitHub), team code review (Graphite), or a cleanup command (gh-hush). Hush is a web app for your GitHub work, in views that you define, with pushes for the facts that you choose.**

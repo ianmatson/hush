@@ -24,7 +24,7 @@ export const GUIDES_INDEX: GuidePage & { path: string } = {
 	path: GUIDES_PATH,
 	title: 'GitHub notification guides',
 	description:
-		'Short how-to guides for GitHub notifications: less noise, only the review requests that need you, push to your phone, quiet bots, RSS feeds, and keyboard triage.',
+		'Short how-to guides for GitHub notifications: less noise, only the review requests that need you, push to your phone, quiet bots, RSS, and keyboard triage.',
 	markdown: `${GUIDES_INTRO}
 
 ${GUIDES.map((g) => `- [${g.title}](${guidePath(g)}): ${g.description}`).join('\n')}

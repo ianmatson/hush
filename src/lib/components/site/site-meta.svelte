@@ -25,6 +25,7 @@
 	} = $props();
 	const url = $derived(SITE_URL + path);
 	const image = `${SITE_URL}/og.png`;
+	const imageAlt = `${SITE_NAME}: your GitHub work, in views you define.`;
 </script>
 
 <svelte:head>
@@ -45,7 +46,9 @@
 		<meta property="og:image" content={image} />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content={imageAlt} />
 		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:image:alt" content={imageAlt} />
 		{#each structuredData as data, i (i)}
 			{@html jsonLdScript(data)}
 		{/each}

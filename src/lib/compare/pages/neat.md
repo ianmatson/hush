@@ -1,6 +1,6 @@
 ---
 title: Hush vs. Neat for GitHub notifications
-description: Neat puts GitHub notifications in the macOS menu bar, for free, with local data. Hush is a web app for your GitHub pull requests and issues, in views you define, with pushes for the facts you choose, on any device.
+description: Neat puts GitHub notifications in the macOS menu bar, with local data. Hush is a web app for your PRs and issues, with pushes, on any device.
 ---
 
 ## Summary

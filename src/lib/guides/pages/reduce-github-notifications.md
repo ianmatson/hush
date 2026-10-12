@@ -1,6 +1,6 @@
 ---
 title: How to reduce GitHub notification noise
-description: Too many GitHub notifications? Unwatch busy repositories, turn off automatic watching, filter the inbox, and route email with GitHub's own settings. Then see your pull requests and issues by whose turn it is.
+description: Too many GitHub notifications? Unwatch busy repositories, stop automatic watching, filter the inbox, and route email. Then see whose turn each PR is.
 ---
 
 ## Short answer

@@ -35,7 +35,7 @@ Snooze and Mute stay in Hush. They do not change your notifications on GitHub. S
 
 ## 4. Turn on push
 
-Go to **Settings → Notifications** and choose **Turn on** for this device. By default, Hush pushes review requests, mentions, replies, reviews and failed CI on your pull requests, and assignments, and each PR or issue only once until you open Hush. See [What gets pushed](/docs/notifications#what-gets-pushed). Do this on each browser or phone that should get pushes.
+Go to **Settings → Notifications** and choose **Turn on** for this device. By default, Hush pushes review requests, mentions, replies, reviews and failed CI on your pull requests, assignments, and the end of a snooze, and each PR or issue only once until you open Hush. See [What gets pushed](/docs/notifications#what-gets-pushed). Do this on each browser or phone that should get pushes.
 
 On iPhone and iPad, first add Hush to your Home Screen (Share → Add to Home Screen), open it from there, and then turn on push. See [Notifications](/docs/notifications).
 
