@@ -30,16 +30,23 @@
 		type ReviewEvent,
 		comparesOnlyNewCommits,
 		fileAnchor,
+		lineElementId,
 		filesInTreeOrder,
 		foldedByDefault,
 		rangeSinceReview,
 		threadsByPath,
+		type DiffLineTarget,
 		type ReviewRange,
 		type FileTreeNode,
 		type PullFile,
 		type ReviewThread,
 		type ViewedFiles
 	} from '$lib/shared/diff';
+	import {
+		gitHubDiffFileHash,
+		parseGitHubDiffAnchor,
+		type GitHubDiffAnchor
+	} from '$lib/shared/in-app-links';
 	import { cn } from '$lib/utils';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import DiffFile from './diff-file.svelte';
@@ -350,20 +357,49 @@
 			?.scrollIntoView({ block: 'start', behavior });
 	}
 
-	function jumpTo(index: number) {
-		reveal(index, 'instant');
-		setTimeout(() => reveal(index, 'instant'), SETTLE_MS);
+	let targetLine = $state<{ filename: string; line: DiffLineTarget } | null>(null);
+
+	function revealLine(index: number, line: DiffLineTarget) {
+		const file = files[index];
+		const row = file && document.getElementById(lineElementId(file.filename, line));
+		if (!row) return reveal(index, 'instant');
+		cursor = index;
+		row.scrollIntoView({ block: 'center', behavior: 'instant' });
+	}
+
+	function jumpTo(index: number, line: DiffLineTarget | null = null) {
+		const go = () => (line ? revealLine(index, line) : reveal(index, 'instant'));
+		go();
+		setTimeout(go, SETTLE_MS);
+	}
+
+	function openAt(hash: string, index: number, line: DiffLineTarget | null) {
+		revealedHash = hash;
+		const filename = files[index].filename;
+		targetLine = line && { filename, line };
+		foldChoices.set(filename, false);
+		void tick().then(() => jumpTo(index, line));
+	}
+
+	async function openGitHubDiffAnchor(hash: string, anchor: GitHubDiffAnchor) {
+		const shown = files;
+		const hashes = await Promise.all(shown.map((f) => gitHubDiffFileHash(f.filename)));
+		const index = hashes.indexOf(anchor.fileHash);
+		if (index < 0 || shown !== files || page.url.hash.slice(1) !== hash) return;
+		openAt(hash, index, anchor.line);
 	}
 
 	let revealedHash = '';
 	$effect(() => {
 		const hash = page.url.hash.slice(1);
 		if (!hash || hash === revealedHash || !files.length) return;
+		const gitHubAnchor = parseGitHubDiffAnchor(hash);
+		if (gitHubAnchor) {
+			void openGitHubDiffAnchor(hash, gitHubAnchor);
+			return;
+		}
 		const index = files.findIndex((f) => fileAnchor(f.filename) === hash);
-		if (index < 0) return;
-		revealedHash = hash;
-		foldChoices.set(files[index].filename, false);
-		void tick().then(() => jumpTo(index));
+		if (index >= 0) openAt(hash, index, null);
 	});
 
 	function onKey(e: KeyboardEvent) {
@@ -714,6 +750,7 @@
 					threads={fileThreads(file)}
 					onthreadschanged={refreshThreads}
 					selection={selection?.file === file.filename ? selection : null}
+					targetLine={targetLine?.filename === file.filename ? targetLine.line : null}
 					canComment={commentingAllowed}
 					onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
 					ontoggle={() => {

@@ -26,6 +26,14 @@ The full page shows the same pull request or issue as the peek, in a wider colum
 - {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
 - The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
 
+#### Links in descriptions and comments
+
+A link to a pull request or an issue in a description or a comment opens its full page in Hush, in the same tab. Cmd+click (Ctrl+click on Windows and Linux) opens it in a new tab.
+
+- A link to a pull request's files (`…/pull/123/files` or `…/pull/123/changes`) opens the Files tab.
+- A link to a file or a line in the diff opens the Files tab at that file, and marks the line. When the line is not in the diff, Hush goes to the file.
+- All other links, such as files on a branch, commits, repositories, people, and labels, open on GitHub in a new tab.
+
 A pull request has two tabs: **Conversation** ({{key:page.conversation}}) and **Files** ({{key:page.files}}). The Files tab has the address of GitHub's Files tab: `…/pull/123/files`.
 
 ### The Files tab
@@ -86,7 +94,7 @@ The address of this view ends in `?since=review`.
 - **Why it is here**, at the top, in plain words: the item's section and its reason, such as “Reviews: Review requested, for 2d.” Under it, what changed since you last looked (see [Since you looked](/docs/pull-requests-and-issues#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened. An **External** badge shows when the author is not a member or collaborator of the repository, and **First-time** when it is their first PR or issue there. The **External contributor** part in **Settings → General → Row contents** turns the badge on or off, for rows and the peek.
-- For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
+- For a PR: the branches, the size (click it to open the Files tab of the full page), the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
 - For a PR: **Files**, the changed files with their added and deleted lines. The part starts closed. Click a file to see its changes in the Files tab of the full page.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.

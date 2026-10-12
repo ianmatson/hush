@@ -2,6 +2,7 @@
 	import {
 		fileAnchor,
 		languageForPath,
+		lineElementId,
 		lineAnchors,
 		parsePatch,
 		placeThreads,
@@ -9,6 +10,8 @@
 		splitRows,
 		type DiffHunk,
 		type DiffLine,
+		type DiffLineTarget,
+		type DiffLineSide,
 		type DiffLineKind,
 		type FileViewedState,
 		type FoldReason,
@@ -41,6 +44,7 @@
 		onviewed,
 		onthreadschanged,
 		selection,
+		targetLine,
 		canComment,
 		onselect,
 		composer
@@ -56,6 +60,7 @@
 		onviewed: () => void;
 		onthreadschanged: () => Promise<unknown>;
 		selection: { hunk: number; from: number; to: number } | null;
+		targetLine: DiffLineTarget | null;
 		canComment: boolean;
 		onselect: (hunk: number, at: number, extend: boolean) => void;
 		composer: Snippet;
@@ -87,6 +92,11 @@
 	});
 	const path = $derived(splitPath(file.filename));
 	const placed = $derived(placeThreads(threads, hunks));
+	const numberCellId = (value: number | null, side: DiffLineSide) =>
+		value === null ? undefined : lineElementId(file.filename, { side, line: value });
+	const isTargetLine = (value: number | null, side: DiffLineSide) =>
+		!!targetLine && targetLine.side === side && targetLine.line === value;
+	const MARKED_NUMBER_TONE = 'bg-signal-review/25 text-foreground';
 	const THREAD_MAX_WIDTH_PX = 768;
 	const THREAD_INSET_PX = 16;
 	let visibleWidth = $state(THREAD_MAX_WIDTH_PX + THREAD_INSET_PX);
@@ -199,21 +209,18 @@
 {#snippet splitHalf(cell: { line: DiffLine; at: number } | null, h: number, side: 'old' | 'new')}
 	{#if cell}
 		{@const tone = cell.line.kind === 'context' ? '' : ROW_TONE[cell.line.kind]}
+		{@const number = side === 'old' ? cell.line.oldLine : cell.line.newLine}
+		{@const diffSide = side === 'old' ? 'L' : 'R'}
 		<td
+			id={numberCellId(number, diffSide)}
 			class={cn(
 				'px-2 text-right align-top text-muted-foreground tabular-nums select-none',
-				isSelected(h, cell.at)
-					? 'bg-signal-review/25 text-foreground'
+				isSelected(h, cell.at) || isTargetLine(number, diffSide)
+					? MARKED_NUMBER_TONE
 					: cell.line.kind === 'context'
 						? ''
 						: NUMBER_TONE[cell.line.kind]
-			)}
-			>{@render lineNumber(
-				side === 'old' ? cell.line.oldLine : cell.line.newLine,
-				h,
-				cell.at,
-				cell.line.kind
-			)}</td
+			)}>{@render lineNumber(number, h, cell.at, cell.line.kind)}</td
 		>
 		<td class={cn('pr-3 align-top break-all whitespace-pre-wrap', tone)}
 			>{@render code(cell.line, h, cell.at)}</td
@@ -367,13 +374,16 @@
 										<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
 									</tr>
 									{#each hunk.lines as line, l (l)}
+										{@const marked =
+											isSelected(h, l) ||
+											isTargetLine(line.oldLine, 'L') ||
+											isTargetLine(line.newLine, 'R')}
 										<tr class={ROW_TONE[line.kind]}>
 											<td
+												id={numberCellId(line.oldLine, 'L')}
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													isSelected(h, l)
-														? 'bg-signal-review/25 text-foreground'
-														: NUMBER_TONE[line.kind]
+													marked ? MARKED_NUMBER_TONE : NUMBER_TONE[line.kind]
 												)}
 												>{@render lineNumber(
 													line.kind === 'del' ? line.oldLine : null,
@@ -383,11 +393,10 @@
 												)}{#if line.kind !== 'del'}{line.oldLine ?? ''}{/if}</td
 											>
 											<td
+												id={numberCellId(line.newLine, 'R')}
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													isSelected(h, l)
-														? 'bg-signal-review/25 text-foreground'
-														: NUMBER_TONE[line.kind]
+													marked ? MARKED_NUMBER_TONE : NUMBER_TONE[line.kind]
 												)}>{@render lineNumber(line.newLine, h, l, line.kind)}</td
 											>
 											<td class="pr-4 whitespace-pre"

@@ -173,9 +173,14 @@
 				<span>opened {ago(p.createdAt)}</span>
 				{#if p.pr}
 					<span class="opacity-50">·</span>
-					<span class="text-signal-merge tabular-nums">+{p.pr.additions}</span>
-					<span class="text-signal-fail tabular-nums">−{p.pr.deletions}</span>
-					<span>{p.pr.files} {p.pr.files === 1 ? 'file' : 'files'}</span>
+					<a
+						href="{itemPagePath(p.repo, p.number, 'pr')}/{FILES_TAB}"
+						class="flex items-center gap-2 underline-offset-2 hover:text-foreground hover:underline"
+					>
+						<span class="text-signal-merge tabular-nums">+{p.pr.additions}</span>
+						<span class="text-signal-fail tabular-nums">−{p.pr.deletions}</span>
+						<span>{p.pr.files} {p.pr.files === 1 ? 'file' : 'files'}</span>
+					</a>
 				{/if}
 			</div>
 			{#if p.pr}

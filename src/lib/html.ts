@@ -1,6 +1,19 @@
 import DOMPurify from 'dompurify';
+import { inAppPathForGitHubUrl } from '$lib/shared/in-app-links';
 
 let hooked = false;
+
+function pointLink(link: Element) {
+	const inAppPath = inAppPathForGitHubUrl(link.getAttribute('href') ?? '');
+	if (inAppPath) {
+		link.setAttribute('href', inAppPath);
+		link.removeAttribute('target');
+		link.removeAttribute('rel');
+		return;
+	}
+	link.setAttribute('target', '_blank');
+	link.setAttribute('rel', 'noopener noreferrer');
+}
 
 /**
  * Clean GitHub's rendered HTML before it goes into the page. GitHub already sanitizes it, but
@@ -9,10 +22,7 @@ let hooked = false;
 export function sanitize(html: string): string {
 	if (!hooked) {
 		DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-			if (node.tagName === 'A') {
-				node.setAttribute('target', '_blank');
-				node.setAttribute('rel', 'noopener noreferrer');
-			}
+			if (node.tagName === 'A') pointLink(node);
 			if (node.tagName === 'IMG') {
 				node.setAttribute('loading', 'lazy');
 				node.setAttribute('referrerpolicy', 'no-referrer');
