@@ -26,6 +26,14 @@ The full page shows the same pull request or issue as the peek, in a wider colum
 - {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
 - The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
 
+#### Links in descriptions and comments
+
+A link to a pull request or an issue in a description or a comment opens its full page in Hush, in the same tab. Cmd+click (Ctrl+click on Windows and Linux) opens it in a new tab.
+
+- A link to a pull request's files (`…/pull/123/files` or `…/pull/123/changes`) opens the Files tab.
+- A link to a file or a line in the diff opens the Files tab at that file, and marks the line. When the line is not in the diff, Hush goes to the file.
+- All other links, such as files on a branch, commits, repositories, people, and labels, open on GitHub in a new tab.
+
 A pull request has two tabs: **Conversation** ({{key:page.conversation}}) and **Files** ({{key:page.files}}). The Files tab has the address of GitHub's Files tab: `…/pull/123/files`.
 
 ### The Files tab
@@ -86,14 +94,14 @@ The address of this view ends in `?since=review`.
 - **Why it is here**, at the top, in plain words: the item's section and its reason, such as “Reviews: Review requested, for 2d.” Under it, what changed since you last looked (see [Since you looked](/docs/pull-requests-and-issues#since-you-looked)).
 - The title and `repo#number`. Both link to GitHub.
 - The state (open, draft, merged, closed), the author, and when it was opened. An **External** badge shows when the author is not a member or collaborator of the repository, and **First-time** when it is their first PR or issue there. The **External contributor** part in **Settings → General → Row contents** turns the badge on or off, for rows and the peek.
-- For a PR: the branches, the size, the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
+- For a PR: the branches, the size (click it to open the Files tab of the full page), the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
 - For a PR: **Files**, the changed files with their added and deleted lines. The part starts closed. Click a file to see its changes in the Files tab of the full page.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - **Project status**: a chip for each GitHub project that has the item, with its Status (“This week”). Click the chip to see the project. There you can change the status, move the item to another project of the same owner, or remove it from the project. A move or a removal loses the item's other fields on that project. The chips need the `project` scope (see [project boards](/docs/github-access#project-boards)).
 - The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted here, and show in the Files tab of the [full page](#the-files-tab).
 - The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
-- **Mentioned in Slack**: messages in the PostHog Slack that link to the PR or issue, newest first, with the channel, the author, the time, and a link to the message. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The part starts closed: its title shows the number of messages, or a spinner while Hush searches. Click the title to show the messages. With no messages, this part is not shown.
+- **Mentioned in Slack**: the Slack icon at the right of the first row, with the number of messages in the PostHog Slack that link to the PR or issue. “20+” means that there are more messages to load. Click the icon to see the messages, newest first, with the channel, the author, and the time. Scroll down to load more. Click a message to open it in the Slack app. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The icon shows when the search is done, and only when there are messages.
 - A comment box at the end.
 
 When the peek opens an item, Hush marks it as read. This stays in Hush: it does not change your notifications on GitHub. Press {{key:dash.read}} to make the item unread again. See [Unread](/docs/pull-requests-and-issues#unread).

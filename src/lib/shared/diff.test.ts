@@ -5,6 +5,7 @@ import {
 	fileAnchor,
 	hunkSides,
 	languageForPath,
+	lineElementId,
 	filesInTreeOrder,
 	foldedByDefault,
 	isGeneratedFile,
@@ -123,6 +124,13 @@ describe('pages and paths', () => {
 	it('makes an anchor that is safe in a URL fragment and differs per path', () => {
 		expect(fileAnchor('src/a b.ts')).toMatch(/^file-[A-Za-z0-9._~-]+$/);
 		expect(fileAnchor('src/a.ts')).not.toBe(fileAnchor('src/b.ts'));
+	});
+
+	it('makes a line anchor from the file anchor, the side, and the line number', () => {
+		expect(lineElementId('src/a.ts', { side: 'R', line: 12 })).toBe(
+			`${fileAnchor('src/a.ts')}-R12`
+		);
+		expect(lineElementId('src/a.ts', { side: 'L', line: 3 })).toBe(`${fileAnchor('src/a.ts')}-L3`);
 	});
 });
 

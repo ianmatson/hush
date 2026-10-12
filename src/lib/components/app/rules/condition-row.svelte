@@ -11,6 +11,7 @@
 	import SearchSelect, { type SearchSelectGroup } from '../search-select.svelte';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import X from '@lucide/svelte/icons/x';
+	import Tip from '$lib/components/app/tip.svelte';
 
 	let {
 		condition,
@@ -158,11 +159,18 @@
 				oninput={(e) => set({ values: e.currentTarget.value ? [e.currentTarget.value] : [] })}
 			/>
 			{#if field.input === 'about'}
-				<span
-					class="flex shrink-0 items-center gap-1 rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[0.7rem] text-violet-600 dark:text-violet-300"
-					title="Jev reads each item and decides whether this is true. It uses Jev calls."
-					><Sparkles class="size-3" />Jev</span
+				<Tip
+					focusable={false}
+					text="Jev reads each item and decides whether this is true. It uses Jev calls."
 				>
+					{#snippet children(props)}
+						<span
+							{...props}
+							class="flex shrink-0 items-center gap-1 rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[0.7rem] text-violet-600 dark:text-violet-300"
+							><Sparkles class="size-3" />Jev</span
+						>
+					{/snippet}
+				</Tip>
 			{/if}
 		{:else}
 			<ChipInput

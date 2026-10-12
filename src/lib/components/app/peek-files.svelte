@@ -6,6 +6,7 @@
 	import { cn } from '$lib/utils';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import Tip from './tip.svelte';
 
 	let {
 		repo,
@@ -51,19 +52,26 @@
 				{#each q.data ?? [] as file (file.filename)}
 					{@const path = splitPath(file.filename)}
 					<li>
-						<a
-							href="{filesPath}#{fileAnchor(file.filename)}"
-							class="-mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-muted"
-							title={file.filename}
-						>
-							<span class="flex min-w-0 flex-1 font-mono text-xs"
-								><span class="min-w-0 truncate text-muted-foreground">{path.directory}</span><span
-									class="max-w-full shrink-0 truncate">{path.name}</span
-								></span
-							>
-							<span class="shrink-0 text-xs text-signal-merge tabular-nums">+{file.additions}</span>
-							<span class="shrink-0 text-xs text-signal-fail tabular-nums">−{file.deletions}</span>
-						</a>
+						<Tip text={file.filename}>
+							{#snippet children(props)}
+								<a
+									{...props}
+									href="{filesPath}#{fileAnchor(file.filename)}"
+									class="-mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-muted"
+								>
+									<span class="flex min-w-0 flex-1 font-mono text-xs"
+										><span class="min-w-0 truncate text-muted-foreground">{path.directory}</span
+										><span class="max-w-full shrink-0 truncate">{path.name}</span></span
+									>
+									<span class="shrink-0 text-xs text-signal-merge tabular-nums"
+										>+{file.additions}</span
+									>
+									<span class="shrink-0 text-xs text-signal-fail tabular-nums"
+										>−{file.deletions}</span
+									>
+								</a>
+							{/snippet}
+						</Tip>
 					</li>
 				{/each}
 			</ul>

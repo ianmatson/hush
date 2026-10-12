@@ -1,4 +1,4 @@
-import type { SlackMentionDTO } from '../src/lib/shared/types';
+import type { SlackMentionDTO, SlackMentionsPageDTO } from '../src/lib/shared/types';
 import { appToken, userToken, type Env, type UserRow } from './db';
 import { gh } from './github';
 import { SLACK_API, slackAnswer, type SlackAnswer } from './slack';
@@ -11,7 +11,7 @@ export const SLACK_MENTIONS_USER_SCOPES = [
 	'search:read.mpim'
 ];
 const SEARCHED_CHANNEL_TYPES = ['public_channel', 'private_channel', 'mpim', 'im'];
-const MAX_MENTIONS = 20;
+const MENTIONS_PER_PAGE = 20;
 const EXTRACT_RADIUS = 120;
 const ELLIPSIS = '…';
 const ACCESS_RECHECK_MS = 24 * 60 * 60 * 1000;
@@ -131,10 +131,20 @@ export function extractAround(content: string, pattern: RegExp): string {
 
 export interface SearchedMessage {
 	author_name?: string;
+	team_id?: string;
+	channel_id?: string;
 	channel_name?: string;
 	message_ts?: string;
 	content?: string;
 	permalink?: string;
+}
+
+export function slackAppUrl(m: SearchedMessage): string | null {
+	if (!m.team_id || !m.channel_id || !m.message_ts) return null;
+	const params = new URLSearchParams({ team: m.team_id, id: m.channel_id, message: m.message_ts });
+	const threadTs = m.permalink ? URL.parse(m.permalink)?.searchParams.get('thread_ts') : null;
+	if (threadTs) params.set('thread_ts', threadTs);
+	return `slack://channel?${params}`;
 }
 
 export function mentionsOf(messages: SearchedMessage[], ref: GitHubRef): SlackMentionDTO[] {
@@ -148,16 +158,18 @@ export function mentionsOf(messages: SearchedMessage[], ref: GitHubRef): SlackMe
 			authorName: m.author_name ?? '',
 			at: Math.round(Number(m.message_ts) * 1000),
 			extract: extractAround(content, pattern),
-			permalink: m.permalink
+			permalink: m.permalink,
+			appUrl: slackAppUrl(m)
 		});
 	}
-	return mentions.sort((a, b) => b.at - a.at).slice(0, MAX_MENTIONS);
+	return mentions.sort((a, b) => b.at - a.at);
 }
 
 export async function searchMentions(
 	userToken: string,
-	ref: GitHubRef
-): Promise<SlackAnswer<{ mentions: SlackMentionDTO[] }>> {
+	ref: GitHubRef,
+	cursor?: string
+): Promise<SlackAnswer<SlackMentionsPageDTO>> {
 	const res = await fetch(`${SLACK_API}/assistant.search.context`, {
 		method: 'POST',
 		headers: {
@@ -171,12 +183,20 @@ export async function searchMentions(
 			disable_semantic_search: 'true',
 			sort: 'timestamp',
 			sort_dir: 'desc',
-			limit: String(MAX_MENTIONS)
+			limit: String(MENTIONS_PER_PAGE),
+			...(cursor ? { cursor } : {})
 		})
 	});
-	const answer = await slackAnswer<{ results?: { messages?: SearchedMessage[] } }>(res);
+	const answer = await slackAnswer<{
+		results?: { messages?: SearchedMessage[] };
+		response_metadata?: { next_cursor?: string };
+	}>(res);
 	if (!answer.ok) return answer;
-	return { ok: true, mentions: mentionsOf(answer.results?.messages ?? [], ref) };
+	return {
+		ok: true,
+		mentions: mentionsOf(answer.results?.messages ?? [], ref),
+		nextCursor: answer.response_metadata?.next_cursor || null
+	};
 }
 
 export async function membershipByAnyToken(tokens: string[], org: string): Promise<OrgMembership> {

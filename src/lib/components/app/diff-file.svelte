@@ -1,7 +1,22 @@
+<script lang="ts" module>
+	import type { HighlightedToken } from '$lib/highlight';
+
+	const HIGHLIGHT_CACHE_LIMIT = 300;
+	const highlightCache = new Map<string, HighlightedToken[][][] | null>();
+
+	function rememberHighlight(key: string, tokens: HighlightedToken[][][] | null) {
+		highlightCache.set(key, tokens);
+		if (highlightCache.size <= HIGHLIGHT_CACHE_LIMIT) return;
+		const oldest = highlightCache.keys().next().value;
+		if (oldest !== undefined) highlightCache.delete(oldest);
+	}
+</script>
+
 <script lang="ts">
 	import {
 		fileAnchor,
 		languageForPath,
+		lineElementId,
 		lineAnchors,
 		parsePatch,
 		placeThreads,
@@ -9,6 +24,8 @@
 		splitRows,
 		type DiffHunk,
 		type DiffLine,
+		type DiffLineTarget,
+		type DiffLineSide,
 		type DiffLineKind,
 		type FileViewedState,
 		type FoldReason,
@@ -21,12 +38,13 @@
 	import { cubicOut } from 'svelte/easing';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { cn } from '$lib/utils';
-	import { highlightHunks, type HighlightedToken } from '$lib/highlight';
+	import { highlightHunks } from '$lib/highlight';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import ReviewThread from './review-thread.svelte';
+	import Tip from './tip.svelte';
 
 	let {
 		file,
@@ -40,6 +58,7 @@
 		onviewed,
 		onthreadschanged,
 		selection,
+		targetLine,
 		canComment,
 		onselect,
 		composer
@@ -55,6 +74,7 @@
 		onviewed: () => void;
 		onthreadschanged: () => Promise<unknown>;
 		selection: { hunk: number; from: number; to: number } | null;
+		targetLine: DiffLineTarget | null;
 		canComment: boolean;
 		onselect: (hunk: number, at: number, extend: boolean) => void;
 		composer: Snippet;
@@ -86,6 +106,11 @@
 	});
 	const path = $derived(splitPath(file.filename));
 	const placed = $derived(placeThreads(threads, hunks));
+	const numberCellId = (value: number | null, side: DiffLineSide) =>
+		value === null ? undefined : lineElementId(file.filename, { side, line: value });
+	const isTargetLine = (value: number | null, side: DiffLineSide) =>
+		!!targetLine && targetLine.side === side && targetLine.line === value;
+	const MARKED_NUMBER_TONE = 'bg-signal-review/25 text-foreground';
 	const THREAD_MAX_WIDTH_PX = 768;
 	const THREAD_INSET_PX = 16;
 	let visibleWidth = $state(THREAD_MAX_WIDTH_PX + THREAD_INSET_PX);
@@ -96,18 +121,40 @@
 	}
 	const language = $derived(languageForPath(file.filename));
 
-	let highlighted = $state<{ hunks: DiffHunk[]; tokens: HighlightedToken[][][] | null } | null>(
-		null
-	);
+	let highlighted = $state.raw<{
+		hunks: DiffHunk[];
+		tokens: HighlightedToken[][][] | null;
+	} | null>(null);
 	const tokens = $derived(highlighted?.hunks === hunks ? highlighted.tokens : null);
+	const NEAR_VIEW_MARGIN = '1200px 0px';
+	let section = $state<HTMLElement | null>(null);
+	let nearView = $state(false);
+	$effect(() => {
+		if (!section || nearView) return;
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				if (entry.isIntersecting) nearView = true;
+			},
+			{ rootMargin: NEAR_VIEW_MARGIN }
+		);
+		observer.observe(section);
+		return () => observer.disconnect();
+	});
+
 	$effect(() => {
 		const forHunks = hunks;
 		const forLanguage = language;
-		if (folded || !forLanguage || !forHunks.length) return;
+		if (!nearView || folded || !forLanguage || !forHunks.length) return;
 		if (untrack(() => highlighted?.hunks === forHunks)) return;
+		const cacheKey = `${forLanguage}\n${file.patch}`;
+		if (highlightCache.has(cacheKey)) {
+			highlighted = { hunks: forHunks, tokens: highlightCache.get(cacheKey) ?? null };
+			return;
+		}
 		let current = true;
 		void highlightHunks(forHunks, forLanguage)
 			.then((result) => {
+				rememberHighlight(cacheKey, result);
 				if (current) highlighted = { hunks: forHunks, tokens: result };
 			})
 			.catch(() => {});
@@ -198,21 +245,18 @@
 {#snippet splitHalf(cell: { line: DiffLine; at: number } | null, h: number, side: 'old' | 'new')}
 	{#if cell}
 		{@const tone = cell.line.kind === 'context' ? '' : ROW_TONE[cell.line.kind]}
+		{@const number = side === 'old' ? cell.line.oldLine : cell.line.newLine}
+		{@const diffSide = side === 'old' ? 'L' : 'R'}
 		<td
+			id={numberCellId(number, diffSide)}
 			class={cn(
 				'px-2 text-right align-top text-muted-foreground tabular-nums select-none',
-				isSelected(h, cell.at)
-					? 'bg-signal-review/25 text-foreground'
+				isSelected(h, cell.at) || isTargetLine(number, diffSide)
+					? MARKED_NUMBER_TONE
 					: cell.line.kind === 'context'
 						? ''
 						: NUMBER_TONE[cell.line.kind]
-			)}
-			>{@render lineNumber(
-				side === 'old' ? cell.line.oldLine : cell.line.newLine,
-				h,
-				cell.at,
-				cell.line.kind
-			)}</td
+			)}>{@render lineNumber(number, h, cell.at, cell.line.kind)}</td
 		>
 		<td class={cn('pr-3 align-top break-all whitespace-pre-wrap', tone)}
 			>{@render code(cell.line, h, cell.at)}</td
@@ -226,6 +270,7 @@
 <svelte:window onpointerup={() => (dragging = null)} />
 
 <section
+	bind:this={section}
 	id={fileAnchor(file.filename)}
 	class={cn(
 		'scroll-mt-28 rounded-lg border [contain-intrinsic-size:auto_20rem] [content-visibility:auto]',
@@ -246,22 +291,31 @@
 			onclick={ontoggle}
 		>
 			<ChevronRight class={cn('size-3.5 shrink-0 transition-transform', !folded && 'rotate-90')} />
-			<span class="flex min-w-0 font-mono" title={file.filename}>
-				<span class="min-w-0 truncate text-muted-foreground"
-					>{#if file.previous_filename}{file.previous_filename} →
-					{/if}{path.directory}</span
-				><span class="max-w-full shrink-0 truncate font-medium text-foreground">{path.name}</span>
-			</span>
+			<Tip focusable={false} text={file.filename}>
+				{#snippet children(props)}
+					<span {...props} class="flex min-w-0 font-mono">
+						<span class="min-w-0 truncate text-muted-foreground"
+							>{#if file.previous_filename}{file.previous_filename} →
+							{/if}{path.directory}</span
+						><span class="max-w-full shrink-0 truncate font-medium text-foreground"
+							>{path.name}</span
+						>
+					</span>
+				{/snippet}
+			</Tip>
 		</button>
 		{#if threads.length}
-			<span
-				class={cn(
-					'flex shrink-0 items-center gap-1 tabular-nums',
-					openThreadCount ? 'text-signal-reply' : 'text-muted-foreground'
-				)}
-				title="{openThreadCount} open of {threads.length} review threads"
-				><MessageSquare class="size-3.5" />{openThreadCount || threads.length}</span
-			>
+			<Tip focusable={false} text="{openThreadCount} open of {threads.length} review threads">
+				{#snippet children(props)}
+					<span
+						{...props}
+						class={cn(
+							'flex shrink-0 items-center gap-1 tabular-nums',
+							openThreadCount ? 'text-signal-reply' : 'text-muted-foreground'
+						)}><MessageSquare class="size-3.5" />{openThreadCount || threads.length}</span
+					>
+				{/snippet}
+			</Tip>
 		{/if}
 		{#if status}<span class={cn('shrink-0', status.tone)}>{status.label}</span>{/if}
 		<span class="shrink-0 text-signal-merge tabular-nums">+{file.additions}</span>
@@ -357,13 +411,16 @@
 										<td colspan="3" class="px-2 py-0.5 whitespace-pre">{hunkHeader(hunk)}</td>
 									</tr>
 									{#each hunk.lines as line, l (l)}
+										{@const marked =
+											isSelected(h, l) ||
+											isTargetLine(line.oldLine, 'L') ||
+											isTargetLine(line.newLine, 'R')}
 										<tr class={ROW_TONE[line.kind]}>
 											<td
+												id={numberCellId(line.oldLine, 'L')}
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													isSelected(h, l)
-														? 'bg-signal-review/25 text-foreground'
-														: NUMBER_TONE[line.kind]
+													marked ? MARKED_NUMBER_TONE : NUMBER_TONE[line.kind]
 												)}
 												>{@render lineNumber(
 													line.kind === 'del' ? line.oldLine : null,
@@ -373,11 +430,10 @@
 												)}{#if line.kind !== 'del'}{line.oldLine ?? ''}{/if}</td
 											>
 											<td
+												id={numberCellId(line.newLine, 'R')}
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													isSelected(h, l)
-														? 'bg-signal-review/25 text-foreground'
-														: NUMBER_TONE[line.kind]
+													marked ? MARKED_NUMBER_TONE : NUMBER_TONE[line.kind]
 												)}>{@render lineNumber(line.newLine, h, l, line.kind)}</td
 											>
 											<td class="pr-4 whitespace-pre"

@@ -9,6 +9,7 @@
 	import Rss from '@lucide/svelte/icons/rss';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import X from '@lucide/svelte/icons/x';
+	import Tip from './tip.svelte';
 
 	/**
 	 * The Atom feed of one view or category: make it (and copy its secret URL), get a new address,
@@ -56,29 +57,33 @@
 
 {#if feed}
 	<DropdownMenu.Root>
-		<DropdownMenu.Trigger>
-			{#snippet child({ props })}
-				<Button
-					{...props}
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Feed of {name}"
-					title="Feed on"><Rss class="text-orange-500" /></Button
-				>
+		<Tip text="Feed on">
+			{#snippet children(tipProps)}
+				<DropdownMenu.Trigger {...tipProps}>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" size="icon-sm" aria-label="Feed of {name}"
+							><Rss class="text-orange-500" /></Button
+						>
+					{/snippet}
+				</DropdownMenu.Trigger>
 			{/snippet}
-		</DropdownMenu.Trigger>
+		</Tip>
 		<DropdownMenu.Content align="end">
 			<DropdownMenu.Item onclick={() => make(true)}><RefreshCw />New feed URL</DropdownMenu.Item>
 			<DropdownMenu.Item variant="destructive" onclick={off}><X />Turn off feed</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
 {:else}
-	<Button
-		variant="ghost"
-		size="icon-sm"
-		aria-label="Make a feed of {name}"
-		title="Make a feed"
-		class={cn(!feeds && 'invisible')}
-		onclick={() => make(false)}><Rss class="opacity-50" /></Button
-	>
+	<Tip text="Make a feed">
+		{#snippet children(props)}
+			<Button
+				{...props}
+				variant="ghost"
+				size="icon-sm"
+				aria-label="Make a feed of {name}"
+				class={cn(!feeds && 'invisible')}
+				onclick={() => make(false)}><Rss class="opacity-50" /></Button
+			>
+		{/snippet}
+	</Tip>
 {/if}

@@ -100,6 +100,7 @@
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Link from '@lucide/svelte/icons/link';
+	import Tip from './tip.svelte';
 
 	let { view }: { view: ItemView } = $props();
 	type Showing = DashKind | 'both';
@@ -920,13 +921,17 @@
 				>
 			{:else if data}
 				Updated {ago(data.fetchedAt)}
-				<button
-					type="button"
-					class="ml-1 rounded p-0.5 hover:bg-muted hover:text-foreground"
-					aria-label="Refresh from GitHub"
-					title="Refresh from GitHub"
-					onclick={refresh}><RefreshCw class="size-3" /></button
-				>
+				<Tip text="Refresh from GitHub">
+					{#snippet children(props)}
+						<button
+							{...props}
+							type="button"
+							class="ml-1 rounded p-0.5 hover:bg-muted hover:text-foreground"
+							aria-label="Refresh from GitHub"
+							onclick={refresh}><RefreshCw class="size-3" /></button
+						>
+					{/snippet}
+				</Tip>
 			{:else}Loading from GitHub…{/if}
 		</p>
 		<div class="ml-auto flex items-center gap-1">

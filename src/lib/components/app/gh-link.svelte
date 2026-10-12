@@ -1,18 +1,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { HTMLAnchorAttributes } from 'svelte/elements';
 	import { cn } from '$lib/utils';
 
 	let {
 		href,
 		class: className,
-		title,
 		style,
 		insideRow = false,
-		children
-	}: {
+		children,
+		...rest
+	}: Omit<HTMLAnchorAttributes, 'href' | 'class' | 'style' | 'children'> & {
 		href: string;
 		class?: string;
-		title?: string;
 		style?: string;
 		insideRow?: boolean;
 		children: Snippet;
@@ -20,8 +20,8 @@
 </script>
 
 <a
+	{...rest}
 	{href}
-	{title}
 	{style}
 	tabindex={insideRow ? -1 : undefined}
 	target="_blank"

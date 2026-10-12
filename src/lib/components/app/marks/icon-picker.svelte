@@ -19,6 +19,7 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import MarkIcon from './mark-icon.svelte';
 	import LucideIcon from './lucide-icon.svelte';
+	import Tip from '$lib/components/app/tip.svelte';
 
 	let {
 		icon,
@@ -121,19 +122,23 @@
 					onscroll={showMoreNearBottom}
 				>
 					{#each icons.slice(0, shown) as o (o.id)}
-						<button
-							type="button"
-							title={o.id}
-							aria-label={o.id}
-							class={cn(
-								'flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:bg-muted',
-								icon === `${LUCIDE_PREFIX}${o.id}` &&
-									'bg-muted ring-1 ring-foreground/30 ring-inset'
-							)}
-							onclick={() => pick(`${LUCIDE_PREFIX}${o.id}`)}
-						>
-							<LucideIcon id={o.id} class={cn('size-4', MARK_TEXT[color])} />
-						</button>
+						<Tip text={o.id}>
+							{#snippet children(props)}
+								<button
+									{...props}
+									type="button"
+									aria-label={o.id}
+									class={cn(
+										'flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:bg-muted',
+										icon === `${LUCIDE_PREFIX}${o.id}` &&
+											'bg-muted ring-1 ring-foreground/30 ring-inset'
+									)}
+									onclick={() => pick(`${LUCIDE_PREFIX}${o.id}`)}
+								>
+									<LucideIcon id={o.id} class={cn('size-4', MARK_TEXT[color])} />
+								</button>
+							{/snippet}
+						</Tip>
 					{:else}
 						<p class="col-span-8 py-4 text-center text-xs text-muted-foreground">No icons match.</p>
 					{/each}
@@ -145,16 +150,20 @@
 					onscroll={showMoreNearBottom}
 				>
 					{#each emoji.slice(0, shown) as o (o.id)}
-						<button
-							type="button"
-							title={o.keywords}
-							aria-label={o.keywords}
-							class={cn(
-								'flex size-8 items-center justify-center rounded-md text-base outline-none hover:bg-muted focus-visible:bg-muted',
-								icon === o.id && 'bg-muted ring-1 ring-foreground/30 ring-inset'
-							)}
-							onclick={() => pick(o.id)}>{o.id}</button
-						>
+						<Tip text={o.keywords}>
+							{#snippet children(props)}
+								<button
+									{...props}
+									type="button"
+									aria-label={o.keywords}
+									class={cn(
+										'flex size-8 items-center justify-center rounded-md text-base outline-none hover:bg-muted focus-visible:bg-muted',
+										icon === o.id && 'bg-muted ring-1 ring-foreground/30 ring-inset'
+									)}
+									onclick={() => pick(o.id)}>{o.id}</button
+								>
+							{/snippet}
+						</Tip>
 					{:else}
 						<p class="col-span-8 py-4 text-center text-xs text-muted-foreground">No emoji match.</p>
 					{/each}

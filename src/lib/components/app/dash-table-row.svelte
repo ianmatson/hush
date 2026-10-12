@@ -32,6 +32,7 @@
 	import AppMenu from './app-menu.svelte';
 	import MarkList from './marks/mark-list.svelte';
 	import type DashRow from './dash-row.svelte';
+	import Tip from './tip.svelte';
 
 	type CardRowProps = Omit<ComponentProps<typeof DashRow>, 'hidden'>;
 
@@ -217,14 +218,17 @@
 				{#if i.comments}<MessageSquare class="size-3" />{i.comments}{/if}
 			</span>
 		{:else if column.id === 'time'}
-			<span
-				class={cn(
-					'shrink-0 text-right text-xs tabular-nums',
-					i.stale ? 'font-medium text-signal-warn' : 'text-muted-foreground'
-				)}
-				title={i.stale ? 'Waiting' : 'Updated'}
-				>{since(i.stale ? i.waitingSince : i.updatedAt)}</span
-			>
+			<Tip focusable={false} text={i.stale ? 'Waiting' : 'Updated'}>
+				{#snippet children(props)}
+					<span
+						{...props}
+						class={cn(
+							'shrink-0 text-right text-xs tabular-nums',
+							i.stale ? 'font-medium text-signal-warn' : 'text-muted-foreground'
+						)}>{since(i.stale ? i.waitingSince : i.updatedAt)}</span
+					>
+				{/snippet}
+			</Tip>
 		{/if}
 	{/each}
 

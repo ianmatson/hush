@@ -89,6 +89,7 @@
 	import Code from '@lucide/svelte/icons/code';
 	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import X from '@lucide/svelte/icons/x';
+	import Tip from '$lib/components/app/tip.svelte';
 
 	let {
 		value = $bindable(''),
@@ -237,18 +238,24 @@
 				</DropdownMenu.Root>
 			{/if}
 			{#if textMode}
-				<Button
-					variant="ghost"
-					size="xs"
-					disabled={!canShowVisually}
-					title={canShowVisually
-						? undefined
-						: 'This query has more nesting than the builder shows.'}
-					onclick={() => {
-						builder = queryToBuilder(value, place) ?? builder;
-						textMode = false;
-					}}><ListChecks /> Visual</Button
+				<Tip
+					focusable={false}
+					text={canShowVisually ? undefined : 'This query has more nesting than the builder shows.'}
 				>
+					{#snippet children(props)}
+						<span {...props} class="inline-flex">
+							<Button
+								variant="ghost"
+								size="xs"
+								disabled={!canShowVisually}
+								onclick={() => {
+									builder = queryToBuilder(value, place) ?? builder;
+									textMode = false;
+								}}><ListChecks /> Visual</Button
+							>
+						</span>
+					{/snippet}
+				</Tip>
 			{:else}
 				<Button variant="ghost" size="xs" onclick={() => (textMode = true)}><Code /> Text</Button>
 			{/if}

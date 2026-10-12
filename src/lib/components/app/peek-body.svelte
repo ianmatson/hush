@@ -35,6 +35,7 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Tip from './tip.svelte';
 
 	/** The contents of the peek panel: one PR or issue, fetched when shown. */
 	let {
@@ -155,6 +156,9 @@
 					rel="noreferrer">{p.repo}#{p.number}</a
 				>
 				<PeekProjects repo={p.repo} number={p.number} />
+				{#if p.kind === 'pr' || p.kind === 'issue'}
+					<PeekSlack {repo} {number} kind={p.kind} class="ml-auto" />
+				{/if}
 			</div>
 			<h2 class="text-base leading-snug font-semibold text-balance">
 				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
@@ -169,23 +173,29 @@
 				<span>opened {ago(p.createdAt)}</span>
 				{#if p.pr}
 					<span class="opacity-50">·</span>
-					<span class="text-signal-merge tabular-nums">+{p.pr.additions}</span>
-					<span class="text-signal-fail tabular-nums">−{p.pr.deletions}</span>
-					<span>{p.pr.files} {p.pr.files === 1 ? 'file' : 'files'}</span>
+					<a
+						href="{itemPagePath(p.repo, p.number, 'pr')}/{FILES_TAB}"
+						class="flex items-center gap-2 underline-offset-2 hover:text-foreground hover:underline"
+					>
+						<span class="text-signal-merge tabular-nums">+{p.pr.additions}</span>
+						<span class="text-signal-fail tabular-nums">−{p.pr.deletions}</span>
+						<span>{p.pr.files} {p.pr.files === 1 ? 'file' : 'files'}</span>
+					</a>
 				{/if}
 			</div>
 			{#if p.pr}
-				{@const headRepo = p.pr.headRepo}
+				{@const { base, head, headRepo } = p.pr}
 				{@const fromFork = !!headRepo && headRepo !== p.repo}
-				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${p.pr.head}` : p.pr.head}
-				<p
-					class="truncate font-mono text-[0.7rem] text-muted-foreground"
-					title="{p.pr.base} ← {headLabel}"
-				>
-					<GhLink href={branchUrl(p.repo, p.pr.base)}>{p.pr.base}</GhLink> ←
-					{#if headRepo}<GhLink href={branchUrl(headRepo, p.pr.head)}>{headLabel}</GhLink
-						>{:else}{headLabel}{/if}
-				</p>
+				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${head}` : head}
+				<Tip focusable={false} text="{base} ← {headLabel}">
+					{#snippet children(props)}
+						<p {...props} class="truncate font-mono text-[0.7rem] text-muted-foreground">
+							<GhLink href={branchUrl(p.repo, base)}>{base}</GhLink> ←
+							{#if headRepo}<GhLink href={branchUrl(headRepo, head)}>{headLabel}</GhLink
+								>{:else}{headLabel}{/if}
+						</p>
+					{/snippet}
+				</Tip>
 			{/if}
 			{#if p.labels.length}
 				<div class="flex flex-wrap gap-1">
@@ -228,9 +238,11 @@
 									class="size-5 rounded-full border border-dashed"
 								></span>{/if}
 							{#if requestedUrl}
-								<GhLink href={requestedUrl} class="truncate" title={r.slug ?? undefined}
-									>{r.name}</GhLink
-								>
+								<Tip text={r.slug}>
+									{#snippet children(props)}
+										<GhLink {...props} href={requestedUrl} class="truncate">{r.name}</GhLink>
+									{/snippet}
+								</Tip>
 							{:else}
 								<span class="truncate">{r.name}</span>
 							{/if}
@@ -306,10 +318,6 @@
 			{/if}
 			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
-
-		{#if p.kind === 'pr' || p.kind === 'issue'}
-			<PeekSlack {repo} {number} kind={p.kind} />
-		{/if}
 
 		<section class="grid">
 			<h3 class="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">

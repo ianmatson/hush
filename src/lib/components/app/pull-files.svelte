@@ -30,16 +30,23 @@
 		type ReviewEvent,
 		comparesOnlyNewCommits,
 		fileAnchor,
+		lineElementId,
 		filesInTreeOrder,
 		foldedByDefault,
 		rangeSinceReview,
 		threadsByPath,
+		type DiffLineTarget,
 		type ReviewRange,
 		type FileTreeNode,
 		type PullFile,
 		type ReviewThread,
 		type ViewedFiles
 	} from '$lib/shared/diff';
+	import {
+		gitHubDiffFileHash,
+		parseGitHubDiffAnchor,
+		type GitHubDiffAnchor
+	} from '$lib/shared/in-app-links';
 	import { cn } from '$lib/utils';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import DiffFile from './diff-file.svelte';
@@ -55,6 +62,7 @@
 	import FileDiff from '@lucide/svelte/icons/file-diff';
 	import { DROP_TARGET_CLASS, Uploads, setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
+	import Tip from './tip.svelte';
 
 	let {
 		repo,
@@ -339,30 +347,176 @@
 	let cursor = $state(-1);
 
 	const SETTLE_MS = 300;
+	const MOUNT_MARGIN = '1500px 0px';
+	const FILE_HEADER_PX = 31;
+	const FOLD_NOTE_PX = 64;
+	const DIFF_ROW_PX = 24;
 
-	function reveal(index: number, behavior: ScrollBehavior = 'smooth') {
+	const mountedFiles = new SvelteSet<string>();
+	const pinnedFiles = new SvelteSet<string>();
+	const measuredHeights = new SvelteMap<string, number>();
+	const heightKey = (file: PullFile) => `${file.filename}\n${isFolded(file)}`;
+
+	function estimatedHeight(file: PullFile): number {
+		if (isFolded(file)) return foldReason(file) ? FOLD_NOTE_PX : FILE_HEADER_PX;
+		if (!file.patch) return FOLD_NOTE_PX;
+		return FILE_HEADER_PX + file.patch.split('\n').length * DIFF_ROW_PX;
+	}
+
+	const keepsMounted = (filename: string) =>
+		pinnedFiles.has(filename) || selection?.file === filename;
+
+	const fileObserver =
+		typeof IntersectionObserver === 'function'
+			? new IntersectionObserver(
+					(entries) => {
+						for (const entry of entries) {
+							const filename = (entry.target as HTMLElement).dataset.filename;
+							if (!filename) continue;
+							if (entry.isIntersecting) {
+								mountedFiles.add(filename);
+								continue;
+							}
+							if (!mountedFiles.has(filename) || keepsMounted(filename)) continue;
+							const file = files.find((f) => f.filename === filename);
+							if (file) measuredHeights.set(heightKey(file), entry.boundingClientRect.height);
+							mountedFiles.delete(filename);
+						}
+					},
+					{ rootMargin: MOUNT_MARGIN }
+				)
+			: null;
+
+	$effect(() => () => fileObserver?.disconnect());
+
+	function watchFile(element: HTMLElement) {
+		const filename = element.dataset.filename;
+		if (!filename) return;
+		const pin = () => pinnedFiles.add(filename);
+		element.addEventListener('pointerdown', pin);
+		element.addEventListener('focusin', pin);
+		if (fileObserver) fileObserver.observe(element);
+		else mountedFiles.add(filename);
+		return () => {
+			element.removeEventListener('pointerdown', pin);
+			element.removeEventListener('focusin', pin);
+			fileObserver?.unobserve(element);
+		};
+	}
+
+	const CURRENT_FILE_OFFSET_PX = 120;
+	const PAGE_END_SLACK_PX = 2;
+	let treeNav = $state<HTMLElement | null>(null);
+
+	function fileInView(): number {
+		const atPageEnd =
+			window.innerHeight + window.scrollY >=
+			document.documentElement.scrollHeight - PAGE_END_SLACK_PX;
+		const line = atPageEnd ? window.innerHeight : CURRENT_FILE_OFFSET_PX;
+		let current = 0;
+		files.forEach((file, index) => {
+			const top = document.getElementById(fileAnchor(file.filename))?.getBoundingClientRect().top;
+			if (top !== undefined && top <= line) current = index;
+		});
+		return current;
+	}
+
+	$effect(() => {
+		if (!files.length) return;
+		let frame = 0;
+		const follow = () => {
+			frame = 0;
+			cursor = fileInView();
+		};
+		const onScroll = () => {
+			if (!frame) frame = requestAnimationFrame(follow);
+		};
+		onScroll();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		return () => {
+			window.removeEventListener('scroll', onScroll);
+			if (frame) cancelAnimationFrame(frame);
+		};
+	});
+
+	$effect(() => {
+		void cursor;
+		const nav = treeNav;
+		if (!nav) return;
+		void tick().then(() => {
+			const row = nav.querySelector<HTMLElement>('[aria-current="location"]');
+			if (!row) return;
+			const navBox = nav.getBoundingClientRect();
+			const rowBox = row.getBoundingClientRect();
+			if (rowBox.top < navBox.top || rowBox.bottom > navBox.bottom)
+				nav.scrollTo({
+					top: nav.scrollTop + rowBox.top - navBox.top - navBox.height / 2,
+					behavior: 'smooth'
+				});
+		});
+	});
+
+	async function renderThrough(index: number) {
+		const filename = files[index]?.filename;
+		if (!filename || mountedFiles.has(filename)) return;
+		mountedFiles.add(filename);
+		await tick();
+	}
+
+	async function reveal(index: number, behavior: ScrollBehavior = 'smooth') {
 		const file = files[index];
 		if (!file) return;
 		cursor = index;
+		await renderThrough(index);
 		document
 			.getElementById(fileAnchor(file.filename))
 			?.scrollIntoView({ block: 'start', behavior });
 	}
 
-	function jumpTo(index: number) {
-		reveal(index, 'instant');
-		setTimeout(() => reveal(index, 'instant'), SETTLE_MS);
+	let targetLine = $state<{ filename: string; line: DiffLineTarget } | null>(null);
+
+	async function revealLine(index: number, line: DiffLineTarget) {
+		await renderThrough(index);
+		const file = files[index];
+		const row = file && document.getElementById(lineElementId(file.filename, line));
+		if (!row) return reveal(index, 'instant');
+		cursor = index;
+		row.scrollIntoView({ block: 'center', behavior: 'instant' });
+	}
+
+	function jumpTo(index: number, line: DiffLineTarget | null = null) {
+		const go = () => (line ? revealLine(index, line) : reveal(index, 'instant'));
+		go();
+		setTimeout(go, SETTLE_MS);
+	}
+
+	function openAt(hash: string, index: number, line: DiffLineTarget | null) {
+		revealedHash = hash;
+		const filename = files[index].filename;
+		targetLine = line && { filename, line };
+		foldChoices.set(filename, false);
+		void tick().then(() => jumpTo(index, line));
+	}
+
+	async function openGitHubDiffAnchor(hash: string, anchor: GitHubDiffAnchor) {
+		const shown = files;
+		const hashes = await Promise.all(shown.map((f) => gitHubDiffFileHash(f.filename)));
+		const index = hashes.indexOf(anchor.fileHash);
+		if (index < 0 || shown !== files || page.url.hash.slice(1) !== hash) return;
+		openAt(hash, index, anchor.line);
 	}
 
 	let revealedHash = '';
 	$effect(() => {
 		const hash = page.url.hash.slice(1);
 		if (!hash || hash === revealedHash || !files.length) return;
+		const gitHubAnchor = parseGitHubDiffAnchor(hash);
+		if (gitHubAnchor) {
+			void openGitHubDiffAnchor(hash, gitHubAnchor);
+			return;
+		}
 		const index = files.findIndex((f) => fileAnchor(f.filename) === hash);
-		if (index < 0) return;
-		revealedHash = hash;
-		foldChoices.set(files[index].filename, false);
-		void tick().then(() => jumpTo(index));
+		if (index >= 0) openAt(hash, index, null);
 	});
 
 	function onKey(e: KeyboardEvent) {
@@ -406,7 +560,6 @@
 					class="flex min-w-0 items-center gap-1 rounded-md py-1 pr-2 text-left hover:bg-muted"
 					style:padding-left="{depth * TREE_INDENT_PX + 4}px"
 					aria-expanded={open}
-					title={node.path}
 					onclick={() => toggleFolder(node.path)}
 				>
 					<ChevronRight
@@ -437,12 +590,12 @@
 						foldChoices.set(node.file.filename, false);
 						void tick().then(() => reveal(index));
 					}}
+					aria-current={index === cursor ? 'location' : undefined}
 					class={cn(
-						'flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 hover:bg-muted',
-						index === cursor && 'bg-muted'
+						'flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-2 transition-colors duration-200 ease-out hover:bg-muted',
+						index === cursor && 'bg-muted text-foreground'
 					)}
 					style:padding-left="{depth * TREE_INDENT_PX + 20}px"
-					title={node.file.filename}
 				>
 					{#if viewed[node.file.filename] === 'VIEWED'}
 						<FileCheck class="size-3.5 shrink-0 text-signal-merge" aria-label="Viewed" />
@@ -456,16 +609,21 @@
 					{/if}
 					<span
 						class={cn(
-							'min-w-0 flex-1 truncate font-mono',
-							viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground'
+							'min-w-0 flex-1 truncate font-mono transition-[font-weight,color] duration-200 ease-out',
+							viewed[node.file.filename] === 'VIEWED' && 'text-muted-foreground',
+							index === cursor && 'font-semibold text-foreground'
 						)}>{node.name}</span
 					>
 					{#if openThreadsOf(node.file)}
-						<span
-							class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
-							title="{openThreadsOf(node.file)} open review threads"
-							><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
-						>
+						<Tip focusable={false} text="{openThreadsOf(node.file)} open review threads">
+							{#snippet children(threadProps)}
+								<span
+									{...threadProps}
+									class="flex shrink-0 items-center gap-0.5 text-signal-reply tabular-nums"
+									><MessageSquare class="size-3" />{openThreadsOf(node.file)}</span
+								>
+							{/snippet}
+						</Tip>
 					{/if}
 					<span class="shrink-0 text-signal-merge tabular-nums">+{node.file.additions}</span>
 					<span class="shrink-0 text-signal-fail tabular-nums">−{node.file.deletions}</span>
@@ -477,6 +635,7 @@
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 px-3 pt-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
 	<nav
+		bind:this={treeNav}
 		aria-label="Changed files"
 		class="hidden self-start lg:sticky lg:top-[calc(4rem+1px)] lg:block lg:max-h-[calc(100dvh-10rem)] lg:overflow-y-auto"
 	>
@@ -499,17 +658,21 @@
 							!sinceReview && 'bg-muted text-foreground'
 						)}>All changes</a
 					>
-					<a
-						href={rangeHref(true)}
-						data-sveltekit-replacestate
-						data-sveltekit-noscroll
-						aria-current={sinceReview ? 'page' : undefined}
-						title="Since your review {ago(reviewBase.at)}"
-						class={cn(
-							'rounded px-2 py-0.5 hover:text-foreground',
-							sinceReview && 'bg-muted text-foreground'
-						)}>Since your review</a
-					>
+					<Tip text="Since your review {ago(reviewBase.at)}">
+						{#snippet children(props)}
+							<a
+								{...props}
+								href={rangeHref(true)}
+								data-sveltekit-replacestate
+								data-sveltekit-noscroll
+								aria-current={sinceReview ? 'page' : undefined}
+								class={cn(
+									'rounded px-2 py-0.5 hover:text-foreground',
+									sinceReview && 'bg-muted text-foreground'
+								)}>Since your review</a
+							>
+						{/snippet}
+					</Tip>
 				</nav>
 			{/if}
 			<span
@@ -687,43 +850,59 @@
 			</p>
 		{:else}
 			{#each files as file, i (file.filename)}
-				<DiffFile
-					{file}
-					folded={isFolded(file)}
-					foldReason={foldReason(file)}
-					current={i === cursor}
-					viewedState={viewed[file.filename]}
-					{split}
-					threads={fileThreads(file)}
-					onthreadschanged={refreshThreads}
-					selection={selection?.file === file.filename ? selection : null}
-					canComment={commentingAllowed}
-					onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
-					ontoggle={() => {
-						cursor = i;
-						toggle(file);
-					}}
-					onviewed={() => {
-						cursor = i;
-						void toggleViewed(file);
-					}}
-				>
-					{#snippet composer()}
-						{@const details = selection && selectionDetails(file, selection)}
-						{#if details}
-							{#key details.draftKey}
-								<LineCommentBox
-									label={details.label}
-									draftKey={details.draftKey}
-									selectedText={details.target.side === 'RIGHT' ? details.selectedText : null}
-									hasPendingReview={!!pendingReview}
-									onsubmit={(body, single) => addComment(details.target, body, single)}
-									oncancel={() => (selection = null)}
-								/>
-							{/key}
-						{/if}
-					{/snippet}
-				</DiffFile>
+				<div data-filename={file.filename} {@attach watchFile}>
+					{#if mountedFiles.has(file.filename)}
+						<DiffFile
+							{file}
+							folded={isFolded(file)}
+							foldReason={foldReason(file)}
+							current={i === cursor}
+							viewedState={viewed[file.filename]}
+							{split}
+							threads={fileThreads(file)}
+							onthreadschanged={refreshThreads}
+							selection={selection?.file === file.filename ? selection : null}
+							targetLine={targetLine?.filename === file.filename ? targetLine.line : null}
+							canComment={commentingAllowed}
+							onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
+							ontoggle={() => {
+								cursor = i;
+								toggle(file);
+							}}
+							onviewed={() => {
+								cursor = i;
+								void toggleViewed(file);
+							}}
+						>
+							{#snippet composer()}
+								{@const details = selection && selectionDetails(file, selection)}
+								{#if details}
+									{#key details.draftKey}
+										<LineCommentBox
+											label={details.label}
+											draftKey={details.draftKey}
+											selectedText={details.target.side === 'RIGHT' ? details.selectedText : null}
+											hasPendingReview={!!pendingReview}
+											onsubmit={(body, single) => addComment(details.target, body, single)}
+											oncancel={() => (selection = null)}
+										/>
+									{/key}
+								{/if}
+							{/snippet}
+						</DiffFile>
+					{:else}
+						<section
+							id={fileAnchor(file.filename)}
+							class="scroll-mt-28 overflow-hidden rounded-lg border"
+							style:height="{measuredHeights.get(heightKey(file)) ?? estimatedHeight(file)}px"
+							aria-label={file.filename}
+						>
+							<p class="truncate bg-muted/40 px-2 py-1.5 font-mono text-xs text-muted-foreground">
+								{file.filename}
+							</p>
+						</section>
+					{/if}
+				</div>
 			{/each}
 		{/if}
 	</div>

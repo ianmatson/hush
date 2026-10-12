@@ -29,6 +29,7 @@ export default defineConfig({
 			paths: { relative: false }
 		})
 	],
+	worker: { format: 'es' },
 	server: {
 		host: DEV_SERVER_HOST,
 		port: DEV_SERVER_PORT,

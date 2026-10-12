@@ -127,6 +127,17 @@ export function fileAnchor(path: string): string {
 	return `file-${encodeURIComponent(path).replace(/%/g, '')}`;
 }
 
+export type DiffLineSide = 'L' | 'R';
+
+export interface DiffLineTarget {
+	side: DiffLineSide;
+	line: number;
+}
+
+export function lineElementId(path: string, { side, line }: DiffLineTarget): string {
+	return `${fileAnchor(path)}-${side}${line}`;
+}
+
 export interface FileTreeFile {
 	kind: 'file';
 	name: string;
