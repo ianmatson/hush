@@ -39,8 +39,8 @@
 			></Card.Action
 		>
 		<Card.Description class="col-span-2"
-			>Choose the columns of the table. The avatar, the title, and the main action always show. When
-			the window is too narrow, columns hide: the author first, the time last.</Card.Description
+			>Choose the columns of the table. The avatar and the title always show; click a row to open
+			it. When the window is too narrow, columns hide: the author first, the time last.</Card.Description
 		>
 	</Card.Header>
 	<Card.Content class="grid gap-4">

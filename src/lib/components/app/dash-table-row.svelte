@@ -5,7 +5,6 @@
 	import { keysOf } from '$lib/keys.svelte';
 	import type { DashItem } from '$lib/shared/types';
 	import {
-		TABLE_ACTION_REM,
 		TABLE_AVATAR_REM,
 		fitTableColumns,
 		shownTableColumns,
@@ -44,7 +43,6 @@
 		checked = false,
 		selecting = false,
 		marks = [],
-		onopen,
 		onsnooze,
 		onmute,
 		oncopy,
@@ -76,12 +74,7 @@
 	);
 	const minWidth = $derived(hideColumnsToFit ? undefined : rem(tableRowMinRem(shown)));
 	const template = $derived(
-		[
-			rem(TABLE_AVATAR_REM),
-			'minmax(0,1fr)',
-			...shown.map((c) => rem(c.widthRem)),
-			rem(TABLE_ACTION_REM)
-		].join(' ')
+		[rem(TABLE_AVATAR_REM), 'minmax(0,1fr)', ...shown.map((c) => rem(c.widthRem))].join(' ')
 	);
 	const repoName = $derived(i.repo.split('/')[1]);
 
@@ -236,7 +229,7 @@
 	{/each}
 
 	<div
-		class="absolute top-1/2 right-[6.25rem] hidden -translate-y-1/2 items-center bg-[linear-gradient(to_right,transparent,var(--row-bg)_1.5rem)] pl-6 md:group-hover:flex md:group-data-selected:flex"
+		class="absolute top-1/2 right-2 hidden -translate-y-1/2 items-center bg-[linear-gradient(to_right,transparent,var(--row-bg)_1.5rem)] pl-6 md:group-hover:flex"
 	>
 		{@render rowAction(
 			i.dismissed ? 'Wake up' : 'Snooze until new activity',
@@ -252,13 +245,6 @@
 		)}
 		{@render rowAction('Copy link', 'list.copy', (e) => stop(e, () => oncopy(i)), Link)}
 	</div>
-
-	<Button
-		variant={i.turn === 'you' ? 'default' : 'ghost'}
-		size="xs"
-		class={cn('justify-self-end', menu && 'hidden sm:inline-flex')}
-		onclick={(e) => stop(e, () => onopen(i, i.actionUrl))}>{i.actionLabel}</Button
-	>
 
 	{#if menu}
 		<div class="shrink-0 sm:hidden">

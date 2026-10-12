@@ -39,7 +39,6 @@ export const TABLE_COLUMNS: TableColumnInfo[] = [
 ];
 
 export const TABLE_AVATAR_REM = 1.25;
-export const TABLE_ACTION_REM = 5.5;
 export const TABLE_GAP_REM = 0.5;
 export const TABLE_PADDING_REM = 1;
 export const TABLE_MIN_TITLE_REM = 10;
@@ -48,9 +47,8 @@ export const tableRowMinRem = (columns: TableColumnInfo[]) =>
 	TABLE_PADDING_REM +
 	TABLE_AVATAR_REM +
 	TABLE_MIN_TITLE_REM +
-	TABLE_ACTION_REM +
 	columns.reduce((sum, c) => sum + c.widthRem, 0) +
-	TABLE_GAP_REM * (columns.length + 2);
+	TABLE_GAP_REM * (columns.length + 1);
 
 export function fitTableColumns(
 	columns: TableColumnInfo[],

@@ -355,7 +355,7 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	},
 	tableColumns: {
 		type: 'array of column ids',
-		body: `The columns that the table layout shows, from left to right in a fixed order. The avatar, the title, and the main action always show. With \`"categoryNames"\` on, the names show in place of the icons of \`"categories"\`. Columns: ${TABLE_COLUMNS.map((c) => `\`"${c.id}"\` (${c.label}${c.prOnly ? ', pull requests only' : ''})`).join(', ')}. The default shows ${DEFAULT_TABLE_COLUMNS.map((id) => `\`"${id}"\``).join(', ')}.
+		body: `The columns that the table layout shows, from left to right in a fixed order. The avatar and the title always show. The table has no action button: click a row to open it in the peek, or use the right-click menu and the keys. With \`"categoryNames"\` on, the names show in place of the icons of \`"categories"\`. Columns: ${TABLE_COLUMNS.map((c) => `\`"${c.id}"\` (${c.label}${c.prOnly ? ', pull requests only' : ''})`).join(', ')}. The default shows ${DEFAULT_TABLE_COLUMNS.map((id) => `\`"${id}"\``).join(', ')}.
 
 \`\`\`json settings
 { "rowLayout": "table", "tableColumns": ["reason", "author", "time"] }
