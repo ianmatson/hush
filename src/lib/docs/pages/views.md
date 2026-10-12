@@ -54,7 +54,7 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 
 ## In a view
 
-- At the top, a switch shows **Pull requests**, **Issues**, or **Both**, with a count each. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
+- At the top, when a view finds both types, a switch shows **PRs** and **Issues**, with a count each. Turn on one or both. {{key:dash.kind}} changes it. This browser remembers the choice for each view.
 - The list puts the items into sections, by the view's Group by. See [Pull requests and issues](/docs/pull-requests-and-issues#group-by).
 - The pencil button next to the switch opens the view in **Settings → Views**.
 - A view has no filter box. To find an item, press {{key:palette}} or {{key:list.search}} to search.

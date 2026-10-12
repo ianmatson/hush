@@ -70,7 +70,7 @@
 	} from '$lib/shared/categories';
 	import { rowMarks, type RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
-	import PillRow, { type Pill } from './pill-row.svelte';
+	import KindToggle from './kind-toggle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
@@ -110,11 +110,6 @@
 
 	let { view }: { view: ItemView } = $props();
 	type Showing = DashKind | 'both';
-	const SHOWING_LABELS: Record<Showing, string> = {
-		pr: 'Pull requests',
-		issue: 'Issues',
-		both: 'Both'
-	};
 	const showingOptions = (v: ItemView): Showing[] => {
 		const kinds = viewKinds(v);
 		return kinds.length > 1 ? [...kinds, 'both'] : kinds;
@@ -533,13 +528,6 @@
 
 	const countIn = (k: DashKind) =>
 		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && inView(i)).length;
-	const showingPills = $derived<Pill[]>(
-		showingOptions(view).map((option) => {
-			const count =
-				option === 'both' ? viewKinds(view).reduce((n, k) => n + countIn(k), 0) : countIn(option);
-			return { id: option, label: SHOWING_LABELS[option], count, dim: !count };
-		})
-	);
 
 	async function setGroupBy(by: GroupBy) {
 		const settings = me.data?.settings;
@@ -923,15 +911,11 @@
 <main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
 	<div class="flex items-center gap-2">
 		<div class="min-w-0 flex-1">
-			<PillRow
-				pills={showingPills}
-				bind:value={() => showing, (k) => k && show(k as Showing)}
-				label="Pull requests or issues"
-				action={{
-					label: `Edit ${view.name}`,
-					href: `/settings/views#view-${view.id}`,
-					icon: Pencil
-				}}
+			<KindToggle
+				kinds={viewKinds(view)}
+				shown={kinds}
+				count={countIn}
+				onchange={(next) => show(next.length > 1 ? 'both' : next[0])}
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">
