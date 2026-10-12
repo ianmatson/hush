@@ -4,6 +4,8 @@ import {
 	groupChoice,
 	itemQueryFacts,
 	matchesCategoryFilter,
+	matchesCategoryFilters,
+	type CategoryFilter,
 	pinsAfter,
 	placeItem,
 	validateCategoryGroups
@@ -167,6 +169,30 @@ describe('matchesCategoryFilter', () => {
 		expect(matchesCategoryFilter(undefined, { notSortedIn: 'area' }, groups)).toBe(true);
 		expect(matchesCategoryFilter(['api', 'big'], { notSortedIn: 'area' }, groups)).toBe(false);
 		expect(matchesCategoryFilter([], { notSortedIn: 'gone' }, groups)).toBe(false);
+	});
+});
+
+describe('matchesCategoryFilters', () => {
+	const area = group([API, BUGS]);
+	const size = group([BIG], 'size');
+	const groups = [area, size];
+	const matches = (item: string[] | undefined, filters: CategoryFilter[]) =>
+		matchesCategoryFilters(item, filters, groups);
+
+	it('match every item when nothing is picked', () => {
+		expect(matches(undefined, [])).toBe(true);
+	});
+	it('match any pick in one group', () => {
+		const apiOrBugs = [{ category: 'api' }, { category: 'bugs' }];
+		expect(matches(['api'], apiOrBugs)).toBe(true);
+		expect(matches(['bugs'], apiOrBugs)).toBe(true);
+		expect(matches(['big'], apiOrBugs)).toBe(false);
+	});
+	it('match a pick in each group', () => {
+		const apiAndBig = [{ category: 'api' }, { category: 'big' }];
+		expect(matches(['api', 'big'], apiAndBig)).toBe(true);
+		expect(matches(['api'], apiAndBig)).toBe(false);
+		expect(matches(['big'], [{ category: 'big' }, { notSortedIn: 'area' }])).toBe(true);
 	});
 });
 

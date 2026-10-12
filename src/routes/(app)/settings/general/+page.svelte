@@ -1,7 +1,7 @@
 <script lang="ts">
 	import AppearanceSettings from '$lib/components/app/settings/appearance-settings.svelte';
 	import MenuSettings from '$lib/components/app/settings/menu-settings.svelte';
-	import RowSettings from '$lib/components/app/settings/row-settings.svelte';
+	import LayoutSettings from '$lib/components/app/settings/layout-settings.svelte';
 	import SwipeSettings from '$lib/components/app/settings/swipe-settings.svelte';
 	import SettingsFile from '$lib/components/app/settings/settings-file.svelte';
 	import AccountSettings from '$lib/components/app/settings/account-settings.svelte';
@@ -12,7 +12,7 @@
 <div class="grid gap-6 sm:gap-10">
 	<h1 class="hidden text-lg font-semibold tracking-tight md:block">General</h1>
 	<AppearanceSettings />
-	<RowSettings />
+	<LayoutSettings />
 	<MenuSettings />
 	<SwipeSettings />
 	<AccountSettings />

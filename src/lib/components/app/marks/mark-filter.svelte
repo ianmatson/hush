@@ -13,29 +13,34 @@
 	let {
 		groups,
 		count,
-		value = $bindable(null)
+		value = $bindable([])
 	}: {
 		groups: CategoryGroup[];
 		count: (filter: CategoryFilter) => number;
-		value?: CategoryFilter | null;
+		value?: CategoryFilter[];
 	} = $props();
 
+	const sameFilter = (a: CategoryFilter, b: CategoryFilter) =>
+		JSON.stringify(a) === JSON.stringify(b);
+	const isPicked = (filter: CategoryFilter) => value.some((v) => sameFilter(v, filter));
+	const toggle = (filter: CategoryFilter) =>
+		(value = isPicked(filter) ? value.filter((v) => !sameFilter(v, filter)) : [...value, filter]);
+
+	const firstPick = $derived(value[0]);
 	const activeCategory = $derived.by(() => {
-		const id = value && 'category' in value ? value.category : null;
+		const id = firstPick && 'category' in firstPick ? firstPick.category : null;
 		return allCategories(groups).find((c) => c.id === id) ?? null;
 	});
 	const notSortedGroup = $derived.by(() => {
-		const id = value && 'notSortedIn' in value ? value.notSortedIn : null;
+		const id = firstPick && 'notSortedIn' in firstPick ? firstPick.notSortedIn : null;
 		return groups.find((g) => g.id === id) ?? null;
 	});
 	const activeLabel = $derived(
-		activeCategory?.name ?? (notSortedGroup ? `${notSortedGroup.name}: Not sorted` : null)
+		value.length > 1
+			? `${value.length} categories`
+			: (activeCategory?.name ?? (notSortedGroup ? `${notSortedGroup.name}: Not sorted` : null))
 	);
 	const shownGroups = $derived(groups.filter((g) => g.categories.length));
-	const isCategory = (id: string) => !!value && 'category' in value && value.category === id;
-	const isNotSorted = (groupId: string) =>
-		!!value && 'notSortedIn' in value && value.notSortedIn === groupId;
-	const toggle = (filter: CategoryFilter, on: boolean) => (value = on ? null : filter);
 </script>
 
 <DropdownMenu.Root>
@@ -60,7 +65,7 @@
 		{/snippet}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Content align="end" class="max-h-[70vh] w-60 overflow-y-auto">
-		<DropdownMenu.Item onclick={() => (value = null)}>
+		<DropdownMenu.Item onclick={() => (value = [])}>
 			<span class="flex-1">Every category</span>
 			{#if !activeLabel}<Check class="size-3.5" />{/if}
 		</DropdownMenu.Item>
@@ -69,10 +74,11 @@
 			<DropdownMenu.Label>{g.name}</DropdownMenu.Label>
 			{#each g.categories as c (c.id)}
 				{@const n = count({ category: c.id })}
-				{@const on = isCategory(c.id)}
+				{@const on = isPicked({ category: c.id })}
 				<DropdownMenu.Item
+					closeOnSelect={false}
 					class={cn(!n && !on && 'opacity-50')}
-					onclick={() => toggle({ category: c.id }, on)}
+					onclick={() => toggle({ category: c.id })}
 				>
 					<MarkIcon color={c.color} icon={c.icon} class="size-3.5" />
 					<span class="flex-1 truncate">{c.name}</span>
@@ -81,9 +87,9 @@
 				</DropdownMenu.Item>
 			{/each}
 			{@const unsorted = count({ notSortedIn: g.id })}
-			{@const on = isNotSorted(g.id)}
+			{@const on = isPicked({ notSortedIn: g.id })}
 			{#if unsorted || on}
-				<DropdownMenu.Item onclick={() => toggle({ notSortedIn: g.id }, on)}>
+				<DropdownMenu.Item closeOnSelect={false} onclick={() => toggle({ notSortedIn: g.id })}>
 					<CircleDashed class="size-3.5 text-muted-foreground" />
 					<span class="flex-1 truncate">Not sorted</span>
 					<span class="text-xs text-muted-foreground tabular-nums">{unsorted}</span>

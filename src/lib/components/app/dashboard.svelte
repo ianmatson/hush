@@ -64,18 +64,21 @@
 	import { cn } from '$lib/utils';
 	import {
 		matchesCategoryFilter,
+		matchesCategoryFilters,
 		type CategoryFilter,
 		type CategoryPin
 	} from '$lib/shared/categories';
 	import { rowMarks, type RowMark } from '$lib/marks';
 	import MarkFilter from './marks/mark-filter.svelte';
-	import PillRow, { type Pill } from './pill-row.svelte';
+	import KindSelect from './kind-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import DashRow from './dash-row.svelte';
+	import DashTableRow from './dash-table-row.svelte';
+	import LayoutOffer from './layout-offer.svelte';
 	import { palette } from '$lib/palette.svelte';
 	import AppMenu from './app-menu.svelte';
 	import { meQuery } from '$lib/queries';
@@ -92,7 +95,6 @@
 	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
-	import JevNotice from './jev-notice.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -108,11 +110,6 @@
 
 	let { view }: { view: ItemView } = $props();
 	type Showing = DashKind | 'both';
-	const SHOWING_LABELS: Record<Showing, string> = {
-		pr: 'Pull requests',
-		issue: 'Issues',
-		both: 'Both'
-	};
 	const showingOptions = (v: ItemView): Showing[] => {
 		const kinds = viewKinds(v);
 		return kinds.length > 1 ? [...kinds, 'both'] : kinds;
@@ -188,7 +185,7 @@
 			);
 	}
 	let refreshing = $state(false);
-	let categoryFilter = $state<CategoryFilter | null>(null);
+	let categoryFilter = $state<CategoryFilter[]>([]);
 	let showSnoozed = $state(false);
 	let snoozeSheetIds = $state<string[] | null>(null);
 	let selectedId = $state<string | null>(null);
@@ -222,6 +219,8 @@
 	const categoryCount = (filter: CategoryFilter) =>
 		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
 	const hiddenPartsOf = (i: DashItem) => me.data?.settings.rows[i.kind] ?? [];
+	const tableLayout = $derived(me.data?.settings.rowLayout === 'table');
+	const tableColumns = $derived(me.data?.settings.tableColumns ?? []);
 
 	const snoozedCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
 	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
@@ -234,7 +233,7 @@
 			(i) =>
 				i.dismissed === showSnoozed &&
 				inView(i) &&
-				(!categoryFilter || matchesCategoryFilter(i.categories, categoryFilter, categoryGroups))
+				matchesCategoryFilters(i.categories, categoryFilter, categoryGroups)
 		);
 		return keepHeldRow(
 			listed,
@@ -332,7 +331,7 @@
 		void showing;
 		const v = view;
 		untrack(() => {
-			categoryFilter = null;
+			categoryFilter = [];
 			selectedId = null;
 			sel.clear();
 			groupMotion = false;
@@ -504,7 +503,7 @@
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
-			categoryFilter = null;
+			categoryFilter = [];
 			showSnoozed = !!item.dismissed;
 			sel.clear();
 			peekedOutsideKey = null;
@@ -529,13 +528,6 @@
 
 	const countIn = (k: DashKind) =>
 		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && inView(i)).length;
-	const showingPills = $derived<Pill[]>(
-		showingOptions(view).map((option) => {
-			const count =
-				option === 'both' ? viewKinds(view).reduce((n, k) => n + countIn(k), 0) : countIn(option);
-			return { id: option, label: SHOWING_LABELS[option], count, dim: !count };
-		})
-	);
 
 	async function setGroupBy(by: GroupBy) {
 		const settings = me.data?.settings;
@@ -917,20 +909,38 @@
 <svelte:window onkeydown={onKey} />
 
 <main data-page class="mx-auto max-w-4xl px-2 pt-3 pb-24 sm:px-4 sm:pt-4">
-	<div class="flex items-center gap-2">
-		<div class="min-w-0 flex-1">
-			<PillRow
-				pills={showingPills}
-				bind:value={() => showing, (k) => k && show(k as Showing)}
-				label="Pull requests or issues"
-				action={{
-					label: `Edit ${view.name}`,
-					href: `/settings/views#view-${view.id}`,
-					icon: Pencil
-				}}
-			/>
-		</div>
+	<div class="mb-2 flex items-center gap-2">
+		<p
+			class="flex min-w-0 flex-1 items-center px-1 text-xs whitespace-nowrap text-muted-foreground"
+		>
+			{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
+				<span class="inline-flex items-center gap-1"
+					><RefreshCw class="size-3 animate-spin" />Updating…</span
+				>
+			{:else if data}
+				Updated {ago(data.fetchedAt)}
+				<button
+					type="button"
+					class="ml-1 rounded p-0.5 hover:bg-muted hover:text-foreground"
+					aria-label="Refresh from GitHub"
+					title="Refresh from GitHub"
+					onclick={refresh}><RefreshCw class="size-3" /></button
+				>
+			{:else}Loading from GitHub…{/if}
+		</p>
 		<div class="ml-auto flex items-center gap-1">
+			{#if snoozedCount || showSnoozed}
+				<Button
+					variant={showSnoozed ? 'secondary' : 'ghost'}
+					size="sm"
+					onclick={() => (showSnoozed = !showSnoozed)}
+				>
+					<AlarmClock /><span class="hidden sm:inline"
+						>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
+					>
+					{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
+				</Button>
+			{/if}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -963,41 +973,16 @@
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
-			<Button
-				variant={showSnoozed ? 'secondary' : 'ghost'}
-				size="sm"
-				onclick={() => (showSnoozed = !showSnoozed)}
-				disabled={!snoozedCount && !showSnoozed}
-			>
-				<AlarmClock /><span class="hidden sm:inline"
-					>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
-				>
-				{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Refresh from GitHub"
-				onclick={refresh}
-				disabled={refreshing}
-			>
-				<RefreshCw class={cn(refreshing && 'animate-spin')} />
-			</Button>
+			<KindSelect
+				kinds={viewKinds(view)}
+				shown={kinds}
+				count={countIn}
+				onchange={(next) => show(next.length > 1 ? 'both' : next[0])}
+			/>
 			<MarkFilter groups={categoryGroups} count={categoryCount} bind:value={categoryFilter} />
 		</div>
 	</div>
 
-	<p class="mt-2 mb-2 flex h-4 items-center px-1 text-xs text-muted-foreground">
-		{#if data && (refreshing || data.refreshing || revalidatingAfterOpen)}
-			<span class="inline-flex items-center gap-1"
-				><RefreshCw class="size-3 animate-spin" />Updating…</span
-			>
-		{:else if data}
-			Updated {ago(data.fetchedAt)}
-		{:else}Loading from GitHub…{/if}
-	</p>
-
-	<JevNotice />
 	{#if loadError}
 		<Alert.Root variant="destructive" class="mb-3"
 			><Alert.Description>{loadError.message}</Alert.Description></Alert.Root
@@ -1135,6 +1120,8 @@
 	{/if}
 </main>
 
+<LayoutOffer />
+
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
 	<SnoozeButton
 		snoozed={showSnoozed}
@@ -1162,25 +1149,29 @@
 
 {#snippet itemRow(i: DashItem, stack?: Stack)}
 	<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
-		<DashRow
-			item={i}
-			marks={marksFor(i)}
-			hidden={hiddenPartsOf(i)}
-			selected={i.id === selectedId && !peekedOutsideMember}
-			checked={sel.has(i.id)}
-			selecting={sel.size > 0}
-			onopen={open}
-			onsnooze={(x) => toggleSnooze([x.id])}
-			onmute={(x) => toggleMute([x.id])}
-			oncopy={(x) => copyLinks([x.id])}
-			onrowclick={(e) => onRowClick(e, i)}
-			ontoggle={(e) => onToggle(e, i)}
-			menu={() => menuFor([i.id])}
-			stack={stack && {
+		{@const rowProps = {
+			item: i,
+			marks: marksFor(i),
+			selected: i.id === selectedId && !peekedOutsideMember,
+			checked: sel.has(i.id),
+			selecting: sel.size > 0,
+			onopen: open,
+			onsnooze: (x: DashItem) => toggleSnooze([x.id]),
+			onmute: (x: DashItem) => toggleMute([x.id]),
+			oncopy: (x: DashItem) => copyLinks([x.id]),
+			onrowclick: (e: MouseEvent) => onRowClick(e, i),
+			ontoggle: (e: MouseEvent) => onToggle(e, i),
+			menu: () => menuFor([i.id]),
+			stack: stack && {
 				position: positionIn(stack, i.id) + 1,
 				size: stack.membersBottomFirst.length
-			}}
-		/>
+			}
+		}}
+		{#if tableLayout}
+			<DashTableRow {...rowProps} columns={tableColumns} />
+		{:else}
+			<DashRow {...rowProps} hidden={hiddenPartsOf(i)} />
+		{/if}
 	</SwipeRow>
 {/snippet}
 

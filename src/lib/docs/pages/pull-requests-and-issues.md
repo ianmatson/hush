@@ -3,7 +3,13 @@ title: Pull requests and issues
 description: The list in each view, and how Group by puts it into sections.
 ---
 
-Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. A switch at the top shows **Pull requests**, **Issues**, or **Both** (when the view finds both types). {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
+Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. When the view finds both types, a menu at the top has **Pull requests** and **Issues**: check one, or both to see all. {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
+
+## Row layout
+
+Each item is a card by default: its title, then its repository, author, and size, then badges for whose turn it is, CI, reviews, and categories. **Settings → General → Row layout** changes all lists to a **table**: one line for each item, with its facts in columns. The table has no action button: click a row to open it in the [peek](/docs/peek). On a narrow screen, the table shows only the title and the time.
+
+The settings under the layout are for the layout you use. With cards, **Row contents** chooses the parts of each card. With the table, **Table columns** chooses the columns: the turn, the repository, the author, the category icons or names, CI, the size, the comment count, and the time. See [`rowLayout`](/docs/settings#rowlayout) and [`tableColumns`](/docs/settings#tablecolumns).
 
 ## Group by
 
@@ -110,7 +116,7 @@ Hush finds up to 3 open pull requests under each pull request in your list, in t
 
 ## Categories
 
-An item has one [category](/docs/categories) from each category group, or none when it is **Not sorted** there. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, next to **Refresh from GitHub**, lists every group and its categories, with counts: choose one to see only its items, **Not sorted** to see the items with no category from that group, and **Every category** to see all.
+An item has one [category](/docs/categories) from each category group, or none when it is **Not sorted** there. Their icons show on each row; to show their names too, turn on **Category names** in **Settings → General → Row contents**. The category button, at the right of the toolbar, lists every group and its categories, with counts. Choose one or more to see only their items: in one group, an item needs any of your choices (Low or Medium effort); across groups, it needs one choice from each (Low effort and High impact). **Not sorted** chooses the items with no category from that group, and **Every category** clears your choices.
 
 To change an item's category, right-click it, choose the name of a group, such as **Effort**, and choose a category. **Choose automatically** removes your choice for that group. This works on a selection too.
 
@@ -151,7 +157,7 @@ Snooze takes an item out of the list for a while. Choose **Snooze** in the item'
 
 **Mute** takes an item out of the list until you unmute it.
 
-The **Snoozed** button at the top shows the number of snoozed and muted items. Choose it to list them, with until when each one sleeps. **Wake up** ({{key:dash.snooze}}) puts an item back in the list now; **Unmute** ({{key:dash.mute}}) ends a mute.
+The **Snoozed** button at the top shows the number of snoozed and muted items. It shows only when an item is snoozed or muted. Choose it to list them, with until when each one sleeps. **Wake up** ({{key:dash.snooze}}) puts an item back in the list now; **Unmute** ({{key:dash.mute}}) ends a mute.
 
 When a snooze ends because the thing happened, Hush pushes, for example “Snooze over: CI passed”. See [What gets pushed](/docs/notifications#what-gets-pushed).
 
@@ -178,4 +184,4 @@ Select many items to snooze, mute, mark as read, or copy them together.
 
 Hush runs the searches of your views about every 15 minutes while it checks GitHub, also when no view is open. It keeps the results for 15 minutes. When you open a view after that, it shows the saved list at once ("Updating…") and searches GitHub again in the background; the list changes when the new results arrive.
 
-A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 100 results for each search). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}} to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).
+A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 100 results for each search). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}}, or the refresh icon next to “Updated …” at the left of the toolbar, to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).

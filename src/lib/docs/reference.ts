@@ -36,6 +36,7 @@ import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { DEFAULT_PUSH_FACTS, PUSH_FACTS } from '$lib/shared/push-facts';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
+import { DEFAULT_TABLE_COLUMNS, ROW_LAYOUTS, TABLE_COLUMNS } from '$lib/shared/row-layout';
 import {
 	ALERT_LOG_KEEP,
 	DASH_TTL,
@@ -190,7 +191,7 @@ iPhone and iPad can ignore this: Safari on iOS does not always remove a notifica
 - **\`about:\` conditions** in category rules: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
 - **Order:** in your views, items whose text says they block something or are about an incident come first inside their section.
 
-A one-time notice on your views says that this is on. When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
+When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
 	},
 	pushUrgentNow: {
 		type: 'boolean',
@@ -343,6 +344,22 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	'rows.issue': {
 		type: 'array of part ids',
 		body: `The same for issue rows. Parts: ${ROW_PARTS.issue.map((p) => `\`"${p.id}"\` (${p.label})`).join(', ')}.`
+	},
+	rowLayout: {
+		type: 'string',
+		body: `How the lists of pull requests and issues show each item. **Settings → General → Row layout** sets it. ${ROW_LAYOUTS.map((l) => `\`"${l.id}"\`: ${l.description.toLowerCase()}`).join(' ')} With \`"cards"\`, \`rows\` chooses the parts of each row; with \`"table"\`, \`tableColumns\` chooses the columns.
+
+\`\`\`json settings
+{ "rowLayout": "table" }
+\`\`\``
+	},
+	tableColumns: {
+		type: 'array of column ids',
+		body: `The columns that the table layout shows, from left to right in a fixed order. The avatar and the title always show. The table has no action button: click a row to open it in the peek, or use the right-click menu and the keys. With \`"categoryNames"\` on, the names show in place of the icons of \`"categories"\`. Columns: ${TABLE_COLUMNS.map((c) => `\`"${c.id}"\` (${c.label}${c.prOnly ? ', pull requests only' : ''})`).join(', ')}. The default shows ${DEFAULT_TABLE_COLUMNS.map((id) => `\`"${id}"\``).join(', ')}.
+
+\`\`\`json settings
+{ "rowLayout": "table", "tableColumns": ["reason", "author", "time"] }
+\`\`\``
 	},
 	keys: {
 		type: 'object: command id → array of keys',

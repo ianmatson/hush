@@ -6,6 +6,12 @@ import { DEFAULT_SWIPE, knownSwipe } from './swipe';
 import { knownKeys } from './keymap';
 import { DEFAULT_PUSH_FACTS, knownPushFacts } from './push-facts';
 import { DEFAULT_ROWS, knownRowParts } from './row-parts';
+import {
+	DEFAULT_ROW_LAYOUT,
+	DEFAULT_TABLE_COLUMNS,
+	knownRowLayout,
+	knownTableColumns
+} from './row-layout';
 import type { Settings } from './types';
 
 const knownDashKeys = (dash: object | undefined) =>
@@ -28,7 +34,9 @@ export const DEFAULT_SETTINGS: Settings = {
 	menus: DEFAULT_MENUS,
 	keys: {},
 	swipe: DEFAULT_SWIPE,
-	rows: DEFAULT_ROWS
+	rows: DEFAULT_ROWS,
+	rowLayout: DEFAULT_ROW_LAYOUT,
+	tableColumns: DEFAULT_TABLE_COLUMNS
 };
 
 /**
@@ -51,6 +59,8 @@ export function parseSettings(json: string | null | undefined): Settings {
 			keys: knownKeys(raw.keys),
 			pushFacts: raw.pushFacts ? knownPushFacts(raw.pushFacts) : DEFAULT_PUSH_FACTS,
 			rows: knownRowParts(raw.rows ?? {}),
+			rowLayout: knownRowLayout(raw.rowLayout),
+			tableColumns: knownTableColumns(raw.tableColumns),
 			alertChannels: { ...DEFAULT_SETTINGS.alertChannels, ...(raw.alertChannels ?? {}) }
 		};
 	} catch {

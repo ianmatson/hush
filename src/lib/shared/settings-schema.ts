@@ -10,6 +10,7 @@ import { MAX_SMART_CONDITIONS, smartConditions } from './decisions';
 import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
 import { validateRows } from './row-parts';
+import { TABLE_COLUMNS, validateRowLayout, validateTableColumns } from './row-layout';
 import { validateKeys } from './keymap';
 import { validateQuietHours } from './quiet';
 import { PUSH_FACTS, validatePushFacts } from './push-facts';
@@ -151,6 +152,17 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'Parts to hide on issue rows. Parts: time, author, external, comments, changes, categories, categoryNames, labels.'
 	},
 	{
+		key: 'rowLayout',
+		page: 'general',
+		description:
+			'How lists show each PR and issue: "cards" (several lines, with badges) or "table" (one line, in columns).'
+	},
+	{
+		key: 'tableColumns',
+		page: 'general',
+		description: `The columns of the table layout, such as ["reason", "time"]. Columns: ${TABLE_COLUMNS.map((c) => c.id).join(', ')}.`
+	},
+	{
 		key: 'keys',
 		page: 'keys',
 		description:
@@ -223,7 +235,9 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	menus: validateMenus,
 	keys: validateKeys,
 	swipe: validateSwipe,
-	rows: validateRows
+	rows: validateRows,
+	rowLayout: validateRowLayout,
+	tableColumns: validateTableColumns
 };
 
 /**
