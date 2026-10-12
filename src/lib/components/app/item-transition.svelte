@@ -31,6 +31,7 @@
 		anchor: Box | null;
 		panel: Box | null;
 		dock: Box | null;
+		pageScroll: number;
 	};
 
 	const isItemRoute = (id: string | null | undefined) => !!id?.includes(ITEM_ROUTE_MARK);
@@ -42,13 +43,15 @@
 	}
 
 	function snapshot(): Snapshot {
-		const surfaceSelector = document.querySelector(ITEM_PAGE) ? ITEM_PAGE : PANEL;
+		const onItemPage = !!document.querySelector(ITEM_PAGE);
+		const surfaceSelector = onItemPage ? ITEM_PAGE : PANEL;
 		return {
 			parts: Object.fromEntries(HEADER_PARTS.map((part) => [part.name, boxOf(part.selector)])),
 			surface: boxOf(surfaceSelector),
 			anchor: boxOf(`${surfaceSelector} ${CONTENT_ANCHOR}`),
 			panel: boxOf(PANEL),
-			dock: boxOf('[data-item-dock]')
+			dock: boxOf('[data-item-dock]'),
+			pageScroll: onItemPage ? window.scrollY : 0
 		};
 	}
 
@@ -142,7 +145,8 @@
 			return;
 		}
 		const dx = (before.anchor?.left ?? panel.left) - (after.anchor?.left ?? page.left);
-		const dy = (before.anchor?.top ?? page.top) - (after.anchor?.top ?? page.top);
+		const pageTop = (after.anchor?.top ?? page.top) + after.pageScroll;
+		const dy = (before.anchor?.top ?? pageTop) - pageTop;
 		const hiddenStrip = Math.max(0, panel.left - (page.left + dx));
 		animatePseudo('::view-transition-new(item-surface)', [
 			{ transform: `translate(${dx}px, ${dy}px)`, clipPath: `inset(0 0 0 ${hiddenStrip}px)` },
@@ -165,7 +169,8 @@
 		}
 		const groupShift = { x: page.left - panel.left, y: page.top - panel.top };
 		const dx = (after.anchor?.left ?? panel.left) - (before.anchor?.left ?? page.left);
-		const dy = (after.anchor?.top ?? page.top) - (before.anchor?.top ?? page.top);
+		const pageTop = (before.anchor?.top ?? page.top) + before.pageScroll;
+		const dy = (after.anchor?.top ?? pageTop) - pageTop;
 		const finalStrip = Math.max(0, panel.left - (page.left + dx));
 		const start = `translate(${groupShift.x}px, ${groupShift.y}px)`;
 		const end = `translate(${groupShift.x + dx}px, ${groupShift.y + dy}px)`;
