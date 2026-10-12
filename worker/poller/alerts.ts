@@ -245,7 +245,7 @@ export abstract class PollerAlerts extends PollerBase {
 
 	private async sendSlackNow(messages: PushMessage[]): Promise<boolean> {
 		const userId = await this.ctx.storage.get<number>('userId');
-		return userId ? sendSlackAlerts(this.env, userId, messages) : false;
+		return userId ? sendSlackAlerts(this.env, userId, messages, await this.origin()) : false;
 	}
 
 	private async sendPushNow(messages: PushMessage[]): Promise<boolean> {

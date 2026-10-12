@@ -17,7 +17,7 @@ The list under **Devices** has every device that gets push, with “(this device
 
 ## Slack
 
-Hush can send your alerts as Slack direct messages from the **Hush** app, as well as push or in place of push. Each message has the alert and an **Open in Hush** button. A digest is one message with a list.
+Hush can send your alerts as Slack direct messages from the **Hush** app, as well as push or in place of push. Each message has the alert and an **Open in Hush** button, which opens the pull request or issue on its page in Hush. A digest is one message with a list.
 
 1. Go to **Settings → Notifications**.
 2. Under **Slack**, choose **Connect Slack**.
