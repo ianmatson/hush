@@ -20,6 +20,7 @@
 		unsnoozeItems
 	} from '$lib/item-actions';
 	import { palette } from '$lib/palette.svelte';
+	import { ui } from '$lib/ui.svelte';
 	import { shortcutsFor, shortcutsOf, type Shortcut } from '$lib/shortcuts';
 	import type { KeyScope } from '$lib/shared/keymap';
 	import type { DashItem } from '$lib/shared/types';
@@ -63,6 +64,11 @@
 	const dash = createQuery(() => dashQuery(kind));
 	const dashItem = $derived(dash.data?.items.find((i) => i.id === itemKey));
 	let helpOpen = $state(false);
+
+	$effect(() => {
+		ui.itemDockOpen = true;
+		return () => (ui.itemDockOpen = false);
+	});
 
 	function showTab(files: boolean) {
 		if (kind !== 'pr' || files === onFilesTab) return;
