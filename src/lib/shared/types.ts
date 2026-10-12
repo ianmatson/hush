@@ -200,11 +200,21 @@ export interface ViewSection {
 	rule: string;
 }
 
+export type ViewSortBy = 'turn' | 'updated' | 'created' | 'waiting' | 'comments' | 'size' | 'title';
+export type ViewSortDir = 'asc' | 'desc';
+
+export interface ViewSort {
+	by: ViewSortBy;
+	dir: ViewSortDir;
+	turnFirst: boolean;
+}
+
 export interface ItemView {
 	id: string;
 	name: string;
 	searches: string[];
 	groupBy: GroupBy;
+	sort?: ViewSort;
 	pushNew?: boolean;
 	sections?: ViewSection[];
 }

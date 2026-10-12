@@ -29,14 +29,9 @@
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
-	import { sortItems } from '$lib/shared/dashboard';
-	import {
-		groupByLabel,
-		groupByOptions,
-		groupItems,
-		projectsHolding,
-		type GroupByOption
-	} from '$lib/shared/grouping';
+	import { sortItemsBy, sortOfView } from '$lib/shared/sorting';
+	import DisplayMenu from './display-menu.svelte';
+	import { groupByLabel, groupByOptions, groupItems, projectsHolding } from '$lib/shared/grouping';
 	import { projectAccessOf, statusColor } from '$lib/shared/projects';
 	import { MARK_DOT } from '$lib/marks';
 	import {
@@ -56,7 +51,8 @@
 		DashProject,
 		DashResponse,
 		GroupBy,
-		ItemView
+		ItemView,
+		ViewSort
 	} from '$lib/shared/types';
 	import { viewKinds } from '$lib/shared/item-views';
 	import { page } from '$app/state';
@@ -75,7 +71,6 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import DashRow from './dash-row.svelte';
 	import DashTableRow from './dash-table-row.svelte';
 	import LayoutOffer from './layout-offer.svelte';
@@ -105,8 +100,6 @@
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Link from '@lucide/svelte/icons/link';
-	import Rows3 from '@lucide/svelte/icons/rows-3';
-	import Check from '@lucide/svelte/icons/check';
 
 	let { view }: { view: ItemView } = $props();
 	type Showing = DashKind | 'both';
@@ -248,6 +241,7 @@
 		id !== null && id === peek.heldId && owns && filtered.some((i) => i.id === id);
 
 	const groupBy = $derived(view.groupBy);
+	const viewSort = $derived(sortOfView(view));
 	const projects = $derived<DashProject[]>(
 		projectsHolding(visibleItems, data?.projects ?? [], groupBy)
 	);
@@ -255,11 +249,9 @@
 	const hasSections = $derived(!!view.sections?.length);
 	const groupByChoices = $derived(groupByOptions(categoryGroups, projects, hasSections));
 	const editSectionsPath = $derived(`/settings/views#view-${view.id}`);
-	const startsNewKind = (choices: GroupByOption[], k: number) =>
-		k > 0 && choices[k].kind !== choices[k - 1].kind;
 	const groupByName = $derived(groupByLabel(groupBy, categoryGroups, data?.projects ?? []));
 	const sections = $derived(
-		groupItems(sortItems(filtered), groupBy, {
+		groupItems(sortItemsBy(filtered, viewSort), groupBy, {
 			me: me.data?.login ?? '',
 			categoryGroups,
 			projects: data?.projects,
@@ -529,10 +521,13 @@
 	const countIn = (k: DashKind) =>
 		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && inView(i)).length;
 
-	async function setGroupBy(by: GroupBy) {
+	const setGroupBy = (by: GroupBy) => by !== view.groupBy && updateView({ groupBy: by });
+	const setSort = (sort: ViewSort) => updateView({ sort });
+
+	async function updateView(patch: Partial<ItemView>) {
 		const settings = me.data?.settings;
-		if (!settings || by === view.groupBy) return;
-		const views = settings.views.map((v) => (v.id === view.id ? { ...v, groupBy: by } : v));
+		if (!settings) return;
+		const views = settings.views.map((v) => (v.id === view.id ? { ...v, ...patch } : v));
 		setSettings({ ...settings, views });
 		try {
 			await applySettings({ views });
@@ -875,6 +870,10 @@
 			return hasSections;
 		},
 		setGroupBy,
+		get sort() {
+			return viewSort;
+		},
+		setSort,
 		get order() {
 			return order;
 		},
@@ -941,38 +940,17 @@
 					{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
 				</Button>
 			{/if}
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					{#snippet child({ props })}
-						<Button {...props} variant="ghost" size="sm" aria-label="Group by {groupByName}">
-							<Rows3 /><span class="hidden max-w-48 truncate sm:inline">{groupByName}</span>
-						</Button>
-					{/snippet}
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="end" class="min-w-60">
-					<DropdownMenu.Label>Group by</DropdownMenu.Label>
-					{#each groupByChoices as o, k (o.id)}
-						{#if startsNewKind(groupByChoices, k)}
-							<DropdownMenu.Separator />
-						{/if}
-						<DropdownMenu.Item onclick={() => setGroupBy(o.id)}>
-							<span class="flex-1">{o.label}</span>
-							{#if o.id === groupBy}<Check class="size-3.5" />{/if}
-						</DropdownMenu.Item>
-					{/each}
-					{#if noProjectAccess}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item disabled class="text-xs">
-							Project status needs project access
-						</DropdownMenu.Item>
-					{/if}
-					<DropdownMenu.Separator />
-					<DropdownMenu.Item onclick={() => goto(editSectionsPath)}>
-						<Pencil />
-						{hasSections ? 'Edit custom sections…' : 'Make custom sections…'}
-					</DropdownMenu.Item>
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
+			<DisplayMenu
+				{groupBy}
+				{groupByName}
+				{groupByChoices}
+				{setGroupBy}
+				sort={viewSort}
+				{setSort}
+				{editSectionsPath}
+				{hasSections}
+				{noProjectAccess}
+			/>
 			<KindSelect
 				kinds={viewKinds(view)}
 				shown={kinds}
