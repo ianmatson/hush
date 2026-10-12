@@ -1,3 +1,17 @@
+<script lang="ts" module>
+	import type { HighlightedToken } from '$lib/highlight';
+
+	const HIGHLIGHT_CACHE_LIMIT = 300;
+	const highlightCache = new Map<string, HighlightedToken[][][] | null>();
+
+	function rememberHighlight(key: string, tokens: HighlightedToken[][][] | null) {
+		highlightCache.set(key, tokens);
+		if (highlightCache.size <= HIGHLIGHT_CACHE_LIMIT) return;
+		const oldest = highlightCache.keys().next().value;
+		if (oldest !== undefined) highlightCache.delete(oldest);
+	}
+</script>
+
 <script lang="ts">
 	import {
 		fileAnchor,
@@ -24,7 +38,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { cn } from '$lib/utils';
-	import { highlightHunks, type HighlightedToken } from '$lib/highlight';
+	import { highlightHunks } from '$lib/highlight';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -132,9 +146,15 @@
 		const forLanguage = language;
 		if (!nearView || folded || !forLanguage || !forHunks.length) return;
 		if (untrack(() => highlighted?.hunks === forHunks)) return;
+		const cacheKey = `${forLanguage}\n${file.patch}`;
+		if (highlightCache.has(cacheKey)) {
+			highlighted = { hunks: forHunks, tokens: highlightCache.get(cacheKey) ?? null };
+			return;
+		}
 		let current = true;
 		void highlightHunks(forHunks, forLanguage)
 			.then((result) => {
+				rememberHighlight(cacheKey, result);
 				if (current) highlighted = { hunks: forHunks, tokens: result };
 			})
 			.catch(() => {});

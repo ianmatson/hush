@@ -347,31 +347,62 @@
 	let cursor = $state(-1);
 
 	const SETTLE_MS = 300;
-	const FIRST_RENDERED_FILES = 8;
-	const FILES_PER_RENDER_STEP = 6;
-	const RENDER_STEP_TIMEOUT_MS = 200;
-	const FIRST_RENDER_STEP_DELAY_MS = 400;
+	const MOUNT_MARGIN = '1500px 0px';
+	const FILE_HEADER_PX = 31;
+	const FOLD_NOTE_PX = 64;
+	const DIFF_ROW_PX = 24;
 
-	let renderedCount = $state(FIRST_RENDERED_FILES);
-	const renderedFiles = $derived(files.slice(0, renderedCount));
+	const mountedFiles = new SvelteSet<string>();
+	const pinnedFiles = new SvelteSet<string>();
+	const measuredHeights = new SvelteMap<string, number>();
+	const heightKey = (file: PullFile) => `${file.filename}\n${isFolded(file)}`;
 
-	$effect(() => {
-		if (renderedCount >= files.length) return;
-		const step = () => (renderedCount += FILES_PER_RENDER_STEP);
-		const firstStep = renderedCount === FIRST_RENDERED_FILES;
-		let idle = 0;
-		const timer = setTimeout(
-			() => {
-				if (typeof requestIdleCallback !== 'function') return step();
-				idle = requestIdleCallback(step, { timeout: RENDER_STEP_TIMEOUT_MS });
-			},
-			firstStep ? FIRST_RENDER_STEP_DELAY_MS : 0
-		);
+	function estimatedHeight(file: PullFile): number {
+		if (isFolded(file)) return foldReason(file) ? FOLD_NOTE_PX : FILE_HEADER_PX;
+		if (!file.patch) return FOLD_NOTE_PX;
+		return FILE_HEADER_PX + file.patch.split('\n').length * DIFF_ROW_PX;
+	}
+
+	const keepsMounted = (filename: string) =>
+		pinnedFiles.has(filename) || selection?.file === filename;
+
+	const fileObserver =
+		typeof IntersectionObserver === 'function'
+			? new IntersectionObserver(
+					(entries) => {
+						for (const entry of entries) {
+							const filename = (entry.target as HTMLElement).dataset.filename;
+							if (!filename) continue;
+							if (entry.isIntersecting) {
+								mountedFiles.add(filename);
+								continue;
+							}
+							if (!mountedFiles.has(filename) || keepsMounted(filename)) continue;
+							const file = files.find((f) => f.filename === filename);
+							if (file) measuredHeights.set(heightKey(file), entry.boundingClientRect.height);
+							mountedFiles.delete(filename);
+						}
+					},
+					{ rootMargin: MOUNT_MARGIN }
+				)
+			: null;
+
+	$effect(() => () => fileObserver?.disconnect());
+
+	function watchFile(element: HTMLElement) {
+		const filename = element.dataset.filename;
+		if (!filename) return;
+		const pin = () => pinnedFiles.add(filename);
+		element.addEventListener('pointerdown', pin);
+		element.addEventListener('focusin', pin);
+		if (fileObserver) fileObserver.observe(element);
+		else mountedFiles.add(filename);
 		return () => {
-			clearTimeout(timer);
-			if (idle) cancelIdleCallback(idle);
+			element.removeEventListener('pointerdown', pin);
+			element.removeEventListener('focusin', pin);
+			fileObserver?.unobserve(element);
 		};
-	});
+	}
 
 	const CURRENT_FILE_OFFSET_PX = 120;
 	const PAGE_END_SLACK_PX = 2;
@@ -383,7 +414,7 @@
 			document.documentElement.scrollHeight - PAGE_END_SLACK_PX;
 		const line = atPageEnd ? window.innerHeight : CURRENT_FILE_OFFSET_PX;
 		let current = 0;
-		renderedFiles.forEach((file, index) => {
+		files.forEach((file, index) => {
 			const top = document.getElementById(fileAnchor(file.filename))?.getBoundingClientRect().top;
 			if (top !== undefined && top <= line) current = index;
 		});
@@ -391,7 +422,7 @@
 	}
 
 	$effect(() => {
-		if (!renderedFiles.length) return;
+		if (!files.length) return;
 		let frame = 0;
 		const follow = () => {
 			frame = 0;
@@ -426,8 +457,9 @@
 	});
 
 	async function renderThrough(index: number) {
-		if (index < renderedCount) return;
-		renderedCount = index + 1;
+		const filename = files[index]?.filename;
+		if (!filename || mountedFiles.has(filename)) return;
+		mountedFiles.add(filename);
 		await tick();
 	}
 
@@ -817,45 +849,60 @@
 				Hush cannot show the changes. <span class="text-muted-foreground">{q.error.message}</span>
 			</p>
 		{:else}
-			{#each renderedFiles as file, i (file.filename)}
-				<DiffFile
-					{file}
-					folded={isFolded(file)}
-					foldReason={foldReason(file)}
-					current={i === cursor}
-					viewedState={viewed[file.filename]}
-					{split}
-					threads={fileThreads(file)}
-					onthreadschanged={refreshThreads}
-					selection={selection?.file === file.filename ? selection : null}
-					targetLine={targetLine?.filename === file.filename ? targetLine.line : null}
-					canComment={commentingAllowed}
-					onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
-					ontoggle={() => {
-						cursor = i;
-						toggle(file);
-					}}
-					onviewed={() => {
-						cursor = i;
-						void toggleViewed(file);
-					}}
-				>
-					{#snippet composer()}
-						{@const details = selection && selectionDetails(file, selection)}
-						{#if details}
-							{#key details.draftKey}
-								<LineCommentBox
-									label={details.label}
-									draftKey={details.draftKey}
-									selectedText={details.target.side === 'RIGHT' ? details.selectedText : null}
-									hasPendingReview={!!pendingReview}
-									onsubmit={(body, single) => addComment(details.target, body, single)}
-									oncancel={() => (selection = null)}
-								/>
-							{/key}
-						{/if}
-					{/snippet}
-				</DiffFile>
+			{#each files as file, i (file.filename)}
+				<div data-filename={file.filename} {@attach watchFile}>
+					{#if mountedFiles.has(file.filename)}
+						<DiffFile
+							{file}
+							folded={isFolded(file)}
+							foldReason={foldReason(file)}
+							current={i === cursor}
+							viewedState={viewed[file.filename]}
+							{split}
+							threads={fileThreads(file)}
+							onthreadschanged={refreshThreads}
+							selection={selection?.file === file.filename ? selection : null}
+							targetLine={targetLine?.filename === file.filename ? targetLine.line : null}
+							canComment={commentingAllowed}
+							onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
+							ontoggle={() => {
+								cursor = i;
+								toggle(file);
+							}}
+							onviewed={() => {
+								cursor = i;
+								void toggleViewed(file);
+							}}
+						>
+							{#snippet composer()}
+								{@const details = selection && selectionDetails(file, selection)}
+								{#if details}
+									{#key details.draftKey}
+										<LineCommentBox
+											label={details.label}
+											draftKey={details.draftKey}
+											selectedText={details.target.side === 'RIGHT' ? details.selectedText : null}
+											hasPendingReview={!!pendingReview}
+											onsubmit={(body, single) => addComment(details.target, body, single)}
+											oncancel={() => (selection = null)}
+										/>
+									{/key}
+								{/if}
+							{/snippet}
+						</DiffFile>
+					{:else}
+						<section
+							id={fileAnchor(file.filename)}
+							class="scroll-mt-28 overflow-hidden rounded-lg border"
+							style:height="{measuredHeights.get(heightKey(file)) ?? estimatedHeight(file)}px"
+							aria-label={file.filename}
+						>
+							<p class="truncate bg-muted/40 px-2 py-1.5 font-mono text-xs text-muted-foreground">
+								{file.filename}
+							</p>
+						</section>
+					{/if}
+				</div>
 			{/each}
 		{/if}
 	</div>
