@@ -582,7 +582,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
     __typename ...P ...I
     ... on PullRequest {
       id number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
-      baseRefName headRefName headRefOid reviewDecision mergeable mergeStateStatus locked
+      baseRefName headRefName headRefOid headRepository { nameWithOwner } reviewDecision mergeable mergeStateStatus locked
       ${REACTION_FIELDS}
       viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate viewerCanMergeAsAdmin
       viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
@@ -593,7 +593,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       latestOpinionatedReviews(first: 20) { nodes { state author { ${PERSON} } } }
       viewerLatestReview { submittedAt commit { oid } }
       reviewThreads(first: 50) { nodes { isResolved } }
-      reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name } } } }
+      reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { name combinedSlug } } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {
         totalCount
         nodes {
@@ -826,6 +826,7 @@ export async function fetchPeek(
 		pr: {
 			base: n.baseRefName,
 			head: n.headRefName,
+			headRepo: n.headRepository?.nameWithOwner ?? null,
 			additions: n.additions ?? 0,
 			deletions: n.deletions ?? 0,
 			files: n.changedFiles ?? 0,
@@ -839,7 +840,11 @@ export async function fetchPeek(
 			requested: (n.reviewRequests?.nodes ?? [])
 				.map((r: Node) => r.requestedReviewer)
 				.filter(Boolean)
-				.map((r: Node) => ({ name: r.login ?? r.name, team: r.__typename === 'Team' })),
+				.map((r: Node) => ({
+					name: r.login ?? r.name,
+					team: r.__typename === 'Team',
+					slug: r.combinedSlug ?? null
+				})),
 			ci: (rollup?.state as CiState | undefined) ?? null,
 			checks,
 			checksTotal: rollup?.contexts?.totalCount ?? checks.length,

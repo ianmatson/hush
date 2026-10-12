@@ -11,6 +11,8 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { DROP_TARGET_CLASS, Uploads, getAttachTarget } from '$lib/attachments.svelte';
+	import { profileUrl } from '$lib/shared/github-links';
+	import GhLink from './gh-link.svelte';
 
 	let {
 		thread,
@@ -101,10 +103,15 @@
 		{#each thread.comments as comment (comment.id)}
 			<div class="grid gap-1">
 				<div class="flex items-center gap-2 text-xs">
-					{#if comment.author.avatar}
-						<img src={comment.author.avatar} alt="" class="size-5 rounded-full bg-muted" />
-					{/if}
-					<span class="font-medium">{comment.author.login}</span>
+					<GhLink
+						href={profileUrl(comment.author.login)}
+						class="flex items-center gap-2 font-medium"
+						>{#if comment.author.avatar}<img
+								src={comment.author.avatar}
+								alt=""
+								class="size-5 rounded-full bg-muted"
+							/>{/if}{comment.author.login}</GhLink
+					>
 					<a
 						href={comment.url}
 						target="_blank"

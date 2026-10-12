@@ -178,20 +178,28 @@
 
 :root {
 	--peek-w: clamp(28rem, 46vw, 56rem);
+	--page-max-w: 56rem;
 }
-/* Docked on the right: center the page (its outer [data-page] box) in the space left over. */
 @media (min-width: 1024px) {
-	html.peek-docked [data-page] {
-		--peek-gap: max(0px, calc((100vw - var(--peek-w) - 56rem) / 2));
-		margin-left: var(--peek-gap);
-		margin-right: calc(var(--peek-w) + var(--peek-gap));
+	[data-page],
+	[data-header-bar] {
+		--page-margin: max(0px, calc((100% - var(--page-max-w)) / 2));
+		margin-left: var(--page-margin);
+		margin-right: var(--page-margin);
+		transition: margin 200ms cubic-bezier(0.33, 1, 0.68, 1);
+	}
+	html.peek-docked [data-page],
+	html.peek-docked [data-header-bar] {
+		--page-margin: max(0px, calc((100% - var(--peek-w) - var(--page-max-w)) / 2));
+		margin-right: calc(var(--peek-w) + var(--page-margin));
+	}
+	html:has([data-wide-page]) [data-header-bar] {
+		--page-max-w: 100rem;
+		max-width: 100rem;
 	}
 	html.peek-docked [data-bulk-bar] {
 		padding-right: calc(var(--peek-w) + 1rem);
 	}
-}
-[data-page] {
-	transition: margin 200ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 :root {
