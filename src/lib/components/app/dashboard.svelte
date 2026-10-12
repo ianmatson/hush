@@ -912,11 +912,10 @@
 	<div class="flex items-center gap-2">
 		<div class="min-w-0 flex-1">
 			<KindSelect
-				options={showingOptions(view)}
-				value={showing}
-				count={(option) =>
-					option === 'both' ? viewKinds(view).reduce((n, k) => n + countIn(k), 0) : countIn(option)}
-				onchange={show}
+				kinds={viewKinds(view)}
+				shown={kinds}
+				count={countIn}
+				onchange={(next) => show(next.length > 1 ? 'both' : next[0])}
 			/>
 		</div>
 		<div class="ml-auto flex items-center gap-1">

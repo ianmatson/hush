@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The list in each view, and how Group by puts it into sections.
 ---
 
-Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. When the view finds both types, a menu at the top shows **All**, **Pull requests**, or **Issues**. {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
+Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. When the view finds both types, a menu at the top has **Pull requests** and **Issues**: check one, or both to see all. {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
 
 ## Row layout
 
