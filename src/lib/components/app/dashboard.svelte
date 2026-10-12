@@ -1167,6 +1167,7 @@
 			member={m}
 			position={positionIn(stack, m.key) + 1}
 			size={stack.membersBottomFirst.length}
+			table={tableLayout}
 			selected={peekedOutsideMember?.key === m.key || (cursorIsIn(stack) && !peekedOutsideMember)}
 			onclick={() => peekOutside(stack, m)}
 		/>
