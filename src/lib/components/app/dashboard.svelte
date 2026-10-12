@@ -964,15 +964,6 @@
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				aria-label="Refresh from GitHub"
-				onclick={refresh}
-				disabled={refreshing}
-			>
-				<RefreshCw class={cn(refreshing && 'animate-spin')} />
-			</Button>
 			<MarkFilter groups={categoryGroups} count={categoryCount} bind:value={categoryFilter} />
 		</div>
 	</div>
@@ -984,6 +975,13 @@
 			>
 		{:else if data}
 			Updated {ago(data.fetchedAt)}
+			<button
+				type="button"
+				class="ml-1 rounded p-0.5 hover:bg-muted hover:text-foreground"
+				aria-label="Refresh from GitHub"
+				title="Refresh from GitHub"
+				onclick={refresh}><RefreshCw class="size-3" /></button
+			>
 		{:else}Loading from GitHub…{/if}
 	</p>
 
