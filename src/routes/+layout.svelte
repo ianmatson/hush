@@ -9,7 +9,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<link rel="apple-touch-icon" href="/icon-192.png" />
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 	<meta name="theme-color" content="#0a0a0a" />
 	<title>Hush</title>
 </svelte:head>

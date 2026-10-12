@@ -12,7 +12,7 @@ Open it in **Settings → General → Edit settings.json** ([app.hush-gh.com/set
 - **It has only your changes.** A setting that you did not change is not in the file; it uses its default. A new default in Hush then applies to you too.
 - **Remove a key to go back to its default.**
 - **Save replaces all your settings.** A setting that is not in the file goes back to its default. {{key:editor.save}} saves.
-- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown colour.`, and saves nothing. Unknown keys are errors too, also settings that Hush no longer has, such as `botsAreFyi`, `peekMarksRead`, `rules`, and `tags`. Categories are in [`categoryGroups`](#categorygroups) now.
+- **Hush checks the whole file first.** If one value is wrong, it shows the error, such as `"Website": unknown color.`, and saves nothing. Unknown keys are errors too. Categories are in [`categoryGroups`](#categorygroups).
 - **`dash`, `menus`, and `swipe` are groups.** Write only the keys that you change: `{ "dash": { "staleDays": 5 } }` keeps the other `dash` defaults. A list, such as `categoryGroups` or `views`, is always replaced as a whole.
 - **Changes apply at once**, on every device. A change to `categoryGroups` places your items in categories again.
 
@@ -99,6 +99,6 @@ The file is your settings.json in a small wrapper:
 
 - `hush` is the file format version: `2`. Hush refuses a version `1` file (conditions as JSON objects): export it again.
 - `settings` has only the changes, the same as settings.json.
-- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many category groups and views the file has. Settings that Hush no longer has, such as `botsAreFyi`, `rules`, and `tags`, are left out.
+- **Import replaces all your settings**, like Save in settings.json. Hush asks first, and says how many category groups and views the file has. Settings that Hush does not know are left out.
 
 {{ref:settings}}

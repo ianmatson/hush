@@ -7,12 +7,12 @@ Hush needs access to your GitHub notifications and repositories. This page says 
 
 ## What Hush can do on GitHub
 
-Hush signs you in with a GitHub OAuth app, with the scopes `notifications`, `repo`, and `read:org`. GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
+Hush signs you in with a GitHub OAuth app, with the scopes `notifications`, `repo`, `read:org`, and `project` ([why each one](/docs/github-access#what-hush-asks-for)). GitHub's Notifications API accepts only these classic scopes, so Hush cannot ask for less.
 
 - **Hush reads** your notifications, the pull requests and issues behind them, the results of your saved searches, and your teams.
-- **Hush writes only when you do it.** Each write is one choice that you make in the [peek](/docs/peek): approve, request changes, comment, react, merge, auto-merge, re-run failed jobs, close, or reopen. Hush never changes your notifications on GitHub. Snooze, Mute, and Read stay in Hush.
+- **Hush writes only when you do it.** Each write is one choice that you make in the [peek](/docs/peek): approve, request changes, comment, reply to or resolve a review thread, mark a file as viewed, react, merge, auto-merge, re-run failed jobs, mark ready for review or draft, change project status, add an image or video to a comment, close, or reopen. [All writes](/docs/github-access#what-hush-does-on-github). Hush never changes your notifications on GitHub. Snooze, Mute, and Read stay in Hush.
 - Hush never writes by itself: no rule, schedule, or background job changes anything on GitHub.
-- Hush does not read code, change repositories or settings, or use admin rights.
+- Hush reads a PR's changed files only when you open its **Files** tab, and does not keep them. It does not change repositories or settings, or use admin rights.
 
 ## For org owners
 

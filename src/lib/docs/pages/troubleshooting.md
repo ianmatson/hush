@@ -9,10 +9,6 @@ The org has probably not approved Hush. GitHub then hides the org completely. Ch
 
 If the org uses SAML single sign-on, and its items do not show in your views, sign in again and authorize Hush for that org.
 
-## The inbox is gone
-
-Hush no longer has an inbox, and it no longer sorts notifications into Needs you and FYI. An old `/inbox` link opens your start view. Hush now shows the pull requests and issues of your [views](/docs/views), and each row says whose turn it is. Your notifications on GitHub stay as they are: Hush only reads them.
-
 ## A pull request or issue is missing
 
 Hush shows only the pull requests and issues that the searches of your views find. A GitHub notification about another item does not show in Hush.

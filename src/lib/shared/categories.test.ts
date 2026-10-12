@@ -192,11 +192,11 @@ describe('defaults', () => {
 });
 
 describe('validation', () => {
-	it('refuses a bad rule, colour, or duplicate id', () => {
+	it('refuses a bad rule, color, or duplicate id', () => {
 		expect(validateCategoryGroups([group([{ ...BUGS, rule: '(label:x' }])])).toMatch(/“\(”/);
 		expect(
 			validateCategoryGroups([group([{ ...BUGS, color: 'black' as ItemCategory['color'] }])])
-		).toMatch(/colour/);
+		).toMatch(/color/);
 		expect(validateCategoryGroups([group([BUGS, BUGS])])).toMatch(/Two categories/);
 	});
 	it('needs category ids that are unique across groups', () => {

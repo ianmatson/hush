@@ -1,6 +1,6 @@
 ---
 title: Hush vs. Notifier for GitHub: two ways to watch GitHub notifications
-description: Notifier for GitHub is a small browser extension that counts unread GitHub notifications. Hush is a web app for your GitHub pull requests and issues, in views you define, with pushes for the facts you choose. When a badge is enough, and when it is not.
+description: Notifier for GitHub counts unread GitHub notifications on a toolbar badge. Hush is a web app for your PRs and issues. When a badge is enough, and when not.
 ---
 
 ## Summary

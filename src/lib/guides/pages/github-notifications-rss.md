@@ -1,6 +1,6 @@
 ---
 title: How to follow GitHub notifications in an RSS or Atom reader
-description: GitHub has no documented feed for your notifications inbox. Use the Atom feeds for releases and commits, the REST API, or a private Hush feed of a view or a category of your pull requests and issues.
+description: GitHub has no documented feed for your notifications. Use Atom feeds for releases and commits, the REST API, or a private Hush feed of a view.
 ---
 
 ## Short answer

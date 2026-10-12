@@ -27,7 +27,7 @@ const md = (slug: string): AboutPage => ({
 const pricing: AboutPage = {
 	slug: 'pricing',
 	title: 'Pricing',
-	description: 'What Hush costs, and what the money pays for.',
+	description: `${PRICING_NOTE} The plans, ${PLANS.map((p) => `$${p.price} a ${p.per}`).join(' or ')}, and what the money pays for.`,
 	markdown: `${PRICING_NOTE}
 
 ${PLANS.map((p) => `- **${p.name}:** $${p.price} a ${p.per}. ${p.note}`).join('\n')}

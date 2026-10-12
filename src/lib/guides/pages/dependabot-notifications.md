@@ -1,6 +1,6 @@
 ---
 title: How to stop Dependabot and bot notification noise on GitHub
-description: Get fewer Dependabot pull requests with groups and a schedule, choose where Dependabot alerts go, filter bot notifications in the inbox, and keep bot pull requests out of your Hush views.
+description: Get fewer Dependabot PRs with groups and a schedule, choose where its alerts go, filter bot notifications, and keep bot PRs out of your Hush views.
 ---
 
 ## Short answer

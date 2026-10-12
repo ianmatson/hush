@@ -1,6 +1,6 @@
 ---
 title: Hush vs. Gitify for GitHub notifications
-description: Gitify is a free desktop app that puts GitHub notifications in your menu bar. Hush is a web app for your GitHub pull requests and issues, in views you define, with pushes for the facts you choose. What each does well.
+description: Gitify puts GitHub notifications in your menu bar, for free. Hush is a web app for your PRs and issues, in views you define. What each one does well.
 ---
 
 ## Summary

@@ -1,6 +1,6 @@
 ---
 title: How to see only the GitHub review requests that need you
-description: Find the pull requests that wait for your review with review-requested:@me and user-review-requested:@me, cut team and CODEOWNERS noise, and keep a list that empties when you review.
+description: Find the PRs that wait for your review with review-requested:@me, cut team and CODEOWNERS noise, and keep a list that empties when you review.
 ---
 
 ## Short answer

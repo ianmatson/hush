@@ -11,7 +11,7 @@ Hush checks more often while you use it, because a check costs GitHub requests a
 
 ## What Hush sees
 
-Hush sees the pull requests and issues of your views and their facts. It reads your notifications only to learn quickly that one of these items changed. It does not read code. Some changes come with no notification (your own review, CI results, new commits after your review); the next search of your views finds those, within about 15 minutes.
+Hush sees the pull requests and issues of your views and their facts. It reads your notifications only to learn quickly that one of these items changed. It reads code only when you open the Files tab of a PR. Some changes come with no notification (your own review, CI results, new commits after your review); the next search of your views finds those, within about 15 minutes.
 
 ## What Hush stores
 
