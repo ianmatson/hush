@@ -36,6 +36,7 @@ import { THEMES } from '$lib/themes/list';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
 import { DEFAULT_PUSH_FACTS, PUSH_FACTS } from '$lib/shared/push-facts';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
+import { DEFAULT_TABLE_COLUMNS, ROW_LAYOUTS, TABLE_COLUMNS } from '$lib/shared/row-layout';
 import {
 	ALERT_LOG_KEEP,
 	DASH_TTL,
@@ -343,6 +344,22 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	'rows.issue': {
 		type: 'array of part ids',
 		body: `The same for issue rows. Parts: ${ROW_PARTS.issue.map((p) => `\`"${p.id}"\` (${p.label})`).join(', ')}.`
+	},
+	rowLayout: {
+		type: 'string',
+		body: `How the lists of pull requests and issues show each item. **Settings → General → Row layout** sets it. ${ROW_LAYOUTS.map((l) => `\`"${l.id}"\`: ${l.description.toLowerCase()}`).join(' ')} With \`"cards"\`, \`rows\` chooses the parts of each row; with \`"table"\`, \`tableColumns\` chooses the columns.
+
+\`\`\`json settings
+{ "rowLayout": "table" }
+\`\`\``
+	},
+	tableColumns: {
+		type: 'array of column ids',
+		body: `The columns that the table layout shows, from left to right in a fixed order. The avatar, the title, and the main action always show. With \`"categoryNames"\` on, the names show in place of the icons of \`"categories"\`. Columns: ${TABLE_COLUMNS.map((c) => `\`"${c.id}"\` (${c.label}${c.prOnly ? ', pull requests only' : ''})`).join(', ')}. The default shows ${DEFAULT_TABLE_COLUMNS.map((id) => `\`"${id}"\``).join(', ')}.
+
+\`\`\`json settings
+{ "rowLayout": "table", "tableColumns": ["reason", "author", "time"] }
+\`\`\``
 	},
 	keys: {
 		type: 'object: command id → array of keys',

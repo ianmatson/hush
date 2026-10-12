@@ -166,6 +166,8 @@ export interface Settings {
 	/** Swipe actions on touch screens, for each list (see shared/swipe.ts). */
 	swipe: import('./swipe').SwipeSettings;
 	rows: import('./row-parts').RowSettings;
+	rowLayout: import('./row-layout').RowLayout;
+	tableColumns: import('./row-layout').TableColumn[];
 }
 
 // --- Pull request and issue dashboards ------------------------------------------

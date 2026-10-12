@@ -76,6 +76,8 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import DashRow from './dash-row.svelte';
+	import DashTableRow from './dash-table-row.svelte';
+	import LayoutOffer from './layout-offer.svelte';
 	import { palette } from '$lib/palette.svelte';
 	import AppMenu from './app-menu.svelte';
 	import { meQuery } from '$lib/queries';
@@ -222,6 +224,8 @@
 	const categoryCount = (filter: CategoryFilter) =>
 		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
 	const hiddenPartsOf = (i: DashItem) => me.data?.settings.rows[i.kind] ?? [];
+	const tableLayout = $derived(me.data?.settings.rowLayout === 'table');
+	const tableColumns = $derived(me.data?.settings.tableColumns ?? []);
 
 	const snoozedCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
 	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
@@ -1135,6 +1139,8 @@
 	{/if}
 </main>
 
+<LayoutOffer />
+
 <BulkBar count={sel.size} onclear={() => sel.clear()}>
 	<SnoozeButton
 		snoozed={showSnoozed}
@@ -1162,25 +1168,29 @@
 
 {#snippet itemRow(i: DashItem, stack?: Stack)}
 	<SwipeRow left={swipeSide('left', i)} right={swipeSide('right', i)}>
-		<DashRow
-			item={i}
-			marks={marksFor(i)}
-			hidden={hiddenPartsOf(i)}
-			selected={i.id === selectedId && !peekedOutsideMember}
-			checked={sel.has(i.id)}
-			selecting={sel.size > 0}
-			onopen={open}
-			onsnooze={(x) => toggleSnooze([x.id])}
-			onmute={(x) => toggleMute([x.id])}
-			oncopy={(x) => copyLinks([x.id])}
-			onrowclick={(e) => onRowClick(e, i)}
-			ontoggle={(e) => onToggle(e, i)}
-			menu={() => menuFor([i.id])}
-			stack={stack && {
+		{@const rowProps = {
+			item: i,
+			marks: marksFor(i),
+			selected: i.id === selectedId && !peekedOutsideMember,
+			checked: sel.has(i.id),
+			selecting: sel.size > 0,
+			onopen: open,
+			onsnooze: (x: DashItem) => toggleSnooze([x.id]),
+			onmute: (x: DashItem) => toggleMute([x.id]),
+			oncopy: (x: DashItem) => copyLinks([x.id]),
+			onrowclick: (e: MouseEvent) => onRowClick(e, i),
+			ontoggle: (e: MouseEvent) => onToggle(e, i),
+			menu: () => menuFor([i.id]),
+			stack: stack && {
 				position: positionIn(stack, i.id) + 1,
 				size: stack.membersBottomFirst.length
-			}}
-		/>
+			}
+		}}
+		{#if tableLayout}
+			<DashTableRow {...rowProps} columns={tableColumns} />
+		{:else}
+			<DashRow {...rowProps} hidden={hiddenPartsOf(i)} />
+		{/if}
 	</SwipeRow>
 {/snippet}
 

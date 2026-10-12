@@ -5,6 +5,12 @@ description: The list in each view, and how Group by puts it into sections.
 
 Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. A switch at the top shows **Pull requests**, **Issues**, or **Both** (when the view finds both types). {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
 
+## Row layout
+
+Each item is a card by default: its title, then its repository, author, and size, then badges for whose turn it is, CI, reviews, and categories. **Settings → General → Row layout** changes all lists to a **table**: one line for each item, with its facts in columns. On a narrow screen, the table shows only the title and the time.
+
+The settings under the layout are for the layout you use. With cards, **Row contents** chooses the parts of each card. With the table, **Table columns** chooses the columns: the turn, the repository, the author, the category icons or names, CI, the size, the comment count, and the time. See [`rowLayout`](/docs/settings#rowlayout) and [`tableColumns`](/docs/settings#tablecolumns).
+
 ## Group by
 
 The **Group by** button, at the top right, puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.
