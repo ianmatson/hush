@@ -140,6 +140,8 @@ function validateView(
 	if (sortErr) return `"${v.name}": ${sortErr}`;
 	if (v.pushNew !== undefined && typeof v.pushNew !== 'boolean')
 		return `"${v.name}": "pushNew" must be true or false.`;
+	if (v.keepClosed !== undefined && typeof v.keepClosed !== 'boolean')
+		return `"${v.name}": "keepClosed" must be true or false.`;
 	return null;
 }
 

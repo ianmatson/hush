@@ -1,4 +1,5 @@
 import { itemQueryFacts } from './categories';
+import { newestCloseFirst } from './closed-items';
 import { queryMatches } from './rules';
 import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSection } from './types';
 
@@ -25,6 +26,7 @@ export const NOT_SORTED_SECTION = 'Not sorted';
 export const NO_STATUS_SECTION = 'No status';
 export const NOT_IN_PROJECT_SECTION = 'Not in project';
 export const EVERYTHING_ELSE_SECTION = 'Everything else';
+export const CLOSED_SECTION = 'Merged and closed';
 export const CUSTOM_GROUP_BY: GroupBy = 'custom';
 const CATEGORY_PREFIX = 'category:';
 const PROJECT_PREFIX = 'project:';
@@ -271,4 +273,22 @@ export function groupItems(items: DashItem[], by: GroupBy, ctx: GroupContext): S
 		);
 	const group = categoryGroupOf(by, ctx.categoryGroups);
 	return group ? categorySections(items, group) : fixedSections(items, STATUS, ctx.me);
+}
+
+export function groupWithClosed(
+	items: DashItem[],
+	by: GroupBy,
+	ctx: GroupContext,
+	closedLabel: string
+): Section[] {
+	const kept = items.filter((i) => i.keptAfterClose).sort(newestCloseFirst);
+	const closed = kept.length ? [{ key: CLOSED_SECTION, label: closedLabel, items: kept }] : [];
+	return [
+		...groupItems(
+			items.filter((i) => !i.keptAfterClose),
+			by,
+			ctx
+		),
+		...closed
+	];
 }

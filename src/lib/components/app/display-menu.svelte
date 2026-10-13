@@ -10,6 +10,7 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import { cn } from '$lib/utils';
 	import { groupByOk, type GroupByOption } from '$lib/shared/grouping';
+	import { KEEP_CLOSED_HOURS } from '$lib/shared/closed-items';
 	import { SORT_BY, SORT_BY_ORDER, isDefaultSort, sortWithBy } from '$lib/shared/sorting';
 	import type { GroupBy, ViewSort, ViewSortBy, ViewSortDir } from '$lib/shared/types';
 
@@ -22,7 +23,10 @@
 		setSort,
 		editSectionsPath,
 		hasSections,
-		noProjectAccess
+		noProjectAccess,
+		keepClosed,
+		setKeepClosed,
+		closedLabel
 	}: {
 		groupBy: GroupBy;
 		groupByName: string;
@@ -33,6 +37,9 @@
 		editSectionsPath: string;
 		hasSections: boolean;
 		noProjectAccess: boolean;
+		keepClosed: boolean;
+		setKeepClosed: (on: boolean) => void;
+		closedLabel: string;
 	} = $props();
 
 	const isSortBy = (v: string): v is ViewSortBy => v in SORT_BY;
@@ -132,6 +139,16 @@
 				disabled={!turnFirstApplies}
 				onCheckedChange={(on) => setSort({ ...sort, turnFirst: on })}
 			/>
+		</label>
+
+		<label class="flex items-start justify-between gap-3 border-t pt-3">
+			<span class="grid gap-0.5">
+				<span>{closedLabel}</span>
+				<span class="text-xs text-muted-foreground">
+					Keep them at the end of the list for {KEEP_CLOSED_HOURS} hours after they close.
+				</span>
+			</span>
+			<Switch checked={keepClosed} onCheckedChange={setKeepClosed} />
 		</label>
 
 		<Button variant="ghost" size="sm" class="justify-start" onclick={() => goto(editSectionsPath)}>

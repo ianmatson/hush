@@ -1,6 +1,6 @@
 import type { DashFacts } from './dashboard';
 import { NO_DECISIONS, type SubjectDecisions } from './decisions';
-import type { CiState, Enrichment, LastComment, StackLink } from './types';
+import type { CiState, CloseReason, Enrichment, LastComment, StackLink } from './types';
 
 /**
  * Everything Hush knows about one PR or issue, as GitHub last returned it. The one record that
@@ -26,6 +26,8 @@ export interface SubjectFacts {
 	createdAt: string;
 	updatedAt: string;
 	state: 'open' | 'closed' | 'merged';
+	closedAt?: string | null;
+	closeReason?: CloseReason | null;
 	draft: boolean;
 	labels: { name: string; color: string }[];
 	assignees: string[];
@@ -159,6 +161,8 @@ export function dashFactsOf(
 		createdAt: s.createdAt,
 		updatedAt: s.updatedAt,
 		state: s.state,
+		closedAt: s.closedAt ?? null,
+		closeReason: s.closeReason ?? null,
 		draft: s.draft,
 		labels: s.labels,
 		comments: s.comments,

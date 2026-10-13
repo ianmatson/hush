@@ -122,6 +122,27 @@ describe('computeTurn: issues', () => {
 	});
 });
 
+describe('computeTurn: merged and closed', () => {
+	const closedAt = '2026-09-21T10:00:00Z';
+	it('says how it closed, and waits since it closed', () => {
+		expect(turn({ state: 'merged', closedAt, requestedMe: true })).toMatchObject({
+			turn: 'none',
+			turnReason: 'Merged',
+			waitingSince: closedAt
+		});
+		expect(turn({ state: 'closed', closedAt }).turnReason).toBe('Closed');
+		expect(turn({ kind: 'issue', state: 'closed', closeReason: 'not_planned' }).turnReason).toBe(
+			'Closed as not planned'
+		);
+		expect(turn({ kind: 'issue', state: 'closed', closeReason: 'duplicate' }).turnReason).toBe(
+			'Closed as duplicate'
+		);
+	});
+	it('falls back to the update time when the close time is not known', () => {
+		expect(turn({ state: 'merged' }).waitingSince).toBe('2026-09-20T00:00:00Z');
+	});
+});
+
 describe('expandSections', () => {
 	const teams = [
 		{ slug: 'o/web', name: 'Web', org: 'o' },

@@ -20,6 +20,7 @@
 	import Bell from '@lucide/svelte/icons/bell';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import { snoozeLabel } from '$lib/shared/item-snooze';
+	import { closedTimeOf } from '$lib/shared/closed-items';
 	import Link from '@lucide/svelte/icons/link';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -95,6 +96,12 @@
 		them: 'bg-muted text-muted-foreground',
 		none: 'bg-muted text-muted-foreground'
 	};
+	const closedTone: Record<Exclude<DashItem['state'], 'open'>, string> = {
+		merged: 'bg-signal-reply/12 text-signal-reply',
+		closed: 'bg-signal-fail/12 text-signal-fail'
+	};
+	const reasonTone = $derived(i.state === 'open' ? turnTone[i.turn] : closedTone[i.state]);
+	const shownTime = $derived(i.state === 'open' ? i.updatedAt : closedTimeOf(i));
 
 	const ci = $derived(
 		i.ci === 'SUCCESS'
@@ -160,7 +167,7 @@
 		'row group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
 		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]',
-		i.dismissed && 'opacity-60'
+		(i.dismissed || i.keptAfterClose) && 'opacity-60'
 	)}
 	onclick={onrowclick}
 	role="option"
@@ -211,7 +218,7 @@
 					>waiting {since(i.waitingSince)}</span
 				>
 			{:else if show('time')}
-				<span class="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(i.updatedAt)}</span>
+				<span class="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(shownTime)}</span>
 			{/if}
 		</div>
 
@@ -260,9 +267,7 @@
 				text={ciNew && said.has('ci') ? 'CI changed since you last looked' : undefined}
 			>
 				{#snippet children(props)}
-					<span
-						{...props}
-						class={cn('relative rounded-md px-1.5 py-0.5 font-medium', turnTone[i.turn])}
+					<span {...props} class={cn('relative rounded-md px-1.5 py-0.5 font-medium', reasonTone)}
 						>{i.turnReason}{#if ciNew && said.has('ci')}{@render newDot()}{/if}</span
 					>
 				{/snippet}

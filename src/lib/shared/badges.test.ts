@@ -14,11 +14,14 @@ describe('saidBy', () => {
 		expect([...saidBy('2 open threads')]).toEqual(['threads']);
 		expect([...saidBy('Re-review requested')]).toEqual(['requested']);
 		expect([...saidBy('@bob requests your review')]).toEqual(['requested']);
+		expect([...saidBy('Merged')]).toEqual(['state']);
+		expect([...saidBy('Closed as not planned')]).toEqual(['state']);
 	});
 	it('reads nothing into other reasons', () => {
 		expect(saidBy('You approved').size).toBe(0);
 		expect(saidBy('Waiting for review').size).toBe(0);
 		expect(saidBy('Review for acme/web').size).toBe(0);
+		expect(saidBy('Merge conflict').has('state')).toBe(false);
 	});
 });
 
@@ -40,5 +43,9 @@ describe('newChanges', () => {
 	});
 	it('leaves out a change with the same text', () => {
 		expect(newChanges([c('state', 'Merged')], new Set(), ['merged'])).toEqual([]);
+	});
+	it('leaves out the state change when the reason says how it closed', () => {
+		const reason = 'Closed as not planned';
+		expect(newChanges([c('state', 'Closed')], saidBy(reason), [reason])).toEqual([]);
 	});
 });

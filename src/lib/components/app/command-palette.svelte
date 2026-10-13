@@ -11,6 +11,7 @@
 	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
+	import { keepsClosed } from '$lib/shared/closed-items';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
 	import Palette from '@lucide/svelte/icons/palette';
 	import * as Command from '$lib/components/ui/command';
@@ -59,7 +60,9 @@
 		return [prs.data, issues.data].flatMap((d) =>
 			(d?.items ?? [])
 				.flatMap((i) => {
-					const home = views.find((v) => i.sections.includes(v.id));
+					const home = views.find(
+						(v) => i.sections.includes(v.id) && (!i.keptAfterClose || keepsClosed(v))
+					);
 					return home ? [{ i, home }] : [];
 				})
 				.map(({ i, home }) => ({
@@ -75,7 +78,7 @@
 						...i.labels.map((l) => l.name)
 					],
 					url: i.url,
-					where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${turn[i.turn]}`,
+					where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${i.state === 'open' ? turn[i.turn] : i.turnReason}`,
 					run: () =>
 						peek(
 							{ page: 'view', view: home.id, kind: i.kind, id: i.id },

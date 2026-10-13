@@ -1,4 +1,5 @@
 import { placeItem } from '../../src/lib/shared/categories';
+import { keptAfterChange, stillKept } from '../../src/lib/shared/closed-items';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
 import type { DashItem, DashResponse, RuleFacts } from '../../src/lib/shared/types';
 import {
@@ -129,7 +130,6 @@ export abstract class PollerSubjects extends PollerDecisions {
 		await this.deliver(candidates);
 	}
 
-	/** Replace changed subjects in the cached dashboards (and drop the ones that closed). */
 	protected async patchDashCaches(
 		who: Who,
 		subs: SubjectFacts[],
@@ -148,22 +148,23 @@ export abstract class PollerSubjects extends PollerDecisions {
 			if (!cached || !cached.data.items.some((i) => byId.has(i.id))) continue;
 			teamSet ??= new Set((await this.teams()).teams.map((t) => t.slug));
 			const names = Object.fromEntries(cached.data.sections.map((x) => [x.id, x.name]));
+			const now = Date.now();
 			const patched = sortItems(
 				cached.data.items.flatMap((i) => {
 					const sub = byId.get(i.id);
 					if (!sub) return [i];
 					const f = dashFactsOf(sub, who.me, teamSet!, decided.get(i.id));
-					if (f.state !== 'open' || !keepItem(f, who.me, dash)) return [];
-					return [
-						finishItem(
-							f,
-							i.sections,
-							i.sections.map((x) => names[x] ?? x),
-							who.me,
-							dash.staleDays,
-							Date.now()
-						)
-					];
+					const kept = keptAfterChange(i, f);
+					if (!keepItem(f, who.me, dash) || (kept && !stillKept(f, now))) return [];
+					const item = finishItem(
+						f,
+						i.sections,
+						i.sections.map((x) => names[x] ?? x),
+						who.me,
+						dash.staleDays,
+						now
+					);
+					return [kept ? { ...item, keptAfterClose: true } : item];
 				})
 			);
 			const items = this.placeItems(who, patched, byId);
@@ -173,7 +174,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 				items,
 				sections: cached.data.sections.map((x) => ({
 					...x,
-					count: items.filter((i) => i.sections.includes(x.id)).length
+					count: items.filter((i) => i.sections.includes(x.id) && !i.keptAfterClose).length
 				}))
 			};
 			await this.ctx.storage.put(key, { sig: cached.sig, data });

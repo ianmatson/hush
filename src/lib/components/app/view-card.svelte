@@ -113,7 +113,9 @@
 	});
 	const sections = $derived(view.sections ?? []);
 	const suggestions = $derived(ruleSuggestions(me.data?.settings));
-	const itemsInView = $derived(cachedItems().filter((i) => i.sections.includes(view.id)));
+	const itemsInView = $derived(
+		cachedItems().filter((i) => i.sections.includes(view.id) && !i.keptAfterClose)
+	);
 
 	function setGroupBy(by: GroupBy) {
 		view.groupBy = by;
