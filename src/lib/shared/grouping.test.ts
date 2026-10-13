@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	categoryGroupBy,
+	CLOSED_SECTION,
 	groupByLabel,
 	groupByOk,
 	groupByOptions,
 	groupItems,
+	groupWithClosed,
 	NO_STATUS_SECTION,
 	NOT_IN_PROJECT_SECTION,
 	NOT_SORTED_SECTION,
@@ -293,5 +295,46 @@ describe('custom sections', () => {
 			kind: 'custom'
 		});
 		expect(groupByOk('custom')).toBe(true);
+	});
+});
+
+describe('merged and closed items', () => {
+	const kept = (id: string, closedAt: string) =>
+		item(id, { state: 'merged', closedAt, keptAfterClose: true });
+	const withClosed = (items: DashItem[], by: Parameters<typeof groupItems>[1]) =>
+		groupWithClosed(items, by, ctx, 'Merged and closed').map((s) => [
+			s.key,
+			s.label,
+			s.items.map((i) => i.id)
+		]);
+
+	it('go in one section at the end, newest close first, under every Group by', () => {
+		const items = [
+			item('a', { author: ME }),
+			kept('old', '2026-10-13T08:00:00Z'),
+			item('b'),
+			kept('new', '2026-10-13T09:00:00Z')
+		];
+		expect(withClosed(items, 'role')).toEqual([
+			['opened', 'You opened', ['a']],
+			['involved', 'Involved', ['b']],
+			[CLOSED_SECTION, 'Merged and closed', ['new', 'old']]
+		]);
+		expect(withClosed(items, 'none')).toEqual([
+			['all', '', ['a', 'b']],
+			[CLOSED_SECTION, 'Merged and closed', ['new', 'old']]
+		]);
+	});
+
+	it('leave a closed item that the search itself found in its usual section', () => {
+		const found = item('found', { state: 'merged', closedAt: '2026-10-01T00:00:00Z' });
+		expect(withClosed([found], 'none')).toEqual([['all', '', ['found']]]);
+	});
+
+	it('show no section when nothing closed', () => {
+		expect(withClosed([item('a')], 'none')).toEqual([['all', '', ['a']]]);
+		expect(withClosed([kept('only', '2026-10-13T09:00:00Z')], 'role')).toEqual([
+			[CLOSED_SECTION, 'Merged and closed', ['only']]
+		]);
 	});
 });

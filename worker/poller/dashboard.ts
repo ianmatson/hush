@@ -6,7 +6,8 @@ import {
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
 import type { DashItem, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
-import { dashFactsOf, type SubjectFacts } from '../../src/lib/shared/subject';
+import { dashFactsOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
+import { keptAfterChange, stillKept } from '../../src/lib/shared/closed-items';
 import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
 import {
 	MAX_SOURCE_COUNT_SEARCHES,
@@ -25,6 +26,7 @@ import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 
 const RETRY_AFTER = 60_000;
+const MAX_LEFT_READS = 50;
 const NEW_ITEM_REASON = 'new-item';
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
 
@@ -222,10 +224,18 @@ export abstract class PollerDashboard extends PollerSync {
 		const placed = this.keepHushMatches(who, this.placeItems(who, items, facts), byId, finish);
 		this.storeTracked(placed, true);
 		const complete = !searchErrors.length && !detailErrors.length;
+		const closed = await this.keptAfterClose(
+			who,
+			cached?.data.items ?? [],
+			placed,
+			cached?.sig === sig && !searchErrors.length,
+			teamSet,
+			finish
+		);
 		if (cached && cached.sig !== sig && complete)
 			this.untrackMissing(
 				kind,
-				placed.map((i) => i.id)
+				[...placed, ...closed.items].map((i) => i.id)
 			);
 		await this.storeTrackedBuild(kind, complete);
 		const nodeIdOf = (key: string) => latest.get(key)?.id ?? '';
@@ -235,9 +245,15 @@ export abstract class PollerDashboard extends PollerSync {
 				: await itemStatuses(who.token, placed.map((i) => nodeIdOf(i.id)).filter(Boolean));
 		const data: DashResponse = {
 			kind,
-			items: statuses
-				? placed.map((i) => ({ ...i, projectStatus: statuses.statusOf.get(nodeIdOf(i.id)) ?? {} }))
-				: placed,
+			items: [
+				...(statuses
+					? placed.map((i) => ({
+							...i,
+							projectStatus: statuses.statusOf.get(nodeIdOf(i.id)) ?? {}
+						}))
+					: placed),
+				...closed.items
+			],
 			...(statuses && { projects: statuses.projects }),
 			sections: views.map((v) => ({
 				id: v.id,
@@ -253,8 +269,51 @@ export abstract class PollerDashboard extends PollerSync {
 		};
 		await this.ctx.storage.put(key, { sig, data });
 		await this.pushNewItems(who, kind, placed, complete);
-		await this.record(who, [...fresh.values()], { dash: false });
+		await this.record(who, [...fresh.values(), ...closed.read], { dash: false });
 		return data;
+	}
+
+	private async keptAfterClose(
+		who: Who,
+		previous: DashItem[],
+		found: DashItem[],
+		checkItemsThatLeft: boolean,
+		teamSet: Set<string>,
+		finish: (dashFacts: DashFacts, viewIds: Set<string>) => DashItem
+	): Promise<{ items: DashItem[]; read: SubjectFacts[] }> {
+		const viewIds = new Set(who.settings.views.map((v) => v.id));
+		const foundIds = new Set(found.map((i) => i.id));
+		const left = previous
+			.filter(
+				(i) =>
+					!foundIds.has(i.id) && (i.keptAfterClose || (checkItemsThatLeft && i.state === 'open'))
+			)
+			.map((i) => ({ ...i, sections: i.sections.filter((id) => viewIds.has(id)) }))
+			.filter((i) => i.sections.length);
+		if (!left.length) return { items: [], read: [] };
+		const stored = this.storedFacts(left.map((i) => i.id));
+		const stillOpenAsFarAsKnown = left
+			.flatMap((i) => {
+				const s = stored.get(i.id);
+				return s?.state === 'open' ? [s.id] : [];
+			})
+			.slice(0, MAX_LEFT_READS);
+		const read = stillOpenAsFarAsKnown.length
+			? [...(await fetchDetails(who.token, who.me, stillOpenAsFarAsKnown)).subjects.values()]
+			: [];
+		const latest = new Map(stored);
+		for (const s of read) latest.set(subjectKey(s.repo, s.number), s);
+		const decided = this.decisionsOf(who, [...latest.values()]);
+		const now = Date.now();
+		const items = left.flatMap((i) => {
+			const facts = latest.get(i.id);
+			if (!facts) return [];
+			const f = dashFactsOf(facts, who.me, teamSet, decided.get(i.id));
+			if (!keptAfterChange(i, f) || !stillKept(f, now) || !keepItem(f, who.me, who.settings.dash))
+				return [];
+			return [{ ...finish(f, new Set(i.sections)), keptAfterClose: true }];
+		});
+		return { items: this.placeItems(who, items, latest), read };
 	}
 
 	private keepHushMatches(

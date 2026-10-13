@@ -1,4 +1,5 @@
 import { isBot } from './bots';
+import { closedLabel } from './closed-items';
 import { readsBoard } from './projects';
 import type { DashItem, DashKind, DashSection, DashSettings, TeamDTO, Turn } from './types';
 
@@ -117,6 +118,8 @@ export type TurnFacts = Pick<
 	| 'author'
 	| 'authorIsBot'
 	| 'state'
+	| 'closedAt'
+	| 'closeReason'
 	| 'draft'
 	| 'assignees'
 	| 'comments'
@@ -174,8 +177,8 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 		actionUrl = i.url
 	) => r('you', turnReason, priority, waitingSince, actionLabel, actionUrl);
 
-	if (i.state === 'merged') return r('none', 'Merged', 0, i.updatedAt);
-	if (i.state === 'closed') return r('none', 'Closed', 0, i.updatedAt);
+	if (i.state === 'merged') return r('none', 'Merged', 0, i.closedAt ?? null);
+	if (i.state === 'closed') return r('none', closedLabel(i.closeReason), 0, i.closedAt ?? null);
 
 	if (i.kind === 'issue') {
 		if (assigned && commentWaitsOnMe)

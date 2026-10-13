@@ -29,7 +29,9 @@
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
 	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
-		d?.items.filter((i) => i.unread && !i.dismissed && i.sections.includes(viewId)).length ?? 0;
+		d?.items.filter(
+			(i) => i.unread && !i.dismissed && !i.keptAfterClose && i.sections.includes(viewId)
+		).length ?? 0;
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);

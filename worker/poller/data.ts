@@ -1,5 +1,6 @@
 import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
+import { stillKept } from '../../src/lib/shared/closed-items';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
 import {
 	eventSnoozeDeadline,
@@ -178,7 +179,7 @@ export abstract class PollerData extends PollerDashboard {
 			items.push(...(cached?.data.items ?? []));
 		}
 		return items
-			.filter((i) => !i.dismissed && keep(i))
+			.filter((i) => !i.dismissed && !i.keptAfterClose && keep(i))
 			.sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))
 			.slice(0, FEED_ENTRIES)
 			.map(itemFeedEntry);
@@ -400,14 +401,15 @@ export abstract class PollerData extends PollerDashboard {
 				}
 			])
 		);
+		const now = Date.now();
+		const items = data.items.filter((i) => !i.keptAfterClose || stillKept(i, now));
 		const subjects = this.all<{ key: string; facts: string }>(
 			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
-			JSON.stringify(data.items.map((i) => i.id))
+			JSON.stringify(items.map((i) => i.id))
 		);
 		const factsOf = new Map(subjects.map((s) => [s.key, JSON.parse(s.facts) as SubjectFacts]));
 		const since = this.sinceYouLooked(subjects, me);
-		const now = Date.now();
-		for (const i of data.items) {
+		for (const i of items) {
 			const state = markState(marks.get(i.id), i.updatedAt, factsOf.get(i.id), me, now);
 			i.dismissed = state.kind !== 'none';
 			i.muted = state.kind === 'muted';
@@ -417,7 +419,7 @@ export abstract class PollerData extends PollerDashboard {
 			i.seenAt = s?.seenAt ?? null;
 			i.unread = isUnread(i.seenAt, i.changes);
 		}
-		return data;
+		return { ...data, items };
 	}
 
 	async snoozeItems(items: ItemRef[], choice: SnoozeChoice): Promise<{ ok: true }> {

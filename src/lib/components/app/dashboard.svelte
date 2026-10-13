@@ -42,7 +42,14 @@
 	import { tokenHelp } from '$lib/token-help';
 	import { sortItemsBy, sortOfView } from '$lib/shared/sorting';
 	import DisplayMenu from './display-menu.svelte';
-	import { groupByLabel, groupByOptions, groupItems, projectsHolding } from '$lib/shared/grouping';
+	import {
+		CLOSED_SECTION,
+		groupByLabel,
+		groupByOptions,
+		groupWithClosed,
+		projectsHolding
+	} from '$lib/shared/grouping';
+	import { closedSectionLabel, keepsClosed } from '$lib/shared/closed-items';
 	import { projectAccessOf, statusColor } from '$lib/shared/projects';
 	import { MARK_DOT } from '$lib/marks';
 	import {
@@ -214,7 +221,9 @@
 
 	const marksFor = (i: DashItem): RowMark[] => rowMarks(i.categories, me.data?.settings);
 
-	const inView = (i: DashItem) => i.sections.includes(view.id);
+	const keepClosed = $derived(keepsClosed(view));
+	const closedLabel = $derived(closedSectionLabel(kinds));
+	const inView = (i: DashItem) => i.sections.includes(view.id) && (keepClosed || !i.keptAfterClose);
 	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed && inView(i)));
 	const categoryCount = (filter: CategoryFilter) =>
 		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
@@ -249,7 +258,9 @@
 
 	const groupBy = $derived(view.groupBy);
 	const viewSort = $derived(sortOfView(view));
-	const listShape = $derived(JSON.stringify([showing, showSnoozed, categoryFilter, groupBy]));
+	const listShape = $derived(
+		JSON.stringify([showing, showSnoozed, categoryFilter, groupBy, keepClosed])
+	);
 	const projects = $derived<DashProject[]>(
 		projectsHolding(visibleItems, data?.projects ?? [], groupBy)
 	);
@@ -259,12 +270,17 @@
 	const editSectionsPath = $derived(`/settings/views#view-${view.id}`);
 	const groupByName = $derived(groupByLabel(groupBy, categoryGroups, data?.projects ?? []));
 	const sections = $derived(
-		groupItems(sortItemsBy(filtered, viewSort), groupBy, {
-			me: me.data?.login ?? '',
-			categoryGroups,
-			projects: data?.projects,
-			sections: view.sections
-		})
+		groupWithClosed(
+			sortItemsBy(filtered, viewSort),
+			groupBy,
+			{
+				me: me.data?.login ?? '',
+				categoryGroups,
+				projects: data?.projects,
+				sections: view.sections
+			},
+			closedLabel
+		)
 	);
 
 	let stackFront = $state<Record<string, string>>({});
@@ -272,7 +288,13 @@
 	let peekedOutsideKey = $state<string | null>(null);
 
 	const stacks = $derived(
-		kinds.includes('pr') ? findStacks(sections.flatMap((section) => section.items)) : []
+		kinds.includes('pr')
+			? findStacks(
+					sections
+						.filter((section) => section.key !== CLOSED_SECTION)
+						.flatMap((section) => section.items)
+				)
+			: []
 	);
 	const stackOf = $derived(stackByMember(stacks));
 	const rotated = (s: Stack) => rotateToFront(s, stackFront[s.bottomKey]);
@@ -527,10 +549,12 @@
 	});
 
 	const countIn = (k: DashKind) =>
-		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && inView(i)).length;
+		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && !i.keptAfterClose && inView(i))
+			.length;
 
 	const setGroupBy = (by: GroupBy) => by !== view.groupBy && updateView({ groupBy: by });
 	const setSort = (sort: ViewSort) => updateView({ sort });
+	const setKeepClosed = (on: boolean) => updateView({ keepClosed: on ? undefined : false });
 
 	async function updateView(patch: Partial<ItemView>) {
 		const settings = me.data?.settings;
@@ -855,6 +879,9 @@
 				{editSectionsPath}
 				{hasSections}
 				{noProjectAccess}
+				{keepClosed}
+				{setKeepClosed}
+				{closedLabel}
 			/>
 			<KindSelect
 				kinds={viewKinds(view)}

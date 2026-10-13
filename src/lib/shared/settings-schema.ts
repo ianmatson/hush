@@ -1,3 +1,4 @@
+import { KEEP_CLOSED_HOURS } from './closed-items';
 import { validateDash } from './dashboard';
 import { MAX_VIEW_SEARCHES, MAX_VIEWS, validateViews } from './item-views';
 import {
@@ -100,7 +101,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'views',
 		page: 'views',
-		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number>, "sort": optional { "by": turn, updated, created, waiting, comments, size, or title, "dir": asc or desc, "turnFirst": true to keep your turn first in each section }, "pushNew": optional, true to push new items }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
+		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number>, "sort": optional { "by": turn, updated, created, waiting, comments, size, or title, "dir": asc or desc, "turnFirst": true to keep your turn first in each section }, "pushNew": optional, true to push new items, "keepClosed": optional, false to take merged and closed items out at once (else they stay ${KEEP_CLOSED_HOURS} hours at the end) }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
 	},
 	{
 		key: 'categoryGroups',

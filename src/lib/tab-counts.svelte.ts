@@ -15,7 +15,7 @@ export function createTabCounts(): { readonly current: Counts } {
 	const turns = (d: DashResponse | undefined, turn: 'you' | 'team') =>
 		d?.items.filter((i) => i.turn === turn && !i.dismissed).length ?? 0;
 	const unread = (d: DashResponse | undefined) =>
-		d?.items.filter((i) => i.unread && !i.dismissed).length ?? 0;
+		d?.items.filter((i) => i.unread && !i.dismissed && !i.keptAfterClose).length ?? 0;
 	const counts = $derived<Counts>({
 		alerts: alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0,
 		unread: unread(prs.data) + unread(issues.data),

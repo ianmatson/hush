@@ -96,6 +96,13 @@ describe('validateViews', () => {
 		expect(bad({ by: 'size', dir: 'asc' })).toMatch(/sort\.turnFirst/);
 		expect(bad('size')).toMatch(/"sort" must be an object/);
 	});
+	it('accepts keepClosed as true or false only', () => {
+		expect(validateViews([view({ keepClosed: false })])).toBeNull();
+		expect(validateViews([view({ keepClosed: true })])).toBeNull();
+		expect(validateViews([view({ keepClosed: 'no' } as unknown as Partial<ItemView>)])).toMatch(
+			/"keepClosed" must be true or false/
+		);
+	});
 	it('refuses bad views', () => {
 		expect(validateViews([])).toMatch(/at least one/);
 		expect(validateViews([view(), view()])).toMatch(/Two views/);

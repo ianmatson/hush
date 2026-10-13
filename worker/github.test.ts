@@ -231,6 +231,44 @@ describe('toSubject stack links', () => {
 	});
 });
 
+describe('toSubject close facts', () => {
+	const CLOSED_AT = '2026-10-13T10:00:00Z';
+	const node = (over: Record<string, unknown>) => ({
+		number: 5,
+		url: 'https://github.com/o/r/issues/5',
+		repository: { nameWithOwner: 'o/r' },
+		author: { login: 'alice' },
+		...over
+	});
+	const issue = (state: string, stateReason: string | null) =>
+		toSubject(node({ __typename: 'Issue', state, stateReason, closedAt: CLOSED_AT }));
+
+	it('reads when a pull request or an issue closed', () => {
+		const merged = node({
+			__typename: 'PullRequest',
+			state: 'MERGED',
+			merged: true,
+			closedAt: CLOSED_AT
+		});
+		expect(toSubject(merged)).toMatchObject({
+			state: 'merged',
+			closedAt: CLOSED_AT,
+			closeReason: null
+		});
+		expect(toSubject(node({ __typename: 'Issue', state: 'OPEN', closedAt: null })).closedAt).toBe(
+			null
+		);
+	});
+
+	it('reads why an issue closed', () => {
+		expect(issue('CLOSED', 'COMPLETED').closeReason).toBe('completed');
+		expect(issue('CLOSED', 'NOT_PLANNED').closeReason).toBe('not_planned');
+		expect(issue('CLOSED', 'DUPLICATE').closeReason).toBe('duplicate');
+		expect(issue('CLOSED', null).closeReason).toBeNull();
+		expect(issue('OPEN', 'REOPENED').closeReason).toBeNull();
+	});
+});
+
 describe('peekEntryFromRest', () => {
 	const user = {
 		login: 'ann',

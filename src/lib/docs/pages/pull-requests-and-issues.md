@@ -3,7 +3,7 @@ title: Pull requests and issues
 description: The list in each view, how Group by puts it into sections, and how Sort orders them.
 ---
 
-Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. When the view finds both types, a menu at the top has **Pull requests** and **Issues**: check one, or both to see all. {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
+Each [view](/docs/views) lists its open pull requests and issues, also when GitHub sent no notification about them. An item that is merged or closed stays for 24 hours, at the end of the list: see [Merged and closed](#merged-and-closed). When the view finds both types, a menu at the top has **Pull requests** and **Issues**: check one, or both to see all. {{key:dash.kind}} changes it, and this browser remembers the choice for each view. Each item has its [categories](#categories).
 
 ## Row layout
 
@@ -13,7 +13,7 @@ The settings under the layout are for the layout you use. With cards, **Row cont
 
 ## Group by
 
-The **Display** button, at the top right, has **Group by** and [Sort](#sort). Group by puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.
+The **Display** button, at the top right, has **Group by**, [Sort](#sort), and [Merged and closed](#merged-and-closed). Group by puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.
 
 | Group by                          | Sections                                                                                                                                               |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -75,12 +75,23 @@ Group by lists each open GitHub project that holds an item of the view, with the
 - To change an item's Status, open it in the [peek](/docs/peek). The list moves it when Hush reads the project again.
 - Hush needs project access: sign in with GitHub again if Group by says **Project status needs project access**. A custom token needs the `read:project` scope (`project` to change a Status).
 
+## Merged and closed
+
+When a pull request or issue in a view is merged or closed, it does not leave the view at once. It stays for 24 hours after it closed, in a **Merged and closed** section at the end of the list (**Closed** in a view of issues only), with the newest first. Its row says **Merged**, **Closed**, **Closed as not planned**, or **Closed as duplicate**.
+
+- The section is the same for every Group by. Choose its name to close it or open it, as with other sections.
+- The numbers on the tabs and on the app icon do not count these items: they need nothing from you.
+- To remove one before the 24 hours end, snooze it until new activity ({{key:dash.snooze}}).
+- To turn this off for a view, turn off **Merged and closed** in the **Display** button. Each view keeps its own choice (the [`keepClosed`](/docs/settings#views) of the view).
+- When GitHub sends no notification about the change, Hush finds it at the next search of your views, within about 15 minutes.
+- A view whose searches find merged or closed items themselves, for example with `is:merged`, lists them in their usual sections, for as long as the searches find them.
+
 ## Order and reasons
 
 With **Sort by Whose turn**, the items in a section that need you come first, the most urgent first (failing CI before a comment), then the ones that waited longest. Each row says what is going on, in a few words:
 
-- **Pull requests:** CI failing · Changes requested · Merge conflict · 2 open threads · Ready to merge · @alice commented · Review requested · Re-review requested · Assigned to you · New commits since your review · Review for acme/web · CI running · Waiting for review · Waiting on author · You approved · Draft · Bot PR.
-- **Issues:** Assigned to you · @alice replied · Waiting for replies · No replies yet · Waiting for a reply.
+- **Pull requests:** CI failing · Changes requested · Merge conflict · 2 open threads · Ready to merge · @alice commented · Review requested · Re-review requested · Assigned to you · New commits since your review · Review for acme/web · CI running · Waiting for review · Waiting on author · You approved · Draft · Bot PR · Merged · Closed.
+- **Issues:** Assigned to you · @alice replied · Waiting for replies · No replies yet · Waiting for a reply · Closed · Closed as not planned · Closed as duplicate.
 
 ### Whose turn it is
 
@@ -173,7 +184,7 @@ Snooze takes an item out of the list for a while. Choose **Snooze** in the item'
 
 - **Until new activity**: the item comes back when something new happens on it on GitHub, such as a comment, a review, or a commit. This is {{key:dash.snooze}}.
 - **A time**: 1 hour, 3 hours, tomorrow at 9:00 ({{key:dash.snoozeTomorrow}}), or next Monday at 9:00. The item comes back at that time, also if something happens before.
-- **Until something happens**: CI passes, CI finishes, someone approves, a new review, new commits, someone replies, or it is merged or closed. The item comes back when that happens, when it is merged or closed, or after 7 days. A choice that is already true is greyed out.
+- **Until something happens**: CI passes, CI finishes, someone approves, a new review, new commits, someone replies, or it is merged or closed. The item comes back when that happens, when it is merged or closed, or after 7 days. A merged or closed item comes back in [Merged and closed](#merged-and-closed). A choice that is already true is greyed out.
 
 **Mute** takes an item out of the list until you unmute it.
 

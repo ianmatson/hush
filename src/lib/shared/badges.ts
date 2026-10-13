@@ -3,7 +3,7 @@ import type { Change } from './types';
 /**
  * One fact, one badge. A row's headline (the turn reason) already says some facts; the badges after it leave those out, so nothing shows twice.
  */
-export type Fact = 'ci' | 'review' | 'threads' | 'conflicts' | 'draft' | 'requested';
+export type Fact = 'ci' | 'review' | 'threads' | 'conflicts' | 'draft' | 'requested' | 'state';
 
 const SAYS: [RegExp, Fact][] = [
 	[/\bdraft\b/i, 'draft'],
@@ -11,7 +11,8 @@ const SAYS: [RegExp, Fact][] = [
 	[/changes requested|ready to merge|is approved/i, 'review'],
 	[/conflict/i, 'conflicts'],
 	[/open (review )?threads?/i, 'threads'],
-	[/review requested|requests (your |a )?(re-)?review/i, 'requested']
+	[/review requested|requests (your |a )?(re-)?review/i, 'requested'],
+	[/^(merged|closed)\b/i, 'state']
 ];
 
 /** The facts that these texts say. */
@@ -22,7 +23,8 @@ export function saidBy(...texts: string[]): Set<Fact> {
 const CHANGE_FACT: Partial<Record<Change['kind'], Fact>> = {
 	ci: 'ci',
 	draft: 'draft',
-	requested: 'requested'
+	requested: 'requested',
+	state: 'state'
 };
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();

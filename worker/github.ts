@@ -1,6 +1,7 @@
 import type {
 	CheckState,
 	CiState,
+	CloseReason,
 	LastComment,
 	PeekDTO,
 	PeekEntry,
@@ -192,7 +193,7 @@ const stackBelowFields = (depth: number): string =>
 /** Fragments P (pull request) and I (issue). Queries that use them declare `$me: String!`. */
 export const SUBJECT_FIELDS = `
 fragment P on PullRequest {
-  id number title url isDraft state merged createdAt updatedAt additions deletions reviewDecision mergeable bodyText
+  id number title url isDraft state merged closedAt createdAt updatedAt additions deletions reviewDecision mergeable bodyText
   repository { nameWithOwner defaultBranchRef { name } }
   baseRefName ${stackBelowFields(MAX_STACK_LEVELS_BELOW)}
   author { login avatarUrl(size: 48) __typename } authorAssociation
@@ -210,7 +211,7 @@ fragment P on PullRequest {
   reviewThreads(first: 50) { nodes { isResolved } }
 }
 fragment I on Issue {
-  id number title url state createdAt updatedAt bodyText
+  id number title url state stateReason closedAt createdAt updatedAt bodyText
   repository { nameWithOwner }
   author { login avatarUrl(size: 48) __typename } authorAssociation
   labels(first: 10) { nodes { name color } }
@@ -233,6 +234,15 @@ const reviewer = (r: Node | null | undefined) =>
 		: { team: false, name: String(r?.login ?? '') };
 
 const COMMENT_CHARS = 280;
+
+const CLOSE_REASONS: Record<string, CloseReason> = {
+	COMPLETED: 'completed',
+	NOT_PLANNED: 'not_planned',
+	DUPLICATE: 'duplicate'
+};
+
+const closeReasonOf = (n: Node): CloseReason | null =>
+	n.__typename === 'Issue' && n.state === 'CLOSED' ? (CLOSE_REASONS[n.stateReason] ?? null) : null;
 
 const toComment = (c: Node): LastComment => ({
 	author: c.author?.login ?? 'ghost',
@@ -286,6 +296,8 @@ export function toSubject(n: Node): SubjectFacts {
 		createdAt: n.createdAt,
 		updatedAt: n.updatedAt,
 		state: n.merged ? 'merged' : n.state === 'CLOSED' ? 'closed' : 'open',
+		closedAt: n.closedAt ?? null,
+		closeReason: closeReasonOf(n),
 		draft: !!n.isDraft,
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),

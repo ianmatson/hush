@@ -58,7 +58,7 @@ A search with `project:` but no `status:` is a normal GitHub search: it finds ev
 - The list puts the items into sections, by the view's Group by. See [Pull requests and issues](/docs/pull-requests-and-issues#group-by).
 - The pencil button next to the switch opens the view in **Settings → Views**.
 - A view has no filter box. To find an item, press {{key:palette}} or {{key:list.search}} to search.
-- The number on a tab counts the unread items in the view that are not snoozed or muted. See [Unread](/docs/pull-requests-and-issues#unread).
+- The number on a tab counts the unread items in the view that are not snoozed, muted, or in [Merged and closed](/docs/pull-requests-and-issues#merged-and-closed). See [Unread](/docs/pull-requests-and-issues#unread).
 - {{key:dash.view.1}} to {{key:dash.view.9}} open your first nine views.
 - On a narrow window, views that do not fit go in **More**. On a phone, the top bar is one menu.
 

@@ -12,6 +12,7 @@
 		type TableColumn
 	} from '$lib/shared/row-layout';
 	import { since } from '$lib/time';
+	import { closedTimeOf } from '$lib/shared/closed-items';
 	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import * as Avatar from '$lib/components/ui/avatar';
@@ -79,12 +80,24 @@
 	);
 	const repoName = $derived(i.repo.split('/')[1]);
 
-	const reasonTone: Record<DashItem['turn'], string> = {
+	const turnTone: Record<DashItem['turn'], string> = {
 		you: 'font-medium text-foreground',
 		team: 'text-signal-review',
 		them: 'text-muted-foreground',
 		none: 'text-muted-foreground'
 	};
+	const closedTone: Record<Exclude<DashItem['state'], 'open'>, string> = {
+		merged: 'text-signal-reply',
+		closed: 'text-signal-fail'
+	};
+	const reasonTone = $derived(i.state === 'open' ? turnTone[i.turn] : closedTone[i.state]);
+	const time = $derived(
+		i.state !== 'open'
+			? { tip: i.turnReason, at: closedTimeOf(i) }
+			: i.stale
+				? { tip: 'Waiting', at: i.waitingSince }
+				: { tip: 'Updated', at: i.updatedAt }
+	);
 
 	const ci = $derived(
 		i.ci === 'SUCCESS'
@@ -133,7 +146,7 @@
 	style:--table-min-width={minWidth}
 	class={cn(
 		'row group relative flex h-9 items-center gap-2 border-b border-border/50 bg-(--row-bg) px-2 text-[0.8rem] select-none md:grid md:min-w-(--table-min-width) md:grid-cols-(--table-cols)',
-		i.dismissed && 'opacity-60'
+		(i.dismissed || i.keptAfterClose) && 'opacity-60'
 	)}
 	{@attach (node) => on(node, 'click', onrowclick)}
 	role="option"
@@ -189,7 +202,7 @@
 
 	{#each shown as column (column.id)}
 		{#if column.id === 'reason'}
-			<span class={cn('hidden truncate text-xs md:block', reasonTone[i.turn])}>{i.turnReason}</span>
+			<span class={cn('hidden truncate text-xs md:block', reasonTone)}>{i.turnReason}</span>
 		{:else if column.id === 'repo'}
 			<span class="hidden truncate font-mono text-[0.7rem] text-muted-foreground md:block"
 				>{repoName}#{i.number}</span
@@ -218,14 +231,14 @@
 				{#if i.comments}<MessageSquare class="size-3" />{i.comments}{/if}
 			</span>
 		{:else if column.id === 'time'}
-			<Tip focusable={false} text={i.stale ? 'Waiting' : 'Updated'}>
+			<Tip focusable={false} text={time.tip}>
 				{#snippet children(props)}
 					<span
 						{...props}
 						class={cn(
 							'shrink-0 text-right text-xs tabular-nums',
 							i.stale ? 'font-medium text-signal-warn' : 'text-muted-foreground'
-						)}>{since(i.stale ? i.waitingSince : i.updatedAt)}</span
+						)}>{since(time.at)}</span
 					>
 				{/snippet}
 			</Tip>

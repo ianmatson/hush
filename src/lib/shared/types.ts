@@ -174,6 +174,7 @@ export interface Settings {
 
 export type DashKind = 'pr' | 'issue';
 export type Turn = 'you' | 'team' | 'them' | 'none';
+export type CloseReason = 'completed' | 'not_planned' | 'duplicate';
 
 /** A saved GitHub search. `@me` is you; `@team` runs the query once per tracked team. */
 export interface DashSection {
@@ -216,6 +217,7 @@ export interface ItemView {
 	groupBy: GroupBy;
 	sort?: ViewSort;
 	pushNew?: boolean;
+	keepClosed?: boolean;
 	sections?: ViewSection[];
 }
 
@@ -272,6 +274,8 @@ export interface DashItem {
 	createdAt: string;
 	updatedAt: string;
 	state: 'open' | 'closed' | 'merged';
+	closedAt?: string | null;
+	closeReason?: CloseReason | null;
 	draft: boolean;
 	labels: DashLabel[];
 	comments: number;
@@ -313,6 +317,7 @@ export interface DashItem {
 	/** Lower sorts first inside a turn group. */
 	priority: number;
 	dismissed: boolean;
+	keptAfterClose?: boolean;
 	/** You muted it: hidden until you unmute it (not until it changes). */
 	muted?: boolean;
 	/** What changed since you last looked (none before your first look). */
