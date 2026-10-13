@@ -24,6 +24,8 @@ The full page shows the same pull request or issue as the peek, in a wider colum
 
 - Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
 - {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
+- The keys for an item work here too: {{key:list.copy}} copies its GitHub link, {{key:dash.snooze}} snoozes it until new activity (or wakes it up), {{key:dash.mute}} mutes or unmutes it, and {{key:dash.read}} marks it as read or unread. Snooze, mute, and unread work only for items in your views. {{key:palette}} has the same actions, and the other snooze times.
+- {{key:list.help}} shows the keys of the full page.
 - The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
 
 #### Links in descriptions and comments
@@ -122,7 +124,7 @@ Hush shows only the actions that you can do now. An action that GitHub would ref
 {{ref:actions}}
 
 - **Approve** sends at once. **Approve with a comment…** (in More) opens the comment box.
-- **Request changes** and **Comment** ({{key:peek.comment}}, or the palette with {{key:palette}}) need text: the comment box opens. {{key:editor.send}} sends it.
+- **Request changes** and **Comment** ({{key:peek.comment}}, or the palette with {{key:palette}}) need text: the comment box opens. On the Files tab of the full page, Hush goes to the Conversation tab first. {{key:editor.send}} sends it.
 - **Merge** asks once more: the button becomes “Confirm: merge”. Press it (or the key) again. The merge uses the method chosen under **Merge method** in More, when the repository allows more than one. Hush merges only the commit that you saw: if someone pushed since, GitHub refuses, and you can look again.
 - **Enable auto-merge** shows when the repository allows it and the PR cannot merge yet: GitHub merges it when the checks and reviews pass.
 - **Ready for review** shows on a draft PR, and **Convert to draft** on an open PR, when you can edit the PR ({{key:peek.draftReady}}). On a draft with nothing else to do, **Ready for review** is the main button.
@@ -130,7 +132,7 @@ Hush shows only the actions that you can do now. An action that GitHub would ref
 
 After an action, Hush checks the item again at once, so the lists update without a sync.
 
-The keys work while the peek is open. Change them in [Keybinds](/docs/keybinds) (the “Peek” group).
+The keys work while the peek is open, and on the full page. Change them in [Keybinds](/docs/keybinds) (the “Peek” group).
 
 ## The comment box
 

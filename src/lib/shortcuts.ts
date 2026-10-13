@@ -1,4 +1,4 @@
-import { COMMANDS, type KeyScope } from './shared/keymap';
+import { COMMAND, COMMANDS, type KeyCommand, type KeyScope } from './shared/keymap';
 import { keysOf } from './keys.svelte';
 
 /** Keyboard shortcuts, as [keys, what they do], for the "?" dialog. */
@@ -16,10 +16,17 @@ export const LIST_MOUSE: Shortcut[] = [
 ];
 /** The shortcuts of these scopes, with your keys (Settings → Keybinds). */
 export function shortcutsFor(scopes: KeyScope[], extra: Shortcut[] = []): Shortcut[] {
+	return [...shortcutLines(COMMANDS.filter((c) => scopes.includes(c.scope))), ...extra];
+}
+
+export function shortcutsOf(ids: string[]): Shortcut[] {
+	return shortcutLines(ids.flatMap((id) => COMMAND.get(id) ?? []));
+}
+
+function shortcutLines(commands: KeyCommand[]): Shortcut[] {
 	const out: Shortcut[] = [];
 	const done = new Set<string>();
-	for (const c of COMMANDS) {
-		if (!scopes.includes(c.scope)) continue;
+	for (const c of commands) {
 		const group = c.id.match(/^(dash\.view)\.\d+$/)?.[1];
 		if (group) {
 			if (done.has(group)) continue;
@@ -33,5 +40,5 @@ export function shortcutsFor(scopes: KeyScope[], extra: Shortcut[] = []): Shortc
 		const keys = keysOf(c.id);
 		if (keys.length) out.push([keys.join(' / '), c.label]);
 	}
-	return [...out, ...extra];
+	return out;
 }

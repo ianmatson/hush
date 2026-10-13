@@ -169,7 +169,7 @@ Right-click an item (or choose **⋯** on a phone) for these actions and more, s
 
 ## Snooze
 
-Snooze takes an item out of the list for a while. Choose **Snooze** in the item's menu (right-click, or **⋯** on a phone), in the bar at the bottom of the [peek](/docs/peek), or in the bar for a selection. The choices:
+Snooze takes an item out of the list for a while. Choose **Snooze** in the item's menu (right-click, or **⋯** on a phone), in the bar at the bottom of the [peek](/docs/peek), or in the bar for a selection. On a [full page](/docs/peek#full-page), press {{key:dash.snooze}}, or choose a time in {{key:palette}}. The choices:
 
 - **Until new activity**: the item comes back when something new happens on it on GitHub, such as a comment, a review, or a commit. This is {{key:dash.snooze}}.
 - **A time**: 1 hour, 3 hours, tomorrow at 9:00 ({{key:dash.snoozeTomorrow}}), or next Monday at 9:00. The item comes back at that time, also if something happens before.
@@ -187,7 +187,7 @@ Snooze and Mute stay in Hush. They do not change your notifications on GitHub.
 
 An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label alone does not count. An unread item has a dot on its avatar and a bold title.
 
-You look at an item when you open it in the peek, open its full page, or open it on GitHub from Hush. If you opened one by mistake, press {{key:dash.read}} to make it unread again: the peek does not mark it as read again until you open it again. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
+You look at an item when you open it in the peek, open its full page, or open it on GitHub from Hush. If you opened one by mistake, press {{key:dash.read}} to make it unread again: the peek and the full page do not mark it as read again until you open it again. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
 
 The number on each view in the top bar is the number of its unread items that are not snoozed or muted.
 

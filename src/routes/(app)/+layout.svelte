@@ -12,6 +12,11 @@
 
 	let { children } = $props();
 
+	const TOAST_GAP = 24;
+	const MOBILE_TOAST_GAP = 16;
+	const TOAST_ABOVE_BOTTOM_BAR = 92;
+	const bottomBarOpen = $derived(ui.bulkBarOpen || ui.itemDockOpen);
+
 	// A Home Screen app can stay suspended for days and resume with the old code. When it comes
 	// back to the screen, check for a new version and load it; with one known, the next link
 	// loads the whole page.
@@ -32,7 +37,12 @@
 </svelte:head>
 
 <!-- 8 s: long enough to read a toast and press Undo. -->
-<Toaster position="bottom-center" duration={8000} offset={{ bottom: ui.bulkBarOpen ? 92 : 24 }} />
+<Toaster
+	position="bottom-center"
+	duration={8000}
+	offset={{ bottom: bottomBarOpen ? TOAST_ABOVE_BOTTOM_BAR : TOAST_GAP }}
+	mobileOffset={{ bottom: bottomBarOpen ? TOAST_ABOVE_BOTTOM_BAR : MOBILE_TOAST_GAP }}
+/>
 <PersistQueryClientProvider client={queryClient} {persistOptions}>
 	<Tooltip.Provider delayDuration={300}>
 		<AppShell>{@render children()}</AppShell>

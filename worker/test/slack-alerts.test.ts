@@ -2,11 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deliveredByAnyChannel } from '../alert-channels';
 import { b64urlEncode, encryptSecret } from '../crypto';
 import type { Env } from '../db';
+import type { SlackMessage } from '../slack';
 import { sendSlackAlerts, slackAlertOf } from '../slack-alerts';
 
 const TEAM_ID = 'T1';
 const USER_ID = 7;
-const ALERT = { title: 'Review requested', body: 'acme/api#12', url: 'https://hush.test/v/mine' };
+const ORIGIN = 'https://hush.test';
+const ALERT = {
+	title: 'Review requested',
+	body: 'acme/api#12',
+	url: 'https://github.com/acme/api/pull/12'
+};
+
+const buttonUrl = (message: SlackMessage) =>
+	(message.blocks?.[1] as { elements: { url: string }[] } | undefined)?.elements[0].url;
 
 type Statement = { sql: string; args: unknown[] };
 
@@ -53,7 +62,7 @@ afterEach(() => {
 
 describe('slackAlertOf', () => {
 	it('has the title, the body, and an Open in Hush button', () => {
-		const message = slackAlertOf(ALERT);
+		const message = slackAlertOf(ALERT, ORIGIN);
 		expect(message.text).toBe('Review requested: acme/api#12');
 		expect(message.blocks).toEqual([
 			{ type: 'section', text: { type: 'mrkdwn', text: '*Review requested*\nacme/api#12' } },
@@ -63,20 +72,28 @@ describe('slackAlertOf', () => {
 					{
 						type: 'button',
 						text: { type: 'plain_text', text: 'Open in Hush' },
-						url: 'https://hush.test/v/mine'
+						url: 'https://hush.test/acme/api/pull/12'
 					}
 				]
 			}
 		]);
 	});
 
+	it('opens pull requests and issues on their Hush page, not on GitHub', () => {
+		const issue = { ...ALERT, url: 'https://github.com/acme/api/issues/7#issuecomment-1' };
+		expect(buttonUrl(slackAlertOf(issue, ORIGIN))).toBe('https://hush.test/acme/api/issues/7');
+	});
+
+	it('keeps a link that already opens Hush', () => {
+		const digest = { ...ALERT, url: `${ORIGIN}/`, tag: 'digest' };
+		expect(buttonUrl(slackAlertOf(digest, ORIGIN))).toBe('https://hush.test/');
+	});
+
 	it('lists the items of a digest', () => {
-		const message = slackAlertOf({
-			...ALERT,
-			title: '3 things need you',
-			body: 'a\nb\nc',
-			tag: 'digest'
-		});
+		const message = slackAlertOf(
+			{ ...ALERT, title: '3 things need you', body: 'a\nb\nc', tag: 'digest' },
+			ORIGIN
+		);
 		expect(message.blocks?.[0]).toEqual({
 			type: 'section',
 			text: { type: 'mrkdwn', text: '*3 things need you*\n• a\n• b\n• c' }
@@ -84,12 +101,13 @@ describe('slackAlertOf', () => {
 	});
 
 	it('escapes Slack control characters', () => {
-		const message = slackAlertOf({ ...ALERT, title: 'Fix <a> & <!channel>' });
+		const message = slackAlertOf({ ...ALERT, title: 'Fix <a> & <!channel>' }, ORIGIN);
 		expect(JSON.stringify(message.blocks)).toContain('Fix &lt;a&gt; &amp; &lt;!channel&gt;');
 	});
 
 	it('leaves out the button for a link that is not absolute', () => {
-		expect(slackAlertOf({ ...ALERT, url: '/v/mine' }).blocks).toHaveLength(1);
+		expect(slackAlertOf({ ...ALERT, url: '/v/mine' }, ORIGIN).blocks).toHaveLength(1);
+		expect(slackAlertOf(ALERT, '').blocks).toHaveLength(1);
 	});
 });
 
@@ -97,18 +115,20 @@ describe('sendSlackAlerts', () => {
 	it('sends each alert as a direct message', async () => {
 		const { env } = await fakeSlackEnv();
 		const fetch = slackAnswers({ ok: true, ts: '1' }, { ok: true, ts: '2' });
-		expect(await sendSlackAlerts(env, USER_ID, [ALERT, ALERT])).toBe(true);
+		expect(await sendSlackAlerts(env, USER_ID, [ALERT, ALERT], ORIGIN)).toBe(true);
 		expect(fetch).toHaveBeenCalledTimes(2);
 		const [url, init] = fetch.mock.calls[0];
 		expect(url).toBe('https://slack.com/api/chat.postMessage');
-		expect(JSON.parse(init.body).channel).toBe('D1');
+		const posted = JSON.parse(init.body);
+		expect(posted.channel).toBe('D1');
+		expect(buttonUrl(posted)).toBe('https://hush.test/acme/api/pull/12');
 	});
 
 	it('removes the workspace and stops on a revoked token', async () => {
 		const { env, written } = await fakeSlackEnv();
 		const fetch = slackAnswers({ ok: false, error: 'token_revoked' });
 		vi.spyOn(console, 'error').mockImplementation(() => {});
-		expect(await sendSlackAlerts(env, USER_ID, [ALERT, ALERT])).toBe(false);
+		expect(await sendSlackAlerts(env, USER_ID, [ALERT, ALERT], ORIGIN)).toBe(false);
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(written.map((s) => s.sql)).toEqual([
 			'DELETE FROM slack_connections WHERE team_id = ?',
@@ -120,7 +140,7 @@ describe('sendSlackAlerts', () => {
 		const { env } = await fakeSlackEnv();
 		slackAnswers({ ok: false, error: 'ratelimited' }, { ok: true, ts: '2' });
 		vi.spyOn(console, 'error').mockImplementation(() => {});
-		expect(await sendSlackAlerts(env, USER_ID, [ALERT, ALERT])).toBe(true);
+		expect(await sendSlackAlerts(env, USER_ID, [ALERT, ALERT], ORIGIN)).toBe(true);
 	});
 });
 

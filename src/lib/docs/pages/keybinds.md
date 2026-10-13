@@ -3,14 +3,14 @@ title: Keybinds
 description: Every keyboard shortcut, the command palette, and how to change any key.
 ---
 
-Hush works from the keyboard. Press {{key:list.help}} on any list to see the shortcuts for it, with your keys.
+Hush works from the keyboard. Press {{key:list.help}} on any list or full page to see the shortcuts that work there, with your keys.
 
 ## Search and commands
 
 {{key:palette}} opens the command palette. Type to find:
 
 - **Pull requests and issues** of your views, by title, repository, number, or author. Enter peeks at it; `Mod`+Enter opens it on GitHub.
-- **Actions** on the item under the cursor or the selection: Snooze, Mute, Mark as read, Peek…, and **Mark all as read** for the view.
+- **Actions** on the item under the cursor or the selection, or on the item of a full page: Snooze, Mute, Mark as read, Peek…, and **Mark all as read** for the view.
 - **Group by** and **Sort by** for the view you are in: type “group by” or “sort”.
 - **Pages**: every view, and each settings page.
 - **Commands**: Sync with GitHub now, Switch to dark (or light) mode, a theme, Sign out.
@@ -41,8 +41,9 @@ Mouse actions are not keys, and cannot change: ⌘-click (Ctrl-click) adds a row
 A key works in one scope. Keys can repeat across scopes that are never active together ({{key:dash.snoozeTomorrow}} snoozes an item in a view, and {{key:page.splitView}} changes the layout of the Files tab on a full page), but not inside scopes that are active at the same time.
 
 - **Everywhere**: on every page.
-- **Lists** and **Pull requests and issues**: in your views.
-- **Peek**: while the [peek](/docs/peek) is open.
+- **Lists** and **Views**: in your views. On a full page, {{key:list.escape}} and {{key:list.fullPage}} go back, and {{key:list.openGitHub}}, {{key:list.search}}, and {{key:list.help}} work too.
+- **Pull requests and issues**: in your views, on the item under the cursor or the selection. On a full page, on its item.
+- **Peek**: while the [peek](/docs/peek) is open, and on a full page.
 - **Full page**: on the [full page](/docs/peek#full-page) of a pull request or issue.
 - **Text boxes**: while you type in the comment box or settings.json.
 

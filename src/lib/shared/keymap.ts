@@ -10,7 +10,7 @@
  */
 
 /** Where a command works. Scopes that are active together must not share a key. */
-export type KeyScope = 'global' | 'list' | 'dash' | 'peek' | 'page' | 'editor';
+export type KeyScope = 'global' | 'list' | 'item' | 'dash' | 'peek' | 'page' | 'editor';
 
 export interface KeyCommand {
 	id: string;
@@ -22,7 +22,8 @@ export interface KeyCommand {
 export const SCOPE_LABEL: Record<KeyScope, string> = {
 	global: 'Everywhere',
 	list: 'Lists',
-	dash: 'Pull requests and issues',
+	item: 'Pull requests and issues',
+	dash: 'Views',
 	peek: 'Peek: actions on GitHub',
 	page: 'Full page',
 	editor: 'Text boxes'
@@ -30,11 +31,12 @@ export const SCOPE_LABEL: Record<KeyScope, string> = {
 
 /** The scopes that are active at the same time as each scope (a key must be unique there). */
 const TOGETHER: Record<KeyScope, KeyScope[]> = {
-	global: ['global', 'list', 'dash', 'peek', 'page'],
-	list: ['global', 'list', 'dash', 'peek', 'page'],
-	dash: ['global', 'list', 'dash', 'peek'],
-	peek: ['global', 'list', 'dash', 'peek', 'page'],
-	page: ['global', 'list', 'peek', 'page'],
+	global: ['global', 'list', 'item', 'dash', 'peek', 'page'],
+	list: ['global', 'list', 'item', 'dash', 'peek', 'page'],
+	item: ['global', 'list', 'item', 'dash', 'peek', 'page'],
+	dash: ['global', 'list', 'item', 'dash', 'peek'],
+	peek: ['global', 'list', 'item', 'dash', 'peek', 'page'],
+	page: ['global', 'list', 'item', 'peek', 'page'],
 	editor: ['editor']
 };
 
@@ -65,7 +67,7 @@ export const COMMANDS: KeyCommand[] = [
 		keys: ['o', 'Enter']
 	},
 	{ id: 'list.openGitHub', label: 'Open on GitHub', scope: 'list', keys: ['Shift+o'] },
-	{ id: 'list.copy', label: 'Copy link', scope: 'list', keys: ['c'] },
+	{ id: 'list.copy', label: 'Copy link', scope: 'item', keys: ['c'] },
 	{ id: 'list.refresh', label: 'Sync with GitHub now', scope: 'list', keys: ['r'] },
 	{ id: 'list.search', label: 'Search', scope: 'list', keys: ['/'] },
 	{ id: 'list.help', label: 'Show shortcuts', scope: 'list', keys: ['?'] },
@@ -73,13 +75,13 @@ export const COMMANDS: KeyCommand[] = [
 	{
 		id: 'dash.snooze',
 		label: 'Snooze until new activity (or wake it up)',
-		scope: 'dash',
+		scope: 'item',
 		keys: ['e']
 	},
 	{ id: 'dash.snoozeTomorrow', label: 'Snooze until tomorrow 9:00', scope: 'dash', keys: ['s'] },
 	{ id: 'dash.showSnoozed', label: 'Show snoozed and muted items', scope: 'dash', keys: ['h'] },
-	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'dash', keys: ['m'] },
-	{ id: 'dash.read', label: 'Mark as read / unread', scope: 'dash', keys: ['u'] },
+	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'item', keys: ['m'] },
+	{ id: 'dash.read', label: 'Mark as read / unread', scope: 'item', keys: ['u'] },
 	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'dash', keys: [']'] },
 	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'dash', keys: ['['] },
 	...range(1, 9).map((n) => ({

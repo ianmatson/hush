@@ -1,12 +1,29 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
+	import { toast } from 'svelte-sonner';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
-	import { meQuery, peekQuery } from '$lib/queries';
+	import { dashQuery, meQuery, peekQuery } from '$lib/queries';
 	import { noteOpened } from '$lib/recheck';
 	import { clearNotificationsFor } from '$lib/notification-clear';
+	import { itemCommands, type ItemActionContext } from '$lib/dash-actions';
+	import { composer, focusComposer } from '$lib/gh-act.svelte';
+	import {
+		UNTIL_NEW_ACTIVITY,
+		copyLinks,
+		markItemsSeen,
+		setItemsRead,
+		snoozeItems,
+		toggleMuteItems,
+		unsnoozeItems
+	} from '$lib/item-actions';
+	import { palette } from '$lib/palette.svelte';
+	import { ui } from '$lib/ui.svelte';
+	import { shortcutsFor, shortcutsOf, type Shortcut } from '$lib/shortcuts';
+	import type { KeyScope } from '$lib/shared/keymap';
+	import type { DashItem } from '$lib/shared/types';
 	import { FILES_TAB, ITEM_PATH_SEGMENTS, itemPagePath } from '$lib/shared/item-page';
 	import { PEEK_PARAM, peekLinkParam } from '$lib/shared/peek-link';
 	import { subjectKey } from '$lib/shared/subject';
@@ -14,12 +31,14 @@
 	import PeekContent from '$lib/components/app/peek-content.svelte';
 	import GhActions from '$lib/components/app/gh-actions.svelte';
 	import PullFiles from '$lib/components/app/pull-files.svelte';
+	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { cn } from '$lib/utils';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Tip from '$lib/components/app/tip.svelte';
 
 	const SEEN_AFTER_MS = 1500;
+	const PAGE_KEY_SCOPES: KeyScope[] = ['list', 'item', 'page'];
 
 	const repo = $derived(`${page.params.owner}/${page.params.repo}`);
 	const number = $derived(Number(page.params.number));
@@ -42,9 +61,18 @@
 	const conversationPath = $derived(itemPagePath(repo, number, kind));
 	const filesPath = $derived(`${conversationPath}/${FILES_TAB}`);
 
+	const dash = createQuery(() => dashQuery(kind));
+	const dashItem = $derived(dash.data?.items.find((i) => i.id === itemKey));
+	let helpOpen = $state(false);
+
+	$effect(() => {
+		ui.itemDockOpen = true;
+		return () => (ui.itemDockOpen = false);
+	});
+
 	function showTab(files: boolean) {
 		if (kind !== 'pr' || files === onFilesTab) return;
-		goto(files ? filesPath : conversationPath, {
+		return goto(files ? filesPath : conversationPath, {
 			replaceState: true,
 			noScroll: true,
 			keepFocus: true
@@ -82,24 +110,83 @@
 		replaceState(onFilesTab ? `${path}/${FILES_TAB}${page.url.hash}` : path, page.state);
 	});
 
+	async function focusComposerOnConversationTab() {
+		await showTab(false);
+		await tick();
+		focusComposer(composer.intent);
+	}
+
+	let composerRequestsSeen = composer.focus;
+	$effect(() => {
+		const requests = composer.focus;
+		if (requests === composerRequestsSeen) return;
+		composerRequestsSeen = requests;
+		untrack(() => {
+			if (onFilesTab) focusComposerOnConversationTab();
+		});
+	});
+
+	let seenTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
 		const key = itemKey;
-		const timer = setTimeout(() => api.seen([key]).catch(() => {}), SEEN_AFTER_MS);
-		return () => clearTimeout(timer);
+		seenTimer = setTimeout(() => markItemsSeen([key]), SEEN_AFTER_MS);
+		return () => clearTimeout(seenTimer);
 	});
 
 	$effect(() => {
 		if (me.data?.settings.clearNotifications === 'item') clearNotificationsFor(itemKey);
 	});
 
+	function setReadHere(ids: string[], read: boolean) {
+		clearTimeout(seenTimer);
+		return setItemsRead(ids, read);
+	}
+
+	const itemActions: ItemActionContext = {
+		byId: (id) => (id === dashItem?.id ? dashItem : undefined),
+		snooze: snoozeItems,
+		unsnooze: unsnoozeItems,
+		toggleMute: toggleMuteItems,
+		setRead: setReadHere,
+		copyLinks: () => copyLinks([githubUrl])
+	};
+
+	$effect(() =>
+		palette.register(() =>
+			itemCommands(itemActions, [itemKey], {
+				snoozed: !!dashItem?.dismissed,
+				detail: `${repo}#${number}`,
+				keyScopes: PAGE_KEY_SCOPES
+			})
+		)
+	);
+
+	function ifInYourViews(act: (item: DashItem) => unknown) {
+		return () => {
+			if (dashItem) act(dashItem);
+			else
+				toast('Not in your views', {
+					description: 'Snooze, mute, and unread work only for items in your views.'
+				});
+		};
+	}
+
+	const helpShortcuts = $derived<Shortcut[]>([
+		...shortcutsFor(['global']),
+		[[...keysOf('list.escape'), ...keysOf('list.fullPage')].join(' / '), 'Back'],
+		...shortcutsOf(['list.openGitHub', 'list.search', 'list.help']),
+		...shortcutsFor(kind === 'pr' ? ['item', 'peek', 'page'] : ['item', 'peek'])
+	]);
+
 	function onKey(e: KeyboardEvent) {
 		const target = e.target;
 		if (
-			target instanceof Element &&
-			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
+			e.defaultPrevented ||
+			(target instanceof Element &&
+				target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]'))
 		)
 			return;
-		const cmd = commandFor(e, ['list', 'page']);
+		const cmd = commandFor(e, PAGE_KEY_SCOPES);
 		const run: Record<string, () => void> = {
 			'page.conversation': () => showTab(false),
 			'page.files': () => showTab(true),
@@ -108,7 +195,15 @@
 			'list.openGitHub': () => {
 				window.open(githubUrl, '_blank', 'noopener');
 				noteOpened(githubUrl);
-			}
+			},
+			'list.search': () => (palette.open = true),
+			'list.help': () => (helpOpen = true),
+			'list.copy': () => itemActions.copyLinks([itemKey]),
+			'dash.snooze': ifInYourViews((i) =>
+				i.dismissed ? itemActions.unsnooze([i.id]) : itemActions.snooze([i.id], UNTIL_NEW_ACTIVITY)
+			),
+			'dash.mute': ifInYourViews((i) => itemActions.toggleMute([i.id])),
+			'dash.read': ifInYourViews((i) => itemActions.setRead([i.id], !!i.unread))
 		};
 		const fn = cmd ? run[cmd] : undefined;
 		if (!fn) return;
@@ -200,3 +295,5 @@
 		>
 	</div>
 </div>
+
+<ShortcutsDialog bind:open={helpOpen} shortcuts={helpShortcuts} />

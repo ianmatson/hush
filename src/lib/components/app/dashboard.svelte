@@ -3,12 +3,23 @@
 	import { closeRowMenus } from '$lib/row-menus.svelte';
 	import { untrack } from 'svelte';
 	import {
+		VIEW_KEY_SCOPES,
 		dashCommands,
 		dashMenu,
-		UNTIL_NEW_ACTIVITY,
 		type DashActionContext
 	} from '$lib/dash-actions';
-	import { snoozeLabel, type SnoozeChoice } from '$lib/shared/item-snooze';
+	import {
+		UNTIL_NEW_ACTIVITY,
+		copyLinks,
+		markItemsSeen,
+		patchDashItems,
+		setItemsRead,
+		snoozeItems,
+		toggleItemsRead,
+		toggleMuteItems,
+		unsnoozeItems
+	} from '$lib/item-actions';
+	import type { SnoozeChoice } from '$lib/shared/item-snooze';
 	import { alreadyTrue } from '$lib/shared/snooze';
 	import { snoozeOptions } from '$lib/time';
 	import SnoozeButton from './snooze-button.svelte';
@@ -173,12 +184,6 @@
 	const invalidateDash = () =>
 		dashKeys().forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
 	const refetchDash = () => dashKeys().forEach((queryKey) => refetchUnlessLive(queryKey));
-	function patchItems(ids: Set<string>, patch: (x: DashItem) => DashItem) {
-		for (const queryKey of dashKeys())
-			queryClient.setQueryData<DashResponse>(queryKey, (old) =>
-				old ? { ...old, items: old.items.map((x) => (ids.has(x.id) ? patch(x) : x)) } : old
-			);
-	}
 	let refreshing = $state(false);
 	let categoryFilter = $state<CategoryFilter[]>([]);
 	let showSnoozed = $state(false);
@@ -320,7 +325,7 @@
 		const i = peekItem;
 		if (i?.id === readByPeek) return;
 		readByPeek = i?.id ?? null;
-		if (i?.unread) untrack(() => markSeenHere([i.id]));
+		if (i?.unread) untrack(() => markItemsSeen([i.id]));
 	});
 	$effect(() => {
 		void showing;
@@ -547,7 +552,7 @@
 		message: string
 	) {
 		await cancelDash();
-		patchItems(new Set(ids), patch);
+		patchDashItems(new Set(ids), patch);
 		sel.clear();
 		try {
 			await api.pinItems(ids, categoryPin);
@@ -589,138 +594,37 @@
 		sel.clear();
 	}
 
-	const describe = (items: DashItem[]) =>
-		items.length === 1 ? items[0].title : `${items.length} items`;
-
-	async function toggleMute(ids: string[]) {
-		const items = ids.map(byId).filter((i): i is DashItem => !!i);
-		if (!items.length) return;
-		const mute = !items[0].muted;
-		const set = new Set(items.map((i) => i.id));
-		leaveRows(set);
-		await cancelDash();
-		patchItems(set, (x) => ({ ...x, dismissed: mute, muted: mute, snooze: undefined }));
-		try {
-			if (mute) await api.muteItems([...set]);
-			else await api.unsnoozeItems([...set]);
-			toast(mute ? 'Muted' : 'Unmuted', {
-				description: describe(items),
-				action: mute
-					? {
-							label: 'Undo',
-							onClick: () => {
-								api
-									.unsnoozeItems([...set])
-									.then(invalidateDash)
-									.catch((e) => toast.error(e.message));
-							}
-						}
-					: undefined
-			});
-		} catch (err) {
-			invalidateDash();
-			toast.error((err as Error).message);
-		}
+	function toggleMute(ids: string[]) {
+		leaveRows(new Set(ids));
+		return toggleMuteItems(ids);
 	}
 
-	async function snooze(ids: string[], choice: SnoozeChoice) {
-		const items = ids.map(byId).filter((i): i is DashItem => !!i);
-		if (!items.length) return;
-		const set = new Set(items.map((i) => i.id));
-		leaveRows(set);
-		await cancelDash();
-		patchItems(set, (x) => ({ ...x, dismissed: true, muted: false, snooze: choice }));
-		try {
-			await api.snoozeItems(
-				items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })),
-				choice
-			);
-			toast(`Snoozed ${snoozeLabel(choice).replace(/^Until/, 'until')}`, {
-				description: describe(items),
-				action: {
-					label: 'Undo',
-					onClick: () => {
-						patchItems(set, (x) => ({ ...x, dismissed: false, snooze: undefined }));
-						api.unsnoozeItems([...set]).catch((e) => {
-							toast.error(e.message);
-							invalidateDash();
-						});
-					}
-				}
-			});
-		} catch (err) {
-			invalidateDash();
-			toast.error((err as Error).message);
-		}
+	function snooze(ids: string[], choice: SnoozeChoice) {
+		leaveRows(new Set(ids));
+		return snoozeItems(ids, choice);
 	}
 
-	async function unsnooze(ids: string[]) {
-		const items = ids.map(byId).filter((i): i is DashItem => !!i);
-		if (!items.length) return;
-		const set = new Set(items.map((i) => i.id));
-		leaveRows(set);
-		await cancelDash();
-		patchItems(set, (x) => ({ ...x, dismissed: false, muted: false, snooze: undefined }));
-		try {
-			await api.unsnoozeItems([...set]);
-			toast('Back in the list', { description: describe(items) });
-		} catch (err) {
-			invalidateDash();
-			toast.error((err as Error).message);
-		}
+	function unsnooze(ids: string[]) {
+		leaveRows(new Set(ids));
+		return unsnoozeItems(ids);
 	}
 
 	const toggleSnooze = (ids: string[]) =>
 		showSnoozed ? unsnooze(ids) : snooze(ids, UNTIL_NEW_ACTIVITY);
 
-	const SEEN_BATCH = 50;
-	function sendInBatches(keys: string[], send: (batch: string[]) => Promise<unknown>) {
-		const batches = Array.from({ length: Math.ceil(keys.length / SEEN_BATCH) }, (_, k) =>
-			keys.slice(k * SEEN_BATCH, (k + 1) * SEEN_BATCH)
-		);
-		return Promise.all(batches.map(send));
-	}
-
-	function markSeenHere(ids: string[]) {
-		patchItems(new Set(ids), (x) => ({ ...x, unread: false }));
-		sendInBatches(ids, api.seen).catch(() => invalidateDash());
-	}
-
-	async function setRead(ids: string[], read: boolean) {
-		const set = new Set(ids);
-		patchItems(set, (x) => ({
-			...x,
-			unread: !read,
-			...(read ? { seenAt: Date.now(), changes: [] } : { seenAt: null })
-		}));
-		try {
-			await sendInBatches(ids, read ? api.seen : api.unseen);
-		} catch (err) {
-			invalidateDash();
-			toast.error((err as Error).message);
-		}
-	}
-
 	function markAllRead() {
 		const ids = visibleItems.filter((i) => i.unread).map((i) => i.id);
 		if (!ids.length) return;
-		setRead(ids, true);
+		setItemsRead(ids, true);
 		toast(`Marked ${ids.length} as read`);
 	}
 
 	function open(i: DashItem, url: string) {
 		openOnGitHub(url);
-		markSeenHere([i.id]);
+		markItemsSeen([i.id]);
 	}
 
-	async function copyLinks(ids: string[]) {
-		const urls = ids
-			.map(byId)
-			.filter(Boolean)
-			.map((i) => i!.url);
-		await navigator.clipboard.writeText(urls.join('\n'));
-		toast.success(urls.length === 1 ? 'Link copied' : `${urls.length} links copied`);
-	}
+	const copyItemLinks = (ids: string[]) => copyLinks(ids.flatMap((id) => byId(id)?.url ?? []));
 
 	const targets = () => sel.targets(order, selectedId);
 
@@ -763,7 +667,7 @@
 			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
 		)
 			return;
-		const cmd = commandFor(e, ['list', 'dash']);
+		const cmd = commandFor(e, VIEW_KEY_SCOPES);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
 		const views = me.data?.settings.views ?? [];
@@ -781,7 +685,7 @@
 			'list.open': () => i && open(i, i.actionUrl),
 			'list.openGitHub': () => i && open(i, i.url),
 			'list.fullPage': () => i && goto(itemPagePath(i.repo, i.number, i.kind)),
-			'list.copy': () => copyLinks(targets()),
+			'list.copy': () => copyItemLinks(targets()),
 			'list.refresh': () => refresh(),
 			'list.search': () => (palette.open = true),
 			'list.help': () => (helpOpen = true),
@@ -791,13 +695,7 @@
 				snooze(targets(), { until: snoozeOptions().find((o) => o.id === 'tomorrow')!.until }),
 			'dash.showSnoozed': () => (showSnoozed = !showSnoozed),
 			'dash.mute': () => toggleMute(targets()),
-			'dash.read': () => {
-				const ids = targets();
-				setRead(
-					ids,
-					ids.some((x) => byId(x)?.unread)
-				);
-			},
+			'dash.read': () => toggleItemsRead(targets()),
 			'dash.stackUp': () => stepStack(1),
 			'dash.stackDown': () => stepStack(-1),
 			'dash.kind': () =>
@@ -843,7 +741,7 @@
 					label: i.unread ? 'Read' : 'Unread',
 					icon: i.unread ? MailOpen : Mail,
 					tone: 'bg-primary text-primary-foreground',
-					run: () => setRead([i.id], !!i.unread)
+					run: () => setItemsRead([i.id], !!i.unread)
 				};
 			case 'mute':
 				return {
@@ -895,13 +793,13 @@
 		peek: peekThis,
 		open,
 		toggleMute,
-		copyLinks,
+		copyLinks: copyItemLinks,
 		refresh,
 		toggleShowSnoozed: () => (showSnoozed = !showSnoozed),
 		snooze,
 		unsnooze,
 		snoozeSheet: (ids) => (snoozeSheetIds = ids),
-		setRead,
+		setRead: setItemsRead,
 		markAllRead
 	};
 	const menuFor = (ids: string[]) => dashMenu(actions, ids);
@@ -1123,15 +1021,10 @@
 		variant="ghost"
 		size="sm"
 		aria-label="Mark as read or unread"
-		onclick={() => {
-			const ids = targets();
-			setRead(
-				ids,
-				ids.some((x) => byId(x)?.unread)
-			);
-		}}><MailOpen /><span class="hidden sm:inline">Read</span></Button
+		onclick={() => toggleItemsRead(targets())}
+		><MailOpen /><span class="hidden sm:inline">Read</span></Button
 	>
-	<Button variant="ghost" size="sm" aria-label="Copy links" onclick={() => copyLinks(targets())}
+	<Button variant="ghost" size="sm" aria-label="Copy links" onclick={() => copyItemLinks(targets())}
 		><Link /><span class="hidden sm:inline">Copy links</span></Button
 	>
 </BulkBar>
@@ -1147,7 +1040,7 @@
 			onopen: open,
 			onsnooze: (x: DashItem) => toggleSnooze([x.id]),
 			onmute: (x: DashItem) => toggleMute([x.id]),
-			oncopy: (x: DashItem) => copyLinks([x.id]),
+			oncopy: (x: DashItem) => copyItemLinks([x.id]),
 			onrowclick: (e: MouseEvent) => onRowClick(e, i),
 			ontoggle: (e: MouseEvent) => onToggle(e, i),
 			menu: () => menuFor([i.id]),
@@ -1222,7 +1115,7 @@
 			onpick={(choice) => snooze([i.id], choice)}
 			onwake={() => unsnooze([i.id])}
 		/>
-		<Button variant="ghost" size="sm" aria-label="Copy link" onclick={() => copyLinks([i.id])}
+		<Button variant="ghost" size="sm" aria-label="Copy link" onclick={() => copyItemLinks([i.id])}
 			><Link /><span class="max-sm:sr-only">Copy link</span></Button
 		>
 	{/if}
@@ -1230,7 +1123,7 @@
 
 <ShortcutsDialog
 	bind:open={helpOpen}
-	shortcuts={shortcutsFor(['global', 'list', 'dash', 'peek'], LIST_MOUSE)}
+	shortcuts={shortcutsFor(['global', ...VIEW_KEY_SCOPES, 'peek'], LIST_MOUSE)}
 />
 
 <PeekHost />
