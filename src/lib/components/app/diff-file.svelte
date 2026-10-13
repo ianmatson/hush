@@ -39,6 +39,7 @@
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { cn } from '$lib/utils';
 	import { highlightHunks } from '$lib/highlight';
+	import { DIFF_LINE_PREFIX, DIFF_NUMBER_TONE, DIFF_ROW_TONE } from '$lib/diff-tones';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -59,6 +60,7 @@
 		onthreadschanged,
 		selection,
 		targetLine,
+		targetThread,
 		canComment,
 		onselect,
 		composer
@@ -75,6 +77,7 @@
 		onthreadschanged: () => Promise<unknown>;
 		selection: { hunk: number; from: number; to: number } | null;
 		targetLine: DiffLineTarget | null;
+		targetThread: string | null;
 		canComment: boolean;
 		onselect: (hunk: number, at: number, extend: boolean) => void;
 		composer: Snippet;
@@ -175,19 +178,6 @@
 		deleted: 'A deleted file.',
 		viewed: 'You viewed this file.'
 	};
-	const ROW_TONE: Record<DiffLineKind, string> = {
-		add: 'bg-signal-merge/10',
-		del: 'bg-signal-fail/10',
-		context: '',
-		note: 'text-muted-foreground italic'
-	};
-	const NUMBER_TONE: Record<DiffLineKind, string> = {
-		add: 'bg-signal-merge/15',
-		del: 'bg-signal-fail/15',
-		context: '',
-		note: ''
-	};
-	const PREFIX: Record<DiffLineKind, string> = { add: '+', del: '−', context: ' ', note: ' ' };
 	const status = $derived(STATUS_LABEL[file.status]);
 	const hunkHeader = (hunk: (typeof hunks)[number]) =>
 		`@@ −${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@ ${hunk.section}`;
@@ -208,7 +198,11 @@
 					style:max-width="{Math.min(THREAD_MAX_WIDTH_PX, visibleWidth - THREAD_INSET_PX)}px"
 				>
 					{#each lineThreads as thread (thread.id)}
-						<ReviewThread {thread} onchanged={onthreadschanged} />
+						<ReviewThread
+							{thread}
+							onchanged={onthreadschanged}
+							highlighted={thread.id === targetThread}
+						/>
 					{/each}
 				</div>
 			</td>
@@ -244,7 +238,7 @@
 
 {#snippet splitHalf(cell: { line: DiffLine; at: number } | null, h: number, side: 'old' | 'new')}
 	{#if cell}
-		{@const tone = cell.line.kind === 'context' ? '' : ROW_TONE[cell.line.kind]}
+		{@const tone = cell.line.kind === 'context' ? '' : DIFF_ROW_TONE[cell.line.kind]}
 		{@const number = side === 'old' ? cell.line.oldLine : cell.line.newLine}
 		{@const diffSide = side === 'old' ? 'L' : 'R'}
 		<td
@@ -255,7 +249,7 @@
 					? MARKED_NUMBER_TONE
 					: cell.line.kind === 'context'
 						? ''
-						: NUMBER_TONE[cell.line.kind]
+						: DIFF_NUMBER_TONE[cell.line.kind]
 			)}>{@render lineNumber(number, h, cell.at, cell.line.kind)}</td
 		>
 		<td class={cn('pr-3 align-top break-all whitespace-pre-wrap', tone)}
@@ -371,7 +365,11 @@
 				{#if placed.atTop.length}
 					<div class="border-b px-2">
 						{#each placed.atTop as thread (thread.id)}
-							<ReviewThread {thread} onchanged={onthreadschanged} />
+							<ReviewThread
+								{thread}
+								onchanged={onthreadschanged}
+								highlighted={thread.id === targetThread}
+							/>
 						{/each}
 					</div>
 				{/if}
@@ -415,12 +413,12 @@
 											isSelected(h, l) ||
 											isTargetLine(line.oldLine, 'L') ||
 											isTargetLine(line.newLine, 'R')}
-										<tr class={ROW_TONE[line.kind]}>
+										<tr class={DIFF_ROW_TONE[line.kind]}>
 											<td
 												id={numberCellId(line.oldLine, 'L')}
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													marked ? MARKED_NUMBER_TONE : NUMBER_TONE[line.kind]
+													marked ? MARKED_NUMBER_TONE : DIFF_NUMBER_TONE[line.kind]
 												)}
 												>{@render lineNumber(
 													line.kind === 'del' ? line.oldLine : null,
@@ -433,13 +431,13 @@
 												id={numberCellId(line.newLine, 'R')}
 												class={cn(
 													'w-px px-2 text-right text-muted-foreground tabular-nums select-none',
-													marked ? MARKED_NUMBER_TONE : NUMBER_TONE[line.kind]
+													marked ? MARKED_NUMBER_TONE : DIFF_NUMBER_TONE[line.kind]
 												)}>{@render lineNumber(line.newLine, h, l, line.kind)}</td
 											>
 											<td class="pr-4 whitespace-pre"
 												><span
 													class="inline-block w-4 text-center text-muted-foreground select-none"
-													>{PREFIX[line.kind]}</span
+													>{DIFF_LINE_PREFIX[line.kind]}</span
 												>{@render code(line, h, l)}</td
 											>
 										</tr>

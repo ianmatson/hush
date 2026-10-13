@@ -4,8 +4,12 @@
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { followWhileGrowing, revealEntry } from '$lib/reveal';
-	import { meQuery, peekQuery } from '$lib/queries';
+	import { meQuery, peekQuery, queryClient, reviewThreadsQuery } from '$lib/queries';
 	import { keys, refetchUnlessLive } from '$lib/queries';
+	import { setAttachTarget } from '$lib/attachments.svelte';
+	import { canAttach } from '$lib/shared/attachments';
+	import { threadsByReview } from '$lib/shared/diff';
+	import { reviewThreadPath } from '$lib/shared/in-app-links';
 	import { externalContributor } from '$lib/shared/contributors';
 	import { rowShows } from '$lib/shared/row-parts';
 	import { sanitize } from '$lib/html';
@@ -17,6 +21,7 @@
 	import PeekProjects from './peek-projects.svelte';
 	import PeekFiles from './peek-files.svelte';
 	import ReactionBar from './reaction-bar.svelte';
+	import ReviewThread from './review-thread.svelte';
 	import ExternalBadge from './external-badge.svelte';
 	import GhLink from './gh-link.svelte';
 	import { branchUrl, labelUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
@@ -46,6 +51,19 @@
 
 	const q = createQuery(() => peekQuery(repo, number));
 	const me = createQuery(meQuery);
+	setAttachTarget(() => ({ repo, allowed: canAttach(q.data?.can.permission ?? null) }));
+	const hasReviewsOnDiff = $derived(
+		q.data?.kind === 'pr' && q.data.timeline.items.some((e) => e.type === 'review' && e.inline)
+	);
+	const threadsQ = createQuery(() => ({
+		...reviewThreadsQuery(repo, number),
+		enabled: hasReviewsOnDiff
+	}));
+	const threadsOfReview = $derived(threadsByReview(threadsQ.data?.threads ?? []));
+	function refreshThreads() {
+		void queryClient.invalidateQueries({ queryKey: keys.peek(repo, number) });
+		return queryClient.refetchQueries({ queryKey: keys.reviewThreads(repo, number) });
+	}
 	const external = $derived(
 		q.data && rowShows(me.data?.settings.rows, q.data.kind, 'external')
 			? externalContributor(q.data.authorAssociation, q.data.author.bot)
@@ -344,6 +362,7 @@
 			{/if}
 			{#each p.timeline.items as e (e.url)}
 				{@const tone = e.type === 'review' ? (REVIEW[e.state ?? '']?.tone ?? '') : ''}
+				{@const reviewThreads = e.type === 'review' ? (threadsOfReview.get(e.id) ?? []) : []}
 				<div class="grid gap-1.5 pb-3" in:revealEntry>
 					<div class="flex items-center gap-2 text-xs">
 						<GhLink
@@ -356,7 +375,9 @@
 						{#if e.inline}
 							<span class="shrink-0 text-muted-foreground"
 								>· <a
-									href="{itemPagePath(p.repo, p.number, 'pr')}/{FILES_TAB}"
+									href={reviewThreads.length
+										? reviewThreadPath(p.repo, p.number, reviewThreads[0])
+										: `${itemPagePath(p.repo, p.number, 'pr')}/${FILES_TAB}`}
 									class="underline-offset-2 hover:text-foreground hover:underline"
 									>{e.inline} on the diff</a
 								></span
@@ -375,7 +396,24 @@
 							{@html sanitize(e.html)}
 						</div>
 					{/if}
-					{#if e.reactions}<ReactionBar r={e.reactions} class="ml-7" />{/if}
+					{#if e.reactions && (e.html.trim() || e.reactions.groups.length)}
+						<ReactionBar r={e.reactions} class="ml-7" />
+					{/if}
+					{#if e.type === 'review' && e.inline}
+						{#if threadsQ.isPending}
+							<Skeleton class="ml-7 h-20" />
+						{:else if reviewThreads.length}
+							<div class="ml-7 grid gap-2">
+								{#each reviewThreads as thread (thread.id)}
+									<ReviewThread
+										{thread}
+										onchanged={refreshThreads}
+										diffHref={reviewThreadPath(p.repo, p.number, thread)}
+									/>
+								{/each}
+							</div>
+						{/if}
+					{/if}
 				</div>
 			{/each}
 			<CommentBox {p} />

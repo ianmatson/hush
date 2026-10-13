@@ -1,4 +1,4 @@
-import type { DiffHunk } from '$lib/shared/diff';
+import type { HunkLines } from '$lib/shared/diff';
 import type { HighlightedToken } from '$lib/highlight-core';
 import type { HighlightRequest, HighlightResponse } from '$lib/highlight-protocol';
 
@@ -30,7 +30,7 @@ function highlighter(): Worker {
 	return worker;
 }
 
-export function highlightHunks(hunks: DiffHunk[], language: string): Promise<Tokens> {
+export function highlightHunks(hunks: HunkLines[], language: string): Promise<Tokens> {
 	if (typeof Worker === 'undefined') return Promise.resolve(null);
 	const id = nextId++;
 	const request: HighlightRequest = { id, hunks, language };

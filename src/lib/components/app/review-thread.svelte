@@ -6,23 +6,36 @@
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
-	import type { ReviewThread } from '$lib/shared/diff';
+	import { splitPath, threadElementId, type ReviewThread } from '$lib/shared/diff';
 	import { Button } from '$lib/components/ui/button';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { DROP_TARGET_CLASS, Uploads, getAttachTarget } from '$lib/attachments.svelte';
 	import { profileUrl } from '$lib/shared/github-links';
 	import GhLink from './gh-link.svelte';
+	import Tip from './tip.svelte';
+	import DiffExcerpt from './diff-excerpt.svelte';
 
 	let {
 		thread,
-		onchanged
+		onchanged,
+		diffHref,
+		highlighted = false
 	}: {
 		thread: ReviewThread;
 		onchanged: () => Promise<unknown>;
+		diffHref?: string;
+		highlighted?: boolean;
 	} = $props();
 
-	let open = $state(untrack(() => !thread.resolved));
+	let open = $state(untrack(() => !thread.resolved || highlighted));
+	$effect(() => {
+		if (highlighted) open = true;
+	});
+	const path = $derived(splitPath(thread.path));
+	const commentCount = $derived(
+		`${thread.totalComments} ${thread.totalComments === 1 ? 'comment' : 'comments'}`
+	);
 	let reply = $state('');
 	let sending = $state<'reply' | 'resolve' | 'edit' | 'delete' | null>(null);
 	let editingId = $state<string | null>(null);
@@ -70,34 +83,69 @@
 		run('resolve', () => api.setThreadResolved(thread.id, !thread.resolved));
 </script>
 
+{#snippet labels()}
+	{#if thread.outdated}<span class="shrink-0 rounded-full border px-1.5 py-px">Outdated</span>{/if}
+	{#if thread.fileLevel}<span class="shrink-0 rounded-full border px-1.5 py-px">On the file</span
+		>{/if}
+	{#if isPending}<span
+			class="shrink-0 rounded-full border border-signal-review/50 px-1.5 py-px text-signal-review"
+			>Pending</span
+		>{/if}
+	{#if thread.resolved}<span class="shrink-0 rounded-full border px-1.5 py-px text-signal-merge"
+			>Resolved</span
+		>{/if}
+{/snippet}
+
 <div
+	id={diffHref ? undefined : threadElementId(thread.id)}
 	class={cn(
-		'my-2 grid gap-2 rounded-lg border bg-background p-3 font-sans text-sm whitespace-normal',
-		thread.resolved && 'bg-muted/30'
+		'grid gap-2 rounded-lg border bg-background p-3 font-sans text-sm whitespace-normal',
+		!diffHref && 'my-2',
+		thread.resolved && 'bg-muted/30',
+		highlighted && 'ring-2 ring-signal-review/50'
 	)}
 >
-	<button
-		type="button"
-		class="flex items-center gap-2 text-left text-xs text-muted-foreground"
-		aria-expanded={open}
-		onclick={() => (open = !open)}
-	>
-		<ChevronRight class={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')} />
-		<span class="truncate"
-			>{firstAuthor}
-			· {thread.totalComments}
-			{thread.totalComments === 1 ? 'comment' : 'comments'}</span
+	{#if diffHref}
+		<div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+			<button
+				type="button"
+				class="-m-1 shrink-0 rounded-md p-1 hover:bg-muted hover:text-foreground"
+				aria-expanded={open}
+				aria-label="Thread"
+				onclick={() => (open = !open)}
+			>
+				<ChevronRight class={cn('size-3.5 transition-transform', open && 'rotate-90')} />
+			</button>
+			<Tip focusable={false} text={thread.path}>
+				{#snippet children(props)}
+					<a
+						{...props}
+						href={diffHref}
+						class="flex min-w-0 font-mono underline-offset-2 hover:text-foreground hover:underline"
+						><span class="min-w-0 truncate">{path.directory}</span><span
+							class="max-w-full shrink-0 truncate text-foreground">{path.name}</span
+						></a
+					>
+				{/snippet}
+			</Tip>
+			{@render labels()}
+			{#if !open}<span class="ml-auto shrink-0 tabular-nums">{commentCount}</span>{/if}
+		</div>
+		{#if open && thread.excerpt.length}
+			<DiffExcerpt lines={thread.excerpt} path={thread.path} />
+		{/if}
+	{:else}
+		<button
+			type="button"
+			class="flex items-center gap-2 text-left text-xs text-muted-foreground"
+			aria-expanded={open}
+			onclick={() => (open = !open)}
 		>
-		{#if thread.outdated}<span class="rounded-full border px-1.5 py-px">Outdated</span>{/if}
-		{#if thread.fileLevel}<span class="rounded-full border px-1.5 py-px">On the file</span>{/if}
-		{#if isPending}<span
-				class="rounded-full border border-signal-review/50 px-1.5 py-px text-signal-review"
-				>Pending</span
-			>{/if}
-		{#if thread.resolved}<span class="rounded-full border px-1.5 py-px text-signal-merge"
-				>Resolved</span
-			>{/if}
-	</button>
+			<ChevronRight class={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')} />
+			<span class="truncate">{firstAuthor} · {commentCount}</span>
+			{@render labels()}
+		</button>
+	{/if}
 
 	{#if open}
 		{#each thread.comments as comment (comment.id)}

@@ -287,6 +287,7 @@ describe('peekEntryFromRest', () => {
 			})
 		).toEqual({
 			type: 'comment',
+			id: 'IC_1',
 			author: {
 				login: 'ann',
 				avatar: 'https://avatars.githubusercontent.com/u/1?v=4&s=48',
@@ -307,7 +308,13 @@ describe('peekEntryFromRest', () => {
 			state: 'APPROVED',
 			user
 		});
-		expect(entry).toMatchObject({ type: 'review', state: 'APPROVED', inline: 0, html: '' });
+		expect(entry).toMatchObject({
+			type: 'review',
+			id: 'PRR_1',
+			state: 'APPROVED',
+			inline: 0,
+			html: ''
+		});
 		expect(entry.at).toBe('2026-10-07T11:00:00Z');
 	});
 });

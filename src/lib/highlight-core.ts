@@ -1,5 +1,5 @@
 import type { HighlighterCore } from 'shiki/core';
-import { hunkSides, type DiffHunk } from '$lib/shared/diff';
+import { hunkSides, type HunkLines } from '$lib/shared/diff';
 
 export interface HighlightedToken {
 	content: string;
@@ -51,7 +51,7 @@ function tokenize(core: HighlighterCore, text: string, language: string) {
 }
 
 export async function highlightHunksNow(
-	hunks: DiffHunk[],
+	hunks: HunkLines[],
 	language: string
 ): Promise<HighlightedToken[][][] | null> {
 	const tooLong = hunks.some((h) =>

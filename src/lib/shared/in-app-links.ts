@@ -1,4 +1,4 @@
-import type { DiffLineTarget, DiffLineSide } from './diff';
+import type { DiffLineTarget, DiffLineSide, ReviewThread } from './diff';
 import {
 	FILES_TAB,
 	ITEM_PATH_SEGMENTS,
@@ -12,6 +12,8 @@ const GITHUB_HOSTS = new Set(['github.com', 'www.github.com']);
 const WEB_PROTOCOLS = new Set(['https:', 'http:']);
 const PULL_FILES_PAGES = new Set(['files', 'changes']);
 const GITHUB_DIFF_ANCHOR = /^#?diff-([0-9a-f]{64})(?:([LR])(\d+))?(?:-[LR]\d+)?$/i;
+const GITHUB_REVIEW_COMMENT_ANCHOR = /^#?r(\d+)$/;
+const GITHUB_REVIEW_COMMENT_URL_ANCHOR = /#discussion_r(\d+)$/;
 
 export interface GitHubDiffAnchor {
 	fileHash: string;
@@ -30,6 +32,37 @@ export function parseGitHubDiffAnchor(hash: string): GitHubDiffAnchor | null {
 				? { side: side.toUpperCase() as DiffLineSide, line: lineNumber }
 				: null
 	};
+}
+
+export function parseReviewCommentAnchor(hash: string): string | null {
+	return GITHUB_REVIEW_COMMENT_ANCHOR.exec(hash)?.[1] ?? null;
+}
+
+const reviewCommentIdOfUrl = (url: string) =>
+	GITHUB_REVIEW_COMMENT_URL_ANCHOR.exec(url)?.[1] ?? null;
+
+function pullFilesPath(itemPath: string, reviewCommentId: string | null): string {
+	const filesPath = `${itemPath}/${FILES_TAB}`;
+	return reviewCommentId ? `${filesPath}#r${reviewCommentId}` : filesPath;
+}
+
+export function reviewThreadPath(repo: string, number: number, thread: ReviewThread): string {
+	const rootComment = thread.comments[0];
+	return pullFilesPath(
+		itemPagePath(repo, number, 'pr'),
+		rootComment ? reviewCommentIdOfUrl(rootComment.url) : null
+	);
+}
+
+export function threadOfReviewComment(
+	threads: ReviewThread[],
+	commentId: string
+): ReviewThread | null {
+	return (
+		threads.find((thread) =>
+			thread.comments.some((comment) => reviewCommentIdOfUrl(comment.url) === commentId)
+		) ?? null
+	);
 }
 
 export async function gitHubDiffFileHash(path: string): Promise<string> {
@@ -67,8 +100,12 @@ export function inAppPathForGitHubUrl(href: string): string | null {
 	const kind = kindOfSegment(segment);
 	if (!kind || !isGitHubName(owner) || !isGitHubName(repo) || !isItemNumber(number)) return null;
 	const itemPath = itemPagePath(`${owner}/${repo}`, Number(number), kind);
-	if (page === undefined) return itemPath;
+	if (page === undefined) {
+		const reviewCommentId = kind === 'pr' ? reviewCommentIdOfUrl(url.hash) : null;
+		return reviewCommentId ? pullFilesPath(itemPath, reviewCommentId) : itemPath;
+	}
 	if (kind !== 'pr' || deeper.length || !PULL_FILES_PAGES.has(page)) return null;
-	const anchor = parseGitHubDiffAnchor(url.hash) ? url.hash : '';
+	const anchor =
+		parseGitHubDiffAnchor(url.hash) || parseReviewCommentAnchor(url.hash) ? url.hash : '';
 	return `${itemPath}/${FILES_TAB}${anchor}`;
 }

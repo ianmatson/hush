@@ -34,6 +34,7 @@
 		filesInTreeOrder,
 		foldedByDefault,
 		rangeSinceReview,
+		threadElementId,
 		threadsByPath,
 		type DiffLineTarget,
 		type ReviewRange,
@@ -45,6 +46,8 @@
 	import {
 		gitHubDiffFileHash,
 		parseGitHubDiffAnchor,
+		parseReviewCommentAnchor,
+		threadOfReviewComment,
 		type GitHubDiffAnchor
 	} from '$lib/shared/in-app-links';
 	import { cn } from '$lib/utils';
@@ -474,6 +477,7 @@
 	}
 
 	let targetLine = $state<{ filename: string; line: DiffLineTarget } | null>(null);
+	let targetThread = $state<string | null>(null);
 
 	async function revealLine(index: number, line: DiffLineTarget) {
 		await renderThrough(index);
@@ -484,8 +488,15 @@
 		row.scrollIntoView({ block: 'center', behavior: 'instant' });
 	}
 
-	function jumpTo(index: number, line: DiffLineTarget | null = null) {
-		const go = () => (line ? revealLine(index, line) : reveal(index, 'instant'));
+	async function revealThread(index: number, threadId: string) {
+		await renderThrough(index);
+		const element = document.getElementById(threadElementId(threadId));
+		if (!element) return reveal(index, 'instant');
+		cursor = index;
+		element.scrollIntoView({ block: 'center', behavior: 'instant' });
+	}
+
+	function jumpTo(go: () => unknown) {
 		go();
 		setTimeout(go, SETTLE_MS);
 	}
@@ -494,8 +505,21 @@
 		revealedHash = hash;
 		const filename = files[index].filename;
 		targetLine = line && { filename, line };
+		targetThread = null;
 		foldChoices.set(filename, false);
-		void tick().then(() => jumpTo(index, line));
+		void tick().then(() =>
+			jumpTo(() => (line ? revealLine(index, line) : reveal(index, 'instant')))
+		);
+	}
+
+	function openThread(hash: string, thread: ReviewThread) {
+		const index = files.findIndex((f) => f.filename === thread.path);
+		if (index < 0) return;
+		revealedHash = hash;
+		targetLine = null;
+		targetThread = thread.id;
+		foldChoices.set(thread.path, false);
+		void tick().then(() => jumpTo(() => revealThread(index, thread.id)));
 	}
 
 	async function openGitHubDiffAnchor(hash: string, anchor: GitHubDiffAnchor) {
@@ -513,6 +537,12 @@
 		const gitHubAnchor = parseGitHubDiffAnchor(hash);
 		if (gitHubAnchor) {
 			void openGitHubDiffAnchor(hash, gitHubAnchor);
+			return;
+		}
+		const reviewCommentId = parseReviewCommentAnchor(hash);
+		if (reviewCommentId) {
+			const thread = threadOfReviewComment(threadsQ.data?.threads ?? [], reviewCommentId);
+			if (thread) openThread(hash, thread);
 			return;
 		}
 		const index = files.findIndex((f) => fileAnchor(f.filename) === hash);
@@ -863,6 +893,7 @@
 							onthreadschanged={refreshThreads}
 							selection={selection?.file === file.filename ? selection : null}
 							targetLine={targetLine?.filename === file.filename ? targetLine.line : null}
+							{targetThread}
 							canComment={commentingAllowed}
 							onselect={(hunk, at, extend) => selectLine(file, hunk, at, extend)}
 							ontoggle={() => {

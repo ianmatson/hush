@@ -34,6 +34,7 @@ A link to a pull request or an issue in a description or a comment opens its ful
 
 - A link to a pull request's files (`…/pull/123/files` or `…/pull/123/changes`) opens the Files tab.
 - A link to a file or a line in the diff opens the Files tab at that file, and marks the line. When the line is not in the diff, Hush goes to the file.
+- A link to a review comment (`…/pull/123#discussion_r456` or `…/pull/123/files#r456`) opens the Files tab at its thread, and marks the thread.
 - All other links, such as files on a branch, commits, repositories, people, and labels, open on GitHub in a new tab.
 
 A pull request has two tabs: **Conversation** ({{key:page.conversation}}) and **Files** ({{key:page.files}}). The Files tab has the address of GitHub's Files tab: `…/pull/123/files`.
@@ -101,7 +102,7 @@ The address of this view ends in `?since=review`.
 - The checks: failed and running ones first. **Show all** lists every check.
 - The labels and the assignees.
 - **Project status**: a chip for each GitHub project that has the item, with its Status (“This week”). Click the chip to see the project. There you can change the status, move the item to another project of the same owner, or remove it from the project. A move or a removal loses the item's other fields on that project. The chips need the `project` scope (see [project boards](/docs/github-access#project-boards)).
-- The description, then the comments and reviews, oldest first. Inline review comments on the diff are counted here, and show in the Files tab of the [full page](#the-files-tab).
+- The description, then the comments and reviews, oldest first. Under each review are the threads that it started on the diff, as on GitHub: the file, the lines that the thread is about, and the comments with their replies. **Reply**, **Resolve**, and **Unresolve** work here too, and resolved threads start closed. Click the file to see the thread in the Files tab of the [full page](#the-files-tab).
 - The reactions under the description and each comment, as on GitHub. Click one to add yours or to take it back; the smile button adds another.
 - **Mentioned in Slack**: the Slack icon at the right of the first row, with the number of messages in the PostHog Slack that link to the PR or issue. “20+” means that there are more messages to load. Click the icon to see the messages, newest first, with the channel, the author, and the time. Scroll down to load more. Click a message to open it in the Slack app. Only for members of the PostHog GitHub org: turn it on in **Settings → Notifications → Slack → Mentions in the peek**. Hush searches Slack each time you open the peek and does not keep the results. The icon shows when the search is done, and only when there are messages.
 - A comment box at the end.
