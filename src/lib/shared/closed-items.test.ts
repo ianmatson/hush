@@ -7,6 +7,7 @@ import {
 	keepsClosed,
 	keptAfterChange,
 	newestCloseFirst,
+	searchFindsOnlyOpen,
 	stillKept
 } from './closed-items';
 
@@ -46,6 +47,22 @@ describe('closed items', () => {
 			false
 		);
 		expect(keptAfterChange({ state: 'merged' }, { state: 'merged' })).toBe(false);
+	});
+
+	it('knows the searches that find only open items', () => {
+		expect(searchFindsOnlyOpen('is:pr is:open review-requested:@me')).toBe(true);
+		expect(searchFindsOnlyOpen('is:open involves:@me')).toBe(true);
+		expect(searchFindsOnlyOpen('repo:PostHog/posthog.com state:open')).toBe(true);
+		expect(searchFindsOnlyOpen('IS:OPEN author:@me')).toBe(true);
+	});
+
+	it('knows the searches that also find merged and closed items', () => {
+		expect(searchFindsOnlyOpen('involves:@me')).toBe(false);
+		expect(searchFindsOnlyOpen('is:pr is:merged author:@me')).toBe(false);
+		expect(searchFindsOnlyOpen('is:issue is:closed assignee:@me')).toBe(false);
+		expect(searchFindsOnlyOpen('is:pr is:unmerged author:@me')).toBe(false);
+		expect(searchFindsOnlyOpen('-is:open author:@me')).toBe(false);
+		expect(searchFindsOnlyOpen('label:is:open')).toBe(false);
 	});
 
 	it('puts the newest close first', () => {

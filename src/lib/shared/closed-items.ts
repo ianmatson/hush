@@ -16,6 +16,10 @@ export const closedLabel = (reason: CloseReason | null | undefined) =>
 
 export const keepsClosed = (view: Pick<ItemView, 'keepClosed'>) => view.keepClosed !== false;
 
+const ONLY_OPEN = /(?:^|\s)(?:is|state):open(?=\s|$)/i;
+
+export const searchFindsOnlyOpen = (search: string) => ONLY_OPEN.test(search);
+
 export const closedTimeOf = (i: ClosedTimes) => i.closedAt ?? i.updatedAt;
 
 export const stillKept = (i: ClosedTimes, now: number) =>
