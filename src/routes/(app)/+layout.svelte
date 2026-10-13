@@ -39,9 +39,12 @@
 <!-- 8 s: long enough to read a toast and press Undo. -->
 <Toaster
 	position="bottom-center"
+	swipeDirections={['left', 'right', 'bottom']}
 	duration={8000}
 	offset={{ bottom: bottomBarOpen ? TOAST_ABOVE_BOTTOM_BAR : TOAST_GAP }}
-	mobileOffset={{ bottom: bottomBarOpen ? TOAST_ABOVE_BOTTOM_BAR : MOBILE_TOAST_GAP }}
+	mobileOffset={{
+		bottom: `calc(${bottomBarOpen ? TOAST_ABOVE_BOTTOM_BAR : MOBILE_TOAST_GAP}px + env(safe-area-inset-bottom, 0px))`
+	}}
 />
 <PersistQueryClientProvider client={queryClient} {persistOptions}>
 	<Tooltip.Provider delayDuration={300}>

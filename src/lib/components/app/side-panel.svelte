@@ -110,7 +110,7 @@
 	>
 		<Dialog.Content
 			showCloseButton={false}
-			class="top-auto bottom-0 left-0 flex h-[88dvh] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-t-2xl rounded-b-none p-0 pb-[env(safe-area-inset-bottom)] sm:max-w-none data-open:zoom-in-100 data-open:slide-in-from-bottom data-closed:zoom-out-100 data-closed:slide-out-to-bottom"
+			class="top-auto bottom-0 left-0 flex h-[88dvh] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-t-2xl rounded-b-none p-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:max-w-none data-open:zoom-in-100 data-open:slide-in-from-bottom data-closed:zoom-out-100 data-closed:slide-out-to-bottom"
 			style={dragY ? `transform: translateY(${dragY}px); transition: none` : undefined}
 		>
 			<Dialog.Title class="sr-only">{title}</Dialog.Title>
