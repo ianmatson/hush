@@ -673,6 +673,7 @@ export function peekEntryFromRest(
 ): PeekEntry {
 	return {
 		type,
+		id: j.node_id,
 		author: {
 			login: j.user?.login ?? 'ghost',
 			avatar: j.user ? restAvatar(j.user.avatar_url) : null,
@@ -741,6 +742,7 @@ export async function fetchPeek(
 			t.__typename === 'PullRequestReview'
 				? {
 						type: 'review',
+						id: t.id,
 						author: person(t.author),
 						at: t.submittedAt ?? t.createdAt,
 						url: t.url,
@@ -751,6 +753,7 @@ export async function fetchPeek(
 					}
 				: {
 						type: 'comment',
+						id: t.id,
 						author: person(t.author),
 						at: t.createdAt,
 						url: t.url,

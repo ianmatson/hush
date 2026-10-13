@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { gitHubDiffFileHash, inAppPathForGitHubUrl, parseGitHubDiffAnchor } from './in-app-links';
+import type { ReviewThread, ThreadComment } from './diff';
+import {
+	gitHubDiffFileHash,
+	inAppPathForGitHubUrl,
+	parseGitHubDiffAnchor,
+	parseReviewCommentAnchor,
+	reviewThreadPath,
+	threadOfReviewComment
+} from './in-app-links';
 
 const HTML_TS_HASH = 'b934ed0e2158893600cafa90b29f357278994ff00a941f29f2438df7a849c83e';
 
@@ -20,8 +28,20 @@ describe('inAppPathForGitHubUrl', () => {
 		expect(
 			inAppPathForGitHubUrl('https://github.com/PostHog/posthog/issues/9#issuecomment-123')
 		).toBe('/PostHog/posthog/issues/9');
+		expect(
+			inAppPathForGitHubUrl('https://github.com/PostHog/posthog/pull/9#pullrequestreview-456')
+		).toBe('/PostHog/posthog/pull/9');
+		expect(
+			inAppPathForGitHubUrl('https://github.com/PostHog/posthog/issues/9#discussion_r456')
+		).toBe('/PostHog/posthog/issues/9');
+	});
+
+	it('opens a review comment at its thread in the Files tab', () => {
 		expect(inAppPathForGitHubUrl('https://github.com/PostHog/posthog/pull/9#discussion_r456')).toBe(
-			'/PostHog/posthog/pull/9'
+			'/PostHog/posthog/pull/9/files#r456'
+		);
+		expect(inAppPathForGitHubUrl('https://github.com/PostHog/posthog/pull/9/files#r456')).toBe(
+			'/PostHog/posthog/pull/9/files#r456'
 		);
 	});
 
@@ -45,9 +65,9 @@ describe('inAppPathForGitHubUrl', () => {
 				`https://github.com/PostHog/posthog/pull/5/changes#diff-${HTML_TS_HASH}`
 			)
 		).toBe(`/PostHog/posthog/pull/5/files#diff-${HTML_TS_HASH}`);
-		expect(inAppPathForGitHubUrl('https://github.com/PostHog/posthog/pull/5/files#r123')).toBe(
-			'/PostHog/posthog/pull/5/files'
-		);
+		expect(
+			inAppPathForGitHubUrl('https://github.com/PostHog/posthog/pull/5/files#issuecomment-1')
+		).toBe('/PostHog/posthog/pull/5/files');
 	});
 
 	it('leaves pages that Hush cannot show on GitHub', () => {
@@ -109,5 +129,70 @@ describe('parseGitHubDiffAnchor', () => {
 describe('gitHubDiffFileHash', () => {
 	it('is the SHA-256 of the path, as in GitHub diff anchors', async () => {
 		expect(await gitHubDiffFileHash('src/lib/html.ts')).toBe(HTML_TS_HASH);
+	});
+});
+
+const comment = (url: string): ThreadComment => ({
+	id: url,
+	author: { login: 'ann', avatar: null },
+	html: '',
+	body: '',
+	at: '2026-10-13T10:00:00Z',
+	url,
+	pending: false,
+	canEdit: false,
+	canDelete: false
+});
+
+const thread = (id: string, commentIds: number[]): ReviewThread => ({
+	id,
+	reviewId: 'PRR_1',
+	path: 'src/app.ts',
+	line: 2,
+	startLine: null,
+	side: 'RIGHT',
+	outdated: false,
+	resolved: false,
+	fileLevel: false,
+	canReply: true,
+	canResolve: true,
+	canUnresolve: false,
+	excerpt: [],
+	comments: commentIds.map((n) => comment(`https://github.com/o/r/pull/2#discussion_r${n}`)),
+	totalComments: commentIds.length
+});
+
+describe('parseReviewCommentAnchor', () => {
+	it('reads the comment ID of a Files tab anchor, as on GitHub', () => {
+		expect(parseReviewCommentAnchor('#r4263581791')).toBe('4263581791');
+		expect(parseReviewCommentAnchor('r12')).toBe('12');
+	});
+
+	it('refuses other anchors', () => {
+		for (const hash of ['r', '#r12a', 'discussion_r12', `diff-${HTML_TS_HASH}R12`, 'file-a.ts'])
+			expect(parseReviewCommentAnchor(hash), hash).toBe(null);
+	});
+});
+
+describe('reviewThreadPath', () => {
+	it('opens the Files tab at the first comment of the thread', () => {
+		expect(reviewThreadPath('o/r', 2, thread('PRRT_1', [11, 12]))).toBe('/o/r/pull/2/files#r11');
+	});
+
+	it('opens the Files tab when the thread has no comment to go to', () => {
+		expect(reviewThreadPath('o/r', 2, thread('PRRT_1', []))).toBe('/o/r/pull/2/files');
+	});
+});
+
+describe('threadOfReviewComment', () => {
+	const threads = [thread('PRRT_1', [11, 12]), thread('PRRT_2', [21])];
+
+	it('finds the thread of a first comment or of a reply', () => {
+		expect(threadOfReviewComment(threads, '21')?.id).toBe('PRRT_2');
+		expect(threadOfReviewComment(threads, '12')?.id).toBe('PRRT_1');
+	});
+
+	it('finds nothing for a comment that is not in a thread', () => {
+		expect(threadOfReviewComment(threads, '1')).toBe(null);
 	});
 });

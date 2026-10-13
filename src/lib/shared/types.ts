@@ -439,6 +439,7 @@ export interface Reactions {
 
 export interface PeekEntry {
 	type: 'comment' | 'review';
+	id: string;
 	reactions?: Reactions;
 	author: PeekPerson;
 	at: string;
@@ -447,7 +448,6 @@ export interface PeekEntry {
 	html: string;
 	/** Reviews only. */
 	state?: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
-	/** Reviews only: inline comments on the diff (not shown in the peek). */
 	inline?: number;
 }
 

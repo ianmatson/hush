@@ -18,7 +18,9 @@ import {
 	splitRows,
 	suggestionBlock,
 	suggestionIn,
+	threadExcerpt,
 	threadsByPath,
+	threadsByReview,
 	type FileTreeNode,
 	type PullCommit,
 	type PullFile,
@@ -33,6 +35,25 @@ const file = (overrides: Partial<PullFile>): PullFile => ({
 	deletions: 1,
 	changes: 2,
 	blob_url: null,
+	...overrides
+});
+
+const thread = (overrides: Partial<ReviewThread>): ReviewThread => ({
+	id: overrides.id ?? 't',
+	reviewId: null,
+	path: 'a.ts',
+	line: 2,
+	startLine: null,
+	side: 'RIGHT',
+	outdated: false,
+	resolved: false,
+	fileLevel: false,
+	canReply: true,
+	canResolve: true,
+	canUnresolve: false,
+	excerpt: [],
+	comments: [],
+	totalComments: 0,
 	...overrides
 });
 
@@ -246,22 +267,6 @@ describe('splitRows', () => {
 });
 
 describe('placeThreads', () => {
-	const thread = (overrides: Partial<ReviewThread>): ReviewThread => ({
-		id: overrides.id ?? 't',
-		path: 'a.ts',
-		line: 2,
-		startLine: null,
-		side: 'RIGHT',
-		outdated: false,
-		resolved: false,
-		fileLevel: false,
-		canReply: true,
-		canResolve: true,
-		canUnresolve: false,
-		comments: [],
-		totalComments: 0,
-		...overrides
-	});
 	const hunks = parsePatch(['@@ -1,3 +1,3 @@', ' a', '-b', '+B', ' c'].join('\n'));
 
 	it('puts a thread under its line, on the new or the old side', () => {
@@ -290,6 +295,66 @@ describe('placeThreads', () => {
 	it('groups threads by file', () => {
 		const byPath = threadsByPath([thread({ id: '1' }), thread({ id: '2', path: 'b.ts' })]);
 		expect([...byPath.keys()]).toEqual(['a.ts', 'b.ts']);
+	});
+
+	it('groups threads by the review that started them', () => {
+		const byReview = threadsByReview([
+			thread({ id: '1', reviewId: 'PRR_a' }),
+			thread({ id: '2', reviewId: 'PRR_b' }),
+			thread({ id: '3', reviewId: 'PRR_a' }),
+			thread({ id: '4', reviewId: null })
+		]);
+		expect([...byReview].map(([review, threads]) => [review, threads.map((t) => t.id)])).toEqual([
+			['PRR_a', ['1', '3']],
+			['PRR_b', ['2']]
+		]);
+	});
+});
+
+describe('threadExcerpt', () => {
+	const added = (count: number) =>
+		[`@@ -0,0 +1,${count} @@`, ...Array.from({ length: count }, (_, i) => `+line ${i + 1}`)].join(
+			'\n'
+		);
+	const newLines = (lines: { newLine: number | null }[]) => lines.map((l) => l.newLine);
+
+	it('shows the last four lines of the hunk for a comment on one line, as GitHub does', () => {
+		expect(newLines(threadExcerpt(added(6), null))).toEqual([3, 4, 5, 6]);
+		expect(newLines(threadExcerpt(added(2), null))).toEqual([1, 2]);
+	});
+
+	it('shows all the commented lines of a range', () => {
+		expect(newLines(threadExcerpt(added(6), { side: 'RIGHT', line: 2 }))).toEqual([2, 3, 4, 5, 6]);
+	});
+
+	it('starts a range on a deleted line when it starts on the old side', () => {
+		const hunk = ['@@ -10,4 +10,3 @@', ' a', '-b', '-c', '+C', ' d'].join('\n');
+		expect(threadExcerpt(hunk, { side: 'LEFT', line: 11 }).map((l) => l.text)).toEqual([
+			'b',
+			'c',
+			'C',
+			'd'
+		]);
+	});
+
+	it('shows four lines when the start of the range is not in the hunk', () => {
+		expect(newLines(threadExcerpt(added(6), { side: 'RIGHT', line: 40 }))).toEqual([3, 4, 5, 6]);
+	});
+
+	it('shows four lines for a range of one line, like a comment on one line', () => {
+		expect(newLines(threadExcerpt(added(6), { side: 'RIGHT', line: 6 }))).toEqual([3, 4, 5, 6]);
+	});
+
+	it('shows at most the last 20 lines of a long range', () => {
+		const lines = newLines(threadExcerpt(added(30), { side: 'RIGHT', line: 1 }));
+		expect(lines).toHaveLength(20);
+		expect([lines[0], lines.at(-1)]).toEqual([11, 30]);
+	});
+
+	it('leaves out the no-newline note, and gives nothing for an empty hunk', () => {
+		const hunk = ['@@ -1 +1,2 @@', '-a', '\\ No newline at end of file', '+a', '+b'].join('\n');
+		expect(threadExcerpt(hunk, null).map((l) => l.kind)).toEqual(['del', 'add', 'add']);
+		expect(threadExcerpt('', null)).toEqual([]);
 	});
 });
 

@@ -348,7 +348,9 @@ export interface HunkSides {
 	sideLine: { side: 'old' | 'new'; index: number }[];
 }
 
-export function hunkSides(hunk: DiffHunk): HunkSides {
+export type HunkLines = Pick<DiffHunk, 'lines'>;
+
+export function hunkSides(hunk: HunkLines): HunkSides {
 	const oldLines: string[] = [];
 	const newLines: string[] = [];
 	const sideLine: HunkSides['sideLine'] = [];
@@ -418,6 +420,7 @@ export type ReviewEvent = 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
 
 export interface ReviewThread {
 	id: string;
+	reviewId: string | null;
 	path: string;
 	line: number | null;
 	startLine: number | null;
@@ -428,11 +431,44 @@ export interface ReviewThread {
 	canReply: boolean;
 	canResolve: boolean;
 	canUnresolve: boolean;
+	excerpt: DiffLine[];
 	comments: ThreadComment[];
 	totalComments: number;
 }
 
 export const threadAnchor = (side: 'LEFT' | 'RIGHT', line: number) => `${side}:${line}`;
+
+export const threadElementId = (threadId: string) => `thread-${threadId}`;
+
+const SINGLE_LINE_EXCERPT_LINES = 4;
+const MAX_EXCERPT_LINES = 20;
+
+export interface ExcerptStart {
+	side: 'LEFT' | 'RIGHT';
+	line: number;
+}
+
+function isExcerptStart(line: DiffLine, start: ExcerptStart): boolean {
+	return start.side === 'LEFT'
+		? line.kind !== 'add' && line.oldLine === start.line
+		: line.kind !== 'del' && line.newLine === start.line;
+}
+
+export function threadExcerpt(diffHunk: string, start: ExcerptStart | null): DiffLine[] {
+	const lines = (parsePatch(diffHunk).at(-1)?.lines ?? []).filter((l) => l.kind !== 'note');
+	const from = start ? lines.findLastIndex((l) => isExcerptStart(l, start)) : -1;
+	const spansLines = from >= 0 && from < lines.length - 1;
+	const shown = spansLines ? lines.slice(from) : lines.slice(-SINGLE_LINE_EXCERPT_LINES);
+	return shown.slice(-MAX_EXCERPT_LINES);
+}
+
+export function threadsByReview(threads: ReviewThread[]): Map<string, ReviewThread[]> {
+	const byReview = new Map<string, ReviewThread[]>();
+	for (const thread of threads)
+		if (thread.reviewId)
+			byReview.set(thread.reviewId, [...(byReview.get(thread.reviewId) ?? []), thread]);
+	return byReview;
+}
 
 export function lineAnchors(line: DiffLine): string[] {
 	const anchors: string[] = [];

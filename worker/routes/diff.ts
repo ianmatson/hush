@@ -2,6 +2,7 @@ import {
 	PULL_FILES_MAX_PAGES,
 	PULL_FILES_PER_PAGE,
 	isCommitOid,
+	threadExcerpt,
 	type PullCommit,
 	type PendingReview,
 	type ReviewEvent,
@@ -47,8 +48,9 @@ const REVIEW_THREADS_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: 
     reviewThreads(first: ${THREADS_PER_PAGE}, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id isResolved isOutdated path line startLine diffSide subjectType
+        id isResolved isOutdated path line startLine originalStartLine diffSide startDiffSide subjectType
         viewerCanReply viewerCanResolve viewerCanUnresolve
+        root: comments(first: 1) { nodes { diffHunk pullRequestReview { id } } }
         comments(first: ${COMMENTS_PER_THREAD}) {
           totalCount
           nodes { id author { login avatarUrl } bodyHTML body createdAt url state viewerCanUpdate viewerCanDelete }
@@ -64,18 +66,21 @@ const REPLY_TO_THREAD = `mutation($id: ID!, $body: String!) {
 const RESOLVE_THREAD = `mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { id } } }`;
 const UNRESOLVE_THREAD = `mutation($id: ID!) { unresolveReviewThread(input: { threadId: $id }) { thread { id } } }`;
 
-type ThreadNode = {
+export type ThreadNode = {
 	id: string;
 	isResolved: boolean;
 	isOutdated: boolean;
 	path: string;
 	line: number | null;
 	startLine: number | null;
+	originalStartLine: number | null;
 	diffSide: 'LEFT' | 'RIGHT';
+	startDiffSide: 'LEFT' | 'RIGHT' | null;
 	subjectType: 'LINE' | 'FILE';
 	viewerCanReply: boolean;
 	viewerCanResolve: boolean;
 	viewerCanUnresolve: boolean;
+	root: { nodes: { diffHunk: string; pullRequestReview: { id: string } | null }[] };
 	comments: {
 		totalCount: number;
 		nodes: {
@@ -109,9 +114,20 @@ type ReviewThreadsPage = {
 	errors?: { message: string }[];
 };
 
-function toReviewThread(node: ThreadNode): ReviewThread {
+function excerptOf(node: ThreadNode, diffHunk: string) {
+	if (node.subjectType === 'FILE') return [];
+	const start =
+		node.originalStartLine === null
+			? null
+			: { side: node.startDiffSide ?? node.diffSide, line: node.originalStartLine };
+	return threadExcerpt(diffHunk, start);
+}
+
+export function toReviewThread(node: ThreadNode): ReviewThread {
+	const root = node.root.nodes[0];
 	return {
 		id: node.id,
+		reviewId: root?.pullRequestReview?.id ?? null,
 		path: node.path,
 		line: node.line,
 		startLine: node.startLine,
@@ -122,6 +138,7 @@ function toReviewThread(node: ThreadNode): ReviewThread {
 		canReply: node.viewerCanReply,
 		canResolve: node.viewerCanResolve,
 		canUnresolve: node.viewerCanUnresolve,
+		excerpt: root ? excerptOf(node, root.diffHunk) : [],
 		totalComments: node.comments.totalCount,
 		comments: node.comments.nodes.map((c) => ({
 			id: c.id,
