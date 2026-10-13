@@ -23,8 +23,8 @@
 
 	const events = $derived(eventsFor(subjects));
 	const pick = (body: { until?: number; event?: SnoozeEvent }) => {
-		open = false;
 		onpick(body);
+		open = false;
 	};
 </script>
 

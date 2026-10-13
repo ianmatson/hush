@@ -1130,9 +1130,11 @@
 
 {#if snoozeSheetIds}
 	{@const ids = snoozeSheetIds}
+	{@const one = ids.length === 1 ? byId(ids[0]) : undefined}
 	<SnoozeSheet
 		bind:open={() => snoozeSheetIds !== null, (open) => !open && (snoozeSheetIds = null)}
 		subjects={ids.map((x) => byId(x)?.kind ?? 'other')}
+		disabled={one ? alreadyTrue(one) : []}
 		untilNewActivity
 		onpick={(choice) => snooze(ids, choice)}
 	/>
