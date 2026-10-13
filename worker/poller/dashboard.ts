@@ -7,7 +7,7 @@ import {
 } from '../../src/lib/shared/dashboard';
 import type { DashItem, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
 import { dashFactsOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
-import { keptAfterChange, stillKept } from '../../src/lib/shared/closed-items';
+import { keptAfterChange, searchFindsOnlyOpen, stillKept } from '../../src/lib/shared/closed-items';
 import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
 import {
 	MAX_SOURCE_COUNT_SEARCHES,
@@ -187,9 +187,11 @@ export abstract class PollerDashboard extends PollerSync {
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const teamSet = new Set(teams.map((t) => t.slug));
 		const byId = new Map<string, { facts: DashFacts; filtersByView: Map<string, Set<string>> }>();
+		const listedWhenClosed = new Set<string>();
 		for (const h of hits) {
 			const subject = facts.get(h.key);
 			if (!subject || !forTeams(h.query, subject, who.me)) continue;
+			if (!searchFindsOnlyOpen(h.query.q)) listedWhenClosed.add(h.key);
 			const e = byId.get(h.key) ?? {
 				facts: dashFactsOf(subject, who.me, teamSet, decided.get(h.key)),
 				filtersByView: new Map<string, Set<string>>()
@@ -221,21 +223,29 @@ export abstract class PollerDashboard extends PollerSync {
 				)
 				.map(({ facts, filtersByView }) => finish(facts, new Set(filtersByView.keys())))
 		);
-		const placed = this.keepHushMatches(who, this.placeItems(who, items, facts), byId, finish);
-		this.storeTracked(placed, true);
+		const found = this.keepHushMatches(who, this.placeItems(who, items, facts), byId, finish);
+		this.storeTracked(found, true);
+		const closedSinceIndexed = (i: DashItem) => i.state !== 'open' && !listedWhenClosed.has(i.id);
+		const placed = found.filter((i) => !closedSinceIndexed(i));
 		const complete = !searchErrors.length && !detailErrors.length;
 		const closed = await this.keptAfterClose(
 			who,
 			cached?.data.items ?? [],
-			placed,
+			found,
 			cached?.sig === sig && !searchErrors.length,
 			teamSet,
 			finish
 		);
+		const kept = [
+			...found
+				.filter((i) => closedSinceIndexed(i) && stillKept(i, now))
+				.map((i) => ({ ...i, keptAfterClose: true })),
+			...closed.items
+		];
 		if (cached && cached.sig !== sig && complete)
 			this.untrackMissing(
 				kind,
-				[...placed, ...closed.items].map((i) => i.id)
+				[...placed, ...kept].map((i) => i.id)
 			);
 		await this.storeTrackedBuild(kind, complete);
 		const nodeIdOf = (key: string) => latest.get(key)?.id ?? '';
@@ -252,7 +262,7 @@ export abstract class PollerDashboard extends PollerSync {
 							projectStatus: statuses.statusOf.get(nodeIdOf(i.id)) ?? {}
 						}))
 					: placed),
-				...closed.items
+				...kept
 			],
 			...(statuses && { projects: statuses.projects }),
 			sections: views.map((v) => ({
