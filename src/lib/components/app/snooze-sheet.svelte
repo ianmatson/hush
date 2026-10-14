@@ -29,7 +29,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="gap-3 sm:max-w-sm">
+	<Dialog.Content class="max-h-[calc(100dvh_-_2rem)] gap-3 overflow-y-auto sm:max-w-sm">
 		<Dialog.Header><Dialog.Title>Snooze</Dialog.Title></Dialog.Header>
 		{#if untilNewActivity}
 			<section class="grid gap-0.5 border-b pb-3">

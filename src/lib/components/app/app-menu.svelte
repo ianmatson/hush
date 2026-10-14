@@ -51,8 +51,7 @@
 				>
 				<M.SubContent class="w-56">{@render list(e.items)}</M.SubContent>
 			</M.Sub>
-		{:else if kind === 'dropdown'}
-			<!-- Phones: nested submenus do not fit, so Snooze opens a sheet. -->
+		{:else if kind === 'dropdown' || narrow.current}
 			<M.Item onclick={e.sheet}
 				>{#if e.icon}<e.icon />{/if}{e.label}…</M.Item
 			>
