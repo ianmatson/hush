@@ -179,6 +179,23 @@ describe('groupItems', () => {
 		expect(groupItems(items, projectGroupBy('acme/7'), ctx)[0].color).toBe('GRAY');
 	});
 
+	it('separates unknown membership from confirmed absence while keeping visible project statuses', () => {
+		expect(
+			shape(
+				[
+					item('unavailable', { projectStatusUnknown: true }),
+					item('absent', { projectStatus: {}, projectStatusUnknown: false }),
+					item('visible', { projectStatus: { 'acme/7': 'todo' }, projectStatusUnknown: true })
+				],
+				projectGroupBy('acme/7')
+			)
+		).toEqual([
+			['Todo', ['visible']],
+			['Project data unavailable', ['unavailable']],
+			['Not in project', ['absent']]
+		]);
+	});
+
 	it('puts every item outside a project that holds none of them', () => {
 		expect(shape([item('a')], projectGroupBy('acme/1'))).toEqual([[NOT_IN_PROJECT_SECTION, ['a']]]);
 	});

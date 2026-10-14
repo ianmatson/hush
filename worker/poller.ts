@@ -238,12 +238,11 @@ export class Poller extends PollerData {
 			retryAt: 0
 		});
 		if (page.status === 304) {
+			await this.ingest(who, [], initialized);
 			await this.keepTrackedFresh();
 			return this.cleanup();
 		}
 		await this.ingest(who, page.items, initialized);
-		// Save Last-Modified only after the notifications are handled. If ingest fails, the next
-		// poll asks GitHub again instead of getting a 304 and losing those notifications.
 		await this.ctx.storage.put({
 			initialized: true,
 			...(page.lastModified ? { lastModified: page.lastModified } : {})

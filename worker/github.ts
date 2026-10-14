@@ -21,6 +21,22 @@ import { readStack } from './stacks';
 const API = 'https://api.github.com';
 const UA = 'hush-notifications (+https://github.com)';
 
+export interface GraphqlError {
+	message: string;
+	type?: string;
+	path?: (string | number)[];
+}
+
+export function hasGraphqlErrorAt(errors: GraphqlError[], path: (string | number)[]): boolean {
+	return errors.some(
+		(error) =>
+			!error.path?.length ||
+			path
+				.slice(0, Math.min(path.length, error.path.length))
+				.every((part, i) => part === error.path![i])
+	);
+}
+
 export class GitHubError extends Error {
 	constructor(
 		public status: number,
@@ -112,7 +128,9 @@ export function subjectHtmlUrl(n: GhNotification): string {
 	}
 }
 
-export function subjectNumber(n: GhNotification): number | null {
+export function subjectNumber(n: {
+	subject: Pick<GhNotification['subject'], 'type' | 'url'>;
+}): number | null {
 	if (n.subject.type !== 'PullRequest' && n.subject.type !== 'Issue') return null;
 	const m = n.subject.url?.match(/\/(?:pulls|issues)\/(\d+)$/);
 	return m ? Number(m[1]) : null;
@@ -336,7 +354,8 @@ export function toSubject(n: Node): SubjectFacts {
 export async function fetchSubjects(
 	token: string,
 	refs: SubjectRef[],
-	me: string
+	me: string,
+	unavailable: Set<string> = new Set()
 ): Promise<Map<string, SubjectFacts>> {
 	const out = new Map<string, SubjectFacts>();
 	for (let i = 0; i < refs.length; i += CHUNK) {
@@ -359,10 +378,24 @@ export async function fetchSubjects(
 			body: JSON.stringify({ query, variables: vars })
 		});
 		if (!res.ok) continue;
-		const json = (await res.json()) as { data?: Record<string, Node | null> };
+		const json = (await res.json()) as {
+			data?: Record<string, Node | null>;
+			errors?: GraphqlError[];
+		};
 		chunk.forEach((r, j) => {
 			const node = json.data?.[`t${j}`]?.issueOrPullRequest;
-			if (node?.id) out.set(r.key, toSubject(node));
+			const errors = (json.errors ?? []).filter((error) =>
+				hasGraphqlErrorAt([error], [`t${j}`, 'issueOrPullRequest'])
+			);
+			if (
+				(node === null && !errors.length) ||
+				(errors.length &&
+					errors.every((error) => error.type === 'NOT_FOUND' || error.type === 'FORBIDDEN') &&
+					errors.every((error) => !!error.path?.length && error.path.length <= 2))
+			)
+				unavailable.add(r.key);
+			if (node?.id && !hasGraphqlErrorAt(json.errors ?? [], [`t${j}`, 'issueOrPullRequest']))
+				out.set(r.key, toSubject(node));
 		});
 	}
 	return out;
@@ -408,36 +441,43 @@ async function inRequests<T>(
 	items: T[],
 	size: number,
 	build: (chunk: T[]) => { query: string; variables: Record<string, unknown> },
-	use: (chunk: T[], data: Record<string, Node | null> | undefined) => void,
-	errors: string[]
+	use: (chunk: T[], data: Record<string, Node | null> | undefined, errors: GraphqlError[]) => void,
+	errors: string[],
+	failed: (chunk: T[]) => void = () => {}
 ): Promise<void> {
 	async function ask(chunk: T[]): Promise<void> {
 		const res = await gh(token, '/graphql', {
 			method: 'POST',
 			body: JSON.stringify(build(chunk))
 		}).catch(() => null);
-		if (!res)
+		if (!res) {
+			failed(chunk);
 			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
+		}
 		if (TIMED_OUT.has(res.status) && chunk.length > 1) {
 			const half = Math.ceil(chunk.length / 2);
 			await Promise.all([ask(chunk.slice(0, half)), ask(chunk.slice(half))]);
 			return;
 		}
-		if (!res.ok)
+		if (!res.ok) {
+			failed(chunk);
 			return void errors.push(
 				TIMED_OUT.has(res.status)
 					? 'GitHub took too long to answer. Hush tries again on the next refresh.'
 					: `GitHub returned ${res.status}.`
 			);
+		}
 		// The time limit also covers reading the answer.
 		const json = (await res.json().catch(() => null)) as {
 			data?: Record<string, Node | null>;
-			errors?: { message: string }[];
+			errors?: GraphqlError[];
 		} | null;
-		if (!json)
+		if (!json) {
+			failed(chunk);
 			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
+		}
 		for (const e of json.errors ?? []) errors.push(e.message);
-		use(chunk, json.data);
+		use(chunk, json.data, json.errors ?? []);
 	}
 	const chunks: T[][] = [];
 	for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
@@ -472,9 +512,16 @@ const SHORT = `__typename
 export async function searchShort(
 	token: string,
 	queries: ExpandedQuery[]
-): Promise<{ hits: SearchHit[]; errors: string[] }> {
+): Promise<{
+	hits: SearchHit[];
+	errors: string[];
+	failedSections: Set<string>;
+	failedQueries?: ExpandedQuery[];
+}> {
 	const errors: string[] = [];
 	const hits: SearchHit[] = [];
+	const failedSections = new Set<string>();
+	const failedQueries: ExpandedQuery[] = [];
 	await inRequests(
 		token,
 		queries,
@@ -488,8 +535,15 @@ export async function searchShort(
 				.join('\n')}\n}`,
 			variables: Object.fromEntries(chunk.map((q, j) => [`q${j}`, newestFirst(q.q)]))
 		}),
-		(chunk, data) =>
+		(chunk, data, graphqlErrors) =>
 			chunk.forEach((q, j) => {
+				if (!data?.[`s${j}`] || hasGraphqlErrorAt(graphqlErrors, [`s${j}`])) {
+					failedSections.add(q.section);
+					failedQueries.push(q);
+					if (!graphqlErrors.length)
+						errors.push('GitHub did not return a view search. Hush tries again later.');
+					return;
+				}
 				for (const n of data?.[`s${j}`]?.nodes ?? [])
 					if (n?.id && n.repository?.nameWithOwner)
 						hits.push({
@@ -499,9 +553,14 @@ export async function searchShort(
 							updatedAt: n.updatedAt
 						});
 			}),
-		errors
+		errors,
+		(chunk) =>
+			chunk.forEach((query) => {
+				failedSections.add(query.section);
+				failedQueries.push(query);
+			})
 	);
-	return { hits, errors: [...new Set(errors)].slice(0, 3) };
+	return { hits, errors: [...new Set(errors)].slice(0, 3), failedSections, failedQueries };
 }
 
 export async function searchCounts(token: string, queries: string[]): Promise<(number | null)[]> {
@@ -538,9 +597,10 @@ export async function fetchDetails(
 			query: `query($me: String!, $ids: [ID!]!) { nodes(ids: $ids) { __typename ...P ...I } }\n${SUBJECT_FIELDS}`,
 			variables: { me, ids: chunk }
 		}),
-		(_, data) => {
-			for (const n of (data?.nodes as unknown as Node[] | undefined) ?? [])
-				if (n?.id) subjects.set(n.id, toSubject(n));
+		(_, data, errors) => {
+			((data?.nodes as unknown as Node[] | undefined) ?? []).forEach((n, index) => {
+				if (n?.id && !hasGraphqlErrorAt(errors, ['nodes', index])) subjects.set(n.id, toSubject(n));
+			});
 		},
 		errors
 	);
@@ -721,13 +781,13 @@ export async function fetchPeek(
 	owner: string,
 	repo: string,
 	number: number
-): Promise<{ peek: PeekDTO; subject: SubjectFacts } | null> {
+): Promise<{ peek: PeekDTO; subject: SubjectFacts | null } | null> {
 	const res = await gh(token, '/graphql', {
 		method: 'POST',
 		body: JSON.stringify({ query: PEEK_QUERY, variables: { me, o: owner, r: repo, n: number } })
 	});
 	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
-	const json = (await res.json()) as { data?: Node; errors?: { message: string }[] };
+	const json = (await res.json()) as { data?: Node; errors?: GraphqlError[] };
 	const n: Node | null | undefined = json.data?.repository?.issueOrPullRequest;
 	if (!n) {
 		if (json.errors?.length && json.data?.repository !== null)
@@ -735,7 +795,10 @@ export async function fetchPeek(
 		return null;
 	}
 	const pr = n.__typename === 'PullRequest';
-	const subject = toSubject(n);
+	const parsedSubject = toSubject(n);
+	const subject = hasGraphqlErrorAt(json.errors ?? [], ['repository', 'issueOrPullRequest'])
+		? null
+		: parsedSubject;
 	const items: PeekEntry[] = (n.timelineItems?.nodes ?? [])
 		.filter((t: Node) => t?.__typename)
 		.map((t: Node) =>
@@ -845,7 +908,7 @@ export async function fetchPeek(
 			additions: n.additions ?? 0,
 			deletions: n.deletions ?? 0,
 			files: n.changedFiles ?? 0,
-			openThreads: subject.openThreads,
+			openThreads: parsedSubject.openThreads,
 			reviewDecision: n.reviewDecision ?? null,
 			mergeable: n.mergeable ?? null,
 			reviews: (n.latestOpinionatedReviews?.nodes ?? []).map((r: Node) => ({

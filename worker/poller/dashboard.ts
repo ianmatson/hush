@@ -24,11 +24,16 @@ import { itemQueryFacts } from '../../src/lib/shared/categories';
 import { DASH_TTL, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
+import { sourceItemOf, withProjectStatuses } from './project-status';
 
 const RETRY_AFTER = 60_000;
 const MAX_LEFT_READS = 50;
 const NEW_ITEM_REASON = 'new-item';
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
+const SOURCE_FAILURE_KEEP_MS = DASH_TTL * 4;
+
+const sourceQueryKey = (query: ExpandedQuery) =>
+	JSON.stringify([query.section, query.q, query.filter ?? '']);
 
 async function findItems(token: string, queries: ExpandedQuery[]) {
 	const onBoards = queries.filter((q) => readsBoard(q.q));
@@ -39,6 +44,13 @@ async function findItems(token: string, queries: ExpandedQuery[]) {
 	]);
 	return {
 		hits: [...searches.hits, ...boards.hits],
+		failedSections: new Set([...(searches.failedSections ?? []), ...(boards.failedSections ?? [])]),
+		failedQueries: [
+			...(searches.failedQueries ??
+				searched.filter((query) => searches.failedSections?.has(query.section))),
+			...(boards.failedQueries ??
+				onBoards.filter((query) => boards.failedSections?.has(query.section)))
+		],
 		errors: [...new Set([...searches.errors, ...boards.errors])].slice(0, 3)
 	};
 }
@@ -146,7 +158,7 @@ export abstract class PollerDashboard extends PollerSync {
 		]);
 		const key = `dash:${kind}`;
 		const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
-		if (!force && cached?.sig === sig) {
+		if (!force && cached?.sig === sig && cached.data.sourceItems) {
 			if (Date.now() - cached.data.fetchedAt < DASH_TTL) return cached.data;
 			// Old: answer with it now, and refresh behind it. Open pages update when it is done.
 			return this.refreshDashboard(kind) ? { ...cached.data, refreshing: true } : cached.data;
@@ -154,10 +166,48 @@ export abstract class PollerDashboard extends PollerSync {
 
 		const { teams, error: teamError } = await this.teams();
 		const { queries, skipped } = expandSections(sections, dash, teams);
-		const { hits, errors: searchErrors } = await findItems(who.token, queries);
+		const {
+			hits,
+			errors: searchErrors,
+			failedSections,
+			failedQueries
+		} = await findItems(who.token, queries);
+		const sourceFailures = Object.fromEntries(
+			failedQueries.map((query) => [
+				sourceQueryKey(query),
+				cached?.sig === sig
+					? (cached.data.sourceFailures?.[sourceQueryKey(query)] ?? Date.now())
+					: Date.now()
+			])
+		);
+		if (cached?.sig === sig && failedSections.size) {
+			const previous = cached.data.sourceItems ?? cached.data.items;
+			const previousFacts = this.storedSubjectFacts(previous.map((item) => item.id));
+			for (const item of previous) {
+				const subject = previousFacts.get(item.id);
+				if (!subject) continue;
+				for (const query of failedQueries) {
+					if (Date.now() - sourceFailures[sourceQueryKey(query)] >= SOURCE_FAILURE_KEEP_MS)
+						continue;
+					if (item.sourceQueries && !item.sourceQueries.includes(sourceQueryKey(query))) continue;
+					if (!failedSections.has(query.section) || !item.sections.includes(query.section))
+						continue;
+					if (
+						item.sourceFilters?.[query.section] &&
+						!item.sourceFilters[query.section].includes(query.filter ?? '')
+					)
+						continue;
+					hits.push({ query, id: subject.id, key: item.id, updatedAt: item.updatedAt });
+				}
+			}
+		}
 
 		// Details: what Hush has, and only what needs a new read from GitHub.
-		const latest = new Map(hits.map((h) => [h.key, h]));
+		const latest = new Map<string, (typeof hits)[number]>();
+		for (const hit of hits) {
+			const previous = latest.get(hit.key);
+			if (!previous || hit.updatedAt > previous.updatedAt) latest.set(hit.key, hit);
+		}
 		const keys = [...latest.keys()];
 		const stored = this.storedFacts(keys);
 		const readKey = `dash:read:${kind}`;
@@ -186,7 +236,10 @@ export abstract class PollerDashboard extends PollerSync {
 		await this.decideSubjects(who, [...facts.values()]);
 		const decided = this.decisionsOf(who, [...facts.values()]);
 		const teamSet = new Set(teams.map((t) => t.slug));
-		const byId = new Map<string, { facts: DashFacts; filtersByView: Map<string, Set<string>> }>();
+		const byId = new Map<
+			string,
+			{ facts: DashFacts; filtersByView: Map<string, Set<string>>; sourceQueries: Set<string> }
+		>();
 		const listedWhenClosed = new Set<string>();
 		for (const h of hits) {
 			const subject = facts.get(h.key);
@@ -194,11 +247,13 @@ export abstract class PollerDashboard extends PollerSync {
 			if (!searchFindsOnlyOpen(h.query.q)) listedWhenClosed.add(h.key);
 			const e = byId.get(h.key) ?? {
 				facts: dashFactsOf(subject, who.me, teamSet, decided.get(h.key)),
-				filtersByView: new Map<string, Set<string>>()
+				filtersByView: new Map<string, Set<string>>(),
+				sourceQueries: new Set<string>()
 			};
 			const filters = e.filtersByView.get(h.query.section) ?? new Set<string>();
 			filters.add(h.query.filter ?? '');
 			e.filtersByView.set(h.query.section, filters);
+			e.sourceQueries.add(sourceQueryKey(h.query));
 			byId.set(h.key, e);
 		}
 		const boardSections = new Set(sections.filter((s) => readsBoard(s.query)).map((s) => s.id));
@@ -221,13 +276,20 @@ export abstract class PollerDashboard extends PollerSync {
 					({ facts, filtersByView }) =>
 						keepItem(facts, who.me, dash) || placedOnBoard(filtersByView.keys())
 				)
-				.map(({ facts, filtersByView }) => finish(facts, new Set(filtersByView.keys())))
+				.map(({ facts, filtersByView, sourceQueries }) => ({
+					...finish(facts, new Set(filtersByView.keys())),
+					sourceFilters: Object.fromEntries(
+						[...filtersByView].map(([id, filters]) => [id, [...filters]])
+					),
+					sourceQueries: [...sourceQueries]
+				}))
 		);
-		const found = this.keepHushMatches(who, this.placeItems(who, items, facts), byId, finish);
+		const sourceItems = this.placeItems(who, items, facts);
+		const found = this.keepHushMatches(who, sourceItems, byId, finish);
 		this.storeTracked(found, true);
 		const closedSinceIndexed = (i: DashItem) => i.state !== 'open' && !listedWhenClosed.has(i.id);
 		const placed = found.filter((i) => !closedSinceIndexed(i));
-		const complete = !searchErrors.length && !detailErrors.length;
+		const complete = !failedSections.size && !searchErrors.length && !detailErrors.length;
 		const closed = await this.keptAfterClose(
 			who,
 			cached?.data.items ?? [],
@@ -248,23 +310,48 @@ export abstract class PollerDashboard extends PollerSync {
 				[...placed, ...kept].map((i) => i.id)
 			);
 		await this.storeTrackedBuild(kind, complete);
-		const nodeIdOf = (key: string) => latest.get(key)?.id ?? '';
+		const retainedFacts = this.storedSubjectFacts(kept.map((i) => i.id));
+		const nodeIdOf = (key: string) =>
+			facts.get(key)?.id ?? latest.get(key)?.id ?? retainedFacts.get(key)?.id;
+		const keptById = new Map(kept.map((item) => [item.id, item]));
+		const allItems = [
+			...sourceItems.map((item) =>
+				keptById.has(item.id)
+					? { ...item, keptAfterClose: true, keptSections: keptById.get(item.id)!.sections }
+					: item
+			),
+			...kept.filter((item) => !sourceItems.some((source) => source.id === item.id))
+		];
 		const statuses =
 			who.projectAccess === 'none'
 				? null
-				: await itemStatuses(who.token, placed.map((i) => nodeIdOf(i.id)).filter(Boolean));
+				: await itemStatuses(
+						who.token,
+						allItems.flatMap((i) => {
+							const id = nodeIdOf(i.id);
+							return id ? [id] : [];
+						})
+					);
+		const projectData = withProjectStatuses(
+			allItems,
+			nodeIdOf,
+			statuses,
+			cached ? { ...cached.data, items: cached.data.sourceItems ?? cached.data.items } : undefined,
+			true
+		);
+		const projectItems = new Map(projectData.items.map((item) => [item.id, item]));
 		const data: DashResponse = {
 			kind,
-			items: [
-				...(statuses
-					? placed.map((i) => ({
-							...i,
-							projectStatus: statuses.statusOf.get(nodeIdOf(i.id)) ?? {}
-						}))
-					: placed),
-				...kept
-			],
-			...(statuses && { projects: statuses.projects }),
+			projects: projectData.projects,
+			sourceItems: projectData.items.map(sourceItemOf),
+			projectErrors: statuses?.errors ?? [],
+			sourceFailures,
+			items: [...placed, ...kept].map((item) => ({
+				...projectItems.get(item.id),
+				...item,
+				projectStatus: projectItems.get(item.id)?.projectStatus,
+				projectStatusUnknown: projectItems.get(item.id)?.projectStatusUnknown
+			})),
 			sections: views.map((v) => ({
 				id: v.id,
 				name: v.name,
@@ -347,7 +434,9 @@ export abstract class PollerDashboard extends PollerSync {
 				{
 					...finish(entry.facts, viewIds),
 					categories: i.categories,
-					pinnedCategories: i.pinnedCategories
+					pinnedCategories: i.pinnedCategories,
+					sourceFilters: i.sourceFilters,
+					sourceQueries: i.sourceQueries
 				}
 			];
 		});
