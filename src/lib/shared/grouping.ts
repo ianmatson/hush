@@ -25,6 +25,7 @@ interface FixedGrouping {
 export const NOT_SORTED_SECTION = 'Not sorted';
 export const NO_STATUS_SECTION = 'No status';
 export const NOT_IN_PROJECT_SECTION = 'Not in project';
+export const UNKNOWN_PROJECT_SECTION = 'Project data unavailable';
 export const EVERYTHING_ELSE_SECTION = 'Everything else';
 export const CLOSED_SECTION = 'Merged and closed';
 export const CUSTOM_GROUP_BY: GroupBy = 'custom';
@@ -233,13 +234,24 @@ function projectSections(items: DashItem[], projectKey: string, project?: DashPr
 		label: NOT_IN_PROJECT_SECTION,
 		items: []
 	};
+	const unknown: Section = {
+		key: UNKNOWN_PROJECT_SECTION,
+		label: UNKNOWN_PROJECT_SECTION,
+		items: []
+	};
 	for (const i of items) {
 		const status = i.projectStatus?.[projectKey];
 		const inProject = status !== undefined;
-		const section = inProject ? (statusSections.get(status ?? '') ?? noStatus) : notInProject;
+		const section = inProject
+			? (statusSections.get(status ?? '') ?? noStatus)
+			: i.projectStatusUnknown
+				? unknown
+				: notInProject;
 		section.items.push(i);
 	}
-	return [...statusSections.values(), noStatus, notInProject].filter((s) => s.items.length);
+	return [...statusSections.values(), noStatus, unknown, notInProject].filter(
+		(s) => s.items.length
+	);
 }
 
 function customSections(items: DashItem[], ctx: GroupContext): Section[] {

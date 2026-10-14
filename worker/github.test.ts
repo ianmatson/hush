@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	DETAILS_TTL,
 	fetchDetails,
+	fetchPeek,
+	fetchSubjects,
 	forTeams,
 	gh,
 	needsDetails,
@@ -114,6 +116,27 @@ describe('searchShort', () => {
 });
 
 describe('fetchDetails', () => {
+	it('does not replace subject facts from a partial node while retaining other complete nodes', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						nodes: [
+							{ id: 'PR_1', __typename: 'PullRequest', labels: null },
+							{ id: 'I_2', __typename: 'Issue' }
+						]
+					},
+					errors: [{ message: 'Labels failed', path: ['nodes', 0, 'labels'] }]
+				})
+			)
+		);
+		const result = await fetchDetails('t', 'ian', ['PR_1', 'I_2']);
+		expect(result.subjects.has('PR_1')).toBe(false);
+		expect(result.subjects.has('I_2')).toBe(true);
+		expect(result.errors).toEqual(['Labels failed']);
+	});
+
 	it('reads the full facts by node ID, 20 in a request', async () => {
 		const asked: string[][] = [];
 		vi.stubGlobal(
@@ -145,6 +168,83 @@ describe('fetchDetails', () => {
 		const r = await fetchDetails('t', 'ian', ids);
 		expect(asked.map((a) => a.length)).toEqual([20, 20, 5]);
 		expect(r.subjects.size).toBe(45);
+	});
+});
+
+describe('subject reads with partial GraphQL responses', () => {
+	it.each(['FORBIDDEN', 'NOT_FOUND'])(
+		'does not acknowledge a batch after a pathless %s error',
+		async (type) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () => Response.json({ errors: [{ message: 'Unavailable', type }] }))
+			);
+			const unavailable = new Set<string>();
+			const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
+			await fetchSubjects('t', refs, 'ian', unavailable);
+			expect(unavailable.size).toBe(0);
+		}
+	);
+	it('marks a definitively missing subject as unavailable instead of retryable', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ data: { t0: { issueOrPullRequest: null } } }))
+		);
+		const unavailable = new Set<string>();
+		await fetchSubjects('t', [{ key: 'n1', owner: 'o', repo: 'r', number: 1 }], 'ian', unavailable);
+		expect(unavailable).toEqual(new Set(['n1']));
+	});
+	it('does not store partial facts from an aliased recheck or notification read', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						t0: {
+							issueOrPullRequest: { id: 'PR_1', __typename: 'PullRequest', reviewRequests: null }
+						},
+						t1: { issueOrPullRequest: { id: 'I_2', __typename: 'Issue' } }
+					},
+					errors: [
+						{
+							message: 'Review requests failed',
+							path: ['t0', 'issueOrPullRequest', 'reviewRequests']
+						}
+					]
+				})
+			)
+		);
+		const result = await fetchSubjects(
+			't',
+			[
+				{ key: 'pr', owner: 'o', repo: 'r', number: 1 },
+				{ key: 'issue', owner: 'o', repo: 'r', number: 2 }
+			],
+			'ian'
+		);
+		expect(result.has('pr')).toBe(false);
+		expect(result.has('issue')).toBe(true);
+	});
+
+	it('opens a partial peek without storing its incomplete subject facts', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						repository: {
+							issueOrPullRequest: { id: 'PR_1', __typename: 'PullRequest', labels: null }
+						}
+					},
+					errors: [
+						{ message: 'Labels failed', path: ['repository', 'issueOrPullRequest', 'labels'] }
+					]
+				})
+			)
+		);
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.can.id).toBe('PR_1');
+		expect(result?.subject).toBeNull();
 	});
 });
 

@@ -13,7 +13,8 @@ import {
 import { isGitHubName, isItemNumber } from '../../src/lib/shared/item-page';
 import { userToken } from '../db';
 import { gh } from '../github';
-import { json, query, routes } from '../app';
+import { json, query, routes, type Ctx } from '../app';
+import { refreshWrittenSubject, subjectBeforeWrite } from '../subject-writes';
 import { writeBlockForNode } from '../write-gate';
 
 const PASSED_THROUGH_STATUSES = new Set([401, 403, 404]);
@@ -154,7 +155,13 @@ export function toReviewThread(node: ThreadNode): ReviewThread {
 	};
 }
 
-async function graphqlWrite(token: string, query: string, variables: Record<string, unknown>) {
+async function graphqlWrite(
+	c: Ctx,
+	token: string,
+	query: string,
+	variables: Record<string, unknown>
+) {
+	const subject = await subjectBeforeWrite(token, String(variables.id ?? variables.pr));
 	const res = await gh(token, '/graphql', {
 		method: 'POST',
 		body: JSON.stringify({ query, variables })
@@ -162,6 +169,7 @@ async function graphqlWrite(token: string, query: string, variables: Record<stri
 	const result = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] };
 	if (!res.ok || result.errors?.length)
 		return result.errors?.[0]?.message ?? `GitHub returned ${res.status}.`;
+	if (subject) await refreshWrittenSubject(c, subject);
 	return null;
 }
 
@@ -439,7 +447,7 @@ const app = routes()
 		const token = await userToken(c.env, c.get('user'));
 		const blocked = await writeBlockForNode(c.env, token, b.threadId);
 		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = await graphqlWrite(token, REPLY_TO_THREAD, {
+		const failure = await graphqlWrite(c, token, REPLY_TO_THREAD, {
 			id: b.threadId,
 			body: b.body
 		});
@@ -456,7 +464,7 @@ const app = routes()
 		const token = await userToken(c.env, c.get('user'));
 		const blocked = await writeBlockForNode(c.env, token, b.threadId);
 		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = await graphqlWrite(token, b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD, {
+		const failure = await graphqlWrite(c, token, b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD, {
 			id: b.threadId
 		});
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
@@ -469,7 +477,7 @@ const app = routes()
 		if (blocked) return c.json({ error: blocked }, 403);
 		const failure = b.single
 			? await postSingleComment(token, b)
-			: await graphqlWrite(token, ADD_REVIEW_THREAD, {
+			: await graphqlWrite(c, token, ADD_REVIEW_THREAD, {
 					pr: b.pullRequestId,
 					path: b.path,
 					body: b.body,
@@ -478,6 +486,7 @@ const app = routes()
 					startLine: b.startLine,
 					startSide: b.startSide
 				});
+		if (b.single && !failure) await refreshWrittenSubject(c, b);
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.post(
@@ -496,7 +505,7 @@ const app = routes()
 			const token = await userToken(c.env, c.get('user'));
 			const blocked = await writeBlockForNode(c.env, token, b.reviewId);
 			if (blocked) return c.json({ error: blocked }, 403);
-			const failure = await graphqlWrite(token, SUBMIT_REVIEW, {
+			const failure = await graphqlWrite(c, token, SUBMIT_REVIEW, {
 				id: b.reviewId,
 				event: b.event,
 				body: b.body.trim() || null
@@ -510,7 +519,7 @@ const app = routes()
 		const token = await userToken(c.env, c.get('user'));
 		const blocked = await writeBlockForNode(c.env, token, b.reviewId);
 		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = await graphqlWrite(token, DISCARD_REVIEW, { id: b.reviewId });
+		const failure = await graphqlWrite(c, token, DISCARD_REVIEW, { id: b.reviewId });
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.post('/api/diff/comment/edit', json<{ commentId: string; body: string | null }>(), async (c) => {
@@ -522,8 +531,8 @@ const app = routes()
 		const blocked = await writeBlockForNode(c.env, token, b.commentId);
 		if (blocked) return c.json({ error: blocked }, 403);
 		const failure = deleting
-			? await graphqlWrite(token, DELETE_COMMENT, { id: b.commentId })
-			: await graphqlWrite(token, EDIT_COMMENT, { id: b.commentId, body: b.body });
+			? await graphqlWrite(c, token, DELETE_COMMENT, { id: b.commentId })
+			: await graphqlWrite(c, token, EDIT_COMMENT, { id: b.commentId, body: b.body });
 		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.get('/api/diff/:owner/:repo/:number/viewed', async (c) => {

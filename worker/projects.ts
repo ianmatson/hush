@@ -12,13 +12,14 @@ import {
 } from '../src/lib/shared/projects';
 import { SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
 import type { DashProject } from '../src/lib/shared/types';
-import { gh, type SearchHit } from './github';
+import { gh, hasGraphqlErrorAt, type GraphqlError, type SearchHit } from './github';
 
 type Node = Record<string, any>;
 
 interface GraphqlAnswer {
 	data: Node | null;
 	errors: string[];
+	graphqlErrors?: GraphqlError[];
 }
 
 async function graphql(
@@ -33,11 +34,12 @@ async function graphql(
 	if (!res) return { data: null, errors: ['GitHub did not answer. Hush tries again later.'] };
 	const json = (await res.json().catch(() => null)) as {
 		data?: Node;
-		errors?: { message: string }[];
+		errors?: GraphqlError[];
 	} | null;
 	const errors = (json?.errors ?? []).map((e) => e.message);
+	if (!json && res.ok) errors.push('GitHub did not answer. Hush tries again later.');
 	if (!res.ok && !errors.length) errors.push(`GitHub returned ${res.status}.`);
-	return { data: json?.data ?? null, errors };
+	return { data: res.ok ? (json?.data ?? null) : null, errors, graphqlErrors: json?.errors };
 }
 
 const friendly = (errors: string[]) =>
@@ -59,9 +61,16 @@ const notFound = (board: BoardQuery) =>
 export async function boardShort(
 	token: string,
 	queries: ExpandedQuery[]
-): Promise<{ hits: SearchHit[]; errors: string[] }> {
+): Promise<{
+	hits: SearchHit[];
+	errors: string[];
+	failedSections: Set<string>;
+	failedQueries?: ExpandedQuery[];
+}> {
 	const hits: SearchHit[] = [];
 	const errors: string[] = [];
+	const failedSections = new Set<string>();
+	const failedQueries: ExpandedQuery[] = [];
 	await Promise.all(
 		queries.map(async (query) => {
 			const board = boardQueryOf(query.q);
@@ -74,7 +83,18 @@ export async function boardShort(
 			});
 			errors.push(...friendly(answer.errors));
 			const project = boardOf(answer.data);
+			if (answer.errors.length || !project) {
+				failedSections.add(query.section);
+				const definitive =
+					!project &&
+					(!answer.errors.length ||
+						answer.graphqlErrors?.some(
+							(error) => error.type === 'NOT_FOUND' || error.type === 'FORBIDDEN'
+						));
+				if (!definitive) failedQueries.push(query);
+			}
 			if (!project) {
+				failedSections.add(query.section);
 				if (!answer.errors.length) errors.push(notFound(board));
 				return;
 			}
@@ -90,7 +110,7 @@ export async function boardShort(
 			}
 		})
 	);
-	return { hits, errors: [...new Set(errors)].slice(0, 3) };
+	return { hits, errors: [...new Set(errors)].slice(0, 3), failedSections, failedQueries };
 }
 
 export async function boardCount(token: string, query: string): Promise<number | null> {
@@ -109,9 +129,22 @@ export async function boardCount(token: string, query: string): Promise<number |
 
 const STATUSES_CHUNK = 50;
 
-const ITEM_STATUSES = `query($ids: [ID!]!) { nodes(ids: $ids) {
-  ... on PullRequest { id projectItems(first: 10, includeArchived: false) { nodes { ...Status } } }
-  ... on Issue { id projectItems(first: 10, includeArchived: false) { nodes { ...Status } } }
+function usableStatusNode(node: Node | null, index: number, errors: GraphqlError[]): boolean {
+	if (!node?.id) return false;
+	const affected = errors.filter((error) => hasGraphqlErrorAt([error], ['nodes', index]));
+	return affected.every(
+		(error) =>
+			(error.type === 'FORBIDDEN' || error.type === 'NOT_FOUND') &&
+			error.path?.[2] === 'projectItems' &&
+			error.path?.[3] === 'nodes' &&
+			error.path?.[5] === 'project' &&
+			typeof node.projectItems?.pageInfo?.hasNextPage === 'boolean'
+	);
+}
+
+const ITEM_STATUSES = `query($ids: [ID!]!, $after: String) { nodes(ids: $ids) {
+  ... on PullRequest { id projectItems(first: 100, after: $after, includeArchived: false) { pageInfo { hasNextPage endCursor } nodes { ...Status } } }
+  ... on Issue { id projectItems(first: 100, after: $after, includeArchived: false) { pageInfo { hasNextPage endCursor } nodes { ...Status } } }
 } }
 fragment Status on ProjectV2Item {
   project { number title url closed
@@ -124,13 +157,23 @@ fragment Status on ProjectV2Item {
 export interface ItemStatuses {
 	projects: DashProject[];
 	statusOf: Map<string, Record<string, string | null>>;
+	incomplete?: Set<string>;
 }
 
 export function readItemStatuses(nodes: (Node | null)[]): ItemStatuses {
 	const projects = new Map<string, DashProject>();
 	const statusOf = new Map<string, Record<string, string | null>>();
+	const incomplete = new Set<string>();
 	for (const n of nodes) {
-		if (!n?.id) continue;
+		if (!n?.id || !Array.isArray(n.projectItems?.nodes)) continue;
+		if (
+			n.projectItems.nodes.some(
+				(item: Node | null) =>
+					!item?.project ||
+					(!item.project.closed && (!item.project.owner?.login || !item.project.number))
+			)
+		)
+			incomplete.add(n.id);
 		const statuses: Record<string, string | null> = {};
 		for (const item of n.projectItems?.nodes ?? []) {
 			const p = item?.project;
@@ -152,7 +195,7 @@ export function readItemStatuses(nodes: (Node | null)[]): ItemStatuses {
 		}
 		statusOf.set(n.id, statuses);
 	}
-	return { projects: [...projects.values()], statusOf };
+	return { projects: [...projects.values()], statusOf, incomplete };
 }
 
 export async function itemStatuses(
@@ -162,9 +205,43 @@ export async function itemStatuses(
 	const nodes: (Node | null)[] = [];
 	const errors: string[] = [];
 	for (let i = 0; i < ids.length; i += STATUSES_CHUNK) {
-		const answer = await graphql(token, ITEM_STATUSES, { ids: ids.slice(i, i + STATUSES_CHUNK) });
+		const answer = await graphql(token, ITEM_STATUSES, {
+			ids: ids.slice(i, i + STATUSES_CHUNK),
+			after: null
+		});
 		errors.push(...friendly(answer.errors));
-		nodes.push(...((answer.data?.nodes as (Node | null)[] | undefined) ?? []));
+		const pageNodes = (answer.data?.nodes as (Node | null)[] | undefined) ?? [];
+		const completeNodes = await Promise.all(
+			pageNodes.map(async (node, index) => {
+				if (!usableStatusNode(node, index, answer.graphqlErrors ?? [])) return null;
+				if (!node) return null;
+				const items = [...(node.projectItems?.nodes ?? [])];
+				let pageInfo = node.projectItems?.pageInfo;
+				const cursors = new Set<string>();
+				while (pageInfo?.hasNextPage) {
+					const cursor = pageInfo.endCursor;
+					if (!cursor || cursors.has(cursor)) {
+						errors.push('GitHub did not return all project memberships. Hush tries again later.');
+						return null;
+					}
+					cursors.add(cursor);
+					const next = await graphql(token, ITEM_STATUSES, { ids: [node.id], after: cursor });
+					errors.push(...friendly(next.errors));
+					const nextNode = next.data?.nodes?.[0];
+					if (
+						!Array.isArray(nextNode?.projectItems?.nodes) ||
+						!usableStatusNode(nextNode, 0, next.graphqlErrors ?? [])
+					)
+						return null;
+					items.push(...nextNode.projectItems.nodes);
+					pageInfo = nextNode.projectItems.pageInfo;
+				}
+				return Array.isArray(node.projectItems?.nodes)
+					? { ...node, projectItems: { nodes: items } }
+					: null;
+			})
+		);
+		nodes.push(...completeNodes);
 	}
 	return { ...readItemStatuses(nodes), errors: [...new Set(errors)].slice(0, 3) };
 }

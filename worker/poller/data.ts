@@ -402,7 +402,9 @@ export abstract class PollerData extends PollerDashboard {
 			])
 		);
 		const now = Date.now();
-		const items = data.items.filter((i) => !i.keptAfterClose || stillKept(i, now));
+		const items = data.items
+			.filter((i) => !i.keptAfterClose || stillKept(i, now))
+			.map(({ sourceFilters: _filters, sourceQueries: _queries, ...item }) => item);
 		const subjects = this.all<{ key: string; facts: string }>(
 			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
 			JSON.stringify(items.map((i) => i.id))
@@ -419,7 +421,13 @@ export abstract class PollerData extends PollerDashboard {
 			i.seenAt = s?.seenAt ?? null;
 			i.unread = isUnread(i.seenAt, i.changes);
 		}
-		return { ...data, items };
+		const {
+			sourceItems: _sourceItems,
+			projectErrors: _projectErrors,
+			sourceFailures: _sourceFailures,
+			...visible
+		} = data;
+		return { ...visible, items };
 	}
 
 	async snoozeItems(items: ItemRef[], choice: SnoozeChoice): Promise<{ ok: true }> {

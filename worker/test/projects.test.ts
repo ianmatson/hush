@@ -1,5 +1,31 @@
-import { describe, expect, it } from 'vitest';
-import { readItemStatuses } from '../projects';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { boardShort, itemStatuses, readItemStatuses } from '../projects';
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('definitive board failures', () => {
+	it.each([undefined, 'NOT_FOUND', 'FORBIDDEN'])(
+		'does not carry a missing board with error type %s',
+		async (type) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () =>
+					Response.json({
+						data: { repositoryOwner: { projectV2: null } },
+						...(type ? { errors: [{ type, message: 'Unavailable' }] } : {})
+					})
+				)
+			);
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const result = await boardShort('test', [
+					{ section: 'website', q: 'project:acme/7 status:Todo' }
+				]);
+				expect(result.failedQueries).toEqual([]);
+				expect(result.failedSections.has('website')).toBe(true);
+			}
+		}
+	);
+});
 
 const board = (over: Record<string, unknown> = {}) => ({
 	number: 7,
@@ -50,8 +76,8 @@ describe('readItemStatuses', () => {
 		});
 	});
 
-	it('skips a project that GitHub did not name an owner for', () => {
-		const { projects, statusOf } = readItemStatuses([
+	it('marks membership as incomplete when GitHub did not name a project owner', () => {
+		const { projects, statusOf, incomplete } = readItemStatuses([
 			{
 				id: 'PR_1',
 				projectItems: { nodes: [{ project: board({ owner: {} }), fieldValueByName: null }] }
@@ -59,5 +85,117 @@ describe('readItemStatuses', () => {
 		]);
 		expect(projects).toEqual([]);
 		expect(statusOf.get('PR_1')).toEqual({});
+		expect(incomplete?.has('PR_1')).toBe(true);
+	});
+
+	it('does not treat a missing project connection as confirmed absence', () => {
+		const { statusOf } = readItemStatuses([{ id: 'PR_1', projectItems: null }]);
+		expect(statusOf.has('PR_1')).toBe(false);
+	});
+});
+
+describe('itemStatuses', () => {
+	it('keeps visible project memberships when a complete connection contains a hidden project', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						nodes: [
+							{
+								id: 'PR_1',
+								projectItems: {
+									pageInfo: { hasNextPage: false, endCursor: null },
+									nodes: [
+										{ project: board(), fieldValueByName: { optionId: 'doing' } },
+										{ project: null, fieldValueByName: null }
+									]
+								}
+							}
+						]
+					},
+					errors: [
+						{
+							type: 'FORBIDDEN',
+							message: 'Project hidden',
+							path: ['nodes', 0, 'projectItems', 'nodes', 1, 'project']
+						}
+					]
+				})
+			)
+		);
+		const result = await itemStatuses('t', ['PR_1']);
+		expect(result.statusOf.get('PR_1')).toEqual({ 'acme/7': 'doing' });
+		expect(result.incomplete?.has('PR_1')).toBe(true);
+		expect(result.errors).toEqual(['Project hidden']);
+	});
+	it('keeps successful nodes but discards membership with a GraphQL field error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						nodes: [
+							{ id: 'PR_1', projectItems: { nodes: [] } },
+							{ id: 'I_2', projectItems: { nodes: [] } }
+						]
+					},
+					errors: [{ message: 'Not allowed', path: ['nodes', 0, 'projectItems'] }]
+				})
+			)
+		);
+		const result = await itemStatuses('t', ['PR_1', 'I_2']);
+		expect(result.statusOf.has('PR_1')).toBe(false);
+		expect(result.statusOf.get('I_2')).toEqual({});
+		expect(result.errors).toEqual(['Not allowed']);
+	});
+
+	it('reads all pages of membership before replacing the stored value', async () => {
+		const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+			const { variables } = JSON.parse(String(init?.body));
+			const first = variables.after === null;
+			return Response.json({
+				data: {
+					nodes: [
+						{
+							id: 'PR_1',
+							projectItems: {
+								pageInfo: { hasNextPage: first, endCursor: first ? 'next' : null },
+								nodes: [{ project: board({ number: first ? 7 : 9 }), fieldValueByName: null }]
+							}
+						}
+					]
+				}
+			});
+		});
+		vi.stubGlobal('fetch', fetch);
+		const result = await itemStatuses('t', ['PR_1']);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(result.statusOf.get('PR_1')).toEqual({ 'acme/7': null, 'acme/9': null });
+	});
+
+	it('discards all pages for an item if a later membership page fails', async () => {
+		const fetch = vi
+			.fn()
+			.mockResolvedValueOnce(
+				Response.json({
+					data: {
+						nodes: [
+							{
+								id: 'PR_1',
+								projectItems: {
+									pageInfo: { hasNextPage: true, endCursor: 'next' },
+									nodes: [{ project: board(), fieldValueByName: null }]
+								}
+							}
+						]
+					}
+				})
+			)
+			.mockResolvedValueOnce(new Response('', { status: 502 }));
+		vi.stubGlobal('fetch', fetch);
+		const result = await itemStatuses('t', ['PR_1']);
+		expect(result.statusOf.has('PR_1')).toBe(false);
+		expect(result.errors).toEqual(['GitHub returned 502.']);
 	});
 });

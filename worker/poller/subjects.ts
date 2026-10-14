@@ -13,6 +13,11 @@ import type { ItemMark } from '../../src/lib/shared/item-snooze';
 import { itemPush, type FactEvent } from '../../src/lib/shared/push-facts';
 import type { SnoozeEvent } from '../../src/lib/shared/snooze';
 import { fetchSubjects } from '../github';
+import { itemStatuses } from '../projects';
+import { readsBoard } from '../../src/lib/shared/projects';
+import { sourceItemOf, withProjectStatuses } from './project-status';
+import { itemQueryFacts } from '../../src/lib/shared/categories';
+import { viewsPassingFilters } from '../../src/lib/shared/item-views';
 import type { PushCandidate } from './alerts';
 import { PollerDecisions } from './decisions';
 import { TRACKED_SEEN_REFRESH, type Who } from './shared';
@@ -32,7 +37,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		who: Who,
 		subjects: SubjectFacts[],
 		opts: { dash?: boolean; quiet?: boolean; mentions?: Map<string, FactEvent> } = {}
-	): Promise<{ changed: number }> {
+	): Promise<{ changed: number; dashChanged: boolean }> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
 		const stored = new Map<string, string>();
@@ -65,13 +70,9 @@ export abstract class PollerSubjects extends PollerDecisions {
 			);
 			await this.pushFactsOf(who, pushable, stored, decided, mentions);
 		}
-		if (opts.dash !== false)
-			await this.patchDashCaches(
-				who,
-				changed.map(([, x]) => x),
-				decided
-			);
-		return { changed: changed.length };
+		const dashChanged =
+			opts.dash !== false ? await this.patchDashCaches(who, subjects, decided) : false;
+		return { changed: changed.length, dashChanged };
 	}
 
 	private async pushFactsOf(
@@ -133,29 +134,51 @@ export abstract class PollerSubjects extends PollerDecisions {
 	protected async patchDashCaches(
 		who: Who,
 		subs: SubjectFacts[],
-		decided: Map<string, SubjectDecisions> = new Map()
+		decided: Map<string, SubjectDecisions> = new Map(),
+		refreshProjects = true
 	) {
-		if (!subs.length) return;
+		if (!subs.length) return false;
 		const { dash } = who.settings;
 		let teamSet: Set<string> | null = null;
+		let changed = false;
 		for (const kind of ['pr', 'issue'] as const) {
 			const key = `dash:${kind}`;
-			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
+			const initial = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
 			// Dashboard items use the PR or issue key, the same key as threads (see dashFactsOf).
 			const byId = new Map(
 				subs.filter((x) => x.kind === kind).map((x) => [subjectKey(x.repo, x.number), x])
 			);
-			if (!cached || !cached.data.items.some((i) => byId.has(i.id))) continue;
-			teamSet ??= new Set((await this.teams()).teams.map((t) => t.slug));
+			if (!initial || !(initial.data.sourceItems ?? initial.data.items).some((i) => byId.has(i.id)))
+				continue;
+			const statuses =
+				who.projectAccess === 'none'
+					? null
+					: !refreshProjects
+						? { projects: [], statusOf: new Map(), errors: initial.data.projectErrors ?? [] }
+						: await itemStatuses(
+								who.token,
+								(initial.data.sourceItems ?? initial.data.items).flatMap((item) => {
+									const sub = byId.get(item.id);
+									return sub ? [sub.id] : [];
+								})
+							);
+			if (refreshProjects) teamSet ??= new Set((await this.teams()).teams.map((t) => t.slug));
+			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
+			if (!cached) continue;
+			teamSet ??= new Set(cached.data.teams.map((team) => team.slug));
 			const names = Object.fromEntries(cached.data.sections.map((x) => [x.id, x.name]));
 			const now = Date.now();
 			const patched = sortItems(
-				cached.data.items.flatMap((i) => {
+				this.restoreSourceItems(who, cached.data).flatMap((i) => {
 					const sub = byId.get(i.id);
 					if (!sub) return [i];
 					const f = dashFactsOf(sub, who.me, teamSet!, decided.get(i.id));
-					const kept = keptAfterChange(i, f);
-					if (!keepItem(f, who.me, dash) || (kept && !stillKept(f, now))) return [];
+					const visible = cached.data.items.find((item) => item.id === i.id);
+					const kept = !!visible && keptAfterChange(visible, f);
+					const onBoard = who.settings.views.some(
+						(view) => i.sections.includes(view.id) && view.searches.some(readsBoard)
+					);
+					if ((!keepItem(f, who.me, dash) && !onBoard) || (kept && !stillKept(f, now))) return [];
 					const item = finishItem(
 						f,
 						i.sections,
@@ -164,22 +187,100 @@ export abstract class PollerSubjects extends PollerDecisions {
 						dash.staleDays,
 						now
 					);
-					return [kept ? { ...item, keptAfterClose: true } : item];
+					return [
+						{
+							...item,
+							sourceFilters: i.sourceFilters,
+							sourceQueries: i.sourceQueries,
+							...(kept && { keptAfterClose: true, keptSections: visible!.sections })
+						}
+					];
 				})
 			);
-			const items = this.placeItems(who, patched, byId);
+			const projectData = withProjectStatuses(patched, (id) => byId.get(id)?.id, statuses, {
+				...cached.data,
+				items: cached.data.sourceItems ?? cached.data.items
+			});
+			const sourceItems = this.placeItems(who, projectData.items, byId);
+			const projectErrors = refreshProjects
+				? (statuses?.errors ?? [])
+				: (cached.data.projectErrors ?? []);
+			const items = sortItems(
+				sourceItems.flatMap((item) => {
+					if (item.keptAfterClose)
+						return [{ ...item, sections: item.keptSections ?? item.sections }];
+					if (!item.sourceFilters) return [item];
+					const viewIds = viewsPassingFilters(
+						item.sections,
+						new Map(
+							Object.entries(item.sourceFilters).map(([id, filters]) => [id, new Set(filters)])
+						),
+						itemQueryFacts(item, who.me, who.settings, now)
+					);
+					if (!viewIds.size) return [];
+					if (viewIds.size === item.sections.length) return [item];
+					const passing = item.sections.filter((id) => viewIds.has(id));
+					return [
+						finishItem(
+							item,
+							passing,
+							passing.map((id) => names[id] ?? id),
+							who.me,
+							dash.staleDays,
+							now
+						)
+					];
+				})
+			);
 			this.storeTracked(items);
 			const data: DashResponse = {
 				...cached.data,
+				projects: projectData.projects,
 				items,
+				sourceItems: sourceItems.map(sourceItemOf),
+				projectErrors,
+				errors: [
+					...new Set([
+						...cached.data.errors.filter((error) => !cached.data.projectErrors?.includes(error)),
+						...projectErrors
+					])
+				].slice(0, 3),
 				sections: cached.data.sections.map((x) => ({
 					...x,
 					count: items.filter((i) => i.sections.includes(x.id) && !i.keptAfterClose).length
 				}))
 			};
+			if (JSON.stringify(data) === JSON.stringify(cached.data)) continue;
 			await this.ctx.storage.put(key, { sig: cached.sig, data });
 			this.broadcast({ type: 'dash', kind });
+			changed = true;
 		}
+		return changed;
+	}
+
+	private restoreSourceItems(who: Who, data: DashResponse): DashItem[] {
+		if (!data.sourceItems) return data.items;
+		const facts = this.storedSubjectFacts(data.sourceItems.map((item) => item.id));
+		const decisions = this.decisionsOf(who, [...facts.values()]);
+		const teams = new Set(data.teams.map((team) => team.slug));
+		const names = new Map(data.sections.map((section) => [section.id, section.name]));
+		return data.sourceItems.flatMap((source) => {
+			const subject = facts.get(source.id);
+			const visible = data.items.find((item) => item.id === source.id);
+			if (!subject) return visible ? [{ ...visible, ...source }] : [];
+			return [
+				{
+					...finishItem(
+						dashFactsOf(subject, who.me, teams, decisions.get(source.id)),
+						source.sections,
+						source.sections.map((id) => names.get(id) ?? id),
+						who.me,
+						who.settings.dash.staleDays
+					),
+					...source
+				}
+			];
+		});
 	}
 
 	protected storedSubjectFacts(keys: string[]): Map<string, SubjectFacts> {
@@ -274,22 +375,22 @@ export abstract class PollerSubjects extends PollerDecisions {
 	}
 
 	protected async rePlaceCachedItems(who: Who): Promise<void> {
-		for (const kind of ['pr', 'issue'] as const) {
-			const key = `dash:${kind}`;
-			const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
-			if (!cached) continue;
-			const items = this.placeItems(who, cached.data.items);
-			this.storeTracked(items);
-			await this.ctx.storage.put(key, { sig: cached.sig, data: { ...cached.data, items } });
-			this.broadcast({ type: 'dash', kind });
-		}
+		const subjects = [...this.storedSubjectFacts(await this.cachedItemKeys()).values()];
+		const changed = await this.patchDashCaches(
+			who,
+			subjects,
+			this.decisionsOf(who, subjects),
+			false
+		);
+		if (!changed)
+			for (const kind of ['pr', 'issue'] as const) this.broadcast({ type: 'dash', kind });
 	}
 
 	protected async cachedItemKeys(): Promise<string[]> {
 		const keys = new Set<string>();
 		for (const kind of ['pr', 'issue'] as const) {
 			const cached = await this.ctx.storage.get<{ data: DashResponse }>(`dash:${kind}`);
-			for (const i of cached?.data.items ?? []) keys.add(i.id);
+			for (const i of cached?.data.sourceItems ?? cached?.data.items ?? []) keys.add(i.id);
 		}
 		return [...keys];
 	}
@@ -317,6 +418,6 @@ export abstract class PollerSubjects extends PollerDecisions {
 		const who = await this.who();
 		if (!who) return { changed: false };
 		const out = await this.record(who, [sub]);
-		return { changed: out.changed > 0 };
+		return { changed: out.changed > 0 || out.dashChanged };
 	}
 }

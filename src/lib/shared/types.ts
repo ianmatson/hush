@@ -307,6 +307,8 @@ export interface DashItem {
 	pinnedCategories?: string[];
 	// Computed.
 	sections: string[];
+	sourceFilters?: Record<string, string[]>;
+	sourceQueries?: string[];
 	turn: Turn;
 	turnReason: string;
 	/** When the current turn started, best estimate. */
@@ -318,6 +320,7 @@ export interface DashItem {
 	priority: number;
 	dismissed: boolean;
 	keptAfterClose?: boolean;
+	keptSections?: string[];
 	/** You muted it: hidden until you unmute it (not until it changes). */
 	muted?: boolean;
 	/** What changed since you last looked (none before your first look). */
@@ -327,6 +330,7 @@ export interface DashItem {
 	unread?: boolean;
 	snooze?: SnoozeChoice;
 	projectStatus?: Record<string, string | null>;
+	projectStatusUnknown?: boolean;
 }
 
 export interface DashProjectStatus {
@@ -342,9 +346,25 @@ export interface DashProject {
 	statuses: DashProjectStatus[];
 }
 
+export type DashSourceItem = Pick<
+	DashItem,
+	| 'id'
+	| 'updatedAt'
+	| 'sections'
+	| 'sourceFilters'
+	| 'sourceQueries'
+	| 'keptAfterClose'
+	| 'keptSections'
+	| 'projectStatus'
+	| 'projectStatusUnknown'
+>;
+
 export interface DashResponse {
 	kind: DashKind;
 	items: DashItem[];
+	sourceItems?: DashSourceItem[];
+	projectErrors?: string[];
+	sourceFailures?: Record<string, number>;
 	sections: { id: string; name: string; count: number; skipped?: string }[];
 	teams: TeamDTO[];
 	fetchedAt: number;

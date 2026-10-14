@@ -42,9 +42,11 @@ const app = routes()
 					404
 				);
 			// The peek is a fresh read too: store it, so the dashboards agree with it.
-			const sync = await poller(c.env, u.id)
-				.recordFetched(found.subject)
-				.catch(() => ({ changed: false, resolved: [] }));
+			const sync = found.subject
+				? await poller(c.env, u.id)
+						.recordFetched(found.subject)
+						.catch(() => ({ changed: false }))
+				: { changed: false };
 			return c.json({ ...found.peek, sync } satisfies PeekDTO, 200, {
 				'Cache-Control': 'private, no-store'
 			});

@@ -72,6 +72,7 @@ Group by lists each open GitHub project that holds an item of the view, with the
 
 - An item that is in the project with no Status is in **No status**.
 - An item that is not in the project is in **Not in project**.
+- If GitHub cannot return an item's project membership and Hush has no known value, the item is in **Project data unavailable**.
 - To change an item's Status, open it in the [peek](/docs/peek). The list moves it when Hush reads the project again.
 - Hush needs project access: sign in with GitHub again if Group by says **Project status needs project access**. A custom token needs the `read:project` scope (`project` to change a Status).
 

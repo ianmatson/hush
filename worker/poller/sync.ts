@@ -16,6 +16,37 @@ const marks = (n: number) => Array(n).fill('?').join(',');
 const CHUNK = 90;
 const TEAM_MENTION = 'team_mention';
 const MENTION_REASONS = new Set(['mention', TEAM_MENTION]);
+const PENDING_NOTIFICATIONS_KEY = 'pendingNotifications';
+const NOTIFICATION_READ_ATTEMPTS = 3;
+
+type NotificationRef = Pick<GhNotification, 'id' | 'unread' | 'reason' | 'updated_at'> & {
+	subject: Pick<GhNotification['subject'], 'type' | 'url'>;
+	repository: Pick<GhNotification['repository'], 'full_name' | 'name'> & {
+		owner: { login: string };
+	};
+};
+
+function notificationRef(notification: GhNotification): NotificationRef {
+	const { id, unread, reason, updated_at, subject, repository } = notification;
+	return {
+		id,
+		unread,
+		reason,
+		updated_at,
+		subject: { type: subject.type, url: subject.url },
+		repository: {
+			full_name: repository.full_name,
+			name: repository.name,
+			owner: { login: repository.owner.login }
+		}
+	};
+}
+
+interface PendingNotification {
+	notification: NotificationRef;
+	attempts: number;
+	quiet: boolean;
+}
 
 const TRACKED_BUILD_KEY = (kind: DashKind) => `trackedBuild:${kind}`;
 const TRACKED_REBUILD_KEY = 'trackedRebuildAt';
@@ -25,12 +56,13 @@ export interface TrackedBuild {
 	complete: boolean;
 }
 
-function itemKeyOf(n: GhNotification): string | null {
+function itemKeyOf(n: NotificationRef): string | null {
 	const num = subjectNumber(n);
 	return num ? subjectKey(n.repository.full_name, num) : null;
 }
 
-const kindOf = (n: GhNotification): DashKind => (n.subject.type === 'PullRequest' ? 'pr' : 'issue');
+const kindOf = (n: NotificationRef): DashKind =>
+	n.subject.type === 'PullRequest' ? 'pr' : 'issue';
 
 export abstract class PollerSync extends PollerSubjects {
 	protected abstract rebuildTracked(kind: DashKind): Promise<void>;
@@ -43,7 +75,7 @@ export abstract class PollerSync extends PollerSubjects {
 		await this.ctx.storage.put(TRACKED_BUILD_KEY(kind), { at: Date.now(), complete });
 	}
 
-	private async onlyTracked(items: GhNotification[]): Promise<GhNotification[]> {
+	private async onlyTracked(items: NotificationRef[]): Promise<NotificationRef[]> {
 		const work = items.filter((n) => itemKeyOf(n));
 		if (!work.length) return [];
 		const keys = work.map((n) => itemKeyOf(n)!);
@@ -53,7 +85,7 @@ export abstract class PollerSync extends PollerSubjects {
 		return work.filter((n) => known.has(itemKeyOf(n)!));
 	}
 
-	private async rebuildFor(unknown: GhNotification[]): Promise<boolean> {
+	private async rebuildFor(unknown: NotificationRef[]): Promise<boolean> {
 		const last = (await this.ctx.storage.get<number>(TRACKED_REBUILD_KEY)) ?? 0;
 		if (Date.now() - last < TRACKED_REBUILD_GAP) return false;
 		const kinds: DashKind[] = [];
@@ -102,10 +134,13 @@ export abstract class PollerSync extends PollerSubjects {
 			))
 				known.set(r.id, r.updated_at);
 		}
-		const fresh = items.filter((n) => known.get(n.id) !== n.updated_at);
+		return items.filter((n) => known.get(n.id) !== n.updated_at);
+	}
+
+	private rememberNotifications(items: NotificationRef[]) {
 		const now = Date.now();
 		this.transaction(() => {
-			for (const n of fresh)
+			for (const n of items)
 				this.run(
 					`INSERT INTO notifications (id, updated_at, seen_at) VALUES (?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at, seen_at = excluded.seen_at`,
@@ -114,28 +149,68 @@ export abstract class PollerSync extends PollerSubjects {
 					now
 				);
 		});
-		return fresh;
 	}
 
 	protected async ingest(who: Who, items: GhNotification[], initialized: boolean): Promise<void> {
-		const changed = await this.onlyTracked(this.newNotifications(items));
-		if (!changed.length) return;
+		const pending = new Map(
+			((await this.ctx.storage.get<PendingNotification[]>(PENDING_NOTIFICATIONS_KEY)) ?? []).map(
+				(entry) => [entry.notification.id, entry]
+			)
+		);
+		for (const notification of this.newNotifications(items)) {
+			if (!itemKeyOf(notification)) continue;
+			if (pending.get(notification.id)?.notification.updated_at === notification.updated_at)
+				continue;
+			pending.set(notification.id, {
+				notification: notificationRef(notification),
+				attempts: 0,
+				quiet: !initialized
+			});
+		}
+		if (!pending.size) return;
+		for (const entry of pending.values()) entry.attempts++;
+		await this.ctx.storage.put(PENDING_NOTIFICATIONS_KEY, [...pending.values()]);
+		const changed = await this.onlyTracked(
+			[...pending.values()].map((entry) => entry.notification)
+		);
 		const refs: SubjectRef[] = changed.map((n) => ({
 			key: n.id,
 			owner: n.repository.owner.login,
 			repo: n.repository.name,
 			number: subjectNumber(n)!
 		}));
-		const fetched = await fetchSubjects(who.token, refs, who.me);
-		const mentions = new Map<string, FactEvent>();
-		if (initialized)
-			for (const n of changed)
-				if (n.unread && MENTION_REASONS.has(n.reason))
-					mentions.set(itemKeyOf(n)!, {
-						fact: 'mentioned',
-						title: n.reason === TEAM_MENTION ? 'Your team was mentioned' : 'You were mentioned'
-					});
-		await this.record(who, [...fetched.values()], { quiet: !initialized, mentions });
+		const unavailable = new Set<string>();
+		const fetched = await fetchSubjects(who.token, refs, who.me, unavailable);
+		for (const quiet of [true, false]) {
+			const notifications = changed.filter(
+				(n) => fetched.has(n.id) && pending.get(n.id)!.quiet === quiet
+			);
+			if (!notifications.length) continue;
+			const mentions = new Map<string, FactEvent>();
+			if (!quiet)
+				for (const n of notifications)
+					if (n.unread && MENTION_REASONS.has(n.reason))
+						mentions.set(itemKeyOf(n)!, {
+							fact: 'mentioned',
+							title: n.reason === TEAM_MENTION ? 'Your team was mentioned' : 'You were mentioned'
+						});
+			await this.record(
+				who,
+				notifications.map((n) => fetched.get(n.id)!),
+				{ quiet, mentions }
+			);
+		}
+		const handled = [...pending.values()]
+			.filter(
+				(entry) =>
+					fetched.has(entry.notification.id) ||
+					unavailable.has(entry.notification.id) ||
+					entry.attempts >= NOTIFICATION_READ_ATTEMPTS
+			)
+			.map((entry) => entry.notification);
+		this.rememberNotifications(handled);
+		for (const n of handled) pending.delete(n.id);
+		await this.ctx.storage.put(PENDING_NOTIFICATIONS_KEY, [...pending.values()]);
 	}
 
 	protected async cleanup() {
