@@ -248,6 +248,51 @@ describe('subject reads with partial GraphQL responses', () => {
 	});
 });
 
+describe('peek comment editing permissions', () => {
+	it.each(['Issue', 'PullRequest'])(
+		'keeps Markdown and only permits owned editable entries on a %s',
+		async (type) => {
+			const entries = [
+				{ __typename: 'IssueComment', viewerDidAuthor: true, viewerCanUpdate: true },
+				{ __typename: 'IssueComment', viewerDidAuthor: false, viewerCanUpdate: true },
+				{ __typename: 'IssueComment', viewerDidAuthor: true, viewerCanUpdate: false },
+				{ __typename: 'PullRequestReview', viewerDidAuthor: true, viewerCanUpdate: true }
+			].map((entry, i) => ({
+				...entry,
+				id: `entry_${i}`,
+				body: '**Markdown**',
+				bodyHTML: '<strong>Markdown</strong>'
+			}));
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () =>
+					Response.json({
+						data: {
+							repository: {
+								issueOrPullRequest: {
+									id: 'subject_1',
+									__typename: type,
+									timelineItems: { nodes: entries, totalCount: entries.length }
+								}
+							}
+						}
+					})
+				)
+			);
+			const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+			expect(result?.peek.timeline.items.map((entry) => entry.canEdit)).toEqual([
+				true,
+				false,
+				false,
+				true
+			]);
+			expect(result?.peek.timeline.items.every((entry) => entry.body === '**Markdown**')).toBe(
+				true
+			);
+		}
+	);
+});
+
 const facts = (over: Partial<SubjectFacts> = {}) =>
 	({
 		updatedAt: '2026-09-02T00:00:00Z',
@@ -382,6 +427,7 @@ describe('peekEntryFromRest', () => {
 				node_id: 'IC_1',
 				html_url: 'https://github.com/o/r/pull/2#issuecomment-3',
 				body_html: '<p>hi</p>',
+				body: 'hi',
 				created_at: '2026-10-07T10:00:00Z',
 				user
 			})
@@ -396,6 +442,8 @@ describe('peekEntryFromRest', () => {
 			at: '2026-10-07T10:00:00Z',
 			url: 'https://github.com/o/r/pull/2#issuecomment-3',
 			html: '<p>hi</p>',
+			body: 'hi',
+			canEdit: true,
 			reactions: { id: 'IC_1', canReact: true, groups: [] }
 		});
 	});

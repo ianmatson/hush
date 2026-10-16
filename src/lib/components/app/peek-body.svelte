@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -17,6 +17,7 @@
 	import { cn } from '$lib/utils';
 	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
 	import CommentBox from './comment-box.svelte';
+	import CommentEditor from './comment-editor.svelte';
 	import PeekSlack from './peek-slack.svelte';
 	import PeekProjects from './peek-projects.svelte';
 	import PeekFiles from './peek-files.svelte';
@@ -89,11 +90,18 @@
 		if (entryAdded && composerEnd) untrack(() => followWhileGrowing(composerEnd!));
 	});
 	let allChecks = $state(false);
+	let editingId = $state<string | null>(null);
+	let editTrigger: HTMLButtonElement | null = null;
+	function closeEditor() {
+		editingId = null;
+		void tick().then(() => editTrigger?.focus());
+	}
 	// A new item starts with the passed checks folded.
 	$effect(() => {
 		void repo;
 		void number;
 		allChecks = false;
+		editingId = null;
 	});
 
 	const STATE = {
@@ -364,7 +372,7 @@
 				{@const tone = e.type === 'review' ? (REVIEW[e.state ?? '']?.tone ?? '') : ''}
 				{@const reviewThreads = e.type === 'review' ? (threadsOfReview.get(e.id) ?? []) : []}
 				<div class="grid gap-1.5 pb-3" in:revealEntry>
-					<div class="flex items-center gap-2 text-xs">
+					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
 						<GhLink
 							href={profileUrl(e.author.login, e.author.bot)}
 							class="flex min-w-0 items-center gap-2 font-medium"
@@ -390,8 +398,22 @@
 							class="ml-auto shrink-0 text-muted-foreground tabular-nums hover:text-foreground"
 							>{ago(e.at)}</a
 						>
+						{#if e.canEdit && typeof e.body === 'string'}
+							<button
+								type="button"
+								class="shrink-0 rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+								disabled={editingId !== null}
+								aria-expanded={editingId === e.id}
+								onclick={(event) => {
+									editTrigger = event.currentTarget;
+									editingId = e.id;
+								}}>Edit</button
+							>
+						{/if}
 					</div>
-					{#if e.html.trim()}
+					{#if editingId === e.id}
+						<CommentEditor entry={e} repo={p.repo} number={p.number} onclose={closeEditor} />
+					{:else if e.html.trim()}
 						<div class="gh-html ml-7 rounded-lg bg-muted/50 px-3 py-2">
 							{@html sanitize(e.html)}
 						</div>

@@ -65,6 +65,8 @@ export const api = {
 		runs?: number[];
 		id?: string;
 	}) => ok(client.api.actions.$post({ json: a })),
+	editComment: (id: string, body: string) =>
+		ok(client.api.comments.edit.$post({ json: { id, body } })),
 	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	suggest: (repo: string, kind: 'user' | 'ref', q: string, from: string) =>
 		ok(client.api.suggest.$get({ query: { repo, kind, q, from } })),

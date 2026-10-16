@@ -197,6 +197,80 @@ const app = routes()
 			.catch(() => {});
 		return c.json({ ok: true as const, entry });
 	})
+	.post('/api/comments/edit', json<{ id: string; body: string }>(), async (c) => {
+		const b = c.req.valid('json');
+		if (typeof b.id !== 'string' || !NODE_ID.test(b.id))
+			return c.json({ error: 'Not a comment.' }, 400);
+		if (typeof b.body !== 'string' || !b.body.trim())
+			return c.json({ error: 'Write a comment first.' }, 400);
+		if (b.body.length > MAX_BODY) return c.json({ error: 'The comment is too long.' }, 400);
+		const u = c.get('user');
+		const token = await userToken(c.env, u);
+		const blocked = await writeBlockForNode(c.env, token, b.id);
+		if (blocked) return c.json({ error: blocked }, 403);
+		const read = await gh(token, '/graphql', {
+			method: 'POST',
+			body: JSON.stringify({
+				query: `query($id: ID!) { node(id: $id) {
+  __typename
+  ... on IssueComment { viewerDidAuthor viewerCanUpdate issue { number repository { nameWithOwner } } }
+  ... on PullRequestReview { viewerDidAuthor viewerCanUpdate pullRequest { number repository { nameWithOwner } } }
+} }`,
+				variables: { id: b.id }
+			})
+		});
+		type Parent = { number: number; repository: { nameWithOwner: string } };
+		const found = (await read.json().catch(() => ({}))) as {
+			data?: {
+				node?: {
+					__typename: string;
+					viewerDidAuthor: boolean;
+					viewerCanUpdate: boolean;
+					issue?: Parent;
+					pullRequest?: Parent;
+				} | null;
+			};
+			errors?: { message: string }[];
+		};
+		if (!read.ok || found.errors?.length)
+			return c.json(
+				{ error: found.errors?.[0]?.message ?? 'GitHub could not read the comment.' },
+				502
+			);
+		const node = found.data?.node;
+		if (!node) return c.json({ error: 'GitHub did not find this comment.' }, 404);
+		const review = node.__typename === 'PullRequestReview';
+		if (!review && node.__typename !== 'IssueComment')
+			return c.json({ error: 'Not a comment.' }, 400);
+		if (!node.viewerDidAuthor || !node.viewerCanUpdate)
+			return c.json({ error: 'You can only edit your own editable comments.' }, 403);
+		const parent = review ? node.pullRequest : node.issue;
+		if (!parent) return c.json({ error: 'GitHub could not read the conversation.' }, 502);
+		const mutation = review ? 'updatePullRequestReview' : 'updateIssueComment';
+		const idField = review ? 'pullRequestReviewId' : 'id';
+		const resultField = review ? 'pullRequestReview' : 'issueComment';
+		const res = await gh(token, '/graphql', {
+			method: 'POST',
+			body: JSON.stringify({
+				query: `mutation($id: ID!, $body: String!) { ${mutation}(input: { ${idField}: $id, body: $body }) { ${resultField} { id body bodyHTML } } }`,
+				variables: { id: b.id, body: b.body.trim() }
+			})
+		});
+		const result = (await res.json().catch(() => ({}))) as {
+			data?: Record<string, Record<string, { id: string; body: string; bodyHTML: string }> | null>;
+			errors?: { message: string }[];
+		};
+		const entry = result.data?.[mutation]?.[resultField];
+		if (!res.ok || result.errors?.length || !entry)
+			return c.json(
+				{ error: result.errors?.[0]?.message ?? 'GitHub could not save the comment.' },
+				422
+			);
+		await poller(c.env, u.id)
+			.recheck(parent.repository.nameWithOwner, parent.number)
+			.catch(() => {});
+		return c.json({ id: entry.id, body: entry.body, html: entry.bodyHTML });
+	})
 	// Add or remove your reaction on a comment, a review, or a description.
 	.post('/api/reactions', json<{ id: string; content: string; add: boolean }>(), async (c) => {
 		const b = c.req.valid('json');
