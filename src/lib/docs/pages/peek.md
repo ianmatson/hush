@@ -143,6 +143,10 @@ Type **@** to mention someone: the people in the conversation come first, then t
 
 GitHub.com makes its own list with private data, so the order can be a little different there. The people and items are the same.
 
+### Edit your comments
+
+Choose **Edit** beside one of your comments or review messages in the conversation. Change the Markdown, then choose **Save** or press {{key:editor.send}}. **Cancel** or Escape closes the editor without saving. If a save fails, your text stays in the editor so you can try again. Hush shows **Edit** only for your own comments that GitHub lets you update.
+
 ### Images and videos
 
 To attach an image or a video, paste it, drop it on the box, or click the paperclip. This works in every comment box: the conversation, line comments, replies, and the review summary. Hush uploads the file to GitHub, as GitHub.com does, so a file in a private repository stays private. The box shows **Uploading…** until the file is on GitHub, and you cannot send until then.

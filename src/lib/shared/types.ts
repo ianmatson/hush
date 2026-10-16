@@ -461,6 +461,8 @@ export interface PeekEntry {
 	type: 'comment' | 'review';
 	id: string;
 	reactions?: Reactions;
+	body?: string;
+	canEdit?: boolean;
 	author: PeekPerson;
 	at: string;
 	url: string;

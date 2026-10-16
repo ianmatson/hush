@@ -678,8 +678,8 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
         totalCount
         nodes {
           __typename
-          ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url ${REACTION_FIELDS} }
-          ... on PullRequestReview { author { ${PERSON} } bodyHTML state submittedAt createdAt url comments { totalCount } ${REACTION_FIELDS} }
+          ... on IssueComment { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate createdAt url ${REACTION_FIELDS} }
+          ... on PullRequestReview { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate state submittedAt createdAt url comments { totalCount } ${REACTION_FIELDS} }
         }
       }
     }
@@ -692,7 +692,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       assignees(first: 10) { nodes { login } }
       timelineItems(last: ${PEEK_TIMELINE}, itemTypes: [ISSUE_COMMENT]) {
         totalCount
-        nodes { __typename ... on IssueComment { author { ${PERSON} } bodyHTML createdAt url ${REACTION_FIELDS} } }
+        nodes { __typename ... on IssueComment { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate createdAt url ${REACTION_FIELDS} } }
       }
     }
   } }
@@ -714,6 +714,7 @@ export interface RestFullMediaTimelineEntry {
 	node_id: string;
 	html_url: string;
 	body_html?: string;
+	body?: string;
 	created_at?: string;
 	submitted_at?: string;
 	state?: PeekEntry['state'];
@@ -742,6 +743,8 @@ export function peekEntryFromRest(
 		at: j.submitted_at ?? j.created_at ?? now.toISOString(),
 		url: j.html_url,
 		html: j.body_html ?? '',
+		body: j.body ?? '',
+		canEdit: typeof j.body === 'string',
 		...(type === 'review' ? { state: j.state ?? 'COMMENTED', inline: 0 } : {}),
 		reactions: { id: j.node_id, canReact: true, groups: [] }
 	};
@@ -810,6 +813,8 @@ export async function fetchPeek(
 						at: t.submittedAt ?? t.createdAt,
 						url: t.url,
 						html: t.bodyHTML ?? '',
+						body: t.body ?? '',
+						canEdit: !!t.viewerDidAuthor && !!t.viewerCanUpdate,
 						state: t.state,
 						inline: t.comments?.totalCount ?? 0,
 						reactions: reactionsOf(t)
@@ -821,6 +826,8 @@ export async function fetchPeek(
 						at: t.createdAt,
 						url: t.url,
 						html: t.bodyHTML ?? '',
+						body: t.body ?? '',
+						canEdit: !!t.viewerDidAuthor && !!t.viewerCanUpdate,
 						reactions: reactionsOf(t)
 					}
 		);
