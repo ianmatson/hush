@@ -1,5 +1,6 @@
 import { beforeNavigate } from '$app/navigation';
 import type { BeforeNavigate } from '@sveltejs/kit';
+import { rebaseEditsOntoCurrent } from './rebase';
 
 const LEAVE_PROMPT = 'Leave without saving your changes?';
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -64,10 +65,19 @@ export class SettingsDraft<Saved, Draft = Saved> implements SettingsDraftControl
 		const edited = this.#edited;
 		const base = this.#base;
 		if (edited === undefined || base === undefined || this.saving) return;
-		const snapshot = copyOf(edited);
+		const current = this.#saved() ?? base;
+		const changedElsewhere = !same(current, base);
+		const atSave = copyOf(edited);
+		const snapshot = changedElsewhere
+			? copyOf(rebaseEditsOntoCurrent(base, atSave, current))
+			: atSave;
 		this.saving = true;
 		try {
-			if (await this.#send(snapshot, base)) this.#base = snapshot;
+			if (!(await this.#send(snapshot, current))) return;
+			this.#base = snapshot;
+			const typedDuringSave = this.#edited;
+			if (changedElsewhere && typedDuringSave !== undefined)
+				this.draft = this.#toDraft(rebaseEditsOntoCurrent(atSave, typedDuringSave, snapshot));
 		} finally {
 			this.saving = false;
 		}
