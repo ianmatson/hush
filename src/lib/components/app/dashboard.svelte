@@ -129,7 +129,8 @@
 	function readShowing(v: ItemView): Showing {
 		const options = showingOptions(v);
 		const asked = localStorage.getItem(showingKey(v.id));
-		return options.find((k) => k === asked) ?? options[0] ?? 'pr';
+		const everythingItFinds = options.includes('both') ? 'both' : options[0];
+		return options.find((k) => k === asked) ?? everythingItFinds ?? 'pr';
 	}
 	let showing = $state<Showing>(readShowing(untrack(() => view)));
 	function show(next: Showing) {
@@ -225,7 +226,14 @@
 	const tableLayout = $derived(me.data?.settings.rowLayout === 'table');
 	const tableColumns = $derived(me.data?.settings.tableColumns ?? []);
 
-	const snoozedCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
+	const putAside = $derived((data?.items ?? []).filter((i) => i.dismissed && inView(i)));
+	const snoozedCount = $derived(putAside.length);
+	const putAsideLabel = $derived.by(() => {
+		const muted = putAside.some((i) => i.muted);
+		const snoozed = putAside.some((i) => !i.muted);
+		if (muted && snoozed) return 'Snoozed and muted';
+		return muted ? 'Muted' : 'Snoozed';
+	});
 	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
 
 	const peekOwner = $derived(`view:${view.id}:${showing}`);
@@ -856,7 +864,7 @@
 					onclick={() => (showSnoozed = !showSnoozed)}
 				>
 					<AlarmClock /><span class="hidden sm:inline"
-						>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
+						>{showSnoozed ? `Showing ${putAsideLabel.toLowerCase()}` : putAsideLabel}</span
 					>
 					{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
 				</Button>

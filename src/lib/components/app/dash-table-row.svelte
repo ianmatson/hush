@@ -89,6 +89,9 @@
 		closed: 'text-signal-fail'
 	};
 	const reasonTone = $derived(i.state === 'open' ? turnTone[i.turn] : closedTone[i.state]);
+	const reasonOnPhone = $derived(
+		i.state === 'open' && i.turn === 'you' && chosen.some((c) => c.id === 'reason')
+	);
 	const time = $derived(
 		i.state !== 'open'
 			? { tip: i.turnReason, at: closedTimeOf(i) }
@@ -189,6 +192,12 @@
 			>
 		{/if}
 	</span>
+
+	{#if reasonOnPhone}
+		<span class={cn('max-w-[40%] shrink-0 truncate text-xs md:hidden', reasonTone)}
+			>{i.turnReason}</span
+		>
+	{/if}
 
 	{#each shown as column (column.id)}
 		{#if column.id === 'reason'}
