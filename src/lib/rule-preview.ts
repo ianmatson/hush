@@ -1,7 +1,7 @@
 import { keys, queryClient } from './queries';
 import { categoryQueryName, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/rules';
-import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
+import { compileExpr, exprMatches, parseExpr, usesAbout } from './shared/query';
 import type { DashItem, DashProject, DashResponse, RuleMatch, Settings } from './shared/types';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { ValueSuggestion, ValueSuggestions } from './shared/rule-builder';
@@ -12,13 +12,6 @@ function withoutAbout(when: RuleMatch): RuleMatch {
 	const { about: _about, ...rest } = when;
 	return rest;
 }
-
-const usesAbout = (expr: QueryExpr): boolean =>
-	expr.kind === 'match'
-		? !!expr.when.about?.length
-		: expr.kind === 'not'
-			? usesAbout(expr.part)
-			: expr.parts.some(usesAbout);
 
 type DashAnswers = (DashResponse | undefined)[];
 

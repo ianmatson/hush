@@ -1,3 +1,5 @@
+import { ciFailing, ciPassing } from './ci';
+import { requestedByName, sameLogin } from './logins';
 import type { SubjectFacts } from './subject';
 import type { Change } from './types';
 
@@ -20,7 +22,6 @@ export interface Snapshot {
 
 /** The snapshot of a subject when you look at it. */
 export function snapshotOf(s: SubjectFacts, me: string): Snapshot {
-	const meL = me.toLowerCase();
 	return {
 		commits: s.commits ?? 0,
 		comments: s.comments,
@@ -28,7 +29,7 @@ export function snapshotOf(s: SubjectFacts, me: string): Snapshot {
 		state: s.state,
 		draft: s.draft,
 		verdicts: Object.fromEntries(s.verdicts.map((v) => [v.by, v.state])),
-		requestedMe: s.reviewRequests.some((r) => !r.team && r.name.toLowerCase() === meL),
+		requestedMe: requestedByName(s.reviewRequests, me),
 		labels: s.labels.map((l) => l.name).sort()
 	};
 }
@@ -38,7 +39,6 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 /** What changed from `before` to `now`, most important first. Your own changes do not count. */
 export function changesSince(before: Snapshot, now: SubjectFacts, me: string): Change[] {
 	const after = snapshotOf(now, me);
-	const meL = me.toLowerCase();
 	const out: Change[] = [];
 	if (after.state !== before.state)
 		out.push({
@@ -49,7 +49,7 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 	if (after.requestedMe && !before.requestedMe)
 		out.push({ kind: 'requested', text: 'Your review is requested', tone: null });
 	for (const [by, state] of Object.entries(after.verdicts)) {
-		if (by.toLowerCase() === meL || before.verdicts[by] === state) continue;
+		if (sameLogin(by, me) || before.verdicts[by] === state) continue;
 		if (state === 'APPROVED') out.push({ kind: 'review', text: `@${by} approved`, tone: 'good' });
 		else if (state === 'CHANGES_REQUESTED')
 			out.push({ kind: 'review', text: `@${by} requested changes`, tone: 'bad' });
@@ -63,9 +63,9 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 		});
 	if (after.ci !== before.ci && after.ci)
 		out.push(
-			after.ci === 'SUCCESS'
+			ciPassing(after.ci)
 				? { kind: 'ci', text: before.ci ? 'CI passes now' : 'CI passes', tone: 'good' }
-				: after.ci === 'FAILURE' || after.ci === 'ERROR'
+				: ciFailing(after.ci)
 					? { kind: 'ci', text: 'CI fails', tone: 'bad' }
 					: { kind: 'ci', text: 'CI running', tone: null }
 		);
@@ -76,7 +76,7 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 			tone: null
 		});
 	// Only the author moves a PR in and out of draft: on your own PR, that was you.
-	if (after.draft !== before.draft && now.author.toLowerCase() !== meL)
+	if (after.draft !== before.draft && !sameLogin(now.author, me))
 		out.push({
 			kind: 'draft',
 			text: after.draft ? 'Back to draft' : 'Ready for review',

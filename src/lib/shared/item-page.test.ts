@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+	githubItemUrl,
 	isGitHubName,
 	isItemNumber,
 	isItemPathSegment,
 	itemPagePath,
-	itemPagePathFromGitHubUrl
+	itemPagePathFromGitHubUrl,
+	parseGitHubItemUrl
 } from './item-page';
 
 describe('itemPagePath', () => {
@@ -36,6 +38,47 @@ describe('itemPagePathFromGitHubUrl', () => {
 		);
 		expect(itemPagePathFromGitHubUrl('https://example.com/PostHog/posthog/pull/1')).toBe(null);
 		expect(itemPagePathFromGitHubUrl('https://github.com/PostHog/../pull/1')).toBe(null);
+	});
+});
+
+describe('parseGitHubItemUrl', () => {
+	it('reads the repository, number, kind, deeper path, and anchor', () => {
+		expect(
+			parseGitHubItemUrl('https://www.github.com/PostHog/posthog/pull/5/files/#diff-abc')
+		).toEqual({
+			repo: 'PostHog/posthog',
+			number: 5,
+			kind: 'pr',
+			subpath: ['files'],
+			hash: '#diff-abc'
+		});
+		expect(parseGitHubItemUrl('github.com/acme/web/issues/7')).toMatchObject({
+			repo: 'acme/web',
+			kind: 'issue'
+		});
+	});
+
+	it('refuses names and numbers that GitHub does not allow', () => {
+		for (const bad of [
+			'https://github.com/../web/pull/1',
+			'https://github.com/a/.../pull/1',
+			'https://github.com/a/b/pull/0',
+			'https://github.com/a/b/pull/12345678901',
+			'https://github.com/a/b/PULL/1',
+			'https://github.com:8443/a/b/pull/1',
+			'https://user@github.com/a/b/pull/1',
+			'ftp://github.com/a/b/pull/1'
+		])
+			expect(parseGitHubItemUrl(bad), bad).toBeNull();
+	});
+});
+
+describe('githubItemUrl', () => {
+	it('builds the GitHub address that parseGitHubItemUrl reads back', () => {
+		const url = githubItemUrl('PostHog/posthog.com', 42, 'issue');
+		expect(url).toBe('https://github.com/PostHog/posthog.com/issues/42');
+		expect(parseGitHubItemUrl(url)).toMatchObject({ repo: 'PostHog/posthog.com', number: 42 });
+		expect(githubItemUrl('acme/web', 7, 'pr')).toBe('https://github.com/acme/web/pull/7');
 	});
 });
 

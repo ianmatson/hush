@@ -15,8 +15,8 @@ import {
 } from '../../src/lib/shared/decisions';
 import { aboutTexts, compileExpr, type QueryExpr } from '../../src/lib/shared/query';
 import { groupChoices, markQueries } from '../../src/lib/shared/categories';
-import { enrichmentOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
-import type { RuleFacts, RuleMatch, Settings } from '../../src/lib/shared/types';
+import { subjectKey, subjectRuleFacts, type SubjectFacts } from '../../src/lib/shared/subject';
+import type { RuleMatch, Settings } from '../../src/lib/shared/types';
 import { dailyTokenBudget, decide, decisionsAvailable } from '../decide';
 import { PollerAlerts } from './alerts';
 import type { Who } from './shared';
@@ -134,13 +134,7 @@ export abstract class PollerDecisions extends PollerAlerts {
 	}
 
 	private conditionsFor(s: SubjectFacts, who: Who, scopes: ConditionScope[]): SmartCondition[] {
-		const facts: RuleFacts = {
-			repo: s.repo,
-			subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
-			title: s.title,
-			enrichment: enrichmentOf(s, who.me),
-			me: who.me
-		};
+		const facts = subjectRuleFacts(s, who.me);
 		return scopes
 			.filter(({ exprs }) =>
 				exprs.some((expr) => couldMatch(expr, (when) => ruleMatches(when, facts)) !== false)

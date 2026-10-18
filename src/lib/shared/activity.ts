@@ -1,5 +1,6 @@
 import { isBot } from './bots';
-import type { Enrichment } from './types';
+import { sameLogin } from './logins';
+import type { Enrichment, LastComment, LatestReview } from './types';
 
 /**
  * The newest thing that happened on a PR or issue, from the facts Hush stores: a comment, a
@@ -14,6 +15,36 @@ export interface Activity {
 	at: string;
 }
 
+type RecentComments = Pick<Enrichment, 'lastComment' | 'previousComment'>;
+
+export const isAfter = (
+	iso: string | null | undefined,
+	than: string | number | null | undefined
+): boolean =>
+	!!iso && (than == null || Date.parse(iso) > (typeof than === 'number' ? than : Date.parse(than)));
+
+export const newestHumanComment = (s: RecentComments): LastComment | null =>
+	[s.lastComment, s.previousComment].find((c) => !!c && !c.authorIsBot) ?? null;
+
+export function replyFromOthers(
+	s: RecentComments,
+	me: string,
+	since?: string | number | null
+): LastComment | null {
+	const reply = newestHumanComment(s);
+	return reply && !sameLogin(reply.author, me) && isAfter(reply.createdAt, since) ? reply : null;
+}
+
+export const reviewByBot = (r: LatestReview) => r.authorIsBot ?? isBot(r.author);
+
+export function reviewFromOthers(
+	r: LatestReview | null | undefined,
+	me: string,
+	since?: string | number | null
+): LatestReview | null {
+	return r && !reviewByBot(r) && !sameLogin(r.author, me) && isAfter(r.at, since) ? r : null;
+}
+
 export function latestActivity(
 	e: Pick<Enrichment, 'lastComment' | 'latestReview' | 'lastCommitAt'> | null | undefined
 ): Activity | null {
@@ -21,17 +52,12 @@ export function latestActivity(
 	const found: Activity[] = [];
 	const c = e.lastComment;
 	if (c?.createdAt)
-		found.push({
-			by: c.author,
-			bot: c.authorIsBot || isBot(c.author),
-			what: 'commented',
-			at: c.createdAt
-		});
+		found.push({ by: c.author, bot: c.authorIsBot, what: 'commented', at: c.createdAt });
 	const r = e.latestReview;
 	if (r?.at)
 		found.push({
 			by: r.author,
-			bot: isBot(r.author),
+			bot: reviewByBot(r),
 			what:
 				r.state === 'APPROVED'
 					? 'approved'
@@ -47,7 +73,7 @@ export function latestActivity(
 /** "@alice commented on your PR", "New commits on this PR", "You approved this PR". */
 export function activityText(a: Activity, me: string, subject: string): string {
 	if (a.what === 'pushed') return `New commits on ${subject}`;
-	const who = a.by?.toLowerCase() === me.toLowerCase() ? 'You' : `@${a.by}`;
+	const who = sameLogin(a.by, me) ? 'You' : `@${a.by}`;
 	if (a.what === 'commented') return `${who} commented on ${subject}`;
 	return `${who} ${a.what} ${subject}`;
 }

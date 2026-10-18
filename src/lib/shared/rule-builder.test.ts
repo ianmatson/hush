@@ -25,7 +25,10 @@ describe('rule builder', () => {
 		'about:"database migrations"',
 		'type:pr label:bug',
 		'label:bug,crash',
-		'login flow'
+		'login flow',
+		'-login',
+		'author:alice,bots',
+		'from:bob author:bots'
 	])('keeps the meaning of %s', (query) => {
 		const back = roundTrip(query);
 		expect(parseExpr(back).errors).toEqual([]);
@@ -52,6 +55,19 @@ describe('rule builder', () => {
 	it('leaves queries it cannot show to the text editor', () => {
 		expect(queryToBuilder('repo:a (label:b OR (label:c author:d))')).toBeNull();
 		expect(queryToBuilder('nope:1')).toBeNull();
+	});
+
+	it('leaves a negated group of words to the text editor, which keeps its meaning', () => {
+		expect(queryToBuilder('-(foo bar)')).toBeNull();
+		expect(queryToBuilder('-"foo bar"')).toBeNull();
+		expect(queryToBuilder('label:x -(foo bar)')).toBeNull();
+	});
+
+	it('shows bots among other values as one condition', () => {
+		expect(queryToBuilder('author:alice,bots')?.items).toEqual([
+			{ type: 'condition', word: 'author', negate: false, values: ['alice', 'bots'] }
+		]);
+		expect(describeBuilder(queryToBuilder('author:alice,bots')!)).toBe('Author is alice or a bot.');
 	});
 
 	it('writes nothing for empty conditions', () => {

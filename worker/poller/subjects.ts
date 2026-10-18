@@ -1,11 +1,11 @@
 import { placeItem } from '../../src/lib/shared/categories';
 import { keptAfterChange, stillKept } from '../../src/lib/shared/closed-items';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
-import type { DashItem, DashResponse, RuleFacts } from '../../src/lib/shared/types';
+import type { DashItem, DashResponse } from '../../src/lib/shared/types';
 import {
 	dashFactsOf,
-	enrichmentOf,
 	subjectKey,
+	subjectRuleFacts,
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
 import type { SubjectDecisions } from '../../src/lib/shared/decisions';
@@ -324,15 +324,11 @@ export abstract class PollerSubjects extends PollerDecisions {
 		return items.map((i) => {
 			const s = facts.get(i.id);
 			if (!s) return { ...i, categories: [], pinnedCategories: [] };
-			const d = decided.get(i.id);
-			const t: RuleFacts = {
-				repo: s.repo,
-				subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
-				title: s.title,
-				enrichment: enrichmentOf(s, who.me, d),
-				me: who.me
-			};
-			const placed = placeItem(t, pins.get(i.id), who.settings.categoryGroups);
+			const placed = placeItem(
+				subjectRuleFacts(s, who.me, decided.get(i.id)),
+				pins.get(i.id),
+				who.settings.categoryGroups
+			);
 			return { ...i, categories: placed.categories, pinnedCategories: placed.pinned };
 		});
 	}

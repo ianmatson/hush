@@ -161,6 +161,26 @@ describe('views with Hush words', () => {
 			'both'
 		]);
 	});
+	it('keep an item whose label matches a label wildcard of the search', () => {
+		const [section] = sectionsFor('pr', [{ ...view, searches: ['is:open label:area/*'] }], NOW);
+		expect(section.filter).toBe('label:area/*');
+		const passing = (labels: string[]) => [
+			...viewsPassingFilters(
+				['quick'],
+				new Map([['quick', new Set([section.filter!])]]),
+				item({ labels })
+			)
+		];
+		expect(passing(['area/api'])).toEqual(['quick']);
+		expect(passing(['bug'])).toEqual([]);
+	});
+	it('keep an item that a bot or the named author opened, for author:name,bots', () => {
+		const { github, hush } = splitSearch('is:pr author:alice,bots');
+		expect(github).toBe('is:pr');
+		expect(queryMatches(hush, item())).toBe(true);
+		expect(queryMatches(hush, item({ author: 'renovate[bot]', authorIsBot: true }))).toBe(true);
+		expect(queryMatches(hush, item({ author: 'bob' }))).toBe(false);
+	});
 	it('find only pull requests when a search uses size:', () => {
 		expect(sectionsFor('issue', [view], NOW)).toEqual([]);
 	});

@@ -50,7 +50,7 @@ Hush pushes facts, not guesses. Each time Hush reads a pull request or issue fro
 | You are assigned                           | on      | Someone assigns you to a pull request or an issue.                                         |
 | A snooze ends                              | on      | The thing that you [snoozed](/docs/pull-requests-and-issues#snooze) an item until happens. |
 
-- Your own actions never push. Comments by bots never push.
+- Your own actions never push. Comments and reviews by bots never push.
 - A muted item never pushes. An item that you snoozed until a time or until something happens pushes only when its snooze ends.
 - The first time Hush reads an item, it pushes only for events of the last hour.
 - **Push new items**: each view also has its own switch, in **Settings → Views**. With it on, Hush pushes when a pull request or issue shows up in that view for the first time. Items that you opened do not push. When you change a view's searches, the items that it finds then do not push.

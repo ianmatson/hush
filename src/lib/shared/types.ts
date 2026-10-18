@@ -23,6 +23,13 @@ export interface LastComment {
 	createdAt: string;
 }
 
+export interface LatestReview {
+	author: string;
+	authorIsBot?: boolean;
+	at: string;
+	state: string;
+}
+
 /** Extra facts about a thread's subject, fetched from GraphQL. */
 export interface Enrichment {
 	kind: 'pr' | 'issue' | 'other';
@@ -45,7 +52,7 @@ export interface Enrichment {
 	/** PRs: when the newest commit was made. */
 	lastCommitAt?: string | null;
 	/** PRs: the newest review. */
-	latestReview?: { author: string; at: string; state: string } | null;
+	latestReview?: LatestReview | null;
 	/** PRs: your own newest review. */
 	myReview?: { at: string; state: string } | null;
 	/** PRs: review threads nobody resolved yet (up to 50). */
@@ -279,10 +286,11 @@ export interface DashItem {
 	draft: boolean;
 	labels: DashLabel[];
 	comments: number;
-	lastCommentBy: string | null;
-	lastCommentAt: string | null;
-	lastCommentIsBot: boolean;
+	lastHumanCommentBy: string | null;
+	lastHumanCommentAt: string | null;
+	activity: Activity | null;
 	assignees: string[];
+	reviewRequests: string[];
 	// Pull requests only.
 	ci: CiState | null;
 	reviewDecision: Enrichment['reviewDecision'];
@@ -487,7 +495,7 @@ export interface AlertDTO {
 export interface PeekDTO {
 	/** The peek also updated the stored facts: `changed` means the lists are out of date. */
 	sync?: { changed: boolean };
-	kind: 'pr' | 'issue';
+	kind: DashKind;
 	number: number;
 	title: string;
 	url: string;

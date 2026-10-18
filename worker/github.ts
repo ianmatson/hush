@@ -11,7 +11,9 @@ import type {
 } from '../src/lib/shared/types';
 import { newestFirst, SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
 import { isBot } from '../src/lib/shared/bots';
+import { ciRunning, ciWord } from '../src/lib/shared/ci';
 import { bodyExcerpt } from '../src/lib/shared/decisions';
+import { requestedByName, sameLogin } from '../src/lib/shared/logins';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts } from '../src/lib/shared/subject';
@@ -208,6 +210,8 @@ const stackBelowFields = (depth: number): string =>
 		? ''
 		: `baseRef { associatedPullRequests(first: 1, states: OPEN) { nodes { number title url isDraft baseRefName author { login } ${stackBelowFields(depth - 1)} } } }`;
 
+const SUBMITTED_REVIEW_STATES = '[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]';
+
 /** Fragments P (pull request) and I (issue). Queries that use them declare `$me: String!`. */
 export const SUBJECT_FIELDS = `
 fragment P on PullRequest {
@@ -223,8 +227,8 @@ fragment P on PullRequest {
   requestEvents: timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
     nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   }
-  latestReview: reviews(last: 1) { nodes { author { login } submittedAt state } }
-  myReviews: reviews(author: $me, last: 1) { nodes { submittedAt state } }
+  latestReview: reviews(last: 1, states: ${SUBMITTED_REVIEW_STATES}) { nodes { author { login __typename } submittedAt state } }
+  myReviews: reviews(author: $me, last: 1, states: ${SUBMITTED_REVIEW_STATES}) { nodes { submittedAt state } }
   verdicts: latestOpinionatedReviews(first: 10) { nodes { author { login } submittedAt state } }
   reviewThreads(first: 50) { nodes { isResolved } }
 }
@@ -262,9 +266,12 @@ const CLOSE_REASONS: Record<string, CloseReason> = {
 const closeReasonOf = (n: Node): CloseReason | null =>
 	n.__typename === 'Issue' && n.state === 'CLOSED' ? (CLOSE_REASONS[n.stateReason] ?? null) : null;
 
+const isBotAuthor = (author: Node | null | undefined) =>
+	author?.__typename === 'Bot' || isBot(author?.login);
+
 const toComment = (c: Node): LastComment => ({
 	author: c.author?.login ?? 'ghost',
-	authorIsBot: c.author?.__typename === 'Bot' || isBot(c.author?.login),
+	authorIsBot: isBotAuthor(c.author),
 	body: String(c.bodyText ?? '').slice(0, COMMENT_CHARS),
 	url: c.url,
 	createdAt: c.createdAt
@@ -309,7 +316,7 @@ export function toSubject(n: Node): SubjectFacts {
 		url: n.url,
 		author: n.author?.login ?? 'ghost',
 		authorAvatar: n.author?.avatarUrl ?? null,
-		authorIsBot: n.author?.__typename === 'Bot' || isBot(n.author?.login),
+		authorIsBot: isBotAuthor(n.author),
 		authorAssociation: n.authorAssociation ?? null,
 		createdAt: n.createdAt,
 		updatedAt: n.updatedAt,
@@ -338,7 +345,12 @@ export function toSubject(n: Node): SubjectFacts {
 			.map((e: Node) => ({ at: e.createdAt, ...reviewer(e.requestedReviewer) })),
 		myReview: mine?.submittedAt ? { at: mine.submittedAt, state: mine.state } : null,
 		latestReview: latest
-			? { author: latest.author?.login ?? 'ghost', at: latest.submittedAt, state: latest.state }
+			? {
+					author: latest.author?.login ?? 'ghost',
+					authorIsBot: isBotAuthor(latest.author),
+					at: latest.submittedAt,
+					state: latest.state
+				}
 			: null,
 		verdicts: (n.verdicts?.nodes ?? [])
 			.filter((v: Node) => v?.author?.login && v.submittedAt)
@@ -626,8 +638,7 @@ export function needsDetails(
 		full ||
 		!stored ||
 		stored.updatedAt !== updatedAt ||
-		stored.ci === 'PENDING' ||
-		stored.ci === 'EXPECTED' ||
+		ciRunning(stored.ci) ||
 		now - (readAt ?? 0) > DETAILS_TTL
 	);
 }
@@ -635,11 +646,8 @@ export function needsDetails(
 /** A team search keeps only the PRs that request one of its teams (see expandSections). */
 export const forTeams = (q: ExpandedQuery, s: SubjectFacts, me: string) =>
 	!q.teams ||
-	s.reviewRequests.some((r) =>
-		r.team
-			? q.teams!.some((t) => t.toLowerCase() === r.name.toLowerCase())
-			: !!q.orDirect && r.name.toLowerCase() === me.toLowerCase()
-	);
+	s.reviewRequests.some((r) => r.team && q.teams!.some((t) => sameLogin(t, r.name))) ||
+	(!!q.orDirect && requestedByName(s.reviewRequests, me));
 
 // ---------------------------------------------------------------------------
 // Peek: one PR or issue with its description, checks, and latest comments. About 1 point.
@@ -705,7 +713,7 @@ const WRITERS = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
 const person = (a: Node | null | undefined): PeekPerson => ({
 	login: a?.login ?? 'ghost',
 	avatar: a?.avatarUrl ?? null,
-	bot: a?.__typename === 'Bot' || isBot(a?.login)
+	bot: isBotAuthor(a)
 });
 
 const PEEK_AVATAR_SIZE = '48';
@@ -751,14 +759,7 @@ export function peekEntryFromRest(
 }
 
 function checkState(n: Node): CheckState {
-	if (n.__typename === 'StatusContext') {
-		const s = String(n.state);
-		return s === 'SUCCESS'
-			? 'success'
-			: s === 'PENDING' || s === 'EXPECTED'
-				? 'pending'
-				: 'failure';
-	}
+	if (n.__typename === 'StatusContext') return ciWord(n.state as CiState) ?? 'failure';
 	if (n.status !== 'COMPLETED') return 'pending';
 	switch (n.conclusion) {
 		case 'SUCCESS':

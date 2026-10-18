@@ -1,11 +1,16 @@
 import { tokens } from './text-match';
 import { readsBoard } from './projects';
-import type { RuleMatch } from './types';
+import type { DashKind, RuleMatch } from './types';
 
 type Field = keyof RuleMatch;
 
+export const SUBJECT_TYPE = { pr: 'PullRequest', issue: 'Issue' } as const satisfies Record<
+	DashKind,
+	string
+>;
 export const MAX_CONDITION_CHARS = 200;
 export const ME = '@me';
+export const BOTS_VALUE = 'bots';
 export const CATEGORY_SEPARATOR = '/';
 const NUMBER_PATTERN = /^(?:(?:<|>|<=|>=)?\d+|\d+\.\.\d+)$/;
 const DATE = String.raw`(?:\d{4}-\d{2}-\d{2}|@today(?:-\d{1,4}[dw])?)`;
@@ -92,8 +97,8 @@ export const WORDS: QueryWord[] = [
 		help: 'What it is',
 		example: 'type:pr',
 		values: {
-			pr: v('PullRequest', 'Pull request'),
-			issue: v('Issue', 'Issue')
+			pr: v(SUBJECT_TYPE.pr, 'Pull request'),
+			issue: v(SUBJECT_TYPE.issue, 'Issue')
 		}
 	},
 	{
@@ -231,7 +236,6 @@ const RENAMED: Record<string, string> = {
 
 export const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
 export const WORD = new Map(WORDS.map((w) => [w.key, w]));
-const IS_TYPES = { pr: 'PullRequest', issue: 'Issue' } as const;
 const ONE_GLOB_FIELDS = new Set<Field>(['repo', 'org', 'author', 'by', 'assignee']);
 
 export const wordWorksIn = (w: Pick<QueryWord, 'key' | 'runs'>, place: QueryPlace) =>
@@ -244,10 +248,25 @@ export const wordWorksIn = (w: Pick<QueryWord, 'key' | 'runs'>, place: QueryPlac
 export const wordsFor = (place: QueryPlace) => WORDS.filter((w) => wordWorksIn(w, place));
 
 /** Split `a,b` values; a quoted part keeps its commas. */
-function values(raw: string): string[] {
+export function splitValues(raw: string): string[] {
 	const out: string[] = [];
 	for (const m of raw.matchAll(/(?:[^,"]+|"[^"]*"?)+/g)) out.push(m[0].replace(/"/g, '').trim());
 	return out.filter(Boolean);
+}
+
+export const queryParts = (query: string): string[] => query.match(/(?:[^\s"]+|"[^"]*"?)+/g) ?? [];
+
+export interface QueryTerm {
+	negated: boolean;
+	key: string;
+	raw: string;
+}
+
+const TERM = /^(-?)([a-z][a-z-]*):(.*)$/i;
+
+export function parseTerm(part: string): QueryTerm | null {
+	const m = TERM.exec(part);
+	return m ? { negated: m[1] === '-', key: m[2], raw: m[3] } : null;
 }
 
 export interface ParsedQuery {
@@ -268,15 +287,15 @@ export function parseQuery(query: string): ParsedQuery {
 		lists.set(field, list);
 	};
 	// Split before removing quotes, so `label:"a b"` stays one part.
-	for (const part of query.match(/(?:[^\s"]+|"[^"]*"?)+/g) ?? []) {
-		const m = /^(-?)([a-z][a-z-]*):(.*)$/i.exec(part);
-		if (!m) {
+	for (const part of queryParts(query)) {
+		const term = parseTerm(part);
+		if (!term) {
 			words.push(...tokens(part));
 			continue;
 		}
-		const [, not, rawKey, raw] = m;
+		const { negated: not, key: rawKey, raw } = term;
 		const key = rawKey.toLowerCase();
-		const vals = values(raw);
+		const vals = splitValues(raw);
 		if (RENAMED[key]) {
 			errors.push(`Use ${RENAMED[key]}: instead of ${key}:.`);
 			continue;
@@ -292,7 +311,7 @@ export function parseQuery(query: string): ParsedQuery {
 					errors.push(`Unknown “is:${x}”. Use ${Object.keys(IS_VALUES).join(', ')}.`);
 				else if (x === 'draft') when.draft = !not;
 				else if (not) errors.push(`“-is:${x}” is not supported here.`);
-				else if (x === 'pr' || x === 'issue') add('type', IS_TYPES[x]);
+				else if (x === 'pr' || x === 'issue') add('type', SUBJECT_TYPE[x]);
 				else if (!states.includes(x as 'open')) states.push(x as 'open');
 			}
 			continue;
@@ -308,7 +327,7 @@ export function parseQuery(query: string): ParsedQuery {
 		}
 		const field = w.field;
 		for (const x of vals) {
-			if (w.bots && x.toLowerCase() === 'bots') {
+			if (w.bots && x.toLowerCase() === BOTS_VALUE) {
 				when[w.bots] = !not;
 				continue;
 			}
@@ -360,7 +379,7 @@ export function parseQuery(query: string): ParsedQuery {
 	return { when, errors };
 }
 
-const quote = (x: string) => (/[\s,":]/.test(x) ? `"${x.replace(/"/g, '')}"` : x);
+export const quote = (x: string) => (/[\s,":()]/.test(x) ? `"${x.replace(/"/g, '')}"` : x);
 const asList = (x: unknown): string[] =>
 	x === undefined ? [] : Array.isArray(x) ? x.map(String) : [String(x)];
 
@@ -399,9 +418,9 @@ export function queryError(query: unknown, place: QueryPlace = 'rule'): string |
 	if (place === 'search') return splitSearch(query).errors[0] ?? null;
 	const { expr, errors } = parseExpr(query);
 	if (errors.length) return errors[0];
-	const leaves = leavesOf(expr);
-	if (place === 'rule' && leaves.some((w) => w.category?.length)) return NO_CATEGORY_IN_RULES;
-	if (place === 'section' && leaves.some((w) => w.about?.length)) return NO_ABOUT_IN_SECTIONS;
+	if (place === 'rule' && leavesOf(expr).some((w) => w.category?.length))
+		return NO_CATEGORY_IN_RULES;
+	if (place === 'section' && usesAbout(expr)) return NO_ABOUT_IN_SECTIONS;
 	return null;
 }
 
@@ -413,7 +432,8 @@ export interface SplitSearch {
 
 const runsInHush = (w: QueryWord, value: string) =>
 	w.runs === 'hush' ||
-	(w.runs === 'both' && ((!!w.bots && value.toLowerCase() === 'bots') || HUSH_VALUE.test(value)));
+	(w.runs === 'both' &&
+		((!!w.bots && value.toLowerCase() === BOTS_VALUE) || HUSH_VALUE.test(value)));
 
 export function splitSearch(search: string): SplitSearch {
 	if (readsBoard(search)) return { github: search.trim(), hush: '', errors: [] };
@@ -425,9 +445,9 @@ export function splitSearch(search: string): SplitSearch {
 			errors.push(NO_OR_IN_SEARCHES);
 			continue;
 		}
-		const m = /^-?([a-z][a-z-]*):(.*)$/i.exec(t.text);
-		const w = m ? WORD.get(m[1].toLowerCase()) : undefined;
-		if (!m || !w) {
+		const term = parseTerm(t.text);
+		const w = term ? WORD.get(term.key.toLowerCase()) : undefined;
+		if (!term || !w) {
 			github.push(t.text);
 			continue;
 		}
@@ -435,7 +455,7 @@ export function splitSearch(search: string): SplitSearch {
 			errors.push(NO_ABOUT_IN_SEARCHES);
 			continue;
 		}
-		const vals = values(m[2]);
+		const vals = splitValues(term.raw);
 		if (vals.some((x) => runsInHush(w, x))) {
 			hush.push(t.text);
 			continue;
@@ -450,11 +470,51 @@ export function splitSearch(search: string): SplitSearch {
 }
 
 const TODAY = /@today(?:-(\d{1,4})([dw]))?/g;
+const RELATIVE_DAY = /^@today(?:-(\d+)([dw]))?$/;
+const DAYS_PER_WEEK = 7;
+const OPEN_END = '*';
+
+export interface RelativeDay {
+	amount: number;
+	unit: 'day' | 'week';
+}
+
+export function parseRelativeDay(date: string): RelativeDay | null {
+	const m = RELATIVE_DAY.exec(date);
+	if (!m) return null;
+	return { amount: m[1] ? Number(m[1]) : 0, unit: m[2] === 'w' ? 'week' : 'day' };
+}
+
+export type Comparison = '<' | '<=' | '>' | '>=';
+
+export type RangeOrBound<T> =
+	{ kind: 'range'; from: T; to: T } | { kind: 'bound'; op: Comparison | null; value: T };
+
+const RANGE = /^(.+)\.\.(.+)$/;
+const BOUND = /^(<=|>=|<|>)?(.+)$/;
+const DIGITS = /^\d+$/;
+
+export function parseRangeOrBound(spec: string): RangeOrBound<string> | null {
+	const range = RANGE.exec(spec);
+	if (range) return { kind: 'range', from: range[1], to: range[2] };
+	const bound = BOUND.exec(spec);
+	if (!bound) return null;
+	return { kind: 'bound', op: (bound[1] as Comparison | undefined) ?? null, value: bound[2] };
+}
+
+export function parseNumberSpec(spec: string): RangeOrBound<number> | null {
+	const parsed = parseRangeOrBound(spec);
+	if (parsed?.kind === 'range' && DIGITS.test(parsed.from) && DIGITS.test(parsed.to))
+		return { kind: 'range', from: Number(parsed.from), to: Number(parsed.to) };
+	if (parsed?.kind === 'bound' && DIGITS.test(parsed.value))
+		return { kind: 'bound', op: parsed.op, value: Number(parsed.value) };
+	return null;
+}
 
 function dayStart(date: string, now: number): number | null {
-	const relative = /^@today(?:-(\d+)([dw]))?$/.exec(date);
+	const relative = parseRelativeDay(date);
 	if (relative) {
-		const back = relative[1] ? Number(relative[1]) * (relative[2] === 'w' ? 7 : 1) : 0;
+		const back = relative.amount * (relative.unit === 'week' ? DAYS_PER_WEEK : 1);
 		return Math.floor(now / DAY_MS) * DAY_MS - back * DAY_MS;
 	}
 	const t = Date.parse(`${date}T00:00:00Z`);
@@ -467,16 +527,15 @@ export const resolveToday = (text: string, now: number) =>
 export function dateMatches(spec: string, iso: string | null | undefined, now: number): boolean {
 	const t = iso ? Date.parse(iso) : NaN;
 	if (Number.isNaN(t)) return false;
-	const range = /^(.+)\.\.(.+)$/.exec(spec);
-	if (range) {
-		const from = range[1] === '*' ? null : dayStart(range[1], now);
-		const to = range[2] === '*' ? null : dayStart(range[2], now);
+	const parsed = parseRangeOrBound(spec);
+	if (parsed?.kind === 'range') {
+		const from = parsed.from === OPEN_END ? null : dayStart(parsed.from, now);
+		const to = parsed.to === OPEN_END ? null : dayStart(parsed.to, now);
 		return (from === null || t >= from) && (to === null || t < to + DAY_MS);
 	}
-	const m = /^(<=|>=|<|>)?(.+)$/.exec(spec);
-	const day = m ? dayStart(m[2], now) : null;
-	if (!m || day === null) return false;
-	switch (m[1]) {
+	const day = parsed ? dayStart(parsed.value, now) : null;
+	if (!parsed || day === null) return false;
+	switch (parsed.op) {
 		case '<':
 			return t < day;
 		case '<=':
@@ -636,12 +695,11 @@ export function leavesOf(expr: QueryExpr): RuleMatch[] {
 }
 
 export function numberMatches(spec: string, lines: number): boolean {
-	const range = /^(\d+)\.\.(\d+)$/.exec(spec);
-	if (range) return lines >= Number(range[1]) && lines <= Number(range[2]);
-	const bound = /^(<=|>=|<|>)?(\d+)$/.exec(spec);
-	if (!bound) return false;
-	const n = Number(bound[2]);
-	switch (bound[1]) {
+	const parsed = parseNumberSpec(spec);
+	if (!parsed) return false;
+	if (parsed.kind === 'range') return lines >= parsed.from && lines <= parsed.to;
+	const n = parsed.value;
+	switch (parsed.op) {
 		case '<':
 			return lines < n;
 		case '>':
@@ -655,6 +713,8 @@ export function numberMatches(spec: string, lines: number): boolean {
 	}
 }
 
+export const usesAbout = (expr: QueryExpr) => leavesOf(expr).some((w) => !!w.about?.length);
+
 export const aboutTexts = (query: string) =>
 	leavesOf(compileExpr(query)).flatMap((when) => when.about ?? []);
 
@@ -666,8 +726,10 @@ export function formatQuery(when: RuleMatch): string {
 			const word = w.values && Object.entries(w.values).find(([, val]) => val.stored === x)?.[0];
 			return quote(word ?? x);
 		});
-		if (list.length) parts.push(`${w.key}:${list.join(',')}`);
-		if (w.bots && when[w.bots] !== undefined) parts.push(`${when[w.bots] ? '' : '-'}${w.key}:bots`);
+		const anyBot = !!w.bots && when[w.bots] === true;
+		const values = anyBot ? [...list, BOTS_VALUE] : list;
+		if (values.length) parts.push(`${w.key}:${values.join(',')}`);
+		if (w.bots && when[w.bots] === false) parts.push(`-${w.key}:${BOTS_VALUE}`);
 	}
 	if (when.draft !== undefined) parts.push(`${when.draft ? '' : '-'}is:draft`);
 	for (const s of when.state ?? []) parts.push(`is:${s}`);
@@ -731,7 +793,7 @@ export function suggest(
 			: w?.values
 				? Object.entries(w.values).map(([x, val]) => ({ insert: x, label: x, help: val.help }))
 				: w?.bots
-					? [{ insert: 'bots', label: 'bots', help: 'Any bot' }]
+					? [{ insert: BOTS_VALUE, label: BOTS_VALUE, help: 'Any bot' }]
 					: [];
 	const items = options
 		.filter((o) => o.label.startsWith(prefix) && o.label !== prefix)

@@ -1,4 +1,6 @@
-import type { Enrichment } from './types';
+import { isAfter, replyFromOthers, reviewFromOthers } from './activity';
+import { ciFinished, ciPassing } from './ci';
+import type { CiState, DashKind, Enrichment } from './types';
 
 export type SnoozeEvent =
 	'ci_pass' | 'ci_done' | 'approved' | 'review' | 'reply' | 'commits' | 'closed';
@@ -9,7 +11,7 @@ export interface SnoozeEventInfo {
 	label: string;
 	/** Push and chip text when it happens: "CI passed". */
 	happened: string;
-	kinds: ('pr' | 'issue')[];
+	kinds: DashKind[];
 }
 
 export const SNOOZE_EVENTS: SnoozeEventInfo[] = [
@@ -36,10 +38,8 @@ export const SNOOZE_EVENT_MAX_MS = 7 * 24 * 3600_000;
 /** Events that make sense for every one of these subjects. */
 export function eventsFor(kinds: ('pr' | 'issue' | 'other')[]): SnoozeEventInfo[] {
 	if (!kinds.length || kinds.includes('other')) return [];
-	return SNOOZE_EVENTS.filter((e) => kinds.every((k) => e.kinds.includes(k as 'pr' | 'issue')));
+	return SNOOZE_EVENTS.filter((e) => kinds.every((k) => e.kinds.includes(k as DashKind)));
 }
-
-const after = (iso: string | null | undefined, ms: number) => !!iso && Date.parse(iso) > ms;
 
 /** Did the event happen since `since` (ms)? `me` is your login, so your own actions do not count. */
 export function eventHappened(
@@ -49,46 +49,29 @@ export function eventHappened(
 	me: string
 ): boolean {
 	if (!e || e.kind === 'other') return false;
-	const meL = me.toLowerCase();
 	switch (event) {
 		case 'ci_pass':
-			return e.ci === 'SUCCESS';
+			return ciPassing(e.ci);
 		case 'ci_done':
-			return e.ci === 'SUCCESS' || e.ci === 'FAILURE' || e.ci === 'ERROR';
+			return ciFinished(e.ci);
 		case 'approved':
 			return e.reviewDecision === 'APPROVED';
 		case 'review':
-			return (
-				!!e.latestReview &&
-				e.latestReview.author.toLowerCase() !== meL &&
-				after(e.latestReview.at, since)
-			);
+			return !!reviewFromOthers(e.latestReview, me, since);
 		case 'commits':
-			return after(e.lastCommitAt, since);
-		case 'reply': {
-			const c = e.lastComment;
-			const commented =
-				!!c && c.author.toLowerCase() !== meL && !c.authorIsBot && after(c.createdAt, since);
-			const reviewed =
-				!!e.latestReview &&
-				e.latestReview.author.toLowerCase() !== meL &&
-				after(e.latestReview.at, since);
-			return commented || reviewed;
-		}
+			return isAfter(e.lastCommitAt, since);
+		case 'reply':
+			return !!replyFromOthers(e, me, since) || !!reviewFromOthers(e.latestReview, me, since);
 		case 'closed':
 			return e.state === 'merged' || e.state === 'closed';
 	}
 }
 
-/** GitHub subject type → the kinds that snooze events know about. */
-export const subjectKind = (subjectType: string): 'pr' | 'issue' | 'other' =>
-	subjectType === 'PullRequest' ? 'pr' : subjectType === 'Issue' ? 'issue' : 'other';
-
 /** Conditions that are already true for a thread, as far as the list row knows. */
-export function alreadyTrue(t: { ci?: string | null; state?: string | null }): SnoozeEvent[] {
+export function alreadyTrue(t: { ci?: CiState | null; state?: string | null }): SnoozeEvent[] {
 	const out: SnoozeEvent[] = [];
-	if (t.ci === 'SUCCESS') out.push('ci_pass');
-	if (t.ci === 'SUCCESS' || t.ci === 'FAILURE' || t.ci === 'ERROR') out.push('ci_done');
+	if (ciPassing(t.ci)) out.push('ci_pass');
+	if (ciFinished(t.ci)) out.push('ci_done');
 	// A merged or closed subject ends every conditional snooze at once.
 	if (t.state === 'merged' || t.state === 'closed') return SNOOZE_EVENTS.map((e) => e.id);
 	return out;

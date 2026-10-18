@@ -1,3 +1,5 @@
+import { githubItemUrl, isGitHubName, isItemNumber, parseGitHubItemUrl } from './item-page';
+
 export const PEEK_PARAM = 'peek';
 
 export interface PeekLink {
@@ -5,22 +7,22 @@ export interface PeekLink {
 	number: number;
 }
 
-const NAME = '[A-Za-z0-9_.-]+';
-const GITHUB_URL = new RegExp(
-	`^(?:https?://)?(?:www\\.)?github\\.com/(${NAME}/${NAME})/(?:pull|issues)/(\\d+)(?:[/?#].*)?$`,
-	'i'
-);
-const SHORT_FORM = new RegExp(`^(${NAME}/${NAME})(?:#|/)(\\d+)$`);
+const SHORT_FORM = /^([^/#\s]+)\/([^/#\s]+)[#/](\d+)$/;
+
+function parseShortForm(text: string): PeekLink | null {
+	const match = SHORT_FORM.exec(text);
+	if (!match) return null;
+	const [, owner, name, number] = match;
+	if (!isGitHubName(owner) || !isGitHubName(name) || !isItemNumber(number)) return null;
+	return { repo: `${owner}/${name}`, number: Number(number) };
+}
 
 export function parsePeekLink(value: string | null): PeekLink | null {
 	const text = value?.trim() ?? '';
-	const match = GITHUB_URL.exec(text) ?? SHORT_FORM.exec(text);
-	if (!match) return null;
-	const number = Number(match[2]);
-	return Number.isSafeInteger(number) && number > 0 ? { repo: match[1], number } : null;
+	const item = parseGitHubItemUrl(text);
+	return item ? { repo: item.repo, number: item.number } : parseShortForm(text);
 }
 
-export const peekLinkUrl = ({ repo, number }: PeekLink) =>
-	`https://github.com/${repo}/issues/${number}`;
+export const peekLinkUrl = ({ repo, number }: PeekLink) => githubItemUrl(repo, number, 'issue');
 
 export const peekLinkParam = ({ repo, number }: PeekLink) => `${repo}/${number}`;

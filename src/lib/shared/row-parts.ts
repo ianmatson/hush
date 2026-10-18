@@ -1,11 +1,11 @@
-export type RowKind = 'pr' | 'issue';
+import type { DashKind } from './types';
 
 export interface RowPart {
 	id: string;
 	label: string;
 }
 
-export type RowSettings = Record<RowKind, string[]>;
+export type RowSettings = Record<DashKind, string[]>;
 
 const ITEM_PARTS: RowPart[] = [
 	{ id: 'time', label: 'Updated or waiting time' },
@@ -28,12 +28,12 @@ const PR_ONLY_PARTS: RowPart[] = [
 	{ id: 'draft', label: 'Draft' }
 ];
 
-export const ROW_PARTS: Record<RowKind, RowPart[]> = {
+export const ROW_PARTS: Record<DashKind, RowPart[]> = {
 	pr: [...ITEM_PARTS.slice(0, 4), ...PR_ONLY_PARTS, ...ITEM_PARTS.slice(4)],
 	issue: ITEM_PARTS
 };
 
-export const ROW_KINDS: { id: RowKind; label: string }[] = [
+export const ROW_KINDS: { id: DashKind; label: string }[] = [
 	{ id: 'pr', label: 'Pull requests' },
 	{ id: 'issue', label: 'Issues' }
 ];
@@ -53,13 +53,13 @@ export const knownRowParts = (rows: Partial<RowSettings>): RowSettings =>
 		])
 	) as RowSettings;
 
-export const rowShows = (rows: RowSettings | undefined, kind: RowKind, part: string) =>
+export const rowShows = (rows: RowSettings | undefined, kind: DashKind, part: string) =>
 	!(rows ?? DEFAULT_ROWS)[kind].includes(part);
 
 export function validateRows(v: unknown): string | null {
 	if (typeof v !== 'object' || v === null) return '"rows" must be an object.';
 	for (const [kind, hidden] of Object.entries(v)) {
-		const parts = ROW_PARTS[kind as RowKind];
+		const parts = ROW_PARTS[kind as DashKind];
 		if (!parts) return `Unknown setting "rows.${kind}".`;
 		if (!Array.isArray(hidden)) return `"rows.${kind}" must be a list of the parts to hide.`;
 		const unknown = hidden.find((id) => !parts.some((p) => p.id === id));

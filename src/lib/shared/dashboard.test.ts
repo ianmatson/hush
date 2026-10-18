@@ -26,10 +26,11 @@ const base = (over: Partial<DashFacts> = {}): DashFacts => ({
 	draft: false,
 	labels: [],
 	comments: 0,
-	lastCommentBy: null,
-	lastCommentAt: null,
-	lastCommentIsBot: false,
+	lastHumanCommentBy: null,
+	lastHumanCommentAt: null,
+	activity: null,
 	assignees: [],
+	reviewRequests: [],
 	ci: 'SUCCESS',
 	reviewDecision: 'REVIEW_REQUIRED',
 	mergeable: 'MERGEABLE',
@@ -104,7 +105,11 @@ describe('computeTurn: pull requests', () => {
 	});
 
 	it('my PR: a human comment after my last commit is my turn', () => {
-		const r = turn({ author: 'ian', lastCommentBy: 'bob', lastCommentAt: '2026-09-10T00:00:00Z' });
+		const r = turn({
+			author: 'ian',
+			lastHumanCommentBy: 'bob',
+			lastHumanCommentAt: '2026-09-10T00:00:00Z'
+		});
 		expect(r).toMatchObject({ turn: 'you', turnReason: '@bob commented' });
 	});
 });
@@ -114,11 +119,15 @@ describe('computeTurn: issues', () => {
 	it('assigned is your turn, and a reply raises the priority', () => {
 		expect(issue({ assignees: ['ian'] })).toMatchObject({ turn: 'you', priority: 3 });
 		expect(
-			issue({ assignees: ['ian'], lastCommentBy: 'bob', lastCommentAt: '2026-09-10T00:00:00Z' })
+			issue({
+				assignees: ['ian'],
+				lastHumanCommentBy: 'bob',
+				lastHumanCommentAt: '2026-09-10T00:00:00Z'
+			})
 		).toMatchObject({ priority: 1 });
 	});
 	it('my last comment means I wait', () => {
-		expect(issue({ lastCommentBy: 'ian' }).turn).toBe('them');
+		expect(issue({ lastHumanCommentBy: 'ian' }).turn).toBe('them');
 	});
 });
 
@@ -179,6 +188,17 @@ describe('expandSections', () => {
 		expect(queries[0].teams).toHaveLength(21);
 		expect(skipped).toEqual({});
 	});
+	it('runs a negated team review search once per team, as written', () => {
+		const { queries } = expandSections(
+			[{ id: 't', name: 'T', query: 'is:pr -team-review-requested:@team' }],
+			DEFAULT_DASH,
+			teams
+		);
+		expect(queries).toEqual([
+			{ section: 't', team: 'o/web', q: 'is:pr -team-review-requested:o/web archived:false' },
+			{ section: 't', team: 'o/infra', q: 'is:pr -team-review-requested:o/infra archived:false' }
+		]);
+	});
 	it('explains team searches without teams', () => {
 		const { skipped } = expandSections(sectionsFor('pr', DEFAULT_VIEWS), DEFAULT_DASH, []);
 		const { skipped: teamSkipped } = expandSections(
@@ -213,10 +233,9 @@ describe('filters, sorting, validation', () => {
 	it('hides drafts and bot PRs by others unless my review is requested or I am assigned', () => {
 		expect(keepItem(base({ draft: true }), 'ian', DEFAULT_DASH)).toBe(false);
 		expect(keepItem(base({ draft: true, author: 'ian' }), 'ian', DEFAULT_DASH)).toBe(true);
-		expect(keepItem(base({ author: 'dependabot[bot]' }), 'ian', DEFAULT_DASH)).toBe(false);
-		expect(
-			keepItem(base({ author: 'dependabot[bot]', requestedMe: true }), 'ian', DEFAULT_DASH)
-		).toBe(true);
+		const bot = { author: 'dependabot[bot]', authorIsBot: true };
+		expect(keepItem(base(bot), 'ian', DEFAULT_DASH)).toBe(false);
+		expect(keepItem(base({ ...bot, requestedMe: true }), 'ian', DEFAULT_DASH)).toBe(true);
 		expect(
 			keepItem(
 				base({ author: 'posthog', authorIsBot: true, assignees: ['Ian'] }),

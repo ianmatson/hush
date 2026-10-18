@@ -1,5 +1,5 @@
-import { sortItems } from './dashboard';
-import type { DashItem, Turn, ViewSort, ViewSortBy, ViewSortDir } from './types';
+import { sortItems, TURN_ORDER } from './dashboard';
+import type { DashItem, ViewSort, ViewSortBy, ViewSortDir } from './types';
 
 export const DEFAULT_VIEW_SORT: ViewSort = { by: 'turn', dir: 'asc', turnFirst: true };
 
@@ -103,13 +103,11 @@ export function viewSortError(v: unknown): string | null {
 	return null;
 }
 
-const TURN_BAND: Record<Turn, number> = { you: 0, team: 1, them: 2, none: 3 };
-
 export function sortItemsBy(items: DashItem[], s: ViewSort): DashItem[] {
 	const turnOrdered = sortItems(items);
 	if (s.by === 'turn') return s.dir === 'asc' ? turnOrdered : [...turnOrdered].reverse();
 	const sign = s.dir === 'asc' ? 1 : -1;
-	const byBand: Compare = (a, b) => (s.turnFirst ? TURN_BAND[a.turn] - TURN_BAND[b.turn] : 0);
+	const byBand: Compare = (a, b) => (s.turnFirst ? TURN_ORDER[a.turn] - TURN_ORDER[b.turn] : 0);
 	const { ascending, hasValue = () => true } = SORT_BY[s.by];
 	const noValueLast: Compare = (a, b) => Number(!hasValue(a)) - Number(!hasValue(b));
 	const byKey: Compare = (a, b) => (hasValue(a) && hasValue(b) ? sign * ascending(a, b) : 0);

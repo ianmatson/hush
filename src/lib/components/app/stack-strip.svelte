@@ -3,9 +3,7 @@
 	import type { Stack, StackMember } from '$lib/shared/stacks';
 	import type { Turn } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleX from '@lucide/svelte/icons/circle-x';
-	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
+	import { ciBadge } from '$lib/ci-badge';
 	import Layers from '@lucide/svelte/icons/layers';
 
 	let {
@@ -28,15 +26,6 @@
 		them: 'bg-muted-foreground/40',
 		none: 'bg-muted-foreground/40'
 	};
-
-	function ciOf(m: StackMember) {
-		const ci = m.itemInList?.ci;
-		if (ci === 'SUCCESS') return { icon: CircleCheck, tone: 'text-signal-merge' };
-		if (ci === 'FAILURE' || ci === 'ERROR') return { icon: CircleX, tone: 'text-signal-fail' };
-		if (ci === 'PENDING' || ci === 'EXPECTED')
-			return { icon: CircleDashed, tone: 'text-signal-warn' };
-		return null;
-	}
 </script>
 
 <section class="border-b px-2 py-2" aria-label="Stack">
@@ -51,7 +40,7 @@
 	<ol class="grid">
 		{#each membersTopFirst as m (m.key)}
 			{@const current = m.key === currentKey}
-			{@const ci = ciOf(m)}
+			{@const ci = ciBadge(m.itemInList?.ci)}
 			<li>
 				<button
 					type="button"

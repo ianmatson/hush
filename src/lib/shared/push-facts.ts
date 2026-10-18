@@ -1,5 +1,8 @@
+import { isAfter, replyFromOthers, reviewFromOthers } from './activity';
+import { ciFailing, ciPassing } from './ci';
+import { requestedByName, sameLogin } from './logins';
 import { enrichmentOf, type SubjectFacts } from './subject';
-import { markState, MUTED_AT, type ItemMark } from './item-snooze';
+import { markState, type ItemMark, type MarkState } from './item-snooze';
 import { snoozeOutcome } from './snooze';
 
 export type PushFact =
@@ -72,8 +75,6 @@ export interface FactEvent {
 	title: string;
 }
 
-const FAILING_CI = new Set(['FAILURE', 'ERROR']);
-
 export function factEvents(
 	before: SubjectFacts | null,
 	after: SubjectFacts,
@@ -81,20 +82,17 @@ export function factEvents(
 	myTeams: Set<string>,
 	since: number
 ): FactEvent[] {
-	const meL = me.toLowerCase();
-	const isMe = (login: string | null | undefined) => login?.toLowerCase() === meL;
-	const newerThan = (at: string | null | undefined, than: number) => !!at && Date.parse(at) > than;
+	const isMe = (login: string | null | undefined) => sameLogin(login, me);
 	const mine = isMe(after.author);
 	const pr = after.kind === 'pr';
 	const events: FactEvent[] = [];
 
-	const requestedMe = (s: SubjectFacts) => s.reviewRequests.some((r) => !r.team && isMe(r.name));
+	const requestedMe = (s: SubjectFacts) => requestedByName(s.reviewRequests, me);
 	const requestedTeam = (s: SubjectFacts) =>
 		s.reviewRequests.find((r) => r.team && myTeams.has(r.name))?.name ?? null;
 	const requestedSince = (team: boolean) =>
 		after.requestEvents.some(
-			(e) =>
-				e.team === team && (team ? myTeams.has(e.name) : isMe(e.name)) && newerThan(e.at, since)
+			(e) => e.team === team && (team ? myTeams.has(e.name) : isMe(e.name)) && isAfter(e.at, since)
 		);
 
 	if (requestedMe(after) && (before ? !requestedMe(before) : requestedSince(false)))
@@ -104,37 +102,25 @@ export function factEvents(
 		events.push({ fact: 'team-review-requested', title: `Review requested from ${team}` });
 
 	const assignedMe = (s: SubjectFacts) => s.assignees.some(isMe);
-	if (assignedMe(after) && (before ? !assignedMe(before) : newerThan(after.createdAt, since)))
+	if (assignedMe(after) && (before ? !assignedMe(before) : isAfter(after.createdAt, since)))
 		events.push({ fact: 'assigned', title: 'Assigned to you' });
 
-	const review = after.latestReview;
-	const reviewIsNew =
-		!!review &&
-		!isMe(review.author) &&
-		newerThan(review.at, before?.latestReview ? Date.parse(before.latestReview.at) : since);
-	if (pr && mine && reviewIsNew && review.state === 'APPROVED')
+	const review = reviewFromOthers(after.latestReview, me, before?.latestReview?.at ?? since);
+	if (pr && mine && review?.state === 'APPROVED')
 		events.push({ fact: 'approved', title: `Approved by ${review.author}` });
-	if (pr && mine && reviewIsNew && review.state === 'CHANGES_REQUESTED')
+	if (pr && mine && review?.state === 'CHANGES_REQUESTED')
 		events.push({ fact: 'changes-requested', title: `${review.author} requested changes` });
 
-	if (pr && mine && before && FAILING_CI.has(after.ci ?? '') && !FAILING_CI.has(before.ci ?? ''))
+	if (pr && mine && before && ciFailing(after.ci) && !ciFailing(before.ci))
 		events.push({ fact: 'ci-failed', title: 'CI failed' });
-	if (pr && mine && before && after.ci === 'SUCCESS' && before.ci !== 'SUCCESS')
+	if (pr && mine && before && ciPassing(after.ci) && !ciPassing(before.ci))
 		events.push({ fact: 'ci-passed', title: 'CI passed' });
 
-	const comment = after.lastComment;
-	const commentIsNew =
-		!!comment &&
-		!isMe(comment.author) &&
-		!comment.authorIsBot &&
-		newerThan(
-			comment.createdAt,
-			before?.lastComment ? Date.parse(before.lastComment.createdAt) : since
-		);
-	const afterMine = isMe(after.previousComment?.author);
-	if (comment && commentIsNew && (mine || afterMine))
-		events.push({ fact: 'replied', title: `${comment.author} replied` });
-	else if (pr && mine && reviewIsNew && review.state === 'COMMENTED')
+	const reply = replyFromOthers(after, me, before?.lastComment?.createdAt ?? since);
+	const answersYourComment = reply === after.lastComment && isMe(after.previousComment?.author);
+	if (reply && (mine || answersYourComment))
+		events.push({ fact: 'replied', title: `${reply.author} replied` });
+	else if (pr && mine && review?.state === 'COMMENTED')
 		events.push({ fact: 'replied', title: `${review.author} reviewed` });
 
 	return events;
@@ -144,6 +130,10 @@ export interface ItemPush {
 	reason: PushFact;
 	title: string;
 }
+
+const holdsPushes = (state: MarkState) =>
+	state.kind === 'muted' ||
+	(state.kind === 'snoozed' && (!!state.snooze.event || state.snooze.until !== undefined));
 
 export function itemPush(
 	before: SubjectFacts | null,
@@ -156,26 +146,24 @@ export function itemPush(
 	now: number,
 	extra: FactEvent[] = []
 ): ItemPush | null {
-	if (mark?.updatedAt === MUTED_AT) return null;
-	if (mark?.snoozeEvent) {
-		const asleepNow = markState(mark, after.updatedAt, after, me, now).kind === 'snoozed';
-		if (asleepNow) return null;
-		const asleepBefore =
-			!!before && markState(mark, before.updatedAt, before, me, now).kind === 'snoozed';
-		if (asleepBefore) {
-			if (!wanted.has('snooze-over')) return null;
-			const outcome = snoozeOutcome(
-				mark.snoozeEvent,
-				enrichmentOf(after, me),
-				mark.snoozedAt ?? 0,
-				me
-			);
-			return {
-				reason: 'snooze-over',
-				title: outcome.wake ? `Snooze over: ${outcome.reason}` : 'Snooze over'
-			};
-		}
-	} else if (mark && mark.snoozedUntil !== null && now < mark.snoozedUntil) return null;
+	if (holdsPushes(markState(mark, after.updatedAt, after, me, now))) return null;
+	if (
+		mark?.snoozeEvent &&
+		before &&
+		markState(mark, before.updatedAt, before, me, now).kind === 'snoozed'
+	) {
+		if (!wanted.has('snooze-over')) return null;
+		const outcome = snoozeOutcome(
+			mark.snoozeEvent,
+			enrichmentOf(after, me),
+			mark.snoozedAt ?? 0,
+			me
+		);
+		return {
+			reason: 'snooze-over',
+			title: outcome.wake ? `Snooze over: ${outcome.reason}` : 'Snooze over'
+		};
+	}
 	const events = [...factEvents(before, after, me, myTeams, since), ...extra].filter((e) =>
 		wanted.has(e.fact)
 	);

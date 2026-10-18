@@ -2,7 +2,8 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import { DEFAULT_ROWS, ROW_KINDS, ROW_PARTS, type RowKind } from '$lib/shared/row-parts';
+	import { DEFAULT_ROWS, ROW_KINDS, ROW_PARTS } from '$lib/shared/row-parts';
+	import type { DashKind } from '$lib/shared/types';
 	import { PREVIEW_MARKS, previewItem } from '$lib/row-preview';
 	import { Button } from '$lib/components/ui/button';
 	import SavedSwitch from './saved-switch.svelte';
@@ -13,7 +14,7 @@
 
 	const me = createQuery(meQuery);
 	const rows = $derived(me.data?.settings.rows ?? DEFAULT_ROWS);
-	let kind = $state<RowKind>('pr');
+	let kind = $state<DashKind>('pr');
 	const noop = () => {};
 
 	function toggle(part: string, on: boolean) {

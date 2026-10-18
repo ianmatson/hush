@@ -9,6 +9,7 @@ import {
 	needsDetails,
 	peekEntryFromRest,
 	searchShort,
+	SUBJECT_FIELDS,
 	toSubject
 } from './github';
 import type { SubjectFacts } from '../src/lib/shared/subject';
@@ -411,6 +412,40 @@ describe('toSubject close facts', () => {
 		expect(issue('CLOSED', 'DUPLICATE').closeReason).toBe('duplicate');
 		expect(issue('CLOSED', null).closeReason).toBeNull();
 		expect(issue('OPEN', 'REOPENED').closeReason).toBeNull();
+	});
+});
+
+describe('toSubject reviews', () => {
+	const AT = '2026-10-13T10:00:00Z';
+	const reviewBy = (author: Record<string, unknown>) =>
+		toSubject({
+			__typename: 'PullRequest',
+			number: 7,
+			url: 'https://github.com/o/r/pull/7',
+			state: 'OPEN',
+			repository: { nameWithOwner: 'o/r' },
+			author: { login: 'alice' },
+			latestReview: { nodes: [{ author, submittedAt: AT, state: 'COMMENTED' }] }
+		}).latestReview;
+
+	it('marks a review by a GitHub App as a bot review', () => {
+		expect(reviewBy({ login: 'copilot-pull-request-reviewer', __typename: 'Bot' })).toEqual({
+			author: 'copilot-pull-request-reviewer',
+			authorIsBot: true,
+			at: AT,
+			state: 'COMMENTED'
+		});
+		expect(reviewBy({ login: 'bob', __typename: 'User' })?.authorIsBot).toBe(false);
+	});
+
+	it('asks only for submitted reviews, so a pending review hides no submitted one', () => {
+		const reviewArguments = SUBJECT_FIELDS.match(/reviews\([^)]*\)/g) ?? [];
+		expect(reviewArguments).toHaveLength(2);
+		for (const args of reviewArguments)
+			expect(args).toContain('states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]');
+		expect(SUBJECT_FIELDS).toMatch(
+			/latestReview: reviews\([^)]*\) \{ nodes \{ author \{ login __typename \}/
+		);
 	});
 });
 

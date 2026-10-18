@@ -1,10 +1,19 @@
 import {
+	BOTS_VALUE,
 	formatQuery,
 	IS_VALUES,
 	parseExpr,
+	parseNumberSpec,
+	parseRangeOrBound,
+	parseRelativeDay,
+	parseTerm,
+	queryParts,
+	quote,
 	splitSearch,
+	splitValues,
 	WORDS,
 	wordWorksIn,
+	type Comparison,
 	type QueryExpr,
 	type QueryPlace,
 	type WordRuns
@@ -32,7 +41,6 @@ export interface BuilderState {
 
 export const TEXT_WORD = 'text';
 export const IS_WORD = 'is';
-const BOTS_VALUE = 'bots';
 
 export type FieldInput = 'list' | 'choice' | 'size' | 'about' | 'text';
 
@@ -185,17 +193,18 @@ export const emptyCondition = (word = 'repo'): BuilderCondition => ({
 
 export const EMPTY_BUILDER: BuilderState = { mode: 'all', items: [] };
 
-const quote = (x: string) => (/[\s,":()]/.test(x) ? `"${x.replace(/"/g, '')}"` : x);
-
 const isComplete = (c: BuilderCondition) => c.values.some((v) => v.trim());
 
+const textWords = (c: BuilderCondition) => c.values.flatMap((v) => v.split(/\s+/)).filter(Boolean);
+
 function conditionText(c: BuilderCondition): string {
+	const not = c.negate ? '-' : '';
+	if (c.word === TEXT_WORD)
+		return textWords(c)
+			.map((w) => `${not}${quote(w)}`)
+			.join(' ');
 	const values = c.values.map((v) => v.trim()).filter(Boolean);
-	if (c.word === TEXT_WORD) {
-		const words = values.flatMap((v) => v.split(/\s+/)).filter(Boolean);
-		return words.map((w) => `${c.negate ? '-' : ''}${quote(w)}`).join(' ');
-	}
-	return `${c.negate ? '-' : ''}${c.word}:${values.map(quote).join(',')}`;
+	return `${not}${c.word}:${values.map(quote).join(',')}`;
 }
 
 const join = (parts: string[], mode: BuilderMode) => parts.join(mode === 'all' ? ' ' : ' OR ');
@@ -213,26 +222,32 @@ export function builderToQuery(state: BuilderState): string {
 function conditionsOfText(text: string, negate: boolean): BuilderCondition[] {
 	const out: BuilderCondition[] = [];
 	const words: string[] = [];
-	for (const part of text.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []) {
-		const m = /^(-?)([a-z][a-z-]*):(.+)$/i.exec(part);
-		if (!m) {
+	for (const part of queryParts(text)) {
+		const term = parseTerm(part);
+		if (!term?.raw) {
 			words.push(part.replace(/"/g, ''));
 			continue;
 		}
-		const values = [...m[3].matchAll(/(?:[^,"]+|"[^"]*")+/g)].map((x) => x[0].replace(/"/g, ''));
-		const own = m[1] === '-';
-		out.push({ type: 'condition', word: m[2].toLowerCase(), negate: own !== negate, values });
+		out.push({
+			type: 'condition',
+			word: term.key.toLowerCase(),
+			negate: term.negated !== negate,
+			values: splitValues(term.raw)
+		});
 	}
 	if (words.length)
 		out.push({ type: 'condition', word: TEXT_WORD, negate, values: [words.join(' ')] });
 	return out;
 }
 
+const negationKeepsItsMeaning = (c: BuilderCondition) =>
+	c.word !== TEXT_WORD || textWords(c).length === 1;
+
 function leafConditions(expr: QueryExpr): BuilderCondition[] | null {
 	if (expr.kind === 'match') return conditionsOfText(formatQuery(expr.when), false);
 	if (expr.kind === 'not' && expr.part.kind === 'match') {
 		const inner = conditionsOfText(formatQuery(expr.part.when), true);
-		return inner.length === 1 ? inner : null;
+		return inner.length === 1 && negationKeepsItsMeaning(inner[0]) ? inner : null;
 	}
 	return null;
 }
@@ -290,18 +305,25 @@ export function queryToBuilder(query: string, place: QueryPlace = 'rule'): Build
 	return { mode, items };
 }
 
+const NUMBER_COMPARISON_WORDS: Record<Comparison, string> = {
+	'<': 'under',
+	'>': 'over',
+	'<=': 'at most',
+	'>=': 'at least'
+};
+
+const DATE_COMPARISON_WORDS: Record<Comparison, string> = {
+	'<': 'before',
+	'<=': 'on or before',
+	'>': 'after',
+	'>=': 'on or after'
+};
+
 function sizeWords(spec: string): string {
-	const range = /^(\d+)\.\.(\d+)$/.exec(spec);
-	if (range) return `${range[1]} to ${range[2]}`;
-	const m = /^(<=|>=|<|>)?(\d+)$/.exec(spec);
-	if (!m) return spec;
-	const words: Record<string, string> = {
-		'<': 'under',
-		'>': 'over',
-		'<=': 'at most',
-		'>=': 'at least'
-	};
-	return m[1] ? `${words[m[1]]} ${m[2]}` : m[2];
+	const parsed = parseNumberSpec(spec);
+	if (!parsed) return spec;
+	if (parsed.kind === 'range') return `${parsed.from} to ${parsed.to}`;
+	return parsed.op ? `${NUMBER_COMPARISON_WORDS[parsed.op]} ${parsed.value}` : `${parsed.value}`;
 }
 
 const DATE_WORDS = new Set(['created', 'updated', 'closed', 'merged']);
@@ -311,24 +333,17 @@ const asPhrase = (label: string) =>
 	/^[A-Z]{2}/.test(label) ? label : `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 
 function dayWords(date: string): string {
-	const relative = /^@today(?:-(\d+)([dw]))?$/.exec(date);
+	const relative = parseRelativeDay(date);
 	if (!relative) return date;
-	if (!relative[1]) return 'today';
-	const unit = relative[2] === 'w' ? 'week' : 'day';
-	return `${relative[1]} ${unit}${relative[1] === '1' ? '' : 's'} ago`;
+	if (!relative.amount) return 'today';
+	return `${relative.amount} ${relative.unit}${relative.amount === 1 ? '' : 's'} ago`;
 }
 
 function dateWords(spec: string): string {
-	const range = /^(.+)\.\.(.+)$/.exec(spec);
-	if (range) return `between ${dayWords(range[1])} and ${dayWords(range[2])}`;
-	const m = /^(<=|>=|<|>)?(.+)$/.exec(spec)!;
-	const words: Record<string, string> = {
-		'<': 'before',
-		'<=': 'on or before',
-		'>': 'after',
-		'>=': 'on or after'
-	};
-	return `${m[1] ? words[m[1]] : 'on'} ${dayWords(m[2])}`;
+	const parsed = parseRangeOrBound(spec);
+	if (!parsed) return spec;
+	if (parsed.kind === 'range') return `between ${dayWords(parsed.from)} and ${dayWords(parsed.to)}`;
+	return `${parsed.op ? DATE_COMPARISON_WORDS[parsed.op] : 'on'} ${dayWords(parsed.value)}`;
 }
 
 export function describeCondition(c: BuilderCondition): string {

@@ -1,6 +1,19 @@
+import { latestActivity, newestHumanComment } from './activity';
 import type { DashFacts } from './dashboard';
 import { NO_DECISIONS, type SubjectDecisions } from './decisions';
-import type { CiState, CloseReason, Enrichment, LastComment, StackLink } from './types';
+import { githubItemUrl } from './item-page';
+import { requestedByName, sameLogin, type ReviewRequest } from './logins';
+import { SUBJECT_TYPE } from './query';
+import type {
+	CiState,
+	CloseReason,
+	DashKind,
+	Enrichment,
+	LastComment,
+	LatestReview,
+	RuleFacts,
+	StackLink
+} from './types';
 
 /**
  * Everything Hush knows about one PR or issue, as GitHub last returned it. The one record that
@@ -14,7 +27,7 @@ import type { CiState, CloseReason, Enrichment, LastComment, StackLink } from '.
 export interface SubjectFacts {
 	/** GraphQL node id. */
 	id: string;
-	kind: 'pr' | 'issue';
+	kind: DashKind;
 	repo: string;
 	number: number;
 	title: string;
@@ -45,11 +58,11 @@ export interface SubjectFacts {
 	deletions: number;
 	lastCommitAt: string | null;
 	/** Open review requests: a user login, or a team's "org/team" slug. */
-	reviewRequests: { team: boolean; name: string }[];
+	reviewRequests: ReviewRequest[];
 	/** The newest review-request events (for "waiting since"). */
 	requestEvents: { at: string; team: boolean; name: string }[];
 	myReview: { at: string; state: string } | null;
-	latestReview: { author: string; at: string; state: string } | null;
+	latestReview: LatestReview | null;
 	/** Each reviewer's latest approval or change request. */
 	verdicts: { by: string; at: string; state: string }[];
 	/** Review threads nobody resolved (up to 50). */
@@ -63,7 +76,16 @@ export const subjectKey = (repo: string, number: number) => `${repo}#${number}`;
 /** Both URL forms GitHub uses for a subject (threads store either). */
 export function subjectUrls(key: string): [string, string] {
 	const [repo, n] = key.split('#');
-	return [`https://github.com/${repo}/pull/${n}`, `https://github.com/${repo}/issues/${n}`];
+	return [githubItemUrl(repo, Number(n), 'pr'), githubItemUrl(repo, Number(n), 'issue')];
+}
+
+export function reviewDecisionOf(
+	s: Pick<SubjectFacts, 'reviewDecision' | 'verdicts'>
+): Enrichment['reviewDecision'] {
+	if (s.reviewDecision) return s.reviewDecision;
+	if (s.verdicts.some((v) => v.state === 'CHANGES_REQUESTED')) return 'CHANGES_REQUESTED';
+	if (s.verdicts.some((v) => v.state === 'APPROVED')) return 'APPROVED';
+	return null;
 }
 
 /**
@@ -87,7 +109,6 @@ export function enrichmentOf(
 	me: string,
 	decisions: SubjectDecisions = NO_DECISIONS
 ): Enrichment {
-	const meL = me.toLowerCase();
 	const base: Enrichment = {
 		kind: s.kind,
 		number: s.number,
@@ -95,7 +116,7 @@ export function enrichmentOf(
 		author: s.author,
 		authorIsBot: s.authorIsBot,
 		labels: s.labels.map((l) => l.name),
-		assignedToMe: s.assignees.some((a) => a.toLowerCase() === meL),
+		assignedToMe: s.assignees.some((a) => sameLogin(a, me)),
 		assignees: s.assignees,
 		reviewRequests: s.reviewRequests.map((r) => r.name),
 		lastComment: s.lastComment,
@@ -113,7 +134,7 @@ export function enrichmentOf(
 		...base,
 		state: s.state,
 		draft: s.draft,
-		reviewDecision: s.reviewDecision,
+		reviewDecision: reviewDecisionOf(s),
 		mergeable: s.mergeable ?? undefined,
 		ci: s.ci,
 		lastCommitAt: s.lastCommitAt,
@@ -122,7 +143,7 @@ export function enrichmentOf(
 		myReview: s.myReview,
 		latestReview: s.latestReview,
 		reviewed: !!s.latestReview,
-		reviewRequestedFromMe: s.reviewRequests.some((r) => !r.team && r.name.toLowerCase() === meL),
+		reviewRequestedFromMe: requestedByName(s.reviewRequests, me),
 		// Short slugs; turnFactsFromEnrichment adds the org back.
 		requestedTeams: s.reviewRequests.filter((r) => r.team).map((r) => r.name.split('/').pop()!),
 		additions: s.additions,
@@ -137,16 +158,15 @@ export function dashFactsOf(
 	myTeams: Set<string>,
 	decisions: SubjectDecisions = NO_DECISIONS
 ): DashFacts {
-	const meL = me.toLowerCase();
 	const pr = s.kind === 'pr';
-	const isMe = (r: { team: boolean; name: string }) => !r.team && r.name.toLowerCase() === meL;
-	const isMine = (r: { team: boolean; name: string }) => isMe(r) || (r.team && myTeams.has(r.name));
-	const requestedMe = s.reviewRequests.some(isMe);
+	const isMine = (r: ReviewRequest) => (r.team ? myTeams.has(r.name) : sameLogin(r.name, me));
+	const requestedMe = requestedByName(s.reviewRequests, me);
 	const requestedTeams = s.reviewRequests
 		.filter((r) => r.team && myTeams.has(r.name))
 		.map((r) => r.name);
 	// The newest review-request event for you or one of your teams.
 	const ev = [...s.requestEvents].reverse().find(isMine);
+	const humanComment = newestHumanComment(s);
 	return {
 		id: subjectKey(s.repo, s.number),
 		kind: s.kind,
@@ -166,12 +186,13 @@ export function dashFactsOf(
 		draft: s.draft,
 		labels: s.labels,
 		comments: s.comments,
-		lastCommentBy: s.lastComment?.author ?? null,
-		lastCommentAt: s.lastComment?.createdAt ?? null,
-		lastCommentIsBot: !!s.lastComment?.authorIsBot,
+		lastHumanCommentBy: humanComment?.author ?? null,
+		lastHumanCommentAt: humanComment?.createdAt ?? null,
+		activity: latestActivity(s),
 		assignees: s.assignees,
+		reviewRequests: s.reviewRequests.map((r) => r.name),
 		ci: pr ? s.ci : null,
-		reviewDecision: pr ? s.reviewDecision : null,
+		reviewDecision: pr ? reviewDecisionOf(s) : null,
 		mergeable: pr ? s.mergeable : null,
 		additions: s.additions,
 		deletions: s.deletions,
@@ -189,3 +210,25 @@ export function dashFactsOf(
 		urgent: decisions.urgent
 	};
 }
+
+export function ruleFactsOf(
+	s: Pick<SubjectFacts, 'repo' | 'kind' | 'title'>,
+	enrichment: Enrichment,
+	me: string,
+	context: Pick<RuleFacts, 'activity' | 'categories' | 'now'>
+): RuleFacts {
+	return {
+		repo: s.repo,
+		subjectType: SUBJECT_TYPE[s.kind],
+		title: s.title,
+		enrichment,
+		me,
+		...context
+	};
+}
+
+export const subjectRuleFacts = (
+	s: SubjectFacts,
+	me: string,
+	decisions: SubjectDecisions = NO_DECISIONS
+): RuleFacts => ruleFactsOf(s, enrichmentOf(s, me, decisions), me, { activity: latestActivity(s) });

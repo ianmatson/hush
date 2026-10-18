@@ -5,6 +5,7 @@
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import { slackMentionsQuery, slackQuery } from '$lib/queries';
+	import type { DashKind } from '$lib/shared/types';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import * as Popover from '$lib/components/ui/popover';
@@ -17,7 +18,7 @@
 		number,
 		kind,
 		class: className
-	}: { repo: string; number: number; kind: 'pr' | 'issue'; class?: string } = $props();
+	}: { repo: string; number: number; kind: DashKind; class?: string } = $props();
 
 	const slack = createQuery(slackQuery);
 	const mentionsConnected = $derived(slack.data?.mentions.connected ?? false);

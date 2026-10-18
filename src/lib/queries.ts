@@ -76,7 +76,7 @@ export const keys = {
 	sessions: ['sessions'] as const,
 	pushDevices: ['push-devices'] as const,
 	slack: ['slack'] as const,
-	slackMentions: (repo: string, number: number, kind: 'pr' | 'issue') =>
+	slackMentions: (repo: string, number: number, kind: DashKind) =>
 		['slack-mentions', repo, number, kind] as const,
 	teams: ['teams'] as const,
 	peek: (repo: string, number: number) => ['peek', repo, number] as const,
@@ -152,7 +152,7 @@ export const sessionsQuery = () => queryOptions({ queryKey: keys.sessions, query
 export const pushDevicesQuery = () =>
 	queryOptions({ queryKey: keys.pushDevices, queryFn: api.subscriptions });
 export const slackQuery = () => queryOptions({ queryKey: keys.slack, queryFn: api.slack });
-export const slackMentionsQuery = (repo: string, number: number, kind: 'pr' | 'issue') =>
+export const slackMentionsQuery = (repo: string, number: number, kind: DashKind) =>
 	infiniteQueryOptions({
 		queryKey: keys.slackMentions(repo, number, kind),
 		queryFn: ({ pageParam }) => api.slackMentions(repo, number, kind, pageParam ?? undefined),

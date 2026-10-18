@@ -1,5 +1,6 @@
 import { itemQueryFacts } from './categories';
 import { newestCloseFirst } from './closed-items';
+import { sameLogin } from './logins';
 import { queryMatches } from './rules';
 import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSection } from './types';
 
@@ -31,7 +32,6 @@ export const CLOSED_SECTION = 'Merged and closed';
 export const CUSTOM_GROUP_BY: GroupBy = 'custom';
 const CATEGORY_PREFIX = 'category:';
 const PROJECT_PREFIX = 'project:';
-const sameLogin = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 const ROLE: FixedGrouping = {
 	sections: [

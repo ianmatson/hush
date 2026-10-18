@@ -1,5 +1,7 @@
-import { isBot } from './bots';
+import { isAfter } from './activity';
+import { ciFailing, ciRunning } from './ci';
 import { closedLabel } from './closed-items';
+import { sameLogin } from './logins';
 import { readsBoard } from './projects';
 import type { DashItem, DashKind, DashSection, DashSettings, TeamDTO, Turn } from './types';
 
@@ -28,7 +30,7 @@ export interface ExpandedQuery {
  * GitHub's review-requested:@me finds PRs that ask you or one of your teams (not your own PRs),
  * so one search, filtered by your tracked teams, does the work of one search per team.
  */
-const TEAM_REVIEW = /\bteam-review-requested:@team\b/g;
+const TEAM_REVIEW = /(?<![\w-])team-review-requested:@team\b/g;
 const REVIEW_REQUESTED_ME = /(?<![\w-])review-requested:@me\b/;
 const NAMES_ARCHIVED = /(?:^|\s)-?archived:/i;
 
@@ -123,9 +125,8 @@ export type TurnFacts = Pick<
 	| 'draft'
 	| 'assignees'
 	| 'comments'
-	| 'lastCommentBy'
-	| 'lastCommentAt'
-	| 'lastCommentIsBot'
+	| 'lastHumanCommentBy'
+	| 'lastHumanCommentAt'
 	| 'ci'
 	| 'reviewDecision'
 	| 'mergeable'
@@ -143,17 +144,16 @@ export type TurnFacts = Pick<
 
 export const NEW_COMMITS_REASON = 'New commits since your review';
 
-const after = (a: string | null, b: string | null) => !!a && (!b || Date.parse(a) > Date.parse(b));
-
 export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): TurnResult {
-	const meL = me.toLowerCase();
-	const mine = i.author.toLowerCase() === meL;
-	const assigned = i.assignees.some((a) => a.toLowerCase() === meL);
-	const lastByMe = i.lastCommentBy?.toLowerCase() === meL;
-	const lastByOtherHuman = !!i.lastCommentBy && !lastByMe && !i.lastCommentIsBot;
+	const mine = sameLogin(i.author, me);
+	const assigned = i.assignees.some((a) => sameLogin(a, me));
+	const commenter = i.lastHumanCommentBy;
+	const commentedAt = i.lastHumanCommentAt;
+	const lastByMe = sameLogin(commenter, me);
+	const lastByOtherHuman = !!commenter && !lastByMe;
 	const commentNeedsNothing = lastByOtherHuman && i.commentsNeedMe === false;
 	const commentWaitsOnMe = lastByOtherHuman && !commentNeedsNothing;
-	const botPr = !mine && (i.authorIsBot || isBot(i.author));
+	const botPr = !mine && i.authorIsBot;
 	const r = (
 		turn: Turn,
 		turnReason: string,
@@ -181,28 +181,25 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 	if (i.state === 'closed') return r('none', closedLabel(i.closeReason), 0, i.closedAt ?? null);
 
 	if (i.kind === 'issue') {
-		if (assigned && commentWaitsOnMe)
-			return you(`@${i.lastCommentBy} replied`, 1, i.lastCommentAt, 'Reply');
+		if (assigned && commentWaitsOnMe) return you(`@${commenter} replied`, 1, commentedAt, 'Reply');
 		if (assigned) return you('Assigned to you', 3, i.createdAt, 'Triage');
-		if (mine && commentWaitsOnMe)
-			return you(`@${i.lastCommentBy} replied`, 2, i.lastCommentAt, 'Reply');
+		if (mine && commentWaitsOnMe) return you(`@${commenter} replied`, 2, commentedAt, 'Reply');
 		if (mine && commentNeedsNothing)
-			return r('them', `@${i.lastCommentBy} replied, no reply needed`, 0, i.lastCommentAt);
+			return r('them', `@${commenter} replied, no reply needed`, 0, commentedAt);
 		if (mine)
 			return r(
 				'them',
 				i.comments ? 'Waiting for replies' : 'No replies yet',
 				0,
-				i.lastCommentAt || i.createdAt
+				commentedAt || i.createdAt
 			);
-		if (lastByMe) return r('them', 'Waiting for a reply', 0, i.lastCommentAt);
+		if (lastByMe) return r('them', 'Waiting for a reply', 0, commentedAt);
 		return r('none', sectionNames[0] ?? 'Involves you', 0, i.updatedAt);
 	}
 
 	if (mine) {
 		if (i.draft) return r('none', 'Draft', 0, i.updatedAt);
-		if (i.ci === 'FAILURE' || i.ci === 'ERROR')
-			return you('CI failing', 0, i.lastCommitAt, 'Fix CI', `${i.url}/checks`);
+		if (ciFailing(i.ci)) return you('CI failing', 0, i.lastCommitAt, 'Fix CI', `${i.url}/checks`);
 		if (i.reviewDecision === 'CHANGES_REQUESTED')
 			return you('Changes requested', 1, i.updatedAt, 'Address');
 		if (i.mergeable === 'CONFLICTING') return you('Merge conflict', 1, i.updatedAt, 'Resolve');
@@ -215,14 +212,13 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 				i.updatedAt,
 				'Reply'
 			);
-		if (i.reviewDecision === 'APPROVED' && i.ci !== 'PENDING' && i.ci !== 'EXPECTED')
+		if (i.reviewDecision === 'APPROVED' && !ciRunning(i.ci))
 			return you('Ready to merge', 2, i.updatedAt, 'Merge');
-		if (commentWaitsOnMe && after(i.lastCommentAt, i.lastCommitAt))
-			return you(`@${i.lastCommentBy} commented`, 2, i.lastCommentAt, 'Reply');
-		if (commentNeedsNothing && after(i.lastCommentAt, i.lastCommitAt))
-			return r('them', `@${i.lastCommentBy} commented, no reply needed`, 0, i.lastCommentAt);
-		if (i.ci === 'PENDING' || i.ci === 'EXPECTED')
-			return r('them', 'CI running', 0, i.lastCommitAt);
+		if (commentWaitsOnMe && isAfter(commentedAt, i.lastCommitAt))
+			return you(`@${commenter} commented`, 2, commentedAt, 'Reply');
+		if (commentNeedsNothing && isAfter(commentedAt, i.lastCommitAt))
+			return r('them', `@${commenter} commented, no reply needed`, 0, commentedAt);
+		if (ciRunning(i.ci)) return r('them', 'CI running', 0, i.lastCommitAt);
 		return r('them', 'Waiting for review', 0, i.requestedAt || i.createdAt);
 	}
 
@@ -233,7 +229,7 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 			? you('Re-review requested', 0, i.requestedAt, 'Review', `${i.url}/files`)
 			: you('Review requested', 0, i.requestedAt || i.createdAt, 'Review', `${i.url}/files`);
 	if (assigned) return you('Assigned to you', 1, i.updatedAt, 'Open');
-	if (i.myLastReviewAt && after(i.lastCommitAt, i.myLastReviewAt))
+	if (i.myLastReviewAt && isAfter(i.lastCommitAt, i.myLastReviewAt))
 		return you(NEW_COMMITS_REASON, 2, i.lastCommitAt, 'Re-review', `${i.url}/files`);
 	if (i.requestedTeams.length)
 		return r(
@@ -251,7 +247,7 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 			0,
 			i.myLastReviewAt
 		);
-	if (lastByMe) return r('them', 'Waiting for a reply', 0, i.lastCommentAt);
+	if (lastByMe) return r('them', 'Waiting for a reply', 0, commentedAt);
 	return r('none', sectionNames[0] ?? 'Involves you', 0, i.updatedAt);
 }
 
@@ -280,16 +276,14 @@ export function keepItem(
 	me: string,
 	dash: Pick<DashSettings, 'hideOthersDrafts' | 'hideBots'>
 ): boolean {
-	const meL = me.toLowerCase();
-	const mine = i.author.toLowerCase() === meL;
-	const assignedToMe = i.assignees.some((a) => a.toLowerCase() === meL);
+	const mine = sameLogin(i.author, me);
+	const assignedToMe = i.assignees.some((a) => sameLogin(a, me));
 	if (dash.hideOthersDrafts && i.draft && !mine) return false;
-	if (dash.hideBots && (i.authorIsBot || isBot(i.author)) && !i.requestedMe && !assignedToMe)
-		return false;
+	if (dash.hideBots && i.authorIsBot && !i.requestedMe && !assignedToMe) return false;
 	return true;
 }
 
-const TURN_ORDER: Record<Turn, number> = { you: 0, team: 1, them: 2, none: 3 };
+export const TURN_ORDER: Record<Turn, number> = { you: 0, team: 1, them: 2, none: 3 };
 
 /** Your turn first; inside a group, most urgent first, then the longest wait. */
 export function sortItems<

@@ -117,4 +117,38 @@ describe('@me and the new words', () => {
 		expect(numberMatches('>=31', 30)).toBe(false);
 		expect(numberMatches('30', 30)).toBe(true);
 	});
+	it('label: takes wildcards', () => {
+		const t = thread({}, { labels: ['area/api', 'Bug'] });
+		expect(matches('label:area/*', t)).toBe(true);
+		expect(matches('label:bu?', t)).toBe(true);
+		expect(matches('label:team/*', t)).toBe(false);
+	});
+});
+
+describe('bots among other values', () => {
+	const bot = thread({}, { author: 'dependabot[bot]', authorIsBot: true });
+	const alice = thread();
+	const bob = thread({}, { author: 'bob' });
+
+	it('author:alice,bots matches either', () => {
+		expect(matches('author:alice,bots', alice)).toBe(true);
+		expect(matches('author:alice,bots', bot)).toBe(true);
+		expect(matches('author:alice,bots', bob)).toBe(false);
+		expect(matches('author:alice author:bots', bot)).toBe(true);
+	});
+
+	it('-author:bots still means a person', () => {
+		expect(matches('author:alice -author:bots', alice)).toBe(true);
+		expect(matches('author:dependabot* -author:bots', bot)).toBe(false);
+	});
+
+	it('from:bob,bots matches either, and a review by a bot is from a bot', () => {
+		const at = '2026-09-20T12:00:00Z';
+		const reviewedBy = (author: string, authorIsBot: boolean) =>
+			thread({}, { latestReview: { author, authorIsBot, at, state: 'COMMENTED' } });
+		expect(matches('from:bob,bots', reviewedBy('bob', false))).toBe(true);
+		expect(matches('from:bob,bots', reviewedBy('copilot-pull-request-reviewer', true))).toBe(true);
+		expect(matches('from:bob,bots', reviewedBy('carol', false))).toBe(false);
+		expect(matches('from:bots', reviewedBy('coderabbitai', true))).toBe(true);
+	});
 });

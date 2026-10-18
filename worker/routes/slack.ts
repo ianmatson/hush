@@ -1,5 +1,6 @@
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
+import { isDashKind } from '../../src/lib/shared/item-page';
 import type { SlackMentionsPageDTO, SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
 import { poller, query, routes, type AppEnv } from '../app';
@@ -16,7 +17,6 @@ import {
 import {
 	SLACK_MENTIONS_USER_SCOPES,
 	exchangeMentionsCode,
-	isGitHubKind,
 	refreshSlackMentionsAccess,
 	searchMentions,
 	slackMentionsCallbackUrl,
@@ -187,7 +187,7 @@ const app = routes()
 				!GITHUB_NAME.test(owner) ||
 				!GITHUB_NAME.test(repo) ||
 				!Number.isSafeInteger(number) ||
-				!isGitHubKind(kind)
+				!isDashKind(kind)
 			)
 				return c.json({ error: 'Bad PR or issue.' }, 400, noStore);
 			const userId = c.get('user').id;

@@ -21,6 +21,7 @@ import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
 import { boardCount, boardShort, itemStatuses } from '../projects';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { itemQueryFacts } from '../../src/lib/shared/categories';
+import { sameLogin } from '../../src/lib/shared/logins';
 import { DASH_TTL, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
@@ -468,7 +469,7 @@ export abstract class PollerDashboard extends PollerSync {
 			if (complete && !sameSearches) nowRemembered[searchesKey(v.id)] = searches;
 			if (!v.pushNew || !sameSearches || !initialized) continue;
 			for (const i of fresh)
-				if (i.author.toLowerCase() !== who.me.toLowerCase())
+				if (!sameLogin(i.author, who.me))
 					candidates.push({
 						itemKey: i.id,
 						reason: NEW_ITEM_REASON,

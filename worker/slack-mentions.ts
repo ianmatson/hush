@@ -1,4 +1,5 @@
-import type { SlackMentionDTO, SlackMentionsPageDTO } from '../src/lib/shared/types';
+import { githubItemUrl } from '../src/lib/shared/item-page';
+import type { DashKind, SlackMentionDTO, SlackMentionsPageDTO } from '../src/lib/shared/types';
 import { appToken, userToken, type Env, type UserRow } from './db';
 import { gh } from './github';
 import { SLACK_API, slackAnswer, type SlackAnswer } from './slack';
@@ -79,24 +80,17 @@ export async function exchangeMentionsCode(
 	);
 }
 
-export type GitHubKind = 'pr' | 'issue';
-
 export interface GitHubRef {
 	owner: string;
 	repo: string;
 	number: number;
-	kind: GitHubKind;
+	kind: DashKind;
 }
-
-const URL_SEGMENT: Record<GitHubKind, string> = { pr: 'pull', issue: 'issues' };
-
-export const isGitHubKind = (value: unknown): value is GitHubKind =>
-	value === 'pr' || value === 'issue';
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export function mentionQuery({ owner, repo, number, kind }: GitHubRef): string {
-	return `"https://github.com/${owner}/${repo}/${URL_SEGMENT[kind]}/${number}"`;
+	return `"${githubItemUrl(`${owner}/${repo}`, number, kind)}"`;
 }
 
 export function mentionPattern({ owner, repo, number }: Omit<GitHubRef, 'kind'>): RegExp {

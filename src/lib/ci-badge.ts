@@ -2,7 +2,8 @@ import type { Component } from 'svelte';
 import CircleCheck from '@lucide/svelte/icons/circle-check';
 import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 import CircleX from '@lucide/svelte/icons/circle-x';
-import type { CiState } from '$lib/shared/types';
+import { ciWord } from '$lib/shared/ci';
+import type { CiState, CiWord } from '$lib/shared/types';
 
 export interface CiBadge {
 	icon: Component;
@@ -10,16 +11,13 @@ export interface CiBadge {
 	label: string;
 }
 
-const PASSING: CiBadge = { icon: CircleCheck, tone: 'text-signal-merge', label: 'Checks pass' };
-const FAILING: CiBadge = { icon: CircleX, tone: 'text-signal-fail', label: 'Checks fail' };
-const RUNNING: CiBadge = { icon: CircleDashed, tone: 'text-signal-warn', label: 'Checks running' };
-
-const BADGE_OF_STATE: Record<CiState, CiBadge> = {
-	SUCCESS: PASSING,
-	FAILURE: FAILING,
-	ERROR: FAILING,
-	PENDING: RUNNING,
-	EXPECTED: RUNNING
+const BADGE_OF_WORD: Record<CiWord, CiBadge> = {
+	success: { icon: CircleCheck, tone: 'text-signal-merge', label: 'Checks pass' },
+	failure: { icon: CircleX, tone: 'text-signal-fail', label: 'Checks fail' },
+	pending: { icon: CircleDashed, tone: 'text-signal-warn', label: 'Checks running' }
 };
 
-export const ciBadge = (ci: CiState | null): CiBadge | null => (ci ? BADGE_OF_STATE[ci] : null);
+export function ciBadge(ci: CiState | null | undefined): CiBadge | null {
+	const word = ciWord(ci);
+	return word ? BADGE_OF_WORD[word] : null;
+}
