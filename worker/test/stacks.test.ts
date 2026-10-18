@@ -113,7 +113,7 @@ describe('mergeStackThrough', () => {
 		});
 		const result = mergeStackThrough('t', 'acme/web', 1, 'SQUASH');
 		await vi.runAllTimersAsync();
-		expect(await result).toEqual({ error: 'Conflicts.' });
+		expect(await result).toEqual({ error: 'Conflicts.', status: 422 });
 		vi.useRealTimers();
 	});
 

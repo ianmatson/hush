@@ -1,6 +1,7 @@
 import { isAfter } from './activity';
 import { ciFailing, ciRunning } from './ci';
 import { closedLabel } from './closed-items';
+import { DAY_MS } from './durations';
 import { sameLogin } from './logins';
 import { readsBoard } from './projects';
 import type { DashItem, DashKind, DashSection, DashSettings, TeamDTO, Turn } from './types';
@@ -260,7 +261,7 @@ export function finishItem(
 	now = Date.now()
 ): DashItem {
 	const t = computeTurn(facts, me, sectionNames);
-	const stale = t.turn !== 'none' && now - Date.parse(t.waitingSince) > staleDays * 86_400_000;
+	const stale = t.turn !== 'none' && now - Date.parse(t.waitingSince) > staleDays * DAY_MS;
 	return {
 		...facts,
 		...t,

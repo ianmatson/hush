@@ -1,8 +1,8 @@
 import type { RowMark } from './marks';
+import { HOUR_MS } from './shared/durations';
 import type { DashItem, DashKind } from './shared/types';
 
-const HOUR = 3_600_000;
-const hoursAgo = (n: number) => new Date(Date.now() - n * HOUR).toISOString();
+const hoursAgo = (n: number) => new Date(Date.now() - n * HOUR_MS).toISOString();
 
 const PREVIEW_ITEM: DashItem = {
 	id: 'acme/web#128',

@@ -2,11 +2,12 @@ import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { MeDTO, OrgAccess } from '../../src/lib/shared/types';
 import { encryptSecret, randomToken, sha256 } from '../crypto';
-import { appToken, getUser, tokenContext, userToken, type Env } from '../db';
+import { appToken, getUser, scopesOf, tokenContext, userToken, type Env } from '../db';
 import { getViewer, gh, type GhUser } from '../github';
 import { refreshSlackMentionsAccess } from '../slack-mentions';
 import { routes, SESSION_COOKIE, poller, json, type AppEnv } from '../app';
-import { SESSION_DAYS, SESSION_IDLE_DAYS, deviceLabel } from '../../src/lib/shared/session';
+import { SESSION_DAYS, SESSION_IDLE_MS, deviceLabel } from '../../src/lib/shared/session';
+import { DAY_MS } from '../../src/lib/shared/durations';
 import type { SessionDTO } from '../../src/lib/shared/types';
 
 // --- Auth: Sign in with GitHub (an OAuth app), and your own token as an option ------------
@@ -86,8 +87,6 @@ async function saveUser(
 	await db.batch(writes);
 }
 
-const DAY = 86_400_000;
-
 async function startSession(c: Context<AppEnv>, userId: number) {
 	const now = Date.now();
 	const sid = randomToken();
@@ -96,10 +95,10 @@ async function startSession(c: Context<AppEnv>, userId: number) {
 		// Sessions that ended stay in the table until the user signs in again.
 		c.env.DB.prepare(
 			'DELETE FROM sessions WHERE user_id = ? AND (expires_at <= ? OR last_seen_at <= ?)'
-		).bind(userId, now, now - SESSION_IDLE_DAYS * DAY),
+		).bind(userId, now, now - SESSION_IDLE_MS),
 		c.env.DB.prepare(
 			'INSERT INTO sessions (id_hash, user_id, created_at, expires_at, last_seen_at, label) VALUES (?, ?, ?, ?, ?, ?)'
-		).bind(await sha256(sid), userId, now, now + SESSION_DAYS * DAY, now, label)
+		).bind(await sha256(sid), userId, now, now + SESSION_DAYS * DAY_MS, now, label)
 	]);
 	setCookie(c, SESSION_COOKIE, sid, {
 		httpOnly: true,
@@ -239,7 +238,7 @@ const app = routes()
        WHERE user_id = ? AND expires_at > ? AND last_seen_at > ?
        ORDER BY last_seen_at DESC`
 		)
-			.bind(c.get('user').id, Date.now(), Date.now() - SESSION_IDLE_DAYS * DAY)
+			.bind(c.get('user').id, Date.now(), Date.now() - SESSION_IDLE_MS)
 			.all<{ id_hash: string; label: string | null; created_at: number; last_seen_at: number }>();
 		return c.json(
 			results.map((r): SessionDTO => ({
@@ -301,7 +300,7 @@ const app = routes()
 			lastPollError: status.lastError,
 			smartDecisionsPaused: !!status.smartDecisionsPaused,
 			smartDecisionsChecking: !!status.smartDecisionsChecking,
-			scopes: u.scopes ? u.scopes.split(',') : [],
+			scopes: scopesOf(u),
 			tokenSource: u.token_source
 		};
 		return c.json(me);

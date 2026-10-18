@@ -54,6 +54,9 @@ export interface UserRow {
 	app_token_iv: string | null;
 }
 
+export const scopesOf = (user: Pick<UserRow, 'scopes'>): string[] =>
+	user.scopes ? user.scopes.split(',') : [];
+
 export function getUser(env: Env, id: number) {
 	return env.DB.prepare(
 		'SELECT id, login, name, avatar_url, token_ct, token_iv, scopes, token_source, app_token_ct, app_token_iv FROM users WHERE id = ?'

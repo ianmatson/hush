@@ -28,12 +28,13 @@ import { boardCount, boardShort, itemStatuses } from '../projects';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { itemQueryFacts } from '../../src/lib/shared/categories';
 import { sameLogin } from '../../src/lib/shared/logins';
+import { MINUTE_MS } from '../../src/lib/shared/durations';
 import { DASH_TTL, viewSearchesKey, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 import { sourceItemOf, withProjectStatuses } from './project-status';
 
-const RETRY_AFTER = 60_000;
+const RETRY_AFTER = MINUTE_MS;
 const MAX_LEFT_READS = 50;
 const NEW_ITEM_REASON = 'new-item';
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
@@ -61,7 +62,6 @@ async function findItems(token: string, queries: ExpandedQuery[]) {
 		errors: [...new Set([...searches.errors, ...boards.errors])].slice(0, 3)
 	};
 }
-const marks = (n: number) => Array(n).fill('?').join(',');
 
 type CachedDash = { sig: string; data: DashResponse };
 type BuildNeed = { sig: string; full: boolean; startedNoEarlierThan: number };
@@ -257,7 +257,7 @@ export abstract class PollerDashboard extends PollerSync {
 			if (!previous || hit.updatedAt > previous.updatedAt) latest.set(hit.key, hit);
 		}
 		const keys = [...latest.keys()];
-		const stored = this.storedFacts(keys);
+		const stored = this.storedSubjectFacts(keys);
 		const readKey = `dash:read:${kind}`;
 		const readAt = (await this.ctx.storage.get<Record<string, number>>(readKey)) ?? {};
 		const now = Date.now();
@@ -436,7 +436,7 @@ export abstract class PollerDashboard extends PollerSync {
 			.map((i) => ({ ...i, sections: i.sections.filter((id) => viewIds.has(id)) }))
 			.filter((i) => i.sections.length);
 		if (!left.length) return { items: [], read: [] };
-		const stored = this.storedFacts(left.map((i) => i.id));
+		const stored = this.storedSubjectFacts(left.map((i) => i.id));
 		const stillOpenAsFarAsKnown = left
 			.flatMap((i) => {
 				const s = stored.get(i.id);
@@ -536,19 +536,5 @@ export abstract class PollerDashboard extends PollerSync {
 			});
 		if (Object.keys(nowRemembered).length) await this.ctx.storage.put(nowRemembered);
 		await this.deliver(candidates);
-	}
-
-	/** The stored facts of these PRs and issues ("owner/repo#123"). */
-	private storedFacts(keys: string[]): Map<string, SubjectFacts> {
-		const out = new Map<string, SubjectFacts>();
-		for (let i = 0; i < keys.length; i += 50) {
-			const chunk = keys.slice(i, i + 50);
-			for (const r of this.all<{ key: string; facts: string }>(
-				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				out.set(r.key, JSON.parse(r.facts) as SubjectFacts);
-		}
-		return out;
 	}
 }

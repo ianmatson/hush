@@ -13,7 +13,6 @@ import { parseCategoryFeed, parseViewFeed } from '../../src/lib/shared/views';
 import { itemFeedEntry, type FeedEntry } from '../feed-entries';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import { mergeSettings, validateSettings } from '../../src/lib/shared/settings-schema';
-import type { SnoozeEvent } from '../../src/lib/shared/snooze';
 import type {
 	AlertDTO,
 	Change,
@@ -24,7 +23,8 @@ import type {
 } from '../../src/lib/shared/types';
 import { sendPush, vapidFromEnv } from '../webpush';
 import { PollerDashboard } from './dashboard';
-import { FILL_MAX, MIN, type PollStatus } from './shared';
+import { FILL_MAX, IN_KEYS, type PollStatus } from './shared';
+import { MINUTE_MS } from '../../src/lib/shared/durations';
 import { DECISION_FILL_KEY } from './decisions';
 import { allCategories, pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
 
@@ -36,10 +36,16 @@ export type Refusal = { error: string; status: 400 | 404 | 500 };
 
 const MAX_DEVICES = 10;
 const FEED_ENTRIES = 50;
-const SEEN_EVERY = 5 * MIN;
+const SEEN_EVERY = 5 * MINUTE_MS;
+const MAX_MARKED_KEYS = 50;
 
 type ItemRef = { id: string; updatedAt: string };
-const marks = (n: number) => Array(n).fill('?').join(',');
+
+const validItemKeys = (keys: string[]) =>
+	[...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(
+		0,
+		MAX_MARKED_KEYS
+	);
 
 /**
  * The user's data, for the API routes: the routes check the request's shape and answer; the
@@ -81,9 +87,9 @@ export abstract class PollerData extends PollerDashboard {
 		const keys = [...new Set(subjects.map((s) => s.key))];
 		if (!keys.length) return out;
 		const seen = new Map(
-			this.all<{ key: string; at: number; snapshot: string }>(
-				`SELECT key, at, snapshot FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
-				JSON.stringify(keys)
+			this.allIn<{ key: string; at: number; snapshot: string }>(
+				`SELECT key, at, snapshot FROM seen WHERE key ${IN_KEYS}`,
+				keys
 			).map((r) => [r.key, r])
 		);
 		for (const { key, facts } of subjects) {
@@ -103,29 +109,26 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	async markUnseen(keys: string[]): Promise<{ ok: true }> {
-		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
+		keys = validItemKeys(keys);
 		if (!keys.length) return { ok: true };
-		const deleted = this.run(
-			`DELETE FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
-			JSON.stringify(keys)
-		);
+		const deleted = this.runIn(`DELETE FROM seen WHERE key ${IN_KEYS}`, keys);
 		if (deleted) this.broadcastDashboards();
 		return { ok: true };
 	}
 
 	/** You looked at these PRs or issues ("owner/repo#123"): "since you looked" starts again. */
 	async markSeen(keys: string[]): Promise<{ ok: true }> {
-		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
+		keys = validItemKeys(keys);
 		if (!keys.length) return { ok: true };
 		const me = await this.login();
-		const facts = this.all<{ key: string; facts: string }>(
-			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
-			JSON.stringify(keys)
+		const facts = this.allIn<{ key: string; facts: string }>(
+			`SELECT key, facts FROM subjects WHERE key ${IN_KEYS}`,
+			keys
 		);
 		const old = new Map(
-			this.all<{ key: string; snapshot: string }>(
-				`SELECT key, snapshot FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
-				JSON.stringify(keys)
+			this.allIn<{ key: string; snapshot: string }>(
+				`SELECT key, snapshot FROM seen WHERE key ${IN_KEYS}`,
+				keys
 			).map((r) => [r.key, r.snapshot])
 		);
 		// Only what changed since the last look: each write counts against the daily row budget.
@@ -389,33 +392,14 @@ export abstract class PollerData extends PollerDashboard {
 	async dashboardView(kind: DashKind, force: boolean): Promise<DashResponse> {
 		const data = await this.dashboard(kind, force);
 		const me = await this.login();
-		const marks = new Map(
-			this.all<{
-				item_id: string;
-				updated_at: string;
-				snoozed_until: number | null;
-				snooze_event: SnoozeEvent | null;
-				snoozed_at: number | null;
-			}>(
-				'SELECT * FROM dash_snoozed WHERE item_id IN (SELECT value FROM json_each(?))',
-				JSON.stringify(data.items.map((i) => i.id))
-			).map((m) => [
-				m.item_id,
-				{
-					updatedAt: m.updated_at,
-					snoozedUntil: m.snoozed_until,
-					snoozeEvent: m.snooze_event,
-					snoozedAt: m.snoozed_at
-				}
-			])
-		);
+		const marks = this.itemMarks(data.items.map((i) => i.id));
 		const now = Date.now();
 		const items = data.items
 			.filter((i) => !i.keptAfterClose || stillKept(i, now))
 			.map(({ sourceFilters: _filters, sourceQueries: _queries, ...item }) => item);
-		const subjects = this.all<{ key: string; facts: string }>(
-			`SELECT key, facts FROM subjects WHERE key IN (SELECT value FROM json_each(?))`,
-			JSON.stringify(items.map((i) => i.id))
+		const subjects = this.allIn<{ key: string; facts: string }>(
+			`SELECT key, facts FROM subjects WHERE key ${IN_KEYS}`,
+			items.map((i) => i.id)
 		);
 		const factsOf = new Map(subjects.map((s) => [s.key, JSON.parse(s.facts) as SubjectFacts]));
 		const since = this.sinceYouLooked(subjects, me);

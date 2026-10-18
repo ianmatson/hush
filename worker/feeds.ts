@@ -1,8 +1,6 @@
+import { escapeHtml } from '../src/lib/shared/html';
 import { sha256 } from './crypto';
 import type { Env } from './db';
-
-const esc = (s: string) =>
-	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export async function renderFeed(env: Env, token: string): Promise<Response> {
 	const origin = env.APP_URL;
@@ -21,23 +19,23 @@ export async function renderFeed(env: Env, token: string): Promise<Response> {
 	const xmlEntries = entries
 		.map(
 			(e) => `  <entry>
-    <id>tag:hush,${esc(e.id)}:${esc(e.updated)}</id>
-    <title>${esc(e.title)}</title>
-    <link href="${esc(e.link)}"/>
-    <updated>${esc(e.updated)}</updated>
-    <author><name>${esc(e.author)}</name></author>${e.category ? `\n    <category term="${esc(e.category)}"/>` : ''}
-    <summary>${esc(e.summary)}</summary>
+    <id>tag:hush,${escapeHtml(e.id)}:${escapeHtml(e.updated)}</id>
+    <title>${escapeHtml(e.title)}</title>
+    <link href="${escapeHtml(e.link)}"/>
+    <updated>${escapeHtml(e.updated)}</updated>
+    <author><name>${escapeHtml(e.author)}</name></author>${e.category ? `\n    <category term="${escapeHtml(e.category)}"/>` : ''}
+    <summary>${escapeHtml(e.summary)}</summary>
   </entry>`
 		)
 		.join('\n');
 
 	const xml = `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <id>tag:hush,feed:${feed.user_id}:${esc(feed.view)}</id>
-  <title>${esc(`Hush · ${name}`)}</title>
-  <link rel="self" href="${esc(self)}"/>
-  <link href="${esc(origin)}/"/>
-  <updated>${esc(updated)}</updated>
+  <id>tag:hush,feed:${feed.user_id}:${escapeHtml(feed.view)}</id>
+  <title>${escapeHtml(`Hush · ${name}`)}</title>
+  <link rel="self" href="${escapeHtml(self)}"/>
+  <link href="${escapeHtml(origin)}/"/>
+  <updated>${escapeHtml(updated)}</updated>
 ${xmlEntries}
 </feed>
 `;

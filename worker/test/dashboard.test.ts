@@ -95,12 +95,7 @@ function harness() {
 		},
 		who: async () => who,
 		teams: async () => ({ teams: [] }),
-		all: (sql: string, ...keys: string[]) =>
-			sql.includes('FROM subjects')
-				? keys.flatMap((key) =>
-						facts.has(key) ? [{ key, facts: JSON.stringify(facts.get(key)) }] : []
-					)
-				: [],
+		all: () => [],
 		storedSubjectFacts: (keys: string[]) =>
 			new Map(keys.flatMap((key) => (facts.has(key) ? [[key, facts.get(key)]] : []))),
 		decideSubjects: async () => {},

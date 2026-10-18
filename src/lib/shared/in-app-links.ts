@@ -1,3 +1,4 @@
+import { toHex } from './bytes';
 import type { DiffLineTarget, DiffLineSide, ReviewThread } from './diff';
 import { FILES_TAB, itemPagePath, parseGitHubItemUrl } from './item-page';
 
@@ -58,8 +59,7 @@ export function threadOfReviewComment(
 }
 
 export async function gitHubDiffFileHash(path: string): Promise<string> {
-	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path));
-	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+	return toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(path)));
 }
 
 export function inAppPathForGitHubUrl(href: string): string | null {

@@ -2,6 +2,7 @@ import type { DashKind } from '../../src/lib/shared/types';
 import { subjectKey } from '../../src/lib/shared/subject';
 import type { FactEvent } from '../../src/lib/shared/push-facts';
 import { MUTED_AT } from '../../src/lib/shared/item-snooze';
+import { DAY_MS } from '../../src/lib/shared/durations';
 import {
 	fetchSubjects,
 	subjectNumber,
@@ -10,8 +11,8 @@ import {
 	type SubjectRef
 } from '../github';
 import {
-	DAY,
 	DASH_TTL,
+	IN_KEYS,
 	NOTIFICATION_KEEP,
 	TRACKED_KEEP,
 	TRACKED_REBUILD_GAP,
@@ -21,8 +22,6 @@ import {
 } from './shared';
 import { PollerSubjects } from './subjects';
 
-const marks = (n: number) => Array(n).fill('?').join(',');
-const CHUNK = 90;
 const TEAM_MENTION = 'team_mention';
 const MENTION_REASONS = new Set(['mention', TEAM_MENTION]);
 const PENDING_NOTIFICATIONS_KEY = 'pendingNotifications';
@@ -146,15 +145,12 @@ export abstract class PollerSync extends PollerSubjects {
 	}
 
 	private newNotifications(items: GhNotification[]): GhNotification[] {
-		const known = new Map<string, string>();
-		for (let i = 0; i < items.length; i += CHUNK) {
-			const ids = items.slice(i, i + CHUNK).map((n) => n.id);
-			for (const r of this.all<{ id: string; updated_at: string }>(
-				`SELECT id, updated_at FROM notifications WHERE id IN (${marks(ids.length)})`,
-				...ids
-			))
-				known.set(r.id, r.updated_at);
-		}
+		const known = new Map(
+			this.allIn<{ id: string; updated_at: string }>(
+				`SELECT id, updated_at FROM notifications WHERE id ${IN_KEYS}`,
+				items.map((n) => n.id)
+			).map((r) => [r.id, r.updated_at])
+		);
 		return items.filter((n) => known.get(n.id) !== n.updated_at);
 	}
 
@@ -231,11 +227,11 @@ export abstract class PollerSync extends PollerSubjects {
 
 	protected async cleanup() {
 		const last = (await this.ctx.storage.get<number>('lastCleanup')) ?? 0;
-		if (Date.now() - last < DAY) return;
+		if (Date.now() - last < DAY_MS) return;
 		const builds = await Promise.all((['pr', 'issue'] as const).map((k) => this.trackedBuild(k)));
-		if (builds.every((b) => b?.complete && Date.now() - b.at < DAY))
+		if (builds.every((b) => b?.complete && Date.now() - b.at < DAY_MS))
 			this.run(`DELETE FROM tracked_items WHERE seen_at < ?`, Date.now() - TRACKED_KEEP);
-		const cutoff = Date.now() - 30 * DAY;
+		const cutoff = Date.now() - 30 * DAY_MS;
 		this.run(
 			`DELETE FROM subjects WHERE changed_at < ? AND key NOT IN (SELECT key FROM tracked_items)`,
 			cutoff
@@ -263,7 +259,7 @@ export abstract class PollerSync extends PollerSubjects {
 	private async forgetDeletedViews() {
 		const views = (await this.settings()).views;
 		this.run(
-			`DELETE FROM view_items WHERE view_id NOT IN (SELECT value FROM json_each(?))`,
+			`DELETE FROM view_items WHERE view_id NOT ${IN_KEYS}`,
 			JSON.stringify(views.map((v) => v.id))
 		);
 		const liveKeys = new Set(

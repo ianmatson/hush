@@ -4,9 +4,11 @@ import {
 	isGitHubName,
 	isItemNumber,
 	isItemPathSegment,
+	isNodeId,
 	itemPagePath,
 	itemPagePathFromGitHubUrl,
-	parseGitHubItemUrl
+	parseGitHubItemUrl,
+	parseRepoFullName
 } from './item-page';
 
 describe('itemPagePath', () => {
@@ -92,5 +94,29 @@ describe('path parts', () => {
 		expect(isItemNumber('42')).toBe(true);
 		expect(isItemNumber('0')).toBe(false);
 		expect(isItemNumber('042')).toBe(false);
+	});
+});
+
+describe('isNodeId', () => {
+	it('accepts GraphQL node IDs and nothing that could leave the request', () => {
+		expect(isNodeId('PR_kwDOABC-12_x=')).toBe(true);
+		expect(isNodeId('../repos')).toBe(false);
+		expect(isNodeId('')).toBe(false);
+		expect(isNodeId('a'.repeat(121))).toBe(false);
+		expect(isNodeId(42)).toBe(false);
+	});
+});
+
+describe('parseRepoFullName', () => {
+	it('splits owner/name and refuses anything else', () => {
+		expect(parseRepoFullName('PostHog/posthog.com')).toEqual({
+			owner: 'PostHog',
+			name: 'posthog.com'
+		});
+		expect(parseRepoFullName('PostHog')).toBeNull();
+		expect(parseRepoFullName('PostHog/posthog/extra')).toBeNull();
+		expect(parseRepoFullName('PostHog/..')).toBeNull();
+		expect(parseRepoFullName('')).toBeNull();
+		expect(parseRepoFullName(undefined)).toBeNull();
 	});
 });

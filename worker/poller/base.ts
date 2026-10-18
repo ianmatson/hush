@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types';
 import { settingsOverrides } from '../../src/lib/shared/settings-schema';
-import { getUser, parseSettings, userToken, type Env, type UserRow } from '../db';
+import { getUser, parseSettings, scopesOf, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
 import { projectAccessOf } from '../../src/lib/shared/projects';
 import { MIGRATIONS, SCHEMA, SCHEMA_VERSION } from './schema';
@@ -137,9 +137,17 @@ export abstract class PollerBase extends DurableObject<Env> {
 		return this.all<T>(query, ...args)[0] ?? null;
 	}
 
+	protected allIn<T>(query: string, keys: readonly SqlValue[], ...args: SqlValue[]): T[] {
+		return keys.length ? this.all<T>(query, JSON.stringify(keys), ...args) : [];
+	}
+
 	/** Run a write; returns the rows written (indexes count too, as the free plan counts them). */
 	protected run(query: string, ...args: SqlValue[]): number {
 		return this.ctx.storage.sql.exec(query, ...args).rowsWritten;
+	}
+
+	protected runIn(query: string, keys: readonly SqlValue[], ...args: SqlValue[]): number {
+		return keys.length ? this.run(query, JSON.stringify(keys), ...args) : 0;
 	}
 
 	/** All or nothing: an error inside rolls every write back. */
@@ -175,7 +183,7 @@ export abstract class PollerBase extends DurableObject<Env> {
 			me: user.login,
 			token: await userToken(this.env, user),
 			settings,
-			projectAccess: projectAccessOf(user.scopes ? user.scopes.split(',') : [])
+			projectAccess: projectAccessOf(scopesOf(user))
 		};
 	}
 

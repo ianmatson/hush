@@ -1,7 +1,6 @@
+import { MINUTE_MS } from './durations';
 import { inQuietHours } from './quiet';
 import type { Settings } from './types';
-
-const MINUTE_MS = 60_000;
 
 export const APP_FOCUS_MESSAGE = 'focus';
 export const APP_BLUR_MESSAGE = 'blur';

@@ -62,7 +62,9 @@ function harness() {
 		appInFocus: () => false,
 		one: () => ({ n: 1 }),
 		all: () => [{ endpoint: 'https://push.test/1', p256dh: 'key', auth: 'auth' }],
+		allIn: () => [],
 		run: () => 0,
+		runIn: () => 0,
 		putChanged: async (changes: Record<string, unknown>) => {
 			for (const [k, v] of Object.entries(changes)) values.set(k, v);
 		}

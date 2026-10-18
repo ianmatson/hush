@@ -1,12 +1,14 @@
 import type { Ctx } from './app';
 import { poller } from './app';
-import { gh, hasGraphqlErrorAt, type GraphqlError } from './github';
+import { graphql, hasGraphqlErrorAt } from './github';
 
-const SUBJECT_REF_QUERY = `query($id: ID!) { node(id: $id) {
+const NODE_SUBJECT_QUERY = `query($id: ID!) { node(id: $id) {
   ... on PullRequest { number repository { nameWithOwner } }
+  ... on Issue { number repository { nameWithOwner } }
   ... on PullRequestReview { pullRequest { number repository { nameWithOwner } } }
   ... on PullRequestReviewThread { pullRequest { number repository { nameWithOwner } } }
   ... on PullRequestReviewComment { pullRequest { number repository { nameWithOwner } } }
+  ... on IssueComment { issue { number repository { nameWithOwner } } }
 } }`;
 
 export interface WrittenSubject {
@@ -14,29 +16,18 @@ export interface WrittenSubject {
 	number: number;
 }
 
-export async function subjectBeforeWrite(
-	token: string,
-	id: string
-): Promise<WrittenSubject | null> {
-	const response = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query: SUBJECT_REF_QUERY, variables: { id } })
-	}).catch(() => null);
-	if (!response?.ok) return null;
-	const result = (await response.json().catch(() => null)) as {
-		data?: {
-			node?: {
-				number?: number;
-				repository?: { nameWithOwner: string };
-				pullRequest?: { number: number; repository: { nameWithOwner: string } };
-			};
-		};
-		errors?: GraphqlError[];
-	} | null;
-	if (!result) return null;
-	if (hasGraphqlErrorAt(result.errors ?? [], ['node'])) return null;
+type SubjectRef = { number?: number; repository?: { nameWithOwner?: string } };
+type NodeSubjectData = {
+	node?: (SubjectRef & { pullRequest?: SubjectRef; issue?: SubjectRef }) | null;
+};
+
+export async function nodeSubject(token: string, id: string): Promise<WrittenSubject | null> {
+	const result = await graphql<NodeSubjectData>(token, NODE_SUBJECT_QUERY, { id }).catch(
+		() => null
+	);
+	if (!result?.ok || hasGraphqlErrorAt(result.errors, ['node'])) return null;
 	const node = result.data?.node;
-	const subject = node?.pullRequest ?? node;
+	const subject = node?.pullRequest ?? node?.issue ?? node;
 	return subject?.number && subject.repository?.nameWithOwner
 		? { repo: subject.repository.nameWithOwner, number: subject.number }
 		: null;

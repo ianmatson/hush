@@ -22,7 +22,8 @@ describe('public dashboard payload', () => {
 			{
 				dashboard: async () => data,
 				account: async () => ({ login: 'reviewer' }),
-				all: () => [],
+				allIn: () => [],
+				itemMarks: () => new Map(),
 				sinceYouLooked: () => new Map()
 			}
 		);
@@ -48,6 +49,7 @@ describe('item marks', () => {
 		const poller = Object.assign(Object.create(PollerData.prototype) as Data, {
 			broadcast,
 			run: () => 1,
+			runIn: () => 1,
 			transaction: (action: () => void) => action()
 		});
 		await write(poller);

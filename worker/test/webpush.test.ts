@@ -2,7 +2,8 @@ import { createECDH } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error no types
 import ece from 'http_ece';
-import { b64urlDecode, b64urlEncode, decryptSecret, encryptSecret, randomToken } from '../crypto';
+import { b64urlDecode, b64urlEncode } from '../../src/lib/shared/bytes';
+import { decryptSecret, encryptSecret, randomToken } from '../crypto';
 import { encryptPayload, vapidAuthHeader } from '../webpush';
 
 describe('encryptPayload (RFC 8291)', () => {

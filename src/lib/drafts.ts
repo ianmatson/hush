@@ -1,7 +1,8 @@
 import { browser } from '$app/environment';
+import { DAY_MS } from '$lib/shared/durations';
 
 export const DRAFTS_KEY = 'hush:comment-drafts';
-const DRAFT_MAX_AGE_MS = 30 * 86_400_000;
+const DRAFT_MAX_AGE_MS = 30 * DAY_MS;
 
 type Draft = { text: string; savedAt: number };
 type Drafts = Record<string, Draft>;

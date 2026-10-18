@@ -76,7 +76,7 @@ function harness() {
 				})
 			}
 		},
-		all: vi.fn((_sql: string, ...ids: string[]) =>
+		allIn: vi.fn((_sql: string, ids: string[]) =>
 			ids.flatMap((id) => (remembered.has(id) ? [{ id, updated_at: remembered.get(id) }] : []))
 		),
 		trackedItemKeys: vi.fn((keys: string[]) => new Set(keys)),

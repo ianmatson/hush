@@ -1,3 +1,4 @@
+import { toHex } from '../src/lib/shared/bytes';
 import type { Env } from './db';
 
 export const SLACK_API = 'https://slack.com/api';
@@ -76,21 +77,39 @@ export function installFrom(
 	};
 }
 
-export async function exchangeSlackCode(
-	env: Env,
+export interface SlackOAuthClient {
+	id: string | undefined;
+	secret: string | undefined;
+	redirectUri: string;
+}
+
+export async function exchangeOAuthCode<T>(
+	client: SlackOAuthClient,
 	code: string
-): Promise<SlackInstall | { error: string }> {
+): Promise<SlackAnswer<T>> {
 	const res = await fetch(`${SLACK_API}/oauth.v2.access`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 		body: new URLSearchParams({
-			client_id: env.SLACK_CLIENT_ID ?? '',
-			client_secret: env.SLACK_CLIENT_SECRET ?? '',
+			client_id: client.id ?? '',
+			client_secret: client.secret ?? '',
 			code,
-			redirect_uri: slackCallbackUrl(env)
+			redirect_uri: client.redirectUri
 		})
 	});
-	return installFrom(await slackAnswer<OAuthAccessAnswer>(res));
+	return slackAnswer<T>(res);
+}
+
+export async function exchangeSlackCode(
+	env: Env,
+	code: string
+): Promise<SlackInstall | { error: string }> {
+	const client = {
+		id: env.SLACK_CLIENT_ID,
+		secret: env.SLACK_CLIENT_SECRET,
+		redirectUri: slackCallbackUrl(env)
+	};
+	return installFrom(await exchangeOAuthCode<OAuthAccessAnswer>(client, code));
 }
 
 export async function openDirectMessage(
@@ -119,10 +138,6 @@ export function postSlackMessage(
 		unfurl_media: false,
 		...message
 	});
-}
-
-function toHex(bytes: ArrayBuffer): string {
-	return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function equalInConstantTime(a: string, b: string): boolean {

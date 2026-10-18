@@ -101,12 +101,17 @@ export interface GhActionState {
 	blocked?: string;
 }
 
-const WRITE = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
+export const MAX_COMMENT_LENGTH = 65_536;
+
+const WRITE_PERMISSIONS = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
+
+export const hasWritePermission = (permission: string | null | undefined): boolean =>
+	!!permission && WRITE_PERMISSIONS.has(permission);
 
 /** Why GitHub would refuse a merge now, or null when it can merge. */
 function mergeBlocker(p: PeekDTO): string | null {
 	const pr = p.can.pr!;
-	if (!WRITE.has(p.can.permission ?? '')) return 'You cannot merge in this repository.';
+	if (!hasWritePermission(p.can.permission)) return 'You cannot merge in this repository.';
 	if (p.draft) return 'It is a draft.';
 	if (!pr.methods.length) return 'The repository allows no merge method.';
 	switch (pr.mergeState) {

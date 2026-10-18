@@ -1,8 +1,9 @@
+import { DAY_MS } from '../src/lib/shared/durations';
 import { githubItemUrl } from '../src/lib/shared/item-page';
 import type { DashKind, SlackMentionDTO, SlackMentionsPageDTO } from '../src/lib/shared/types';
 import { appToken, userToken, type Env, type UserRow } from './db';
 import { gh } from './github';
-import { SLACK_API, slackAnswer, type SlackAnswer } from './slack';
+import { SLACK_API, exchangeOAuthCode, slackAnswer, type SlackAnswer } from './slack';
 import { saveSlackMentionsAccess, slackMentionsCheckedAt } from './slack-store';
 
 export const SLACK_MENTIONS_USER_SCOPES = [
@@ -15,7 +16,7 @@ const SEARCHED_CHANNEL_TYPES = ['public_channel', 'private_channel', 'mpim', 'im
 const MENTIONS_PER_PAGE = 20;
 const EXTRACT_RADIUS = 120;
 const ELLIPSIS = '…';
-const ACCESS_RECHECK_MS = 24 * 60 * 60 * 1000;
+const ACCESS_RECHECK_MS = DAY_MS;
 
 export const slackMentionsConfigured = (env: Env) =>
 	!!(
@@ -64,18 +65,13 @@ export async function exchangeMentionsCode(
 	env: Env,
 	code: string
 ): Promise<SlackMentionsInstall | { error: string }> {
-	const res = await fetch(`${SLACK_API}/oauth.v2.access`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-		body: new URLSearchParams({
-			client_id: env.SLACK_MENTIONS_CLIENT_ID ?? '',
-			client_secret: env.SLACK_MENTIONS_CLIENT_SECRET ?? '',
-			code,
-			redirect_uri: slackMentionsCallbackUrl(env)
-		})
-	});
+	const client = {
+		id: env.SLACK_MENTIONS_CLIENT_ID,
+		secret: env.SLACK_MENTIONS_CLIENT_SECRET,
+		redirectUri: slackMentionsCallbackUrl(env)
+	};
 	return mentionsInstallFrom(
-		await slackAnswer<MentionsOAuthAnswer>(res),
+		await exchangeOAuthCode<MentionsOAuthAnswer>(client, code),
 		env.SLACK_MENTIONS_TEAM_ID ?? ''
 	);
 }

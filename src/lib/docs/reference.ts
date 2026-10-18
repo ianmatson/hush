@@ -44,6 +44,7 @@ import {
 } from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
+import { DAY_MS, HOUR_MS, MINUTE_MS } from '$lib/shared/durations';
 import { THEMES } from '$lib/themes/list';
 import { SORT_BY, SORT_BY_ORDER } from '$lib/shared/sorting';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
@@ -75,10 +76,6 @@ import {
  * keys, query words, menus, actions), so the docs cannot drift from the product. A docs page
  * asks for one with a line of its own: {{ref:settings}}.
  */
-
-const MIN = 60_000;
-const HOUR = 60 * MIN;
-const DAY = 24 * HOUR;
 
 /** Text for a table cell: pipes and line breaks would end the cell. */
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -142,7 +139,7 @@ A snooze that ends always pushes.
 	},
 	pushDigestMinutes: {
 		type: 'number or null',
-		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${POLL_ACTIVE / MIN} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
+		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${POLL_ACTIVE / MINUTE_MS} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
 
 \`\`\`json settings
 { "pushDigestMinutes": 60 }
@@ -158,7 +155,7 @@ A snooze that ends always pushes.
 	},
 	pushWhileOpen: {
 		type: 'boolean',
-		body: `Off (default): while you use Hush on any device, new items show in Hush and do not push. Hush counts as in use when its tab or app has focus and you used it in the last ${APP_FOCUS_LASTS_MS / MIN} minutes. On: pushes go at all times.`
+		body: `Off (default): while you use Hush on any device, new items show in Hush and do not push. Hush counts as in use when its tab or app has focus and you used it in the last ${APP_FOCUS_LASTS_MS / MINUTE_MS} minutes. On: pushes go at all times.`
 	},
 	'alertChannels.push': {
 		type: 'boolean',
@@ -211,7 +208,7 @@ When you turn it on, or add an \`about:\` condition, Hush checks the PRs and iss
 - \`sections\` (optional): up to ${MAX_VIEW_SECTIONS} custom sections, each \`{ "name", "rule" }\`: a unique name of up to ${MAX_SECTION_NAME_CHARS} characters, and a rule in the [query language](/docs/query-language). An item goes into the first section whose rule matches, then **Everything else**. \`"groupBy": "custom"\` needs at least one. See [Custom sections](/docs/pull-requests-and-issues#custom-sections).
 A view needs at least one search, and you keep at least one view.
 
-Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once.
+Hush runs the searches about every ${DASH_TTL / MINUTE_MS} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MINUTE_MS} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY_MS} days. When you change \`views\`, the items that no view finds now stop at once.
 
 A change to \`views\` replaces the whole list. To add a view, write the defaults below and your new one.
 
@@ -299,7 +296,7 @@ ${table(
 	},
 	'dash.excludedTeams': {
 		type: 'array of strings',
-		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first 15 teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
+		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR_MS} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first 15 teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
 
 \`\`\`json settings
 { "dash": { "excludedTeams": ["acme/everyone", "acme/contractors"] } }
@@ -531,7 +528,11 @@ function actionsReference(): string {
 
 function limitsReference(): string {
 	const dur = (ms: number) =>
-		ms >= DAY ? `${ms / DAY} days` : ms >= HOUR ? `${ms / HOUR} hours` : `${ms / MIN} minutes`;
+		ms >= DAY_MS
+			? `${ms / DAY_MS} days`
+			: ms >= HOUR_MS
+				? `${ms / HOUR_MS} hours`
+				: `${ms / MINUTE_MS} minutes`;
 	return table(
 		['What', 'Limit'],
 		[

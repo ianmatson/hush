@@ -18,6 +18,8 @@ import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts } from '../src/lib/shared/subject';
 import { NO_STACK } from '../src/lib/shared/stack-merge';
+import { hasWritePermission } from '../src/lib/shared/actions';
+import { HOUR_MS, SECOND_MS } from '../src/lib/shared/durations';
 import { readStack } from './stacks';
 
 const API = 'https://api.github.com';
@@ -73,6 +75,98 @@ export async function gh(token: string, path: string, init: RequestInit = {}): P
 	} finally {
 		clearTimeout(waitForAnswer);
 	}
+}
+
+export const githubStatusMessage = (status: number) => `GitHub returned ${status}.`;
+
+export async function refusal(res: Response): Promise<string> {
+	const answer = (await res.json().catch(() => ({}))) as {
+		message?: string;
+		errors?: ({ message?: string } | string)[];
+	};
+	const detail = answer.errors?.map((e) => (typeof e === 'string' ? e : e.message)).filter(Boolean);
+	return (
+		[answer.message, ...(detail ?? [])].filter(Boolean).join(': ') ||
+		githubStatusMessage(res.status)
+	);
+}
+
+export interface GraphqlResult<T> {
+	ok: boolean;
+	status: number;
+	data?: T;
+	errors: GraphqlError[];
+}
+
+const GITHUB_GAVE_NO_ANSWER = 'GitHub did not answer.';
+
+export async function graphql<T = Node>(
+	token: string,
+	query: string,
+	variables: Record<string, unknown>
+): Promise<GraphqlResult<T>> {
+	const res = await gh(token, '/graphql', {
+		method: 'POST',
+		body: JSON.stringify({ query, variables })
+	});
+	const answer = (await res.json().catch(() => null)) as {
+		data?: T | null;
+		errors?: GraphqlError[];
+	} | null;
+	if (!answer && res.ok) throw new GitHubError(502, GITHUB_GAVE_NO_ANSWER);
+	return {
+		ok: res.ok,
+		status: res.status,
+		data: answer?.data ?? undefined,
+		errors: answer?.errors ?? []
+	};
+}
+
+export function graphqlFailure(result: GraphqlResult<unknown>): string | null {
+	if (result.ok && !result.errors.length) return null;
+	return result.errors[0]?.message || githubStatusMessage(result.status);
+}
+
+export async function graphqlData<T>(
+	token: string,
+	query: string,
+	variables: Record<string, unknown>
+): Promise<T> {
+	const result = await graphql<T>(token, query, variables);
+	const failure = graphqlFailure(result);
+	if (failure || !result.data)
+		throw new GitHubError(
+			result.ok ? 502 : result.status,
+			failure ?? githubStatusMessage(result.status)
+		);
+	return result.data;
+}
+
+export interface WriteFailure {
+	error: string;
+	status: 422 | 502;
+}
+
+const REFUSED: WriteFailure['status'] = 422;
+const FAILED: WriteFailure['status'] = 502;
+
+export const failedWriteStatus = (githubStatus: number): WriteFailure['status'] =>
+	githubStatus >= 500 ? FAILED : REFUSED;
+
+const GITHUB_UNREACHABLE: WriteFailure = { error: GITHUB_GAVE_NO_ANSWER, status: FAILED };
+
+export const refusedWrite = (error: string): WriteFailure => ({ error, status: REFUSED });
+
+export async function restWriteFailure(res: Response | null): Promise<WriteFailure> {
+	return res
+		? { error: await refusal(res), status: failedWriteStatus(res.status) }
+		: GITHUB_UNREACHABLE;
+}
+
+export function graphqlWriteFailure(result: GraphqlResult<unknown> | null): WriteFailure | null {
+	if (!result) return GITHUB_UNREACHABLE;
+	const error = graphqlFailure(result);
+	return error ? { error, status: failedWriteStatus(result.status) } : null;
 }
 
 export interface GhUser {
@@ -160,8 +254,6 @@ export function parseSsoHeader(value: string | null): string[] {
 				.filter(Boolean)
 		: [];
 }
-
-const SECOND_MS = 1000;
 
 export function rateLimitRetryAt(headers: Headers, now = Date.now()): number | undefined {
 	const retryAfter = headers.get('Retry-After')?.trim();
@@ -451,21 +543,17 @@ export async function fetchTeams(
 	const query = `query($login: String!) {
   viewer { organizations(first: 50) { nodes { login teams(first: 100, userLogins: [$login]) { nodes { combinedSlug name } } } } }
 }`;
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query, variables: { login } })
-	});
-	if (!res.ok) return { teams: [], error: `GitHub returned ${res.status} for your teams.` };
-	const json = (await res.json()) as { data?: Node; errors?: { message: string }[] };
+	const result = await graphql(token, query, { login });
+	if (!result.ok) return { teams: [], error: `GitHub returned ${result.status} for your teams.` };
 	const teams: TeamDTO[] = [];
-	for (const org of json.data?.viewer?.organizations?.nodes ?? []) {
+	for (const org of result.data?.viewer?.organizations?.nodes ?? []) {
 		for (const t of org?.teams?.nodes ?? [])
 			teams.push({ slug: t.combinedSlug, name: t.name, org: org.login });
 	}
 	teams.sort((a, b) => a.slug.localeCompare(b.slug));
 	return {
 		teams,
-		error: json.errors?.length && !teams.length ? json.errors[0].message : undefined
+		error: result.errors.length && !teams.length ? result.errors[0].message : undefined
 	};
 }
 
@@ -486,38 +574,29 @@ async function inRequests<T>(
 	failed: (chunk: T[]) => void = () => {}
 ): Promise<void> {
 	async function ask(chunk: T[]): Promise<void> {
-		const res = await gh(token, '/graphql', {
-			method: 'POST',
-			body: JSON.stringify(build(chunk))
-		}).catch(() => null);
-		if (!res) {
+		const { query, variables } = build(chunk);
+		const result = await graphql<Record<string, Node | null>>(token, query, variables).catch(
+			() => null
+		);
+		if (!result) {
 			failed(chunk);
 			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
 		}
-		if (TIMED_OUT.has(res.status) && chunk.length > 1) {
+		if (TIMED_OUT.has(result.status) && chunk.length > 1) {
 			const half = Math.ceil(chunk.length / 2);
 			await Promise.all([ask(chunk.slice(0, half)), ask(chunk.slice(half))]);
 			return;
 		}
-		if (!res.ok) {
+		if (!result.ok) {
 			failed(chunk);
 			return void errors.push(
-				TIMED_OUT.has(res.status)
+				TIMED_OUT.has(result.status)
 					? 'GitHub took too long to answer. Hush tries again on the next refresh.'
-					: `GitHub returned ${res.status}.`
+					: githubStatusMessage(result.status)
 			);
 		}
-		// The time limit also covers reading the answer.
-		const json = (await res.json().catch(() => null)) as {
-			data?: Record<string, Node | null>;
-			errors?: GraphqlError[];
-		} | null;
-		if (!json) {
-			failed(chunk);
-			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
-		}
-		for (const e of json.errors ?? []) errors.push(e.message);
-		use(chunk, json.data, json.errors ?? []);
+		for (const e of result.errors) errors.push(e.message);
+		use(chunk, result.data, result.errors);
 	}
 	const chunks: T[][] = [];
 	for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
@@ -605,20 +684,15 @@ export async function searchShort(
 
 export async function searchCounts(token: string, queries: string[]): Promise<(number | null)[]> {
 	if (!queries.length) return [];
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({
-			query: `query(${queries.map((_, j) => `$q${j}: String!`).join(', ')}) {\n${queries
-				.map((_, j) => `c${j}: search(type: ISSUE, query: $q${j}, first: 0) { issueCount }`)
-				.join('\n')}\n}`,
-			variables: Object.fromEntries(queries.map((q, j) => [`q${j}`, q]))
-		})
-	});
-	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
-	const json = (await res.json()) as {
-		data?: Record<string, { issueCount: number } | null>;
-	};
-	return queries.map((_, j) => json.data?.[`c${j}`]?.issueCount ?? null);
+	const result = await graphql<Record<string, { issueCount: number } | null>>(
+		token,
+		`query(${queries.map((_, j) => `$q${j}: String!`).join(', ')}) {\n${queries
+			.map((_, j) => `c${j}: search(type: ISSUE, query: $q${j}, first: 0) { issueCount }`)
+			.join('\n')}\n}`,
+		Object.fromEntries(queries.map((q, j) => [`q${j}`, q]))
+	);
+	if (!result.ok) throw new GitHubError(result.status, githubStatusMessage(result.status));
+	return queries.map((_, j) => result.data?.[`c${j}`]?.issueCount ?? null);
 }
 
 /** Step 2: the full facts of these PRs and issues (by node ID). Missing ones are left out. */
@@ -648,7 +722,7 @@ export async function fetchDetails(
 }
 
 /** Details of an item that did not change are read again after this long, as a safety net. */
-export const DETAILS_TTL = 60 * 60_000;
+export const DETAILS_TTL = HOUR_MS;
 
 /**
  * Must the refresh read this item's details again? Yes when Hush has none, when it changed on
@@ -735,9 +809,6 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
 }
 ${SUBJECT_FIELDS}`;
 
-/** Permissions that may still write in a locked conversation, and merge. */
-const WRITERS = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
-
 const person = (a: Node | null | undefined): PeekPerson => ({
 	login: a?.login ?? 'ghost',
 	avatar: a?.avatarUrl ?? null,
@@ -814,21 +885,17 @@ export async function fetchPeek(
 	repo: string,
 	number: number
 ): Promise<{ peek: PeekDTO; subject: SubjectFacts | null } | null> {
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query: PEEK_QUERY, variables: { me, o: owner, r: repo, n: number } })
-	});
-	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
-	const json = (await res.json()) as { data?: Node; errors?: GraphqlError[] };
-	const n: Node | null | undefined = json.data?.repository?.issueOrPullRequest;
+	const result = await graphql(token, PEEK_QUERY, { me, o: owner, r: repo, n: number });
+	if (!result.ok) throw new GitHubError(result.status, githubStatusMessage(result.status));
+	const n: Node | null | undefined = result.data?.repository?.issueOrPullRequest;
 	if (!n) {
-		if (json.errors?.length && json.data?.repository !== null)
-			throw new GitHubError(502, json.errors[0].message);
+		if (result.errors.length && result.data?.repository !== null)
+			throw new GitHubError(502, result.errors[0].message);
 		return null;
 	}
 	const pr = n.__typename === 'PullRequest';
 	const parsedSubject = toSubject(n);
-	const subject = hasGraphqlErrorAt(json.errors ?? [], ['repository', 'issueOrPullRequest'])
+	const subject = hasGraphqlErrorAt(result.errors, ['repository', 'issueOrPullRequest'])
 		? null
 		: parsedSubject;
 	const items: PeekEntry[] = (n.timelineItems?.nodes ?? [])
@@ -882,7 +949,7 @@ export async function fetchPeek(
 			close: !!n.viewerCanClose,
 			reopen: !!n.viewerCanReopen,
 			update: !!n.viewerCanUpdate,
-			comment: !n.locked || WRITERS.has(n.repository?.viewerPermission),
+			comment: !n.locked || hasWritePermission(n.repository?.viewerPermission),
 			permission: n.repository?.viewerPermission ?? null
 		}
 	};

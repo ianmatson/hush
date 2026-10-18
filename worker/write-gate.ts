@@ -1,31 +1,42 @@
 import { gateAllowsRepo, writeGate, writesBlockedMessage } from '../src/lib/shared/write-gate';
 import type { Env } from './db';
-import { gh } from './github';
+import { nodeSubject, type WrittenSubject } from './subject-writes';
 
-const NODE_REPOSITORY_QUERY = `query($id: ID!) { node(id: $id) {
-  ... on PullRequest { repository { nameWithOwner } }
-  ... on PullRequestReviewThread { repository { nameWithOwner } }
-  ... on PullRequestReview { repository { nameWithOwner } }
-  ... on PullRequestReviewComment { repository { nameWithOwner } }
-  ... on IssueComment { repository { nameWithOwner } }
-  ... on Issue { repository { nameWithOwner } }
-} }`;
+const NO_ALLOWED_REPOS = undefined;
 
-async function repositoryOfNode(token: string, id: string): Promise<string | null> {
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query: NODE_REPOSITORY_QUERY, variables: { id } })
-	});
-	if (!res.ok) return null;
-	const json = (await res.json().catch(() => ({}))) as {
-		data?: { node?: { repository?: { nameWithOwner?: string } } | null };
-	};
-	return json.data?.node?.repository?.nameWithOwner ?? null;
+const gateOf = (env: Env) => writeGate(env.GITHUB_WRITES, env.GITHUB_WRITES_ALLOW);
+
+export function writeBlockForRepo(env: Env, repo: string | null): string | null {
+	const gate = gateOf(env);
+	return gateAllowsRepo(gate, repo) ? null : writesBlockedMessage(gate);
 }
 
-export function writeBlockForRepo(env: Env, repo: string): string | null {
-	const gate = writeGate(env.GITHUB_WRITES, env.GITHUB_WRITES_ALLOW);
-	return gateAllowsRepo(gate, repo) ? null : writesBlockedMessage(gate);
+export function writeBlockForEveryRepo(env: Env): string | null {
+	const gate = gateOf(env);
+	return gate.kind === 'none' ? writesBlockedMessage(gate) : null;
+}
+
+export function writeBlockForProjects(env: Env): string | null {
+	const gate = writeGate(env.GITHUB_WRITES, NO_ALLOWED_REPOS);
+	return gate.kind === 'all' ? null : writesBlockedMessage(gate);
+}
+
+interface NodeWriteCheck {
+	blocked: string | null;
+	subject: WrittenSubject | null;
+}
+
+export async function checkNodeWrite(
+	env: Env,
+	token: string,
+	nodeId: string,
+	{ subjectNeeded }: { subjectNeeded: boolean }
+): Promise<NodeWriteCheck> {
+	const blockedEverywhere = writeBlockForEveryRepo(env);
+	if (blockedEverywhere) return { blocked: blockedEverywhere, subject: null };
+	const repoNeeded = gateOf(env).kind === 'repos';
+	const subject = subjectNeeded || repoNeeded ? await nodeSubject(token, nodeId) : null;
+	return { blocked: writeBlockForRepo(env, subject?.repo ?? null), subject };
 }
 
 export async function writeBlockForNode(
@@ -33,10 +44,5 @@ export async function writeBlockForNode(
 	token: string,
 	nodeId: string
 ): Promise<string | null> {
-	const gate = writeGate(env.GITHUB_WRITES, env.GITHUB_WRITES_ALLOW);
-	if (gate.kind === 'all') return null;
-	if (gate.kind === 'none') return writesBlockedMessage(gate);
-	return gateAllowsRepo(gate, await repositoryOfNode(token, nodeId))
-		? null
-		: writesBlockedMessage(gate);
+	return (await checkNodeWrite(env, token, nodeId, { subjectNeeded: false })).blocked;
 }

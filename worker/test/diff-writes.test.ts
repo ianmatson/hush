@@ -105,31 +105,51 @@ describe('subject reconciliation after diff writes', () => {
 		expect(recheck).toHaveBeenCalledWith('sandbox/web', 7);
 	});
 
-	it('does not refresh or retry a refused mutation', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi
-				.fn()
-				.mockResolvedValueOnce(
-					Response.json({
-						data: {
-							node: { pullRequest: { number: 7, repository: { nameWithOwner: 'sandbox/web' } } }
-						}
-					})
-				)
-				.mockResolvedValueOnce(Response.json({ errors: [{ message: 'Refused' }] }))
-		);
-		const { app, env, recheck } = harness();
-		const response = await app.request(
-			'/api/diff/review/submit',
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(writes[2][1])
+	it.each([
+		['refuses it', async () => Response.json({ errors: [{ message: 'Refused' }] }), 422, 'Refused'],
+		[
+			'fails',
+			async () => new Response('Bad gateway', { status: 502 }),
+			502,
+			'GitHub returned 502.'
+		],
+		[
+			'does not answer',
+			async () => {
+				throw new Error('Network failed');
 			},
-			env
-		);
-		expect(response.status).toBe(502);
-		expect(recheck).not.toHaveBeenCalled();
-	});
+			502,
+			'GitHub did not answer.'
+		]
+	])(
+		'does not refresh or retry a mutation when GitHub %s',
+		async (_, mutationAnswer, status, error) => {
+			vi.stubGlobal(
+				'fetch',
+				vi
+					.fn()
+					.mockResolvedValueOnce(
+						Response.json({
+							data: {
+								node: { pullRequest: { number: 7, repository: { nameWithOwner: 'sandbox/web' } } }
+							}
+						})
+					)
+					.mockImplementationOnce(mutationAnswer)
+			);
+			const { app, env, recheck } = harness();
+			const response = await app.request(
+				'/api/diff/review/submit',
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(writes[2][1])
+				},
+				env
+			);
+			expect(response.status).toBe(status);
+			expect(await response.json()).toEqual({ error });
+			expect(recheck).not.toHaveBeenCalled();
+		}
+	);
 });

@@ -1,3 +1,4 @@
+import { DAY_MS } from './durations';
 import { tokens } from './text-match';
 import { readsBoard } from './projects';
 import type { DashKind, RuleMatch } from './types';
@@ -17,7 +18,6 @@ const DATE = String.raw`(?:\d{4}-\d{2}-\d{2}|@today(?:-\d{1,4}[dw])?)`;
 const DATE_PATTERN = new RegExp(
 	String.raw`^(?:(?:<|>|<=|>=)?${DATE}|(?:${DATE}|\*)\.\.(?:${DATE}|\*))$`
 );
-const DAY_MS = 86_400_000;
 
 export type WordRuns = 'both' | 'github' | 'hush';
 export type QueryPlace = 'rule' | 'section' | 'search';

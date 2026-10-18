@@ -1,4 +1,5 @@
 import { api } from '$lib/api';
+import { b64urlDecode } from '$lib/shared/bytes';
 import { deviceLabel } from '$lib/shared/session';
 
 export type PushSupport = 'supported' | 'unsupported' | 'needs-install';
@@ -12,12 +13,6 @@ export function pushSupport(): PushSupport {
 	const standalone = window.matchMedia('(display-mode: standalone)').matches;
 	if (ios && !standalone) return 'needs-install';
 	return hasApis ? 'supported' : 'unsupported';
-}
-
-function keyToBytes(b64url: string): Uint8Array<ArrayBuffer> {
-	const b64 =
-		b64url.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (b64url.length % 4)) % 4);
-	return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 }
 
 export async function currentSubscription(): Promise<PushSubscription | null> {
@@ -38,7 +33,7 @@ export async function enablePush(): Promise<void> {
 	if (!sub)
 		sub = await reg.pushManager.subscribe({
 			userVisibleOnly: true,
-			applicationServerKey: keyToBytes(publicKey)
+			applicationServerKey: b64urlDecode(publicKey)
 		});
 	await api.subscribe(sub.toJSON(), deviceLabel(navigator.userAgent));
 }

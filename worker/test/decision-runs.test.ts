@@ -58,6 +58,8 @@ function harness() {
 			}
 		},
 		all: (query: string, ...args: (string | number | null)[]) => db.prepare(query).all(...args),
+		allIn: (query: string, keys: string[]) =>
+			keys.length ? db.prepare(query).all(JSON.stringify(keys)) : [],
 		run: (query: string, ...args: (string | number | null)[]) =>
 			Number(db.prepare(query).run(...args).changes),
 		transaction: <T>(action: () => T) => action()

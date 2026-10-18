@@ -19,11 +19,9 @@ import { subjectKey, subjectRuleFacts, type SubjectFacts } from '../../src/lib/s
 import type { RuleMatch, Settings } from '../../src/lib/shared/types';
 import { dailyTokenBudget, decide, decisionsAvailable } from '../decide';
 import { PollerAlerts } from './alerts';
-import type { Who } from './shared';
+import { IN_KEYS, type Who } from './shared';
 
 const DECISION_CONCURRENCY = 6;
-const SQL_BATCH = 90;
-const marks = (n: number) => Array(n).fill('?').join(',');
 
 export const DECISION_FILL_KEY = 'decisionFill';
 const USAGE_KEY = 'decisionUsage';
@@ -88,15 +86,12 @@ export abstract class PollerDecisions extends PollerAlerts {
 
 	private storedDecisions(keys: string[]): Map<string, StoredDecisions> {
 		const out = new Map<string, StoredDecisions>();
-		for (let i = 0; i < keys.length; i += SQL_BATCH) {
-			const batch = keys.slice(i, i + SQL_BATCH);
-			for (const r of this.all<{ key: string; answers: string }>(
-				`SELECT key, answers FROM decisions WHERE key IN (${marks(batch.length)})`,
-				...batch
-			)) {
-				const stored = parseStoredDecisions(r.answers);
-				if (stored) out.set(r.key, stored);
-			}
+		for (const r of this.allIn<{ key: string; answers: string }>(
+			`SELECT key, answers FROM decisions WHERE key ${IN_KEYS}`,
+			keys
+		)) {
+			const stored = parseStoredDecisions(r.answers);
+			if (stored) out.set(r.key, stored);
 		}
 		return out;
 	}

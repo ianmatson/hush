@@ -10,21 +10,35 @@ import {
 	type FileViewedState,
 	type ViewedFiles
 } from '../../src/lib/shared/diff';
-import { isGitHubName, isItemNumber } from '../../src/lib/shared/item-page';
+import { MAX_COMMENT_LENGTH } from '../../src/lib/shared/actions';
+import {
+	isGitHubName,
+	isItemNumber,
+	isNodeId,
+	parseRepoFullName
+} from '../../src/lib/shared/item-page';
 import { userToken } from '../db';
-import { gh } from '../github';
+import {
+	gh,
+	graphql,
+	graphqlWriteFailure,
+	restWriteFailure,
+	type GraphqlResult,
+	type WriteFailure
+} from '../github';
 import { json, query, routes, type Ctx } from '../app';
-import { refreshWrittenSubject, subjectBeforeWrite } from '../subject-writes';
-import { writeBlockForNode } from '../write-gate';
+import { refreshWrittenSubject } from '../subject-writes';
+import { checkNodeWrite, writeBlockForRepo } from '../write-gate';
 
 const PASSED_THROUGH_STATUSES = new Set([401, 403, 404]);
-const NODE_ID = /^[A-Za-z0-9_=-]{1,120}$/;
 const MAX_PATH_LENGTH = 1024;
 const PULL_COMMITS_LIMIT = 100;
 const THREADS_PER_PAGE = 100;
 const THREAD_PAGES_LIMIT = 10;
 const COMMENTS_PER_THREAD = 50;
-const MAX_REPLY_LENGTH = 65_536;
+const NO_STORE = { 'Cache-Control': 'private, no-store' };
+const GITHUB_JSON = { 'Content-Type': 'application/json; charset=utf-8', ...NO_STORE };
+const NO_PULL_REQUEST = 'GitHub found no pull request.';
 
 const VIEWED_FILES_QUERY = `query($o: String!, $r: String!, $n: Int!, $after: String) {
   repository(owner: $o, name: $r) { pullRequest(number: $n) {
@@ -98,21 +112,17 @@ export type ThreadNode = {
 	};
 };
 
+type PageInfo = { hasNextPage: boolean; endCursor: string | null };
+
 type ReviewThreadsPage = {
-	data?: {
-		repository?: {
-			pullRequest?: {
-				reviews?: {
-					nodes: { id: string; viewerDidAuthor: boolean; comments: { totalCount: number } }[];
-				};
-				reviewThreads?: {
-					pageInfo: { hasNextPage: boolean; endCursor: string | null };
-					nodes: ThreadNode[];
-				};
+	repository?: {
+		pullRequest?: {
+			reviews?: {
+				nodes: { id: string; viewerDidAuthor: boolean; comments: { totalCount: number } }[];
 			};
+			reviewThreads?: { pageInfo: PageInfo; nodes: ThreadNode[] };
 		};
 	};
-	errors?: { message: string }[];
 };
 
 function excerptOf(node: ThreadNode, diffHunk: string) {
@@ -155,24 +165,6 @@ export function toReviewThread(node: ThreadNode): ReviewThread {
 	};
 }
 
-async function graphqlWrite(
-	c: Ctx,
-	token: string,
-	query: string,
-	variables: Record<string, unknown>
-) {
-	const subject = await subjectBeforeWrite(token, String(variables.id ?? variables.pr));
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query, variables })
-	});
-	const result = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] };
-	if (!res.ok || result.errors?.length)
-		return result.errors?.[0]?.message ?? `GitHub returned ${res.status}.`;
-	if (subject) await refreshWrittenSubject(c, subject);
-	return null;
-}
-
 const ADD_REVIEW_THREAD = `mutation($pr: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
   addPullRequestReviewThread(input: { pullRequestId: $pr, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide }) { thread { id } }
 }`;
@@ -189,10 +181,10 @@ const REVIEW_EVENTS = new Set<ReviewEvent>(['COMMENT', 'APPROVE', 'REQUEST_CHANG
 const SIDES = new Set(['LEFT', 'RIGHT']);
 const isLineNumber = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isInteger(value) && value > 0;
-const isNodeId = (value: unknown): value is string =>
-	typeof value === 'string' && NODE_ID.test(value);
 const isBody = (value: unknown): value is string =>
-	typeof value === 'string' && !!value.trim() && value.length <= MAX_REPLY_LENGTH;
+	typeof value === 'string' && !!value.trim() && value.length <= MAX_COMMENT_LENGTH;
+const isFilePath = (value: unknown): value is string =>
+	typeof value === 'string' && !!value && value.length <= MAX_PATH_LENGTH;
 
 type CommentInput = {
 	repo: string;
@@ -209,18 +201,13 @@ type CommentInput = {
 };
 
 function validComment(b: Partial<CommentInput>): b is CommentInput {
-	const [owner, name, extra] = typeof b.repo === 'string' ? b.repo.split('/') : [];
 	const range = b.startLine === null || b.startLine === undefined;
 	return (
-		isGitHubName(owner ?? '') &&
-		isGitHubName(name ?? '') &&
-		extra === undefined &&
+		!!parseRepoFullName(b.repo) &&
 		isLineNumber(b.number) &&
 		isNodeId(b.pullRequestId) &&
 		isCommitOid(b.commitOid) &&
-		typeof b.path === 'string' &&
-		!!b.path &&
-		b.path.length <= MAX_PATH_LENGTH &&
+		isFilePath(b.path) &&
 		isBody(b.body) &&
 		isLineNumber(b.line) &&
 		SIDES.has(b.side ?? '') &&
@@ -231,7 +218,7 @@ function validComment(b: Partial<CommentInput>): b is CommentInput {
 	);
 }
 
-async function postSingleComment(token: string, b: CommentInput): Promise<string | null> {
+async function postSingleComment(token: string, b: CommentInput): Promise<WriteFailure | null> {
 	const res = await gh(token, `/repos/${b.repo}/pulls/${b.number}/comments`, {
 		method: 'POST',
 		body: JSON.stringify({
@@ -242,17 +229,8 @@ async function postSingleComment(token: string, b: CommentInput): Promise<string
 			side: b.side,
 			...(b.startLine ? { start_line: b.startLine, start_side: b.startSide } : {})
 		})
-	});
-	if (res.ok) return null;
-	const result = (await res.json().catch(() => ({}))) as {
-		message?: string;
-		errors?: (string | { message?: string })[];
-	};
-	const detail = result.errors?.map((e) => (typeof e === 'string' ? e : e.message)).filter(Boolean);
-	return (
-		[result.message, ...(detail ?? [])].filter(Boolean).join(': ') ||
-		`GitHub returned ${res.status}.`
-	);
+	}).catch(() => null);
+	return res?.ok ? null : restWriteFailure(res);
 }
 
 const MARK_VIEWED = `mutation($id: ID!, $path: String!) {
@@ -263,37 +241,28 @@ const UNMARK_VIEWED = `mutation($id: ID!, $path: String!) {
 }`;
 
 type PullCommitsResult = {
-	data?: {
-		repository?: {
-			pullRequest?: {
-				commits?: {
-					nodes: {
-						commit: {
-							oid: string;
-							messageHeadline: string;
-							committedDate: string;
-							parents: { totalCount: number };
-						};
-					}[];
-				};
+	repository?: {
+		pullRequest?: {
+			commits?: {
+				nodes: {
+					commit: {
+						oid: string;
+						messageHeadline: string;
+						committedDate: string;
+						parents: { totalCount: number };
+					};
+				}[];
 			};
 		};
 	};
-	errors?: { message: string }[];
 };
 
 type ViewedFilesPage = {
-	data?: {
-		repository?: {
-			pullRequest?: {
-				files?: {
-					pageInfo: { hasNextPage: boolean; endCursor: string | null };
-					nodes: { path: string; viewerViewedState: string }[];
-				};
-			};
+	repository?: {
+		pullRequest?: {
+			files?: { pageInfo: PageInfo; nodes: { path: string; viewerViewedState: string }[] };
 		};
 	};
-	errors?: { message: string }[];
 };
 
 function pageNumber(value: string | undefined): number | null {
@@ -304,8 +273,61 @@ function pageNumber(value: string | undefined): number | null {
 const validPull = (owner: string, repo: string, number: string) =>
 	isGitHubName(owner) && isGitHubName(repo) && isItemNumber(number);
 
+type ReadFailureStatus = 401 | 403 | 404 | 502;
+type ReadFailure = { error: string; status: ReadFailureStatus };
+
 function passThroughFailure(status: number) {
-	return (PASSED_THROUGH_STATUSES.has(status) ? status : 502) as 401 | 403 | 404 | 502;
+	return (PASSED_THROUGH_STATUSES.has(status) ? status : 502) as ReadFailureStatus;
+}
+
+const githubDidNot = (action: string, status: number): ReadFailure => ({
+	error: `GitHub did not ${action} (${status}).`,
+	status: passThroughFailure(status)
+});
+
+async function proxyGitHubJson(c: Ctx, path: string, action: string, emptyBody: string) {
+	const res = await gh(await userToken(c.env, c.get('user')), path);
+	if (!res.ok) {
+		const failure = githubDidNot(action, res.status);
+		return c.json({ error: failure.error }, failure.status);
+	}
+	return c.body(res.body ?? emptyBody, 200, GITHUB_JSON);
+}
+
+async function readEveryPage<D>(
+	token: string,
+	query: string,
+	variables: Record<string, unknown>,
+	read: { action: string; pagesLimit: number; page: (data: D) => PageInfo | null }
+): Promise<ReadFailure | null> {
+	let after: string | null = null;
+	for (let page = 0; page < read.pagesLimit; page++) {
+		const result: GraphqlResult<D> = await graphql<D>(token, query, { ...variables, after });
+		if (!result.ok) return githubDidNot(read.action, result.status);
+		const pageInfo: PageInfo | null = result.data ? read.page(result.data) : null;
+		if (!pageInfo) return { error: result.errors[0]?.message ?? NO_PULL_REQUEST, status: 404 };
+		if (!pageInfo.hasNextPage) break;
+		after = pageInfo.endCursor;
+	}
+	return null;
+}
+
+async function gatedNodeWrite(
+	c: Ctx,
+	nodeId: string,
+	query: string,
+	variables: Record<string, unknown>,
+	{ refreshesSubject = true } = {}
+) {
+	const token = await userToken(c.env, c.get('user'));
+	const { blocked, subject } = await checkNodeWrite(c.env, token, nodeId, {
+		subjectNeeded: refreshesSubject
+	});
+	if (blocked) return c.json({ error: blocked }, 403);
+	const failure = graphqlWriteFailure(await graphql(token, query, variables).catch(() => null));
+	if (failure) return c.json({ error: failure.error }, failure.status);
+	if (subject) await refreshWrittenSubject(c, subject);
+	return c.json({ ok: true });
 }
 
 const app = routes()
@@ -314,19 +336,12 @@ const app = routes()
 		const page = pageNumber(c.req.query('page'));
 		if (!validPull(owner, repo, number) || page === null)
 			return c.json({ error: 'Not a pull request page.' }, 400);
-		const res = await gh(
-			await userToken(c.env, c.get('user')),
-			`/repos/${owner}/${repo}/pulls/${number}/files?per_page=${PULL_FILES_PER_PAGE}&page=${page}`
+		return proxyGitHubJson(
+			c,
+			`/repos/${owner}/${repo}/pulls/${number}/files?per_page=${PULL_FILES_PER_PAGE}&page=${page}`,
+			'give the changed files',
+			'[]'
 		);
-		if (!res.ok)
-			return c.json(
-				{ error: `GitHub did not give the changed files (${res.status}).` },
-				passThroughFailure(res.status)
-			);
-		return c.body(res.body ?? '[]', 200, {
-			'Content-Type': 'application/json; charset=utf-8',
-			'Cache-Control': 'private, no-store'
-		});
 	})
 	.get(
 		'/api/diff/:owner/:repo/:number/compare',
@@ -337,157 +352,101 @@ const app = routes()
 			const head = c.req.query('head');
 			if (!validPull(owner, repo, number) || !isCommitOid(base) || !isCommitOid(head))
 				return c.json({ error: 'Not a pair of commits.' }, 400);
-			const res = await gh(
-				await userToken(c.env, c.get('user')),
-				`/repos/${owner}/${repo}/compare/${base}...${head}`
+			return proxyGitHubJson(
+				c,
+				`/repos/${owner}/${repo}/compare/${base}...${head}`,
+				'compare the commits',
+				'{}'
 			);
-			if (!res.ok)
-				return c.json(
-					{ error: `GitHub did not compare the commits (${res.status}).` },
-					passThroughFailure(res.status)
-				);
-			return c.body(res.body ?? '{}', 200, {
-				'Content-Type': 'application/json; charset=utf-8',
-				'Cache-Control': 'private, no-store'
-			});
 		}
 	)
 	.get('/api/diff/:owner/:repo/:number/commits', async (c) => {
 		const { owner, repo, number } = c.req.param();
 		if (!validPull(owner, repo, number)) return c.json({ error: 'Not a pull request.' }, 400);
-		const res = await gh(await userToken(c.env, c.get('user')), '/graphql', {
-			method: 'POST',
-			body: JSON.stringify({
-				query: PULL_COMMITS_QUERY,
-				variables: { o: owner, r: repo, n: Number(number) }
-			})
-		});
-		if (!res.ok)
-			return c.json(
-				{ error: `GitHub did not give the commits (${res.status}).` },
-				passThroughFailure(res.status)
-			);
-		const result = (await res.json()) as PullCommitsResult;
+		const result = await graphql<PullCommitsResult>(
+			await userToken(c.env, c.get('user')),
+			PULL_COMMITS_QUERY,
+			{ o: owner, r: repo, n: Number(number) }
+		);
+		if (!result.ok) {
+			const failure = githubDidNot('give the commits', result.status);
+			return c.json({ error: failure.error }, failure.status);
+		}
 		const nodes = result.data?.repository?.pullRequest?.commits?.nodes;
-		if (!nodes)
-			return c.json({ error: result.errors?.[0]?.message ?? 'GitHub found no pull request.' }, 404);
+		if (!nodes) return c.json({ error: result.errors[0]?.message ?? NO_PULL_REQUEST }, 404);
 		const commits: PullCommit[] = nodes.map(({ commit }) => ({
 			oid: commit.oid,
 			headline: commit.messageHeadline,
 			merge: commit.parents.totalCount > 1,
 			at: commit.committedDate
 		}));
-		return c.json({ commits }, 200, { 'Cache-Control': 'private, no-store' });
+		return c.json({ commits }, 200, NO_STORE);
 	})
 	.get('/api/diff/:owner/:repo/:number/commit/:sha', async (c) => {
 		const { owner, repo, number, sha } = c.req.param();
 		if (!validPull(owner, repo, number) || !isCommitOid(sha))
 			return c.json({ error: 'Not a commit.' }, 400);
-		const res = await gh(
-			await userToken(c.env, c.get('user')),
-			`/repos/${owner}/${repo}/commits/${sha}`
-		);
-		if (!res.ok)
-			return c.json(
-				{ error: `GitHub did not give the commit (${res.status}).` },
-				passThroughFailure(res.status)
-			);
-		return c.body(res.body ?? '{}', 200, {
-			'Content-Type': 'application/json; charset=utf-8',
-			'Cache-Control': 'private, no-store'
-		});
+		return proxyGitHubJson(c, `/repos/${owner}/${repo}/commits/${sha}`, 'give the commit', '{}');
 	})
 	.get('/api/diff/:owner/:repo/:number/threads', async (c) => {
 		const { owner, repo, number } = c.req.param();
 		if (!validPull(owner, repo, number)) return c.json({ error: 'Not a pull request.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
 		const threads: ReviewThread[] = [];
-		let pendingReview: PendingReview | null = null;
-		let after: string | null = null;
-		for (let page = 0; page < THREAD_PAGES_LIMIT; page++) {
-			const res = await gh(token, '/graphql', {
-				method: 'POST',
-				body: JSON.stringify({
-					query: REVIEW_THREADS_QUERY,
-					variables: { o: owner, r: repo, n: Number(number), after }
-				})
-			});
-			if (!res.ok)
-				return c.json(
-					{ error: `GitHub did not give the review threads (${res.status}).` },
-					passThroughFailure(res.status)
-				);
-			const result = (await res.json()) as ReviewThreadsPage;
-			const found = result.data?.repository?.pullRequest?.reviewThreads;
-			if (!found)
-				return c.json(
-					{ error: result.errors?.[0]?.message ?? 'GitHub found no pull request.' },
-					404
-				);
-			const pending = result.data?.repository?.pullRequest?.reviews?.nodes.find(
-				(r) => r.viewerDidAuthor
-			);
-			if (pending) pendingReview = { id: pending.id, comments: pending.comments.totalCount };
-			threads.push(...found.nodes.filter((n) => n.comments.totalCount > 0).map(toReviewThread));
-			if (!found.pageInfo.hasNextPage) break;
-			after = found.pageInfo.endCursor;
-		}
-		return c.json({ threads, pendingReview }, 200, { 'Cache-Control': 'private, no-store' });
+		let pendingReview = null as PendingReview | null;
+		const failure = await readEveryPage<ReviewThreadsPage>(
+			await userToken(c.env, c.get('user')),
+			REVIEW_THREADS_QUERY,
+			{ o: owner, r: repo, n: Number(number) },
+			{
+				action: 'give the review threads',
+				pagesLimit: THREAD_PAGES_LIMIT,
+				page: (data) => {
+					const pullRequest = data.repository?.pullRequest;
+					const found = pullRequest?.reviewThreads;
+					if (!found) return null;
+					const pending = pullRequest.reviews?.nodes.find((r) => r.viewerDidAuthor);
+					if (pending) pendingReview = { id: pending.id, comments: pending.comments.totalCount };
+					threads.push(...found.nodes.filter((n) => n.comments.totalCount > 0).map(toReviewThread));
+					return found.pageInfo;
+				}
+			}
+		);
+		if (failure) return c.json({ error: failure.error }, failure.status);
+		return c.json({ threads, pendingReview }, 200, NO_STORE);
 	})
 	.post('/api/diff/threads/reply', json<{ threadId: string; body: string }>(), async (c) => {
 		const b = c.req.valid('json');
-		if (
-			typeof b.threadId !== 'string' ||
-			!NODE_ID.test(b.threadId) ||
-			typeof b.body !== 'string' ||
-			!b.body.trim() ||
-			b.body.length > MAX_REPLY_LENGTH
-		)
+		if (!isNodeId(b.threadId) || !isBody(b.body))
 			return c.json({ error: 'Not a reply to a review thread.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
-		const blocked = await writeBlockForNode(c.env, token, b.threadId);
-		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = await graphqlWrite(c, token, REPLY_TO_THREAD, {
-			id: b.threadId,
-			body: b.body
-		});
-		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+		return gatedNodeWrite(c, b.threadId, REPLY_TO_THREAD, { id: b.threadId, body: b.body });
 	})
 	.post('/api/diff/threads/resolve', json<{ threadId: string; resolved: boolean }>(), async (c) => {
 		const b = c.req.valid('json');
-		if (
-			typeof b.threadId !== 'string' ||
-			!NODE_ID.test(b.threadId) ||
-			typeof b.resolved !== 'boolean'
-		)
+		if (!isNodeId(b.threadId) || typeof b.resolved !== 'boolean')
 			return c.json({ error: 'Not a review thread.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
-		const blocked = await writeBlockForNode(c.env, token, b.threadId);
-		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = await graphqlWrite(c, token, b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD, {
+		return gatedNodeWrite(c, b.threadId, b.resolved ? RESOLVE_THREAD : UNRESOLVE_THREAD, {
 			id: b.threadId
 		});
-		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 	})
 	.post('/api/diff/comment', json<CommentInput>(), async (c) => {
 		const b = c.req.valid('json');
 		if (!validComment(b)) return c.json({ error: 'Not a comment on a line of the diff.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
-		const blocked = await writeBlockForNode(c.env, token, b.pullRequestId);
+		if (!b.single)
+			return gatedNodeWrite(c, b.pullRequestId, ADD_REVIEW_THREAD, {
+				pr: b.pullRequestId,
+				path: b.path,
+				body: b.body,
+				line: b.line,
+				side: b.side,
+				startLine: b.startLine,
+				startSide: b.startSide
+			});
+		const blocked = writeBlockForRepo(c.env, b.repo);
 		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = b.single
-			? await postSingleComment(token, b)
-			: await graphqlWrite(c, token, ADD_REVIEW_THREAD, {
-					pr: b.pullRequestId,
-					path: b.path,
-					body: b.body,
-					line: b.line,
-					side: b.side,
-					startLine: b.startLine,
-					startSide: b.startSide
-				});
-		if (b.single && !failure) await refreshWrittenSubject(c, b);
-		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+		const failure = await postSingleComment(await userToken(c.env, c.get('user')), b);
+		if (failure) return c.json({ error: failure.error }, failure.status);
+		await refreshWrittenSubject(c, b);
+		return c.json({ ok: true });
 	})
 	.post(
 		'/api/diff/review/submit',
@@ -498,105 +457,69 @@ const app = routes()
 				!isNodeId(b.reviewId) ||
 				!REVIEW_EVENTS.has(b.event as ReviewEvent) ||
 				typeof b.body !== 'string' ||
-				b.body.length > MAX_REPLY_LENGTH ||
+				b.body.length > MAX_COMMENT_LENGTH ||
 				(b.event === 'REQUEST_CHANGES' && !b.body.trim())
 			)
 				return c.json({ error: 'Not a review to submit.' }, 400);
-			const token = await userToken(c.env, c.get('user'));
-			const blocked = await writeBlockForNode(c.env, token, b.reviewId);
-			if (blocked) return c.json({ error: blocked }, 403);
-			const failure = await graphqlWrite(c, token, SUBMIT_REVIEW, {
+			return gatedNodeWrite(c, b.reviewId, SUBMIT_REVIEW, {
 				id: b.reviewId,
 				event: b.event,
 				body: b.body.trim() || null
 			});
-			return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
 		}
 	)
 	.post('/api/diff/review/discard', json<{ reviewId: string }>(), async (c) => {
 		const b = c.req.valid('json');
 		if (!isNodeId(b.reviewId)) return c.json({ error: 'Not a review.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
-		const blocked = await writeBlockForNode(c.env, token, b.reviewId);
-		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = await graphqlWrite(c, token, DISCARD_REVIEW, { id: b.reviewId });
-		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+		return gatedNodeWrite(c, b.reviewId, DISCARD_REVIEW, { id: b.reviewId });
 	})
 	.post('/api/diff/comment/edit', json<{ commentId: string; body: string | null }>(), async (c) => {
 		const b = c.req.valid('json');
 		const deleting = b.body === null;
 		if (!isNodeId(b.commentId) || (!deleting && !isBody(b.body)))
 			return c.json({ error: 'Not a review comment.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
-		const blocked = await writeBlockForNode(c.env, token, b.commentId);
-		if (blocked) return c.json({ error: blocked }, 403);
-		const failure = deleting
-			? await graphqlWrite(c, token, DELETE_COMMENT, { id: b.commentId })
-			: await graphqlWrite(c, token, EDIT_COMMENT, { id: b.commentId, body: b.body });
-		return failure ? c.json({ error: failure }, 502) : c.json({ ok: true });
+		return deleting
+			? gatedNodeWrite(c, b.commentId, DELETE_COMMENT, { id: b.commentId })
+			: gatedNodeWrite(c, b.commentId, EDIT_COMMENT, { id: b.commentId, body: b.body });
 	})
 	.get('/api/diff/:owner/:repo/:number/viewed', async (c) => {
 		const { owner, repo, number } = c.req.param();
 		if (!validPull(owner, repo, number)) return c.json({ error: 'Not a pull request.' }, 400);
-		const token = await userToken(c.env, c.get('user'));
 		const viewed: ViewedFiles = {};
-		let after: string | null = null;
-		for (let page = 0; page < PULL_FILES_MAX_PAGES; page++) {
-			const res = await gh(token, '/graphql', {
-				method: 'POST',
-				body: JSON.stringify({
-					query: VIEWED_FILES_QUERY,
-					variables: { o: owner, r: repo, n: Number(number), after }
-				})
-			});
-			if (!res.ok)
-				return c.json(
-					{ error: `GitHub did not give the viewed files (${res.status}).` },
-					passThroughFailure(res.status)
-				);
-			const json = (await res.json()) as ViewedFilesPage;
-			const files = json.data?.repository?.pullRequest?.files;
-			if (!files)
-				return c.json({ error: json.errors?.[0]?.message ?? 'GitHub found no pull request.' }, 404);
-			for (const file of files.nodes)
-				if (file.viewerViewedState === 'VIEWED' || file.viewerViewedState === 'DISMISSED')
-					viewed[file.path] = file.viewerViewedState as FileViewedState;
-			if (!files.pageInfo.hasNextPage) break;
-			after = files.pageInfo.endCursor;
-		}
-		return c.json({ viewed }, 200, { 'Cache-Control': 'private, no-store' });
+		const failure = await readEveryPage<ViewedFilesPage>(
+			await userToken(c.env, c.get('user')),
+			VIEWED_FILES_QUERY,
+			{ o: owner, r: repo, n: Number(number) },
+			{
+				action: 'give the viewed files',
+				pagesLimit: PULL_FILES_MAX_PAGES,
+				page: (data) => {
+					const files = data.repository?.pullRequest?.files;
+					if (!files) return null;
+					for (const file of files.nodes)
+						if (file.viewerViewedState === 'VIEWED' || file.viewerViewedState === 'DISMISSED')
+							viewed[file.path] = file.viewerViewedState as FileViewedState;
+					return files.pageInfo;
+				}
+			}
+		);
+		if (failure) return c.json({ error: failure.error }, failure.status);
+		return c.json({ viewed }, 200, NO_STORE);
 	})
 	.post(
 		'/api/diff/viewed',
 		json<{ pullRequestId: string; path: string; viewed: boolean }>(),
 		async (c) => {
 			const b = c.req.valid('json');
-			if (
-				typeof b.pullRequestId !== 'string' ||
-				!NODE_ID.test(b.pullRequestId) ||
-				typeof b.path !== 'string' ||
-				!b.path ||
-				b.path.length > MAX_PATH_LENGTH ||
-				typeof b.viewed !== 'boolean'
-			)
+			if (!isNodeId(b.pullRequestId) || !isFilePath(b.path) || typeof b.viewed !== 'boolean')
 				return c.json({ error: 'Not a file of a pull request.' }, 400);
-			const token = await userToken(c.env, c.get('user'));
-			const blocked = await writeBlockForNode(c.env, token, b.pullRequestId);
-			if (blocked) return c.json({ error: blocked }, 403);
-			const res = await gh(token, '/graphql', {
-				method: 'POST',
-				body: JSON.stringify({
-					query: b.viewed ? MARK_VIEWED : UNMARK_VIEWED,
-					variables: { id: b.pullRequestId, path: b.path }
-				})
-			});
-			const result = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] };
-			if (!res.ok || result.errors?.length)
-				return c.json(
-					{ error: result.errors?.[0]?.message ?? `GitHub returned ${res.status}.` },
-					502
-				);
-			return c.json({ ok: true });
+			return gatedNodeWrite(
+				c,
+				b.pullRequestId,
+				b.viewed ? MARK_VIEWED : UNMARK_VIEWED,
+				{ id: b.pullRequestId, path: b.path },
+				{ refreshesSubject: false }
+			);
 		}
 	);
 

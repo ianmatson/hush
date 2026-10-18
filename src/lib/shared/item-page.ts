@@ -8,6 +8,7 @@ export const ITEM_PATH_SEGMENTS = { pr: 'pull', issue: 'issues' } as const satis
 export type ItemPathSegment = (typeof ITEM_PATH_SEGMENTS)[DashKind];
 
 const NAME = /^(?!\.+$)[A-Za-z0-9_.-]{1,100}$/;
+const NODE_ID = /^[A-Za-z0-9_=-]{1,120}$/;
 const POSITIVE_INTEGER = /^[1-9]\d{0,9}$/;
 const GITHUB_ORIGIN = 'https://github.com';
 const GITHUB_HOSTS = new Set(['github.com', 'www.github.com']);
@@ -16,6 +17,20 @@ const HAS_PROTOCOL = /^[a-z][a-z\d+.-]*:/i;
 
 export const isGitHubName = (value: string | undefined): value is string =>
 	!!value && NAME.test(value);
+
+export const isNodeId = (value: unknown): value is string =>
+	typeof value === 'string' && NODE_ID.test(value);
+
+export interface RepoFullName {
+	owner: string;
+	name: string;
+}
+
+export function parseRepoFullName(value: unknown): RepoFullName | null {
+	if (typeof value !== 'string') return null;
+	const [owner, name, extra] = value.split('/');
+	return isGitHubName(owner) && isGitHubName(name) && extra === undefined ? { owner, name } : null;
+}
 
 export const isDashKind = (value: unknown): value is DashKind =>
 	value === 'pr' || value === 'issue';

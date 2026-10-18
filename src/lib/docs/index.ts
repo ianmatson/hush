@@ -1,5 +1,6 @@
 import { Marked, type Tokens } from 'marked';
 import { SITE_URL } from '$lib/site';
+import { escapeHtml } from '$lib/shared/html';
 import { REFERENCES, keyMention, slug } from './reference';
 
 /**
@@ -96,9 +97,6 @@ export const docPath = (d: Pick<DocPage, 'slug'>) => (d.slug ? `/docs/${d.slug}`
 /** The Markdown copy of a page. */
 export const docMarkdownPath = (d: Pick<DocPage, 'slug'>) => `/docs/${d.slug || 'index'}.md`;
 
-const esc = (s: string) =>
-	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
 const ENTITIES: Record<string, string> = {
 	'&amp;': '&',
 	'&lt;': '<',
@@ -134,13 +132,13 @@ export function renderMarkdown(markdown: string): Rendered {
 			},
 			code({ text, lang }: Tokens.Code) {
 				const language = (lang ?? '').split(/\s+/)[0];
-				const label = language ? ` data-lang="${esc(language)}"` : '';
-				return `<pre${label}><code>${esc(text)}</code></pre>\n`;
+				const label = language ? ` data-lang="${escapeHtml(language)}"` : '';
+				return `<pre${label}><code>${escapeHtml(text)}</code></pre>\n`;
 			},
 			link({ href, title, tokens }: Tokens.Link) {
 				const inner = this.parser.parseInline(tokens);
 				const external = /^https?:/.test(href) && !href.startsWith(SITE_URL);
-				return `<a href="${esc(href)}"${title ? ` title="${esc(title)}"` : ''}${external ? ' rel="noreferrer"' : ''}>${inner}</a>`;
+				return `<a href="${escapeHtml(href)}"${title ? ` title="${escapeHtml(title)}"` : ''}${external ? ' rel="noreferrer"' : ''}>${inner}</a>`;
 			}
 		}
 	});

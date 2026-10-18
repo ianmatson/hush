@@ -1,20 +1,7 @@
+import { b64urlDecode, b64urlEncode } from '../src/lib/shared/bytes';
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-
-export function b64urlEncode(bytes: ArrayBuffer | Uint8Array): string {
-	const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-	let s = '';
-	for (const b of u8) s += String.fromCharCode(b);
-	return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-export function b64urlDecode(s: string): Uint8Array<ArrayBuffer> {
-	const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4);
-	const bin = atob(b64);
-	const out = new Uint8Array(bin.length);
-	for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-	return out;
-}
 
 export function randomToken(bytes = 32): string {
 	return b64urlEncode(crypto.getRandomValues(new Uint8Array(bytes)));

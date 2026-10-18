@@ -102,7 +102,7 @@ function harness() {
 		storeTracked: vi.fn(),
 		broadcast,
 		who: vi.fn(async () => who),
-		all: vi.fn(() => [{ key: item.id, facts: JSON.stringify(subject) }]),
+		allIn: vi.fn(() => [{ key: item.id, facts: JSON.stringify(subject) }]),
 		run: vi.fn(),
 		transaction: vi.fn((action: () => void) => action()),
 		decideSubjects: vi.fn(async () => {}),

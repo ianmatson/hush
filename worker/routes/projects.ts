@@ -1,11 +1,9 @@
 import { projectAccessOf, type ProjectEdit } from '../../src/lib/shared/projects';
-import { userToken } from '../db';
+import { isGitHubName, isNodeId } from '../../src/lib/shared/item-page';
+import { scopesOf, userToken } from '../db';
 import { editProject, projectsOf } from '../projects';
 import { routes, poller, json } from '../app';
-
-const NAME = /^(?!\.+$)[A-Za-z0-9_.-]{1,100}$/;
-const NODE_ID = /^[A-Za-z0-9_=-]{1,120}$/;
-const isNodeId = (v: unknown): v is string => typeof v === 'string' && NODE_ID.test(v);
+import { writeBlockForProjects } from '../write-gate';
 
 function validEdit(b: Partial<ProjectEdit> & Record<string, unknown>): ProjectEdit | null {
 	if (!isNodeId(b.projectId) || !isNodeId(b.itemId)) return null;
@@ -31,9 +29,9 @@ const app = routes()
 		const u = c.get('user');
 		const { owner, repo } = c.req.param();
 		const number = Number(c.req.param('number'));
-		if (!NAME.test(owner) || !NAME.test(repo) || !Number.isInteger(number) || number < 1)
+		if (!isGitHubName(owner) || !isGitHubName(repo) || !Number.isInteger(number) || number < 1)
 			return c.json({ error: 'Not a PR or issue.' }, 400);
-		const access = projectAccessOf(u.scopes ? u.scopes.split(',') : []);
+		const access = projectAccessOf(scopesOf(u));
 		try {
 			return c.json(await projectsOf(await userToken(c.env, u), access, owner, repo, number), 200, {
 				'Cache-Control': 'private, no-store'
@@ -43,10 +41,10 @@ const app = routes()
 		}
 	})
 	.post('/api/projects/item', json<ProjectEdit>(), async (c) => {
-		if (c.env.GITHUB_WRITES === 'off')
-			return c.json({ error: 'GitHub writes are off in this copy (GITHUB_WRITES=off).' }, 403);
+		const blocked = writeBlockForProjects(c.env);
+		if (blocked) return c.json({ error: blocked }, 403);
 		const u = c.get('user');
-		if (projectAccessOf(u.scopes ? u.scopes.split(',') : []) !== 'edit')
+		if (projectAccessOf(scopesOf(u)) !== 'edit')
 			return c.json({ error: 'Give Hush project access first.' }, 403);
 		const edit = validEdit(c.req.valid('json') as Record<string, unknown>);
 		if (!edit) return c.json({ error: 'Not a project change.' }, 400);

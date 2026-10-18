@@ -1,6 +1,6 @@
-import { listNotifications } from './github';
+import { MINUTE_MS } from '../src/lib/shared/durations';
+import { githubStatusMessage, listNotifications } from './github';
 import {
-	MIN,
 	ACTIVE_WINDOW,
 	PAUSE_AFTER_NO_PUSH,
 	PAUSE_AFTER_WITH_PUSH,
@@ -172,7 +172,7 @@ export class Poller extends PollerData {
 			return;
 		}
 		let delay: number;
-		if (errors > 0) delay = Math.min(base * 2 ** (errors - 1), 30 * MIN);
+		if (errors > 0) delay = Math.min(base * 2 ** (errors - 1), 30 * MINUTE_MS);
 		else if (s.get('hasPush') || idleFor < ACTIVE_WINDOW) delay = base;
 		else delay = Math.max(base, POLL_IDLE);
 		const retryAt = Number(s.get('retryAt') ?? 0);
@@ -232,7 +232,7 @@ export class Poller extends PollerData {
 		if (rateLimited)
 			return this.fail('GitHub rate limit. Hush will retry later.', { retryAt: page.retryAt });
 		if (page.status !== 200 && page.status !== 304)
-			return this.fail(`GitHub returned ${page.status}.`);
+			return this.fail(githubStatusMessage(page.status));
 
 		this.lastGoodPoll = Date.now();
 		await this.putChanged({
