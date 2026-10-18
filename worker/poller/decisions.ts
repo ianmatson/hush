@@ -80,6 +80,8 @@ function couldMatch(expr: QueryExpr, exactMatches: (when: RuleMatch) => boolean)
 }
 
 export abstract class PollerDecisions extends PollerAlerts {
+	private decisionRuns: Promise<void> = Promise.resolve();
+
 	protected decisionsOn(settings: Settings): boolean {
 		return settings.smartDecisions && decisionsAvailable(this.env);
 	}
@@ -117,8 +119,14 @@ export abstract class PollerDecisions extends PollerAlerts {
 		return (await this.decisionUsage()).tokens >= dailyTokenBudget(this.env);
 	}
 
-	protected async decideSubjects(who: Who, subjects: SubjectFacts[]): Promise<void> {
-		if (!this.decisionsOn(who.settings) || !subjects.length) return;
+	protected decideSubjects(who: Who, subjects: SubjectFacts[]): Promise<void> {
+		if (!this.decisionsOn(who.settings) || !subjects.length) return Promise.resolve();
+		const run = this.decisionRuns.then(() => this.decideInTurn(who, subjects));
+		this.decisionRuns = run.catch(() => {});
+		return run;
+	}
+
+	private async decideInTurn(who: Who, subjects: SubjectFacts[]): Promise<void> {
 		const keyed = new Map(subjects.map((s) => [subjectKey(s.repo, s.number), s]));
 		const keys = [...keyed.keys()];
 		const stored = this.storedDecisions(keys);

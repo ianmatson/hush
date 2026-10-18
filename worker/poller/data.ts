@@ -47,7 +47,7 @@ const marks = (n: number) => Array(n).fill('?').join(',');
  */
 export abstract class PollerData extends PollerDashboard {
 	// In the top class (worker/poller.ts), with the poll schedule.
-	abstract touch(origin?: string): Promise<void>;
+	abstract touch(): Promise<void>;
 	abstract status(): Promise<PollStatus>;
 
 	async alertChannelsChanged(): Promise<void> {
@@ -55,9 +55,9 @@ export abstract class PollerData extends PollerDashboard {
 	}
 
 	/** For /api/me: your settings and the poll status, in one call. Hush is open: a visit. */
-	async me(origin: string): Promise<{ settings: Settings; status: PollStatus }> {
+	async me(): Promise<{ settings: Settings; status: PollStatus }> {
 		const seen = (await this.ctx.storage.get<number>('lastActive')) ?? 0;
-		if (Date.now() - seen >= SEEN_EVERY) this.ctx.waitUntil(this.touch(origin));
+		if (Date.now() - seen >= SEEN_EVERY) this.ctx.waitUntil(this.touch());
 		const [settings, status] = await Promise.all([this.settings(), this.status()]);
 		return { settings, status };
 	}
@@ -98,13 +98,18 @@ export abstract class PollerData extends PollerDashboard {
 		return out;
 	}
 
+	private broadcastDashboards(): void {
+		for (const kind of ['pr', 'issue'] as const) this.broadcast({ type: 'dash', kind });
+	}
+
 	async markUnseen(keys: string[]): Promise<{ ok: true }> {
 		keys = [...new Set(keys.filter((k) => typeof k === 'string' && k.includes('#')))].slice(0, 50);
-		if (keys.length)
-			this.run(
-				`DELETE FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
-				JSON.stringify(keys)
-			);
+		if (!keys.length) return { ok: true };
+		const deleted = this.run(
+			`DELETE FROM seen WHERE key IN (SELECT value FROM json_each(?))`,
+			JSON.stringify(keys)
+		);
+		if (deleted) this.broadcastDashboards();
 		return { ok: true };
 	}
 
@@ -140,8 +145,7 @@ export abstract class PollerData extends PollerDashboard {
 				);
 		});
 		this.clearPushMarks(writes.map((w) => w.key));
-		this.broadcast({ type: 'dash', kind: 'pr' });
-		this.broadcast({ type: 'dash', kind: 'issue' });
+		this.broadcastDashboards();
 		return { ok: true };
 	}
 
@@ -326,7 +330,8 @@ export abstract class PollerData extends PollerDashboard {
 		return { ok: true };
 	}
 
-	async testPush(origin: string): Promise<Refusal | { sent: number; statuses: number[] }> {
+	async testPush(): Promise<Refusal | { sent: number; statuses: number[] }> {
+		const origin = this.env.APP_URL;
 		if (!this.env.VAPID_PRIVATE_KEY)
 			return { error: 'VAPID keys are not configured on the server.', status: 500 };
 		const devices = this.all<{ endpoint: string; p256dh: string; auth: string }>(
@@ -391,7 +396,10 @@ export abstract class PollerData extends PollerDashboard {
 				snoozed_until: number | null;
 				snooze_event: SnoozeEvent | null;
 				snoozed_at: number | null;
-			}>('SELECT * FROM dash_snoozed').map((m) => [
+			}>(
+				'SELECT * FROM dash_snoozed WHERE item_id IN (SELECT value FROM json_each(?))',
+				JSON.stringify(data.items.map((i) => i.id))
+			).map((m) => [
 				m.item_id,
 				{
 					updatedAt: m.updated_at,
@@ -448,6 +456,7 @@ export abstract class PollerData extends PollerDashboard {
 					now
 				);
 		});
+		this.broadcastDashboards();
 		return { ok: true };
 	}
 
@@ -455,6 +464,7 @@ export abstract class PollerData extends PollerDashboard {
 		this.transaction(() => {
 			for (const id of ids) this.run('DELETE FROM dash_snoozed WHERE item_id = ?', id);
 		});
+		this.broadcastDashboards();
 		return { ok: true };
 	}
 
@@ -469,6 +479,7 @@ export abstract class PollerData extends PollerDashboard {
 					MUTED_AT
 				);
 		});
+		this.broadcastDashboards();
 		return { ok: true };
 	}
 }

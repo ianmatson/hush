@@ -176,10 +176,13 @@ const app = routes()
 		// Your own token stays in use, unless you asked for the app's token again.
 		// A custom token that GitHub no longer accepts is replaced (else signing in would not help).
 		const existing = await getUser(c.env, viewer.user.id);
+		const previousToken = existing ? await userToken(c.env, existing).catch(() => null) : null;
 		const keepOwn =
 			existing?.token_source === 'own' &&
 			use !== 'app' &&
-			!('error' in (await inspect(await userToken(c.env, existing).catch(() => ''))));
+			previousToken !== null &&
+			!('error' in (await inspect(previousToken)));
+		const sameAppToken = previousToken === token && existing?.scopes === viewer.scopes.join(',');
 		await saveUser(
 			c.env,
 			viewer.user,
@@ -187,7 +190,7 @@ const app = routes()
 			token
 		);
 		await startSession(c, viewer.user.id);
-		await poller(c.env, viewer.user.id).start(viewer.user.id, c.env.APP_URL);
+		await poller(c.env, viewer.user.id).start(viewer.user.id, keepOwn || sameAppToken);
 		c.executionCtx.waitUntil(
 			getUser(c.env, viewer.user.id)
 				.then((user) => (user ? refreshSlackMentionsAccess(c.env, user) : undefined))
@@ -217,7 +220,7 @@ const app = routes()
 			);
 		await saveUser(c.env, viewer.user, { value: token, scopes: viewer.scopes, source: 'own' });
 		// Sync again: the new token can see threads the old one could not.
-		await poller(c.env, u.id).start(u.id, new URL(c.req.url).origin);
+		await poller(c.env, u.id).start(u.id);
 		return c.json({ ok: true });
 	})
 	.post('/api/auth/logout', async (c) => {
@@ -287,7 +290,7 @@ const app = routes()
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status } = await poller(c.env, u.id).me(new URL(c.req.url).origin);
+		const { settings, status } = await poller(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,

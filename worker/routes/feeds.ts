@@ -36,7 +36,7 @@ const app = routes()
 		)
 			.bind(await sha256(token), c.get('user').id, view, row.created_at)
 			.run();
-		return c.json(feedDTO(row, `${new URL(c.req.url).origin}/feeds/${token}`));
+		return c.json(feedDTO(row, `${c.env.APP_URL}/feeds/${token}`));
 	})
 	/** Turn off a feed: its URL stops working. */
 	.delete('/api/feeds/:view', async (c) => {
@@ -45,8 +45,6 @@ const app = routes()
 			.run();
 		return c.json({ ok: true });
 	})
-	.get('/feeds/:token', (c) =>
-		renderFeed(c.env, c.req.param('token').replace(/\.xml$/, ''), new URL(c.req.url).origin)
-	);
+	.get('/feeds/:token', (c) => renderFeed(c.env, c.req.param('token').replace(/\.xml$/, '')));
 
 export default app;

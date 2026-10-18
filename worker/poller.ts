@@ -12,27 +12,33 @@ import { PollerData } from './poller/data';
 
 export type { PollStatus } from './poller/shared';
 
+const NOTIFICATION_BASELINE_KEYS = ['initialized', 'lastModified'];
+const REBUILT_AT_SIGN_IN_KEYS = ['pollGap', 'dash:pr', 'dash:issue', 'teams'];
+
+const logFailure = (step: string) => (err: unknown) =>
+	console.error(`${step} failed`, (err as Error).message);
+
 export class Poller extends PollerData {
 	private running: Promise<void> | null = null;
 	/** Time of the last good poll by this instance. Covers the moment between alarms (no alarm set). */
 	private lastGoodPoll = 0;
 
-	async start(userId: number, origin: string): Promise<void> {
-		// A new token (signing in, or a custom token) can see what the old one could not: start the
-		// notification poll again, and build the dashboards and the team list again.
-		await this.ctx.storage.delete([
-			'initialized',
-			'lastModified',
-			'pollGap',
-			'dash:pr',
-			'dash:issue',
-			'teams'
-		]);
+	async start(userId: number, tokenUnchanged = false): Promise<void> {
+		const state = await this.ctx.storage.get(['userId', 'stopped', 'paused']);
+		const pollingHadNoGap =
+			tokenUnchanged &&
+			state.get('userId') === userId &&
+			!state.get('stopped') &&
+			!state.get('paused');
+		await this.ctx.storage.delete(
+			pollingHadNoGap
+				? REBUILT_AT_SIGN_IN_KEYS
+				: [...NOTIFICATION_BASELINE_KEYS, ...REBUILT_AT_SIGN_IN_KEYS]
+		);
 		this.broadcast({ type: 'dash', kind: 'pr' });
 		this.broadcast({ type: 'dash', kind: 'issue' });
 		await this.ctx.storage.put({
 			userId,
-			origin,
 			lastActive: Date.now(),
 			errorCount: 0,
 			lastError: null,
@@ -45,11 +51,9 @@ export class Poller extends PollerData {
 	}
 
 	/** The UI calls this when it is open. An idle account (15-minute polls) polls again within 5. */
-	async touch(origin?: string): Promise<void> {
+	async touch(): Promise<void> {
 		const now = Date.now();
 		await this.ctx.storage.put('lastActive', now);
-		// Push links open the address you use now (for example after a domain move).
-		if (origin) await this.putChanged({ origin });
 		const [alarm, lastPollAt, stopped] = await Promise.all([
 			this.ctx.storage.getAlarm(),
 			this.lastPollAt(),
@@ -68,11 +72,7 @@ export class Poller extends PollerData {
 
 	async pollNow(): Promise<PollStatus> {
 		await this.ctx.storage.put('lastActive', Date.now());
-		await this.runOnce();
-		await this.runDecisionFill();
-		await this.flushHeld();
-		await this.schedule();
-		await this.broadcastStatus();
+		await this.cycle();
 		return this.status();
 	}
 
@@ -87,9 +87,7 @@ export class Poller extends PollerData {
 	}
 
 	private async runDecisionFill(): Promise<void> {
-		await this.fillDecisions().catch((err) =>
-			console.error('decision fill failed', (err as Error).message)
-		);
+		await this.fillDecisions().catch(logFailure('decision fill'));
 	}
 
 	/**
@@ -110,11 +108,18 @@ export class Poller extends PollerData {
 	}
 
 	async alarm(): Promise<void> {
-		await this.runOnce();
-		await this.runDecisionFill();
-		await this.flushHeld();
-		await this.schedule();
-		await this.broadcastStatus();
+		await this.cycle();
+	}
+
+	private async cycle(): Promise<void> {
+		try {
+			await this.runOnce();
+			await this.runDecisionFill();
+			await this.flushHeld().catch(logFailure('held alerts'));
+		} finally {
+			await this.schedule();
+		}
+		await this.broadcastStatus().catch(logFailure('status broadcast'));
 	}
 
 	/** The poll times and error for open tabs ("Synced 2m ago"), with no request from them. */
@@ -223,10 +228,9 @@ export class Poller extends PollerData {
 				stop: true
 			});
 		}
-		if (page.status === 403 || page.status === 429)
-			return this.fail('GitHub rate limit or permission error. Hush will retry later.', {
-				retryAt: page.resetAt
-			});
+		const rateLimited = (page.status === 403 || page.status === 429) && page.retryAt !== undefined;
+		if (rateLimited)
+			return this.fail('GitHub rate limit. Hush will retry later.', { retryAt: page.retryAt });
 		if (page.status !== 200 && page.status !== 304)
 			return this.fail(`GitHub returned ${page.status}.`);
 

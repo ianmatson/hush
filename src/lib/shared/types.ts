@@ -493,8 +493,6 @@ export interface AlertDTO {
 }
 
 export interface PeekDTO {
-	/** The peek also updated the stored facts: `changed` means the lists are out of date. */
-	sync?: { changed: boolean };
 	kind: DashKind;
 	number: number;
 	title: string;

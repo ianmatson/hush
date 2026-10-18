@@ -82,7 +82,7 @@ export abstract class PollerAlerts extends PollerBase {
 		const outgoing =
 			messages.length <= MAX_INDIVIDUAL_PUSHES
 				? messages
-				: [digestOf(messages, messages.length, false, await this.origin())];
+				: [digestOf(messages, messages.length, false, this.origin())];
 		const room = urgent ? outgoing.length : limitRoom(settings, now, state);
 		const sendable = outgoing.slice(0, room);
 		const overLimit = outgoing.slice(room);
@@ -106,12 +106,17 @@ export abstract class PollerAlerts extends PollerBase {
 		const state = await this.deliveryState();
 		if (!heldAreDue(settings, now, state)) return;
 		await this.ctx.storage.delete(['held', 'quietHeld']);
-		const onlyOne = held.count === 1 && held.messages.length === 1;
-		const message = onlyOne
-			? held.messages[0]
-			: digestOf(held.messages, held.count, held.duringQuiet, await this.origin());
-		await this.recordSend(settings, now, state, 1, true);
-		if (!(await this.sendNow([message]))) await this.hold(held, { startsDigestWindow: false });
+		let delivered = false;
+		try {
+			const onlyOne = held.count === 1 && held.messages.length === 1;
+			const message = onlyOne
+				? held.messages[0]
+				: digestOf(held.messages, held.count, held.duringQuiet, this.origin());
+			await this.recordSend(settings, now, state, 1, true);
+			delivered = await this.sendNow([message]);
+		} finally {
+			if (!delivered) await this.hold(held, { startsDigestWindow: false });
+		}
 	}
 
 	protected clearPushMarks(itemKeys: string[]) {
@@ -146,8 +151,8 @@ export abstract class PollerAlerts extends PollerBase {
 		return !!(await slackConnection(this.env, userId));
 	}
 
-	private async origin(): Promise<string> {
-		return (await this.ctx.storage.get<string>('origin')) ?? '';
+	private origin(): string {
+		return this.env.APP_URL;
 	}
 
 	private pushMarks(itemKeys: string[]): Map<string, PushMark> {
@@ -204,7 +209,7 @@ export abstract class PollerAlerts extends PollerBase {
 		if (held) return held;
 		const legacy = s.get('quietHeld') as LegacyQuietHeld | undefined;
 		if (!legacy) return { count: 0, messages: [], duringQuiet: false };
-		const home = `${await this.origin()}/`;
+		const home = `${this.origin()}/`;
 		return {
 			count: legacy.count,
 			messages: legacy.lines.map((title) => ({ title, body: '', url: home })),
@@ -245,7 +250,7 @@ export abstract class PollerAlerts extends PollerBase {
 
 	private async sendSlackNow(messages: PushMessage[]): Promise<boolean> {
 		const userId = await this.ctx.storage.get<number>('userId');
-		return userId ? sendSlackAlerts(this.env, userId, messages, await this.origin()) : false;
+		return userId ? sendSlackAlerts(this.env, userId, messages, this.origin()) : false;
 	}
 
 	private async sendPushNow(messages: PushMessage[]): Promise<boolean> {
@@ -253,7 +258,7 @@ export abstract class PollerAlerts extends PollerBase {
 			'SELECT endpoint, p256dh, auth FROM push_devices'
 		);
 		if (!messages.length || !devices.length || !this.env.VAPID_PRIVATE_KEY) return false;
-		const vapid = vapidFromEnv(this.env, await this.origin());
+		const vapid = vapidFromEnv(this.env, this.origin());
 		const gone: string[] = [];
 		let accepted = 0;
 		for (const d of devices) {

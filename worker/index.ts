@@ -56,11 +56,12 @@ app.use('/api/*', async (c, next) => {
 		'/api/slack/interactions'
 	];
 	if (open.includes(c.req.path)) return next();
-	const sid = getCookie(c, SESSION_COOKIE);
-	if (!sid) {
+	const notSignedIn = async () => {
 		if (await overLimit(c.env.API_LIMIT, `ip:${clientIp(c)}`)) return tooMany(c);
 		return c.json({ error: 'Not signed in' }, 401);
-	}
+	};
+	const sid = getCookie(c, SESSION_COOKIE);
+	if (!sid) return notSignedIn();
 	// A session ends 30 days after sign-in, or after 7 days with no use.
 	const now = Date.now();
 	const hash = await sha256(sid);
@@ -70,7 +71,7 @@ app.use('/api/*', async (c, next) => {
 	)
 		.bind(hash, now, now - SESSION_IDLE_DAYS * DAY)
 		.first<UserRow & { session_seen_at: number }>();
-	if (!row) return c.json({ error: 'Not signed in' }, 401);
+	if (!row) return notSignedIn();
 	if (await overLimit(c.env.API_LIMIT, `user:${row.id}`)) return tooMany(c);
 	// The last use, at most once an hour: enough for the 7-day limit, and few writes.
 	if (now - row.session_seen_at > SESSION_TOUCH_MS)

@@ -1,4 +1,4 @@
-import type { Settings } from '../../src/lib/shared/types';
+import type { DashKind, Settings } from '../../src/lib/shared/types';
 import type { ProjectAccess } from '../../src/lib/shared/projects';
 import { APP_FOCUS_LASTS_MS } from '../../src/lib/shared/push-policy';
 
@@ -10,6 +10,7 @@ export const PUSH_MARK_KEEP = 30 * 24 * 60 * MIN;
 export const ACTIVE_WINDOW = 15 * MIN;
 export const MAX_INDIVIDUAL_PUSHES = 3;
 export const TEAMS_TTL = 6 * 60 * MIN;
+export const TEAMS_RETRY_AFTER = MIN;
 export const DAY = 24 * 60 * MIN;
 // Stop polling for accounts nobody uses. Opening Hush (or signing in) starts it again.
 export const PAUSE_AFTER_NO_PUSH = 14 * DAY;
@@ -27,6 +28,10 @@ export const TRACKED_SEEN_REFRESH = DAY;
 export const TRACKED_REBUILD_GAP = 5 * MIN;
 export const FILL_MAX = 500;
 export const NOTIFICATION_KEEP = 30 * DAY;
+
+export const VIEW_SEARCHES_PREFIX = 'viewItemsFor:';
+export const viewSearchesKey = (viewId: string, kind: DashKind) =>
+	`${VIEW_SEARCHES_PREFIX}${viewId}:${kind}`;
 
 export interface PollStatus {
 	lastPollAt: number | null;

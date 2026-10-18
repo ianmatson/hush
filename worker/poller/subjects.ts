@@ -37,7 +37,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		who: Who,
 		subjects: SubjectFacts[],
 		opts: { dash?: boolean; quiet?: boolean; mentions?: Map<string, FactEvent> } = {}
-	): Promise<{ changed: number; dashChanged: boolean }> {
+	): Promise<void> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
 		const stored = new Map<string, string>();
@@ -70,9 +70,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 			);
 			await this.pushFactsOf(who, pushable, stored, decided, mentions);
 		}
-		const dashChanged =
-			opts.dash !== false ? await this.patchDashCaches(who, subjects, decided) : false;
-		return { changed: changed.length, dashChanged };
+		if (opts.dash !== false) await this.patchDashCaches(who, subjects, decided);
 	}
 
 	private async pushFactsOf(
@@ -395,25 +393,20 @@ export abstract class PollerSubjects extends PollerDecisions {
 	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Stores its facts,
 	 * which updates its entry in the cached dashboards. About 1 point.
 	 */
-	async recheck(repo: string, number: number): Promise<{ ok: true }> {
+	async recheck(repo: string, number: number): Promise<{ ok: true } | { error: string }> {
 		const who = await this.who();
 		if (!who) return { ok: true };
 		const [owner, name] = repo.split('/');
 		const key = subjectKey(repo, number);
-		const fetched = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
-		const sub = fetched.get(key);
+		const reads = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
+		const sub = reads.subjects.get(key);
 		if (sub) await this.record(who, [sub]);
-		return { ok: true };
+		if (sub || reads.deletedOrNoAccess.has(key)) return { ok: true };
+		return { error: reads.errors[0] ?? 'GitHub did not return this PR or issue.' };
 	}
 
-	/**
-	 * Facts that the API fetched (the peek): store them and update every view. `changed` tells the
-	 * browser to refetch its lists.
-	 */
-	async recordFetched(sub: SubjectFacts): Promise<{ changed: boolean }> {
+	async recordFetched(sub: SubjectFacts): Promise<void> {
 		const who = await this.who();
-		if (!who) return { changed: false };
-		const out = await this.record(who, [sub]);
-		return { changed: out.changed > 0 || out.dashChanged };
+		if (who) await this.record(who, [sub]);
 	}
 }

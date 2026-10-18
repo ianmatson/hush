@@ -24,7 +24,9 @@ const app = routes()
 			number < 1
 		)
 			return c.json({ error: 'Not a PR or issue.' }, 400);
-		return c.json(await poller(c.env, u.id).recheck(repo, number));
+		const result = await poller(c.env, u.id).recheck(repo, number);
+		if ('error' in result) return c.json({ error: result.error }, 502);
+		return c.json(result);
 	})
 	// --- Peek ------------------------------------------------------------------
 
@@ -42,12 +44,13 @@ const app = routes()
 					404
 				);
 			// The peek is a fresh read too: store it, so the dashboards agree with it.
-			const sync = found.subject
-				? await poller(c.env, u.id)
+			if (found.subject)
+				c.executionCtx.waitUntil(
+					poller(c.env, u.id)
 						.recordFetched(found.subject)
-						.catch(() => ({ changed: false }))
-				: { changed: false };
-			return c.json({ ...found.peek, sync } satisfies PeekDTO, 200, {
+						.catch((err) => console.error('peek record failed', (err as Error).message))
+				);
+			return c.json(found.peek satisfies PeekDTO, 200, {
 				'Cache-Control': 'private, no-store'
 			});
 		} catch (err) {

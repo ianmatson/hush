@@ -141,17 +141,19 @@ export async function linkStack(
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
+export type StackMergeResult = { error: string } | { stillMerging: boolean };
+
 export async function mergeStackThrough(
 	token: string,
 	repo: string,
 	number: number,
 	method: MergeMethod
-): Promise<string | null> {
+): Promise<StackMergeResult> {
 	const res = await gh(token, `/repos/${repo}/pulls/${number}/merge-async`, {
 		method: 'PUT',
 		body: JSON.stringify({ merge_method: method.toLowerCase(), merge_action: 'default' })
 	});
-	if (!res.ok) return refusal(res);
+	if (!res.ok) return { error: await refusal(res) };
 	let result = (await res.json().catch(() => ({}))) as AsyncMergeResult;
 	const uuid = result.details?.uuid;
 	for (let poll = 0; result.status === 'pending' && uuid && poll < ASYNC_MERGE_POLLS; poll++) {
@@ -159,7 +161,7 @@ export async function mergeStackThrough(
 		const next = await gh(token, `/repos/${repo}/pulls/${number}/merge-async/${uuid}`);
 		if (next.ok) result = (await next.json().catch(() => result)) as AsyncMergeResult;
 	}
-	return result.status === 'failed'
-		? (result.details?.message ?? 'GitHub could not merge it.')
-		: null;
+	if (result.status === 'failed')
+		return { error: result.details?.message ?? 'GitHub could not merge it.' };
+	return { stillMerging: result.status === 'pending' };
 }

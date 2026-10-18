@@ -1,13 +1,22 @@
 import type { DashKind } from '../../src/lib/shared/types';
 import { subjectKey } from '../../src/lib/shared/subject';
 import type { FactEvent } from '../../src/lib/shared/push-facts';
-import { fetchSubjects, subjectNumber, type GhNotification, type SubjectRef } from '../github';
+import { MUTED_AT } from '../../src/lib/shared/item-snooze';
+import {
+	fetchSubjects,
+	subjectNumber,
+	type GhNotification,
+	type SubjectReads,
+	type SubjectRef
+} from '../github';
 import {
 	DAY,
 	DASH_TTL,
 	NOTIFICATION_KEEP,
 	TRACKED_KEEP,
 	TRACKED_REBUILD_GAP,
+	VIEW_SEARCHES_PREFIX,
+	viewSearchesKey,
 	type Who
 } from './shared';
 import { PollerSubjects } from './subjects';
@@ -18,6 +27,9 @@ const TEAM_MENTION = 'team_mention';
 const MENTION_REASONS = new Set(['mention', TEAM_MENTION]);
 const PENDING_NOTIFICATIONS_KEY = 'pendingNotifications';
 const NOTIFICATION_READ_ATTEMPTS = 3;
+const UNANSWERED_READ_ATTEMPTS = 36;
+const DASH_KINDS: DashKind[] = ['pr', 'issue'];
+const STORAGE_DELETE_MAX_KEYS = 128;
 
 type NotificationRef = Pick<GhNotification, 'id' | 'unread' | 'reason' | 'updated_at'> & {
 	subject: Pick<GhNotification['subject'], 'type' | 'url'>;
@@ -46,6 +58,15 @@ interface PendingNotification {
 	notification: NotificationRef;
 	attempts: number;
 	quiet: boolean;
+}
+
+function readIsSettled(entry: PendingNotification, reads: SubjectReads): boolean {
+	const id = entry.notification.id;
+	if (reads.subjects.has(id) || reads.deletedOrNoAccess.has(id)) return true;
+	const attemptsAllowed = reads.githubDidNotAnswer.has(id)
+		? UNANSWERED_READ_ATTEMPTS
+		: NOTIFICATION_READ_ATTEMPTS;
+	return entry.attempts >= attemptsAllowed;
 }
 
 const TRACKED_BUILD_KEY = (kind: DashKind) => `trackedBuild:${kind}`;
@@ -179,8 +200,8 @@ export abstract class PollerSync extends PollerSubjects {
 			repo: n.repository.name,
 			number: subjectNumber(n)!
 		}));
-		const unavailable = new Set<string>();
-		const fetched = await fetchSubjects(who.token, refs, who.me, unavailable);
+		const reads = await fetchSubjects(who.token, refs, who.me);
+		const fetched = reads.subjects;
 		for (const quiet of [true, false]) {
 			const notifications = changed.filter(
 				(n) => fetched.has(n.id) && pending.get(n.id)!.quiet === quiet
@@ -201,12 +222,7 @@ export abstract class PollerSync extends PollerSubjects {
 			);
 		}
 		const handled = [...pending.values()]
-			.filter(
-				(entry) =>
-					fetched.has(entry.notification.id) ||
-					unavailable.has(entry.notification.id) ||
-					entry.attempts >= NOTIFICATION_READ_ATTEMPTS
-			)
+			.filter((entry) => readIsSettled(entry, reads))
 			.map((entry) => entry.notification);
 		this.rememberNotifications(handled);
 		for (const n of handled) pending.delete(n.id);
@@ -227,6 +243,35 @@ export abstract class PollerSync extends PollerSubjects {
 		this.run(`DELETE FROM decisions WHERE key NOT IN (SELECT key FROM subjects)`);
 		this.run(`DELETE FROM notifications WHERE seen_at < ?`, Date.now() - NOTIFICATION_KEEP);
 		this.forgetOldPushMarks(Date.now());
+		this.forgetMarksOfUnknownItems();
+		await this.forgetDeletedViews();
 		await this.ctx.storage.put('lastCleanup', Date.now());
+	}
+
+	private forgetMarksOfUnknownItems() {
+		const knownItems = 'SELECT key FROM subjects UNION SELECT key FROM tracked_items';
+		this.run(`DELETE FROM seen WHERE key NOT IN (${knownItems})`);
+		this.run(
+			`DELETE FROM dash_snoozed WHERE item_id NOT IN (${knownItems})
+       AND updated_at != ? AND (snoozed_until IS NULL OR snoozed_until < ?)`,
+			MUTED_AT,
+			Date.now()
+		);
+		this.run(`DELETE FROM view_items WHERE item_id NOT IN (${knownItems})`);
+	}
+
+	private async forgetDeletedViews() {
+		const views = (await this.settings()).views;
+		this.run(
+			`DELETE FROM view_items WHERE view_id NOT IN (SELECT value FROM json_each(?))`,
+			JSON.stringify(views.map((v) => v.id))
+		);
+		const liveKeys = new Set(
+			views.flatMap((v) => DASH_KINDS.map((kind) => viewSearchesKey(v.id, kind)))
+		);
+		const remembered = await this.ctx.storage.list({ prefix: VIEW_SEARCHES_PREFIX });
+		const stale = [...remembered.keys()].filter((key) => !liveKeys.has(key));
+		for (let i = 0; i < stale.length; i += STORAGE_DELETE_MAX_KEYS)
+			await this.ctx.storage.delete(stale.slice(i, i + STORAGE_DELETE_MAX_KEYS));
 	}
 }

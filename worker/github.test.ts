@@ -6,8 +6,10 @@ import {
 	fetchSubjects,
 	forTeams,
 	gh,
+	listNotifications,
 	needsDetails,
 	peekEntryFromRest,
+	rateLimitRetryAt,
 	searchShort,
 	SUBJECT_FIELDS,
 	toSubject
@@ -172,6 +174,60 @@ describe('fetchDetails', () => {
 	});
 });
 
+describe('notification rate limits', () => {
+	const now = Date.parse('2026-10-17T12:00:00Z');
+	const resetAt = now + 45 * 60_000;
+	const headers = (values: Record<string, string>) => new Headers(values);
+
+	it('waits for Retry-After on a secondary rate limit', () => {
+		expect(
+			rateLimitRetryAt(
+				headers({
+					'Retry-After': '60',
+					'X-RateLimit-Remaining': '4000',
+					'X-RateLimit-Reset': String(resetAt / 1000)
+				}),
+				now
+			)
+		).toBe(now + 60_000);
+	});
+
+	it('waits for the reset only when the quota is used up', () => {
+		expect(
+			rateLimitRetryAt(
+				headers({ 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(resetAt / 1000) }),
+				now
+			)
+		).toBe(resetAt);
+	});
+
+	it('does not wait on a 403 that is not a rate limit', () => {
+		expect(
+			rateLimitRetryAt(
+				headers({ 'X-RateLimit-Remaining': '4999', 'X-RateLimit-Reset': String(resetAt / 1000) }),
+				now
+			)
+		).toBeUndefined();
+	});
+
+	it('reports the Retry-After time with the notification page', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response('{}', {
+						status: 403,
+						headers: { 'Retry-After': '120', 'X-RateLimit-Remaining': '10' }
+					})
+			)
+		);
+		const before = Date.now();
+		const page = await listNotifications('t', {});
+		expect(page.retryAt).toBeGreaterThanOrEqual(before + 120_000);
+		expect(page.retryAt).toBeLessThanOrEqual(Date.now() + 120_000);
+	});
+});
+
 describe('subject reads with partial GraphQL responses', () => {
 	it.each(['FORBIDDEN', 'NOT_FOUND'])(
 		'does not acknowledge a batch after a pathless %s error',
@@ -180,10 +236,9 @@ describe('subject reads with partial GraphQL responses', () => {
 				'fetch',
 				vi.fn(async () => Response.json({ errors: [{ message: 'Unavailable', type }] }))
 			);
-			const unavailable = new Set<string>();
 			const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
-			await fetchSubjects('t', refs, 'ian', unavailable);
-			expect(unavailable.size).toBe(0);
+			const reads = await fetchSubjects('t', refs, 'ian');
+			expect(reads.deletedOrNoAccess.size).toBe(0);
 		}
 	);
 	it('marks a definitively missing subject as unavailable instead of retryable', async () => {
@@ -191,9 +246,57 @@ describe('subject reads with partial GraphQL responses', () => {
 			'fetch',
 			vi.fn(async () => Response.json({ data: { t0: { issueOrPullRequest: null } } }))
 		);
-		const unavailable = new Set<string>();
-		await fetchSubjects('t', [{ key: 'n1', owner: 'o', repo: 'r', number: 1 }], 'ian', unavailable);
-		expect(unavailable).toEqual(new Set(['n1']));
+		const reads = await fetchSubjects(
+			't',
+			[{ key: 'n1', owner: 'o', repo: 'r', number: 1 }],
+			'ian'
+		);
+		expect(reads.deletedOrNoAccess).toEqual(new Set(['n1']));
+		expect(reads.githubDidNotAnswer.size).toBe(0);
+	});
+	it.each([403, 500])(
+		'reports every subject of a chunk that GitHub refused with %i',
+		async (status) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () => Response.json({ message: 'Refused' }, { status }))
+			);
+			const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
+			const reads = await fetchSubjects('t', refs, 'ian');
+			expect(reads.subjects.size).toBe(0);
+			expect(reads.githubDidNotAnswer).toEqual(new Set(['n1', 'n2']));
+			expect(reads.errors).toEqual([`GitHub returned ${status}.`]);
+		}
+	);
+	it('reads a timed-out chunk again in halves and keeps the half that answered', async () => {
+		const asked: number[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				const numbers = Object.entries(body(init).variables)
+					.filter(([name]) => /^n\d+$/.test(name))
+					.map(([, value]) => value as number);
+				asked.push(numbers.length);
+				if (numbers.length > 1 || numbers[0] === 2) return new Response('', { status: 502 });
+				return Response.json({
+					data: {
+						t0: {
+							issueOrPullRequest: {
+								__typename: 'Issue',
+								id: 'I_1',
+								number: 1,
+								repository: { nameWithOwner: 'o/r' }
+							}
+						}
+					}
+				});
+			})
+		);
+		const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
+		const reads = await fetchSubjects('t', refs, 'ian');
+		expect(asked).toEqual([2, 1, 1]);
+		expect([...reads.subjects.keys()]).toEqual(['n1']);
+		expect(reads.githubDidNotAnswer).toEqual(new Set(['n2']));
 	});
 	it('does not store partial facts from an aliased recheck or notification read', async () => {
 		vi.stubGlobal(
@@ -223,8 +326,8 @@ describe('subject reads with partial GraphQL responses', () => {
 			],
 			'ian'
 		);
-		expect(result.has('pr')).toBe(false);
-		expect(result.has('issue')).toBe(true);
+		expect(result.subjects.has('pr')).toBe(false);
+		expect(result.subjects.has('issue')).toBe(true);
 	});
 
 	it('opens a partial peek without storing its incomplete subject facts', async () => {

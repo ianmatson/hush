@@ -43,9 +43,8 @@ export async function subjectBeforeWrite(
 }
 
 export async function refreshWrittenSubject(c: Ctx, subject: WrittenSubject): Promise<void> {
-	await poller(c.env, c.get('user').id)
+	const result = await poller(c.env, c.get('user').id)
 		.recheck(subject.repo, subject.number)
-		.catch((error) =>
-			console.error('subject refresh after write failed', (error as Error).message)
-		);
+		.catch((error) => ({ error: (error as Error).message }));
+	if ('error' in result) console.error('subject refresh after write failed', result.error);
 }

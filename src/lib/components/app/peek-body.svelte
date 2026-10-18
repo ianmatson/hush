@@ -5,7 +5,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import { followWhileGrowing, revealEntry } from '$lib/reveal';
 	import { meQuery, peekQuery, queryClient, reviewThreadsQuery } from '$lib/queries';
-	import { keys, refetchUnlessLive } from '$lib/queries';
+	import { keys } from '$lib/queries';
 	import { setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
 	import { threadsByReview } from '$lib/shared/diff';
@@ -70,16 +70,6 @@
 			? externalContributor(q.data.authorAssociation, q.data.author.bot)
 			: null
 	);
-	// The server stored what this peek read. If that changed the dashboards, refetch them now
-	// (once per fetch), so every view agrees with the peek.
-	let synced = 0;
-	$effect(() => {
-		const at = q.dataUpdatedAt;
-		const sync = q.data?.sync;
-		if (!sync?.changed || at === synced) return;
-		synced = at;
-		refetchUnlessLive(keys.dashAll, keys.alerts);
-	});
 	let composerEnd = $state<HTMLElement | null>(null);
 	let shownEntryCount: number | null = null;
 	$effect.pre(() => {

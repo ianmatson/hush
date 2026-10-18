@@ -91,6 +91,7 @@ const app = routes()
 
 		let error: string | null = null;
 		let entry: PeekEntry | null = null;
+		let stillMerging = false;
 		switch (action) {
 			case 'approve':
 			case 'request_changes': {
@@ -141,7 +142,9 @@ const app = routes()
 				if (plan.kind === 'link') error = await linkStack(token, repo, plan.chainBottomFirst);
 				if (error) break;
 				if (plan.kind === 'link' || plan.kind === 'stack') {
-					error = await mergeStackThrough(token, repo, number, b.method);
+					const merge = await mergeStackThrough(token, repo, number, b.method);
+					if ('error' in merge) error = merge.error;
+					else stillMerging = merge.stillMerging;
 					break;
 				}
 				const res = await call(`/repos/${repo}/pulls/${number}/merge`, 'PUT', {
@@ -191,11 +194,11 @@ const app = routes()
 			}
 		}
 		if (error) return c.json({ error }, 422);
-		if (noSubject) return c.json({ ok: true as const, entry });
+		if (noSubject) return c.json({ ok: true as const, entry, stillMerging });
 		await poller(c.env, u.id)
 			.recheck(repo, number)
 			.catch(() => {});
-		return c.json({ ok: true as const, entry });
+		return c.json({ ok: true as const, entry, stillMerging });
 	})
 	.post('/api/comments/edit', json<{ id: string; body: string }>(), async (c) => {
 		const b = c.req.valid('json');

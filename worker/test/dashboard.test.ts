@@ -28,6 +28,9 @@ class TestDashboard extends PollerDashboard {
 	cachedBuild() {
 		return this.buildDashboard('pr', false);
 	}
+	rebuildAfter(changedAt: number) {
+		return this.rebuildTracked('pr', changedAt);
+	}
 }
 
 function harness() {
@@ -75,6 +78,8 @@ function harness() {
 	const storage = new Map<string, unknown>([['dash:pr', { sig, data }]]);
 	const trackedBuild = vi.fn();
 	const poller = Object.assign(Object.create(TestDashboard.prototype) as TestDashboard, {
+		dashBuilds: new Map(),
+		broadcast: vi.fn(),
 		ctx: {
 			storage: {
 				get: vi.fn(async (key: string | string[]) =>
@@ -255,5 +260,82 @@ describe('dashboard source failure and local filters', () => {
 		const result = await poller.cachedBuild();
 		expect(searchShort).toHaveBeenCalled();
 		expect(result.sourceItems).toBeDefined();
+	});
+});
+
+describe('one dashboard build at a time', () => {
+	function slowSearches() {
+		const searches = { running: 0, mostAtOnce: 0, answers: [] as (() => void)[] };
+		vi.mocked(searchShort).mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					searches.running++;
+					searches.mostAtOnce = Math.max(searches.mostAtOnce, searches.running);
+					searches.answers.push(() => {
+						searches.running--;
+						resolve({ hits: [], errors: [], failedSections: new Set() });
+					});
+				})
+		);
+		const answerNext = async () => {
+			await vi.waitFor(() => expect(searches.answers.length).toBeGreaterThan(0));
+			searches.answers.shift()!();
+		};
+		return { searches, answerNext };
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(boardShort).mockResolvedValue({ hits: [], errors: [], failedSections: new Set() });
+		vi.mocked(itemStatuses).mockResolvedValue({ projects: [], statusOf: new Map(), errors: [] });
+	});
+
+	it('shares a running build with a background rebuild', async () => {
+		const { poller } = harness();
+		const { searches, answerNext } = slowSearches();
+		const alarmRebuild = poller.incrementalBuild();
+		const staleRefresh = poller.incrementalBuild();
+		await answerNext();
+		expect(await staleRefresh).toBe(await alarmRebuild);
+		expect(searchShort).toHaveBeenCalledTimes(1);
+		expect(searches.mostAtOnce).toBe(1);
+	});
+
+	it('runs the Refresh build after a background rebuild, not next to it', async () => {
+		const { poller } = harness();
+		const { searches, answerNext } = slowSearches();
+		const alarmRebuild = poller.incrementalBuild();
+		const refresh = poller.build();
+		await answerNext();
+		await alarmRebuild;
+		await answerNext();
+		await refresh;
+		expect(searchShort).toHaveBeenCalledTimes(2);
+		expect(searches.mostAtOnce).toBe(1);
+	});
+
+	it('lets a background rebuild share a running Refresh build', async () => {
+		const { poller } = harness();
+		const { answerNext } = slowSearches();
+		const refresh = poller.build();
+		const alarmRebuild = poller.incrementalBuild();
+		await answerNext();
+		await Promise.all([refresh, alarmRebuild]);
+		expect(searchShort).toHaveBeenCalledTimes(1);
+	});
+
+	it('builds again after a board change that came during a build', async () => {
+		const { poller } = harness();
+		const { searches, answerNext } = slowSearches();
+		const alarmRebuild = poller.incrementalBuild();
+		await vi.waitFor(() => expect(searchShort).toHaveBeenCalledTimes(1));
+		await new Promise((done) => setTimeout(done, 2));
+		const afterBoardChange = poller.rebuildAfter(Date.now());
+		await answerNext();
+		await alarmRebuild;
+		await answerNext();
+		await afterBoardChange;
+		expect(searchShort).toHaveBeenCalledTimes(2);
+		expect(searches.mostAtOnce).toBe(1);
 	});
 });

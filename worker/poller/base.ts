@@ -9,6 +9,7 @@ import {
 	APP_BLUR_MESSAGE,
 	APP_FOCUS_MESSAGE,
 	FOCUS_COUNTS_FOR,
+	TEAMS_RETRY_AFTER,
 	TEAMS_TTL,
 	type Who
 } from './shared';
@@ -24,6 +25,8 @@ type SocketFocus = { focusedAt: number };
  * sync, the dashboards, and the API's data methods.
  */
 export abstract class PollerBase extends DurableObject<Env> {
+	private teamsFailure: { at: number; error: string } | null = null;
+
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		// The tables exist before any request or alarm runs.
@@ -188,11 +191,22 @@ export abstract class PollerBase extends DurableObject<Env> {
 	/** Your GitHub teams, cached for 6 hours. */
 	async teams(force = false): Promise<{ teams: TeamDTO[]; error?: string }> {
 		const cached = await this.ctx.storage.get<{ teams: TeamDTO[]; at: number }>('teams');
+		const lastKnown = cached?.teams ?? [];
 		if (!force && cached && Date.now() - cached.at < TEAMS_TTL) return { teams: cached.teams };
+		const failure = this.teamsFailure;
+		if (!force && failure && Date.now() - failure.at < TEAMS_RETRY_AFTER)
+			return { teams: lastKnown, error: failure.error };
 		const user = await this.account();
-		if (!user) return { teams: cached?.teams ?? [], error: 'Not signed in.' };
-		const res = await fetchTeams(await userToken(this.env, user), user.login);
-		if (res.error && cached) return { teams: cached.teams, error: res.error };
+		if (!user) return { teams: lastKnown, error: 'Not signed in.' };
+		const res = await fetchTeams(await userToken(this.env, user), user.login).catch(() => ({
+			teams: [],
+			error: 'GitHub did not answer for your teams.'
+		}));
+		if (res.error) {
+			this.teamsFailure = { at: Date.now(), error: res.error };
+			return { teams: lastKnown, error: res.error };
+		}
+		this.teamsFailure = null;
 		await this.ctx.storage.put('teams', { teams: res.teams, at: Date.now() });
 		return res;
 	}

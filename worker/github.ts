@@ -143,7 +143,7 @@ export interface NotificationsPage {
 	items: GhNotification[];
 	lastModified: string | null;
 	pollInterval: number;
-	resetAt?: number;
+	retryAt?: number;
 	/** Org ids that GitHub left out because the token is not SAML-authorized for them. */
 	ssoHiddenOrgs: string[];
 	/** Every page was read (no "next" page was left). */
@@ -159,6 +159,20 @@ export function parseSsoHeader(value: string | null): string[] {
 				.map((x) => x.trim())
 				.filter(Boolean)
 		: [];
+}
+
+const SECOND_MS = 1000;
+
+export function rateLimitRetryAt(headers: Headers, now = Date.now()): number | undefined {
+	const retryAfter = headers.get('Retry-After')?.trim();
+	if (retryAfter) {
+		const seconds = Number(retryAfter);
+		const at = Number.isFinite(seconds) ? now + seconds * SECOND_MS : Date.parse(retryAfter);
+		if (!Number.isNaN(at)) return at;
+	}
+	const reset = Number(headers.get('X-RateLimit-Reset'));
+	const quotaUsedUp = headers.get('X-RateLimit-Remaining') === '0';
+	return quotaUsedUp && reset > 0 ? reset * SECOND_MS : undefined;
 }
 
 /**
@@ -186,13 +200,12 @@ export async function listNotifications(
 		url = res.headers.get('Link')?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
 	}
 	const res = first!;
-	const reset = res.headers.get('X-RateLimit-Reset');
 	return {
 		status: res.status,
 		items,
 		lastModified: res.headers.get('Last-Modified'),
 		pollInterval: Number(res.headers.get('X-Poll-Interval') ?? 60) || 60,
-		resetAt: reset ? Number(reset) * 1000 : undefined,
+		retryAt: rateLimitRetryAt(res.headers),
 		ssoHiddenOrgs: parseSsoHeader(res.headers.get('X-GitHub-SSO')),
 		complete: res.status === 200 && url === null
 	};
@@ -362,55 +375,70 @@ export function toSubject(n: Node): SubjectFacts {
 	};
 }
 
-/** Fetch PRs and issues (40 per request). Subjects that fail (no access, SAML, deleted) are left out. */
+export interface SubjectReads {
+	subjects: Map<string, SubjectFacts>;
+	deletedOrNoAccess: Set<string>;
+	githubDidNotAnswer: Set<string>;
+	errors: string[];
+}
+
+function subjectsQuery(me: string, chunk: SubjectRef[]) {
+	const variables: Record<string, string | number> = { me };
+	const decl: string[] = ['$me: String!'];
+	const body: string[] = [];
+	chunk.forEach((r, j) => {
+		variables[`o${j}`] = r.owner;
+		variables[`r${j}`] = r.repo;
+		variables[`n${j}`] = r.number;
+		decl.push(`$o${j}: String!, $r${j}: String!, $n${j}: Int!`);
+		body.push(
+			`t${j}: repository(owner: $o${j}, name: $r${j}) { issueOrPullRequest(number: $n${j}) { __typename ...P ...I } }`
+		);
+	});
+	return {
+		query: `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`,
+		variables
+	};
+}
+
+const isDeletedOrNoAccess = (node: Node | null | undefined, errors: GraphqlError[]) =>
+	(node === null && !errors.length) ||
+	(errors.length > 0 &&
+		errors.every((error) => error.type === 'NOT_FOUND' || error.type === 'FORBIDDEN') &&
+		errors.every((error) => !!error.path?.length && error.path.length <= 2));
+
 export async function fetchSubjects(
 	token: string,
 	refs: SubjectRef[],
-	me: string,
-	unavailable: Set<string> = new Set()
-): Promise<Map<string, SubjectFacts>> {
-	const out = new Map<string, SubjectFacts>();
-	for (let i = 0; i < refs.length; i += CHUNK) {
-		const chunk = refs.slice(i, i + CHUNK);
-		const vars: Record<string, string | number> = { me };
-		const decl: string[] = ['$me: String!'];
-		const body: string[] = [];
-		chunk.forEach((r, j) => {
-			vars[`o${j}`] = r.owner;
-			vars[`r${j}`] = r.repo;
-			vars[`n${j}`] = r.number;
-			decl.push(`$o${j}: String!, $r${j}: String!, $n${j}: Int!`);
-			body.push(
-				`t${j}: repository(owner: $o${j}, name: $r${j}) { issueOrPullRequest(number: $n${j}) { __typename ...P ...I } }`
-			);
-		});
-		const query = `query(${decl.join(', ')}) {\n${body.join('\n')}\n}\n${SUBJECT_FIELDS}`;
-		const res = await gh(token, '/graphql', {
-			method: 'POST',
-			body: JSON.stringify({ query, variables: vars })
-		});
-		if (!res.ok) continue;
-		const json = (await res.json()) as {
-			data?: Record<string, Node | null>;
-			errors?: GraphqlError[];
-		};
-		chunk.forEach((r, j) => {
-			const node = json.data?.[`t${j}`]?.issueOrPullRequest;
-			const errors = (json.errors ?? []).filter((error) =>
-				hasGraphqlErrorAt([error], [`t${j}`, 'issueOrPullRequest'])
-			);
-			if (
-				(node === null && !errors.length) ||
-				(errors.length &&
-					errors.every((error) => error.type === 'NOT_FOUND' || error.type === 'FORBIDDEN') &&
-					errors.every((error) => !!error.path?.length && error.path.length <= 2))
-			)
-				unavailable.add(r.key);
-			if (node?.id && !hasGraphqlErrorAt(json.errors ?? [], [`t${j}`, 'issueOrPullRequest']))
-				out.set(r.key, toSubject(node));
-		});
-	}
-	return out;
+	me: string
+): Promise<SubjectReads> {
+	const subjects = new Map<string, SubjectFacts>();
+	const deletedOrNoAccess = new Set<string>();
+	const githubDidNotAnswer = new Set<string>();
+	const errors: string[] = [];
+	await inRequests(
+		token,
+		refs,
+		CHUNK,
+		(chunk) => subjectsQuery(me, chunk),
+		(chunk, data, graphqlErrors) =>
+			chunk.forEach((r, j) => {
+				const path = [`t${j}`, 'issueOrPullRequest'];
+				const node = data?.[`t${j}`]?.issueOrPullRequest;
+				const errorsHere = graphqlErrors.filter((error) => hasGraphqlErrorAt([error], path));
+				if (isDeletedOrNoAccess(node, errorsHere)) deletedOrNoAccess.add(r.key);
+				if (node?.id && !hasGraphqlErrorAt(graphqlErrors, path))
+					subjects.set(r.key, toSubject(node));
+			}),
+		errors,
+		(chunk) => chunk.forEach((r) => githubDidNotAnswer.add(r.key))
+	);
+	return {
+		subjects,
+		deletedOrNoAccess,
+		githubDidNotAnswer,
+		errors: [...new Set(errors)].slice(0, 3)
+	};
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,8 @@ import type { Env } from './db';
 const esc = (s: string) =>
 	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export async function renderFeed(env: Env, token: string, origin: string): Promise<Response> {
+export async function renderFeed(env: Env, token: string): Promise<Response> {
+	const origin = env.APP_URL;
 	const feed = await env.DB.prepare('SELECT user_id, view FROM feeds WHERE token_hash = ?')
 		.bind(await sha256(token))
 		.first<{ user_id: number; view: string }>();
