@@ -2,7 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import type { DashProject, FeedDTO, GroupBy, ItemView, ViewSection } from '$lib/shared/types';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { meQuery } from '$lib/queries';
+	import { dashQuery, meQuery } from '$lib/queries';
 	import {
 		CUSTOM_GROUP_BY,
 		EVERYTHING_ELSE_SECTION,
@@ -10,7 +10,7 @@
 		groupByOptions,
 		type GroupByKind
 	} from '$lib/shared/grouping';
-	import { cachedItems, cachedProjects, previewItems, ruleSuggestions } from '$lib/rule-preview';
+	import { itemsIn, previewItems, projectsIn, ruleSuggestions } from '$lib/rule-preview';
 	import SearchSelect, { type SearchSelectGroup } from './search-select.svelte';
 	import {
 		githubSearchOf,
@@ -83,7 +83,11 @@
 
 	const me = createQuery(meQuery);
 	const categoryGroups = $derived(me.data?.settings.categoryGroups ?? []);
-	const projects: DashProject[] = cachedProjects();
+	const savedDashboards = (['pr', 'issue'] as const).map((kind) =>
+		createQuery(() => ({ ...dashQuery(kind), enabled: false }))
+	);
+	const dashAnswers = $derived(savedDashboards.map((q) => q.data));
+	const projects = $derived<DashProject[]>(projectsIn(dashAnswers));
 	const groupChoices = $derived.by(() => {
 		const choices = groupByOptions(categoryGroups, projects, true);
 		return choices.some((o) => o.id === view.groupBy)
@@ -112,9 +116,10 @@
 		return [...byHeading.values()];
 	});
 	const sections = $derived(view.sections ?? []);
-	const suggestions = $derived(ruleSuggestions(me.data?.settings));
+	const savedItems = $derived(itemsIn(dashAnswers));
+	const suggestions = $derived(ruleSuggestions(me.data?.settings, savedItems));
 	const itemsInView = $derived(
-		cachedItems().filter((i) => i.sections.includes(view.id) && !i.keptAfterClose)
+		savedItems.filter((i) => i.sections.includes(view.id) && !i.keptAfterClose)
 	);
 
 	function setGroupBy(by: GroupBy) {

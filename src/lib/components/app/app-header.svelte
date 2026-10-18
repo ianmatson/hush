@@ -9,6 +9,7 @@
 	import { tick } from 'svelte';
 	import type { DashResponse } from '$lib/shared/types';
 	import { alertsSeen } from '$lib/alerts.svelte';
+	import { countsAsUnread, newAlertCount } from '$lib/tab-status';
 	import { ui } from '$lib/ui.svelte';
 	import { cn } from '$lib/utils';
 	import * as Avatar from '$lib/components/ui/avatar';
@@ -29,13 +30,11 @@
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
 	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
-		d?.items.filter(
-			(i) => i.unread && !i.dismissed && !i.keptAfterClose && i.sections.includes(viewId)
-		).length ?? 0;
+		d?.items.filter((i) => countsAsUnread(i) && i.sections.includes(viewId)).length ?? 0;
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);
-	const newAlerts = $derived(alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0);
+	const newAlerts = $derived(newAlertCount(alerts.data, alertsSeen.at));
 
 	const links = $derived([
 		...(me.data?.settings.views ?? []).map((v) => ({

@@ -26,3 +26,10 @@ export function commandFor(e: KeyboardEvent, scopes: KeyScope[]): string | null 
 export function keysOf(id: string): string[] {
 	return (currentBindings().get(id) ?? []).map((k) => keyText(k, isMac));
 }
+
+const OWNS_ITS_KEYS = 'input, textarea, [contenteditable], [role="menu"], [role="dialog"]';
+
+export function ignoreKey(e: KeyboardEvent): boolean {
+	const target = e.target;
+	return e.defaultPrevented || (target instanceof Element && !!target.closest(OWNS_ITS_KEYS));
+}

@@ -1,29 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createTabCounts } from '$lib/tab-counts.svelte';
-	import {
-		DOT_COLORS,
-		faviconHref,
-		loadPrefs,
-		titlePrefix,
-		total,
-		withPrefix
-	} from '$lib/tab-status';
+	import { faviconHref, loadPrefs, tabStatusOf, withPrefix } from '$lib/tab-status';
 
 	const tabCounts = createTabCounts();
-	const counts = $derived(tabCounts.current);
 
 	let prefs = $state(loadPrefs());
-	const prefix = $derived(titlePrefix(counts, prefs.title));
-	const dot = $derived(
-		prefs.favicon.enabled && total(counts, prefs.favicon.sources) > 0
-			? DOT_COLORS[prefs.favicon.color]
-			: null
-	);
-	const dotCount = $derived(
-		prefs.favicon.style === 'count' ? total(counts, prefs.favicon.sources) : undefined
-	);
-	const badge = $derived(prefs.appBadge.enabled ? total(counts, prefs.appBadge.sources) : 0);
+	const status = $derived(tabStatusOf(tabCounts.current, prefs));
+	const prefix = $derived(status.titlePrefix);
+	const dot = $derived(status.dot);
+	const dotCount = $derived(status.dotCount);
+	const badge = $derived(status.badge);
 
 	let icon = $state<HTMLLinkElement | null>(null);
 	let originalIcon = '';

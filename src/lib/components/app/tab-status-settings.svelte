@@ -7,8 +7,7 @@
 		faviconHref,
 		loadPrefs,
 		savePrefs,
-		titlePrefix,
-		total,
+		tabStatusOf,
 		type CountSource,
 		type DotColor
 	} from '$lib/tab-status';
@@ -38,19 +37,9 @@
 		total: 'Total, e.g. (12)',
 		breakdown: 'Breakdown, e.g. (7 · 3 PR · 2 issue)'
 	} as const;
-	const previewTitle = $derived(
-		[titlePrefix(counts, prefs.title), 'Hush'].filter(Boolean).join(' ')
-	);
-	const previewDot = $derived(
-		prefs.favicon.enabled && total(counts, prefs.favicon.sources) > 0
-			? DOT_COLORS[prefs.favicon.color]
-			: null
-	);
-	const previewCount = $derived(
-		prefs.favicon.style === 'count' ? total(counts, prefs.favicon.sources) : undefined
-	);
+	const preview = $derived(tabStatusOf(counts, prefs));
+	const previewTitle = $derived([preview.titlePrefix, 'Hush'].filter(Boolean).join(' '));
 	const dotStyles = { count: 'Number', dot: 'Dot only' } as const;
-	const previewBadge = $derived(prefs.appBadge.enabled ? total(counts, prefs.appBadge.sources) : 0);
 	const canBadge = typeof navigator !== 'undefined' && 'setAppBadge' in navigator;
 </script>
 
@@ -115,7 +104,7 @@
 			<div
 				class="flex min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 shadow-xs"
 			>
-				<img src={faviconHref(previewDot, previewCount)} alt="" class="size-4 shrink-0" />
+				<img src={faviconHref(preview.dot, preview.dotCount)} alt="" class="size-4 shrink-0" />
 				<span class="truncate text-sm">{previewTitle}</span>
 			</div>
 			{#if prefs.appBadge.enabled}
@@ -123,10 +112,10 @@
 					{#snippet children(props)}
 						<div {...props} class="relative ml-auto shrink-0">
 							<img src="/icon.svg" alt="" class="size-9 rounded-lg" />
-							{#if previewBadge}
+							{#if preview.badge}
 								<span
 									class="absolute -top-1.5 -right-1.5 min-w-5 rounded-full bg-red-500 px-1 text-center text-[0.68rem] leading-5 font-semibold text-white tabular-nums"
-									>{previewBadge}</span
+									>{preview.badge}</span
 								>
 							{/if}
 						</div>

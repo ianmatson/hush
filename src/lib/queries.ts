@@ -42,8 +42,13 @@ const MEMORY_ONLY_KEYS = new Set([
 	'pull-viewed',
 	'pull-commits',
 	'commit-diff',
-	'review-threads'
+	'review-threads',
+	'suggest',
+	'search-count'
 ]);
+
+const TYPED_QUERY_FRESH_MS = 5 * MIN;
+const TYPED_QUERY_GC_MS = 5 * MIN;
 
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
 export const persistOptions = {
@@ -84,7 +89,10 @@ export const keys = {
 	commitDiff: (repo: string, sha: string) => ['commit-diff', repo, sha] as const,
 	reviewThreads: (repo: string, number: number) => ['review-threads', repo, number] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
-	alerts: ['alerts'] as const
+	alerts: ['alerts'] as const,
+	suggest: (repo: string, kind: 'user' | 'ref', query: string) =>
+		['suggest', repo, kind, query] as const,
+	searchCount: (q: string) => ['search-count', q] as const
 };
 
 export function refetchUnlessLive(...queryKeys: QueryKey[]): Promise<unknown> {
@@ -151,6 +159,23 @@ export const slackMentionsQuery = (repo: string, number: number, kind: 'pr' | 'i
 	});
 export const teamsQuery = () =>
 	queryOptions({ queryKey: keys.teams, queryFn: () => api.teams(), staleTime: 60 * MIN });
+
+export const suggestQuery = (repo: string, kind: 'user' | 'ref', query: string, from: string) =>
+	queryOptions({
+		queryKey: keys.suggest(repo, kind, query.toLowerCase()),
+		queryFn: () => api.suggest(repo, kind, query, from).then((r) => r.items),
+		staleTime: TYPED_QUERY_FRESH_MS,
+		gcTime: TYPED_QUERY_GC_MS
+	});
+
+export const searchCountQuery = (q: string) =>
+	queryOptions({
+		queryKey: keys.searchCount(q),
+		queryFn: () => api.countSearch(q),
+		staleTime: TYPED_QUERY_FRESH_MS,
+		gcTime: TYPED_QUERY_GC_MS,
+		retry: false
+	});
 
 export function setSettings(settings: Settings) {
 	queryClient.setQueryData<MeDTO>(keys.me, (old) => (old ? { ...old, settings } : old));

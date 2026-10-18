@@ -1,8 +1,9 @@
 import { toast } from 'svelte-sonner';
 import { api } from '$lib/api';
-import { keys, queryClient } from '$lib/queries';
+import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
+import type { CategoryPin } from '$lib/shared/categories';
 import { snoozeLabel, type SnoozeChoice } from '$lib/shared/item-snooze';
-import type { DashItem, DashKind, DashResponse } from '$lib/shared/types';
+import type { CategoryGroup, DashItem, DashKind, DashResponse } from '$lib/shared/types';
 
 export const UNTIL_NEW_ACTIVITY: SnoozeChoice = {};
 
@@ -18,6 +19,10 @@ const cancelDash = (items: DashItem[]) =>
 function invalidateDash(items: DashItem[]) {
 	for (const queryKey of dashKeysOf(items)) queryClient.invalidateQueries({ queryKey });
 }
+
+const refetchDash = (items: DashItem[]) => refetchUnlessLive(...dashKeysOf(items));
+
+export const willMute = (items: Pick<DashItem, 'muted'>[]) => !items.every((i) => i.muted);
 
 export function dashItemsOf(ids: string[]): DashItem[] {
 	const cached = DASH_KINDS.flatMap(
@@ -49,7 +54,7 @@ function sendInBatches(ids: string[], send: (batch: string[]) => Promise<unknown
 export async function toggleMuteItems(ids: string[]) {
 	const items = dashItemsOf(ids);
 	if (!items.length) return;
-	const mute = !items[0].muted;
+	const mute = willMute(items);
 	const set = new Set(items.map((i) => i.id));
 	await cancelDash(items);
 	patchDashItems(set, (x) => ({ ...x, dismissed: mute, muted: mute, snooze: undefined }));
@@ -58,17 +63,7 @@ export async function toggleMuteItems(ids: string[]) {
 		else await api.unsnoozeItems([...set]);
 		toast(mute ? 'Muted' : 'Unmuted', {
 			description: describe(items),
-			action: mute
-				? {
-						label: 'Undo',
-						onClick: () => {
-							api
-								.unsnoozeItems([...set])
-								.then(() => invalidateDash(items))
-								.catch((e) => toast.error(e.message));
-						}
-					}
-				: undefined
+			action: mute ? { label: 'Undo', onClick: () => void unsnoozeItems([...set]) } : undefined
 		});
 	} catch (err) {
 		invalidateDash(items);
@@ -121,14 +116,19 @@ export async function unsnoozeItems(ids: string[]) {
 	}
 }
 
-export function markItemsSeen(ids: string[]) {
+export async function markItemsSeen(ids: string[]) {
 	const items = dashItemsOf(ids);
-	patchDashItems(new Set(ids), (x) => ({ ...x, unread: false }));
+	const unread = items.filter((i) => i.unread);
+	if (unread.length) {
+		await cancelDash(unread);
+		patchDashItems(new Set(unread.map((i) => i.id)), (x) => ({ ...x, unread: false }));
+	}
 	sendInBatches(ids, api.seen).catch(() => invalidateDash(items));
 }
 
 export async function setItemsRead(ids: string[], read: boolean) {
 	const items = dashItemsOf(ids);
+	await cancelDash(items);
 	patchDashItems(new Set(ids), (x) => ({
 		...x,
 		unread: !read,
@@ -140,6 +140,46 @@ export async function setItemsRead(ids: string[], read: boolean) {
 		invalidateDash(items);
 		toast.error((err as Error).message);
 	}
+}
+
+async function sendPin(
+	ids: string[],
+	pin: CategoryPin,
+	patch: (x: DashItem) => DashItem,
+	message: string
+) {
+	const items = dashItemsOf(ids);
+	await cancelDash(items);
+	patchDashItems(new Set(ids), patch);
+	try {
+		await api.pinItems(ids, pin);
+		toast(message, { description: describe(items) });
+		refetchDash(items);
+	} catch (err) {
+		toast.error((err as Error).message);
+		invalidateDash(items);
+	}
+}
+
+export function pinItems(ids: string[], pin: CategoryPin, groups: CategoryGroup[]) {
+	const group = groups.find((g) => g.id === pin.group);
+	const chosen = group?.categories.find((c) => c.id === pin.category);
+	if (!group || !chosen) return sendPin(ids, pin, (x) => x, 'Hush chooses the category again');
+	const inGroup = new Set(group.categories.map((c) => c.id));
+	const replace = (list: string[] | undefined) => [
+		...(list ?? []).filter((c) => !inGroup.has(c)),
+		chosen.id
+	];
+	return sendPin(
+		ids,
+		pin,
+		(x) => ({
+			...x,
+			categories: replace(x.categories),
+			pinnedCategories: replace(x.pinnedCategories)
+		}),
+		`${group.name}: ${chosen.name}`
+	);
 }
 
 export function toggleItemsRead(ids: string[]) {

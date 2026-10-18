@@ -20,18 +20,21 @@ const usesAbout = (expr: QueryExpr): boolean =>
 			? usesAbout(expr.part)
 			: expr.parts.some(usesAbout);
 
-export function cachedItems(): DashItem[] {
-	return (['pr', 'issue'] as const).flatMap(
-		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.items ?? []
-	);
-}
+type DashAnswers = (DashResponse | undefined)[];
 
-export function cachedProjects(): DashProject[] {
-	const all = (['pr', 'issue'] as const).flatMap(
-		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.projects ?? []
-	);
+export const itemsIn = (answers: DashAnswers): DashItem[] => answers.flatMap((d) => d?.items ?? []);
+
+export function projectsIn(answers: DashAnswers): DashProject[] {
+	const all = answers.flatMap((d) => d?.projects ?? []);
 	return [...new Map(all.map((p) => [p.key, p])).values()];
 }
+
+const cachedItems = (): DashItem[] =>
+	itemsIn(
+		(['pr', 'issue'] as const).map((kind) =>
+			queryClient.getQueryData<DashResponse>(keys.dash(kind))
+		)
+	);
 
 export function previewItems(
 	query: string,
@@ -63,9 +66,9 @@ const plain = (values: string[]): ValueSuggestion[] =>
 	values.map((value) => ({ value, label: value }));
 
 export function ruleSuggestions(
-	settings: Pick<Settings, 'categoryGroups'> | undefined
+	settings: Pick<Settings, 'categoryGroups'> | undefined,
+	items: DashItem[] = cachedItems()
 ): ValueSuggestions {
-	const items = cachedItems();
 	const repos = uniq(items.map((i) => i.repo));
 	return {
 		repo: plain([...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos]),

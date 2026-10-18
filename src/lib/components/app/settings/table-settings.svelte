@@ -51,7 +51,6 @@
 						item={previewItem(kind)}
 						marks={PREVIEW_MARKS}
 						{columns}
-						onopen={noop}
 						onsnooze={noop}
 						onmute={noop}
 						oncopy={noop}

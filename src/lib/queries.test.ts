@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$app/environment', () => ({ browser: false }));
 vi.mock('$lib/api', () => ({ api: {}, ApiError: class extends Error {} }));
 
-const { keys, queryClient, refetchUnlessLive } = await import('./queries');
+const { keys, persistOptions, queryClient, refetchUnlessLive } = await import('./queries');
 const { live } = await import('./live-state.svelte');
 
 describe('refetchUnlessLive', () => {
@@ -22,5 +22,23 @@ describe('refetchUnlessLive', () => {
 		live.connected = false;
 		await refetchUnlessLive(keys.alerts);
 		expect(queryClient.getQueryState(keys.alerts)?.isInvalidated).toBe(true);
+	});
+});
+
+describe('persisted cache', () => {
+	const persisted = (queryKey: readonly unknown[]) =>
+		persistOptions.dehydrateOptions.shouldDehydrateQuery({
+			state: { status: 'success' },
+			queryKey
+		});
+
+	it('keeps the answers to each typed word in memory only', () => {
+		expect(persisted(keys.suggest('acme/web', 'user', 'oct'))).toBe(false);
+		expect(persisted(keys.searchCount('repo:acme/web is:open'))).toBe(false);
+	});
+
+	it('saves the lists that a reload shows at once', () => {
+		expect(persisted(keys.dash('pr'))).toBe(true);
+		expect(persisted(keys.alerts)).toBe(true);
 	});
 });

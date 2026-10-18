@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import { MediaQuery, SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { commandFor } from '$lib/keys.svelte';
+	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
+	import { commandFor, ignoreKey } from '$lib/keys.svelte';
 	import {
 		commitDiffQuery,
 		keys,
@@ -264,7 +265,9 @@
 	let reviewEvent = $state<ReviewEvent>('COMMENT');
 	let reviewSummary = $state('');
 	let reviewBusy = $state<'submit' | 'discard' | null>(null);
-	let confirmDiscard = $state(false);
+	const discardConfirm = new ArmedConfirm();
+	onDestroy(() => discardConfirm.dispose());
+	const confirmingDiscard = $derived(!!pendingReview && discardConfirm.isArmed(pendingReview.id));
 
 	async function submitReview() {
 		if (!pendingReview || reviewBusy || summaryUploads.pending) return;
@@ -289,11 +292,11 @@
 
 	async function discardReview() {
 		if (!pendingReview || reviewBusy) return;
-		if (!confirmDiscard) return void (confirmDiscard = true);
+		if (!confirmingDiscard) return discardConfirm.arm(pendingReview.id);
 		reviewBusy = 'discard';
 		try {
 			await api.discardReview(pendingReview.id);
-			confirmDiscard = false;
+			discardConfirm.disarm();
 			submitting = false;
 			await refreshThreads();
 			toast.success('Pending review discarded');
@@ -550,12 +553,7 @@
 	});
 
 	function onKey(e: KeyboardEvent) {
-		const target = e.target;
-		if (
-			target instanceof Element &&
-			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
-		)
-			return;
+		if (ignoreKey(e)) return;
 		const cmd = commandFor(e, ['page']);
 		const run: Record<string, () => void> = {
 			'page.nextFile': () => reveal(Math.min(cursor + 1, files.length - 1)),
@@ -776,9 +774,9 @@
 							size="sm"
 							variant="ghost"
 							disabled={!!reviewBusy}
-							class={cn(confirmDiscard && 'text-destructive')}
+							class={cn(confirmingDiscard && 'text-destructive')}
 							onclick={() => void discardReview()}
-							>{confirmDiscard ? 'Confirm: discard' : 'Discard'}</Button
+							>{confirmingDiscard ? 'Confirm: discard' : 'Discard'}</Button
 						>
 						<Button size="sm" disabled={!!reviewBusy} onclick={() => (submitting = !submitting)}
 							>Submit review</Button

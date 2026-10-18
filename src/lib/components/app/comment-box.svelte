@@ -9,9 +9,8 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
 	import { caretXY } from '$lib/caret';
-	import { meQuery, queryClient } from '$lib/queries';
+	import { meQuery, queryClient, suggestQuery } from '$lib/queries';
 	import {
 		applyPick,
 		closedShortcodeBefore,
@@ -79,7 +78,7 @@
 
 	async function submit(intent: ComposeIntent) {
 		const body = text.trim();
-		if (uploads.pending) return;
+		if (uploads.pending || acting.id) return;
 		if (intent !== 'approve' && !body) return void box?.focus();
 		if (!(await sendAction(p, intent, { body: body || undefined }))) return;
 		toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
@@ -117,22 +116,12 @@
 		].filter((x) => x.login !== 'ghost');
 	});
 
-	const suggestKey = (t: RemoteTrigger) =>
-		[
-			'suggest',
-			t.kind === 'ref' && t.repo ? t.repo : p.repo,
-			t.kind,
-			t.query.toLowerCase()
-		] as const;
+	const suggestionsFor = (t: RemoteTrigger) =>
+		suggestQuery(t.kind === 'ref' && t.repo ? t.repo : p.repo, t.kind, t.query, p.repo);
 
 	function fetchSuggestions(t: RemoteTrigger) {
-		const repo = t.kind === 'ref' && t.repo ? t.repo : p.repo;
 		// Only the words so far: the list waits for a short pause (GitHub limits searches).
-		return queryClient.fetchQuery({
-			queryKey: suggestKey(t),
-			queryFn: () => api.suggest(repo, t.kind, t.query, p.repo).then((r) => r.items),
-			staleTime: 5 * 60_000
-		});
+		return queryClient.fetchQuery(suggestionsFor(t));
 	}
 
 	function place(el: HTMLTextAreaElement, t: Trigger) {
@@ -176,7 +165,7 @@
 				? rankUsers(participants, u as UserSuggestion[], t.query, me.data?.login ?? '')
 				: rankRefs(u as RefSuggestion[], t.query);
 		// Saved answers and the conversation's people show at once; the rest after the answer.
-		const saved = queryClient.getQueryData<Suggestion[]>(suggestKey(t));
+		const saved = queryClient.getQueryData(suggestionsFor(t).queryKey);
 		if (saved) items = mine(saved);
 		else if (t.kind === 'user') items = mine(same ? items : []);
 		else if (!same) items = [];
@@ -315,7 +304,7 @@
 					}
 					if (commandFor(e, ['editor']) === 'editor.send') {
 						e.preventDefault();
-						submit(composer.intent);
+						if (!e.repeat) submit(composer.intent);
 					} else if (e.key === 'Escape') {
 						e.preventDefault();
 						box?.blur();

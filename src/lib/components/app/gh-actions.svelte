@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { peekQuery } from '$lib/queries';
 	import { palette } from '$lib/palette.svelte';
-	import { commandFor, keysOf } from '$lib/keys.svelte';
+	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
+	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import { acting, focusComposer, sendWithUndo } from '$lib/gh-act.svelte';
 	import {
 		GH_ACTIONS,
@@ -61,8 +62,10 @@
 		return c ? keysOf(c)[0] : undefined;
 	};
 
-	let confirming = $state<GhActionId | null>(null);
-	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
+	const armedConfirm = new ArmedConfirm();
+	onDestroy(() => armedConfirm.dispose());
+	const confirmKey = (id: GhActionId) => `${repo}#${number}:${id}`;
+	const confirming = (id: GhActionId) => armedConfirm.isArmed(confirmKey(id));
 
 	/** Run an action from a button, the menu, a key, or the palette. */
 	function run(id: GhActionId) {
@@ -70,24 +73,17 @@
 		if (!p || !s || acting.id) return;
 		if (s.blocked) return void toast.error(s.blocked);
 		if (id === 'comment' || id === 'request_changes') return focusComposer(id);
-		if (GH_ACTIONS[id].confirm && confirming !== id) {
-			confirming = id;
+		if (GH_ACTIONS[id].confirm && !confirming(id)) {
+			armedConfirm.arm(confirmKey(id));
 			if (id === 'merge' && stackNotice) toast.info(stackNotice, { duration: 8000 });
-			clearTimeout(confirmTimer);
-			confirmTimer = setTimeout(() => (confirming = null), 4000);
 			return;
 		}
-		confirming = null;
+		armedConfirm.disarm();
 		void sendWithUndo(p, id, { method });
 	}
 
 	function onKey(e: KeyboardEvent) {
-		const t = e.target;
-		if (
-			t instanceof Element &&
-			t.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
-		)
-			return;
+		if (ignoreKey(e)) return;
 		const cmd = commandFor(e, ['peek']);
 		const s = cmd ? states.find((x) => GH_ACTIONS[x.id].command === cmd) : undefined;
 		if (!s) return;
@@ -142,15 +138,15 @@
 							</DropdownMenu.Item>
 						{:else}
 							<DropdownMenu.Item
-								class={cn(confirming === s.id && 'text-destructive')}
+								class={cn(confirming(s.id) && 'text-destructive')}
 								onSelect={(e) => {
 									// The first press of an action that asks again only arms it: the menu stays
 									// open to show "Confirm: …". (Decide before run() changes `confirming`.)
-									if (GH_ACTIONS[s.id].confirm && confirming !== s.id) e.preventDefault();
+									if (GH_ACTIONS[s.id].confirm && !confirming(s.id)) e.preventDefault();
 									run(s.id);
 								}}
 							>
-								{confirming === s.id ? `Confirm: ${label(s.id).toLowerCase()}` : label(s.id)}
+								{confirming(s.id) ? `Confirm: ${label(s.id).toLowerCase()}` : label(s.id)}
 								{@render keyHint(s.id)}
 							</DropdownMenu.Item>
 						{/if}
@@ -179,12 +175,12 @@
 		{#if main}
 			<Button
 				size="sm"
-				variant={confirming === main.id ? 'destructive' : 'default'}
+				variant={confirming(main.id) ? 'destructive' : 'default'}
 				disabled={!!acting.id}
 				onclick={() => run(main.id)}
 			>
 				{#if acting.id === main.id}<LoaderCircle class="animate-spin" />{/if}
-				{confirming === main.id ? `Confirm: ${label(main.id).toLowerCase()}` : label(main.id)}
+				{confirming(main.id) ? `Confirm: ${label(main.id).toLowerCase()}` : label(main.id)}
 			</Button>
 		{/if}
 	</div>

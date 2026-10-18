@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { commandFor, keysOf } from '$lib/keys.svelte';
+	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import { dashQuery, meQuery, peekQuery } from '$lib/queries';
 	import { noteOpened } from '$lib/recheck';
 	import { clearNotificationsFor } from '$lib/notification-clear';
@@ -179,13 +179,7 @@
 	]);
 
 	function onKey(e: KeyboardEvent) {
-		const target = e.target;
-		if (
-			e.defaultPrevented ||
-			(target instanceof Element &&
-				target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]'))
-		)
-			return;
+		if (ignoreKey(e)) return;
 		const cmd = commandFor(e, PAGE_KEY_SCOPES);
 		const run: Record<string, () => void> = {
 			'page.conversation': () => showTab(false),
