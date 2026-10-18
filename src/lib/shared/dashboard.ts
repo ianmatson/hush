@@ -4,7 +4,7 @@ import { closedLabel } from './closed-items';
 import { DAY_MS } from './durations';
 import { sameLogin } from './logins';
 import { readsBoard } from './projects';
-import type { DashItem, DashKind, DashSection, DashSettings, TeamDTO, Turn } from './types';
+import type { DashItem, DashSection, DashSettings, TeamDTO, Turn } from './types';
 
 export const DEFAULT_DASH: DashSettings = {
 	excludedTeams: [],
@@ -143,7 +143,7 @@ export type TurnFacts = Pick<
 	| 'commentsNeedMe'
 >;
 
-export const NEW_COMMITS_REASON = 'New commits since your review';
+const NEW_COMMITS_REASON = 'New commits since your review';
 
 export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): TurnResult {
 	const mine = sameLogin(i.author, me);

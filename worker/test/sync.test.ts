@@ -218,9 +218,7 @@ const page = {
 	status: 200,
 	items: [] as GhNotification[],
 	lastModified: 'snapshot',
-	pollInterval: 60,
-	ssoHiddenOrgs: [],
-	complete: true
+	pollInterval: 60
 };
 
 function pollerHarness() {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { queryMatches } from './rules';
 import {
 	DEFAULT_VIEWS,
 	MAX_VIEW_SEARCHES,
@@ -11,7 +10,7 @@ import {
 	validateViews,
 	viewKinds
 } from './item-views';
-import type { ItemView, RuleFacts } from './types';
+import type { ItemView } from './types';
 
 const view = (over: Partial<ItemView> = {}): ItemView => ({
 	id: 'web',

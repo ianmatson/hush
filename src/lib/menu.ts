@@ -1,4 +1,5 @@
 import type { Component } from 'svelte';
+import type { SnoozeChoice } from '$lib/shared/item-snooze';
 import type { SnoozeEvent } from '$lib/shared/snooze';
 import type { MarkColor } from '$lib/shared/types';
 import { SEP, tidySeparators } from '$lib/shared/menus';
@@ -25,8 +26,7 @@ export type MenuEntry =
 			icon?: Component;
 			subjects: ('pr' | 'issue' | 'other')[];
 			disabled: SnoozeEvent[];
-			untilNewActivity?: boolean;
-			onpick: (body: { until?: number; event?: SnoozeEvent }) => void;
+			onpick: (choice: SnoozeChoice) => void;
 			/** Phones: a sheet instead of nested submenus. */
 			sheet: () => void;
 	  };

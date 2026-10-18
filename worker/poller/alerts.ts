@@ -21,8 +21,6 @@ const MAX_HELD_MESSAGES = 10;
 const DIGEST_LINES = 4;
 const isItemKey = (tag: string | undefined): tag is string => !!tag?.includes('#');
 
-export const SNOOZE_OVER_REASON = 'snooze-over';
-
 export interface PushCandidate {
 	itemKey: string;
 	reason: string;
@@ -34,7 +32,6 @@ export interface PushCandidate {
 type OpenChannels = { push: boolean; slack: boolean };
 
 type Held = { count: number; messages: PushMessage[]; duringQuiet: boolean };
-type LegacyQuietHeld = { count: number; lines: string[] };
 
 /** Push alerts: send them, record them in the alert history, and update them when resolved. */
 export abstract class PollerAlerts extends PollerBase {
@@ -100,10 +97,10 @@ export abstract class PollerAlerts extends PollerBase {
 		const settings = await this.settings();
 		const now = Date.now();
 		if (!settings.pushWhileOpen && this.appInFocus(now))
-			return void (await this.ctx.storage.delete(['held', 'quietHeld']));
+			return void (await this.ctx.storage.delete('held'));
 		const state = await this.deliveryState();
 		if (!heldAreDue(settings, now, state)) return;
-		await this.ctx.storage.delete(['held', 'quietHeld']);
+		await this.ctx.storage.delete('held');
 		let delivered = false;
 		try {
 			const onlyOne = held.count === 1 && held.messages.length === 1;
@@ -196,17 +193,9 @@ export abstract class PollerAlerts extends PollerBase {
 	}
 
 	private async held(): Promise<Held> {
-		const s = await this.ctx.storage.get(['held', 'quietHeld']);
-		const held = s.get('held') as Held | undefined;
-		if (held) return held;
-		const legacy = s.get('quietHeld') as LegacyQuietHeld | undefined;
-		if (!legacy) return { count: 0, messages: [], duringQuiet: false };
-		const home = `${this.origin()}/`;
-		return {
-			count: legacy.count,
-			messages: legacy.lines.map((title) => ({ title, body: '', url: home })),
-			duringQuiet: true
-		};
+		return (
+			(await this.ctx.storage.get<Held>('held')) ?? { count: 0, messages: [], duringQuiet: false }
+		);
 	}
 
 	private async hold(incoming: Held, opts: { startsDigestWindow: boolean }) {

@@ -118,22 +118,33 @@ function harness() {
 	return { poller, subjects, data, storage, trackedBuild };
 }
 
+const NOTHING_FOUND = {
+	hits: [],
+	errors: [],
+	failedSections: new Set<string>(),
+	failedQueries: []
+};
+
+const failEveryBoardQuery = () =>
+	vi.mocked(boardShort).mockImplementation(async (_token, queries) => ({
+		hits: [],
+		errors: ['Board failed'],
+		failedSections: new Set(queries.map((query) => query.section)),
+		failedQueries: queries
+	}));
+
 describe('dashboard source failure and local filters', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(boardShort).mockResolvedValue({ hits: [], errors: [], failedSections: new Set() });
-		vi.mocked(searchShort).mockResolvedValue({ hits: [], errors: [], failedSections: new Set() });
+		vi.mocked(boardShort).mockResolvedValue(NOTHING_FOUND);
+		vi.mocked(searchShort).mockResolvedValue(NOTHING_FOUND);
 		vi.mocked(itemStatuses).mockResolvedValue({ projects: [], statusOf: new Map(), errors: [] });
 	});
 
 	it('reads fresh facts when a successful source overlaps a failed source', async () => {
 		const { poller, subjects, storage } = harness();
 		storage.set('dash:read:pr', { 'sandbox/web#1': Date.now() });
-		vi.mocked(boardShort).mockResolvedValue({
-			hits: [],
-			errors: ['Board failed'],
-			failedSections: new Set(['website'])
-		});
+		failEveryBoardQuery();
 		vi.mocked(searchShort).mockResolvedValue({
 			hits: [
 				{
@@ -144,7 +155,8 @@ describe('dashboard source failure and local filters', () => {
 				}
 			],
 			errors: [],
-			failedSections: new Set()
+			failedSections: new Set(),
+			failedQueries: []
 		});
 		await poller.incrementalBuild();
 		expect(fetchDetails).toHaveBeenCalledWith('test', 'reviewer', ['PR_1']);
@@ -152,11 +164,7 @@ describe('dashboard source failure and local filters', () => {
 
 	it('retains a failed board source while removing confirmed absence from a successful source', async () => {
 		const { poller, trackedBuild } = harness();
-		vi.mocked(boardShort).mockResolvedValue({
-			hits: [],
-			errors: ['Board failed'],
-			failedSections: new Set(['website'])
-		});
+		failEveryBoardQuery();
 		const result = await poller.build();
 		expect(result.items.map((item) => [item.id, item.sections])).toEqual([
 			['sandbox/web#1', ['website']]
@@ -221,11 +229,7 @@ describe('dashboard source failure and local filters', () => {
 		const { poller, data, storage } = harness();
 		data.items[0].sections = ['website', 'mine'];
 		storage.set('dash:pr', { ...(storage.get('dash:pr') as object), data });
-		vi.mocked(boardShort).mockResolvedValue({
-			hits: [],
-			errors: ['Board failed'],
-			failedSections: new Set(['website'])
-		});
+		failEveryBoardQuery();
 		const result = await poller.build();
 		expect(result.items[0].sections).toEqual(['website']);
 	});
@@ -243,7 +247,8 @@ describe('dashboard source failure and local filters', () => {
 				}
 			],
 			errors: [],
-			failedSections: new Set()
+			failedSections: new Set(),
+			failedQueries: []
 		});
 		const result = await poller.build();
 		expect(result.items).toEqual([]);
@@ -268,7 +273,7 @@ describe('one dashboard build at a time', () => {
 					searches.mostAtOnce = Math.max(searches.mostAtOnce, searches.running);
 					searches.answers.push(() => {
 						searches.running--;
-						resolve({ hits: [], errors: [], failedSections: new Set() });
+						resolve(NOTHING_FOUND);
 					});
 				})
 		);
@@ -281,7 +286,7 @@ describe('one dashboard build at a time', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(boardShort).mockResolvedValue({ hits: [], errors: [], failedSections: new Set() });
+		vi.mocked(boardShort).mockResolvedValue(NOTHING_FOUND);
 		vi.mocked(itemStatuses).mockResolvedValue({ projects: [], statusOf: new Map(), errors: [] });
 	});
 

@@ -38,7 +38,7 @@
 			{/snippet}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content align="start" class="w-56">
-			<SnoozeItems {subjects} {disabled} untilNewActivity {onpick} />
+			<SnoozeItems {subjects} {disabled} {onpick} />
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
 {/if}

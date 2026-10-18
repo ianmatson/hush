@@ -12,7 +12,6 @@
 			<PushAlert
 				title="4 alerts while quiet"
 				body="@joethreepwood requests your review, and 3 more"
-				actions={[]}
 			/>
 			<span class="behind"></span>
 		</div>

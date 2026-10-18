@@ -52,13 +52,8 @@ async function findItems(token: string, queries: ExpandedQuery[]) {
 	]);
 	return {
 		hits: [...searches.hits, ...boards.hits],
-		failedSections: new Set([...(searches.failedSections ?? []), ...(boards.failedSections ?? [])]),
-		failedQueries: [
-			...(searches.failedQueries ??
-				searched.filter((query) => searches.failedSections?.has(query.section))),
-			...(boards.failedQueries ??
-				onBoards.filter((query) => boards.failedSections?.has(query.section)))
-		],
+		failedSections: new Set([...searches.failedSections, ...boards.failedSections]),
+		failedQueries: [...searches.failedQueries, ...boards.failedQueries],
 		errors: [...new Set([...searches.errors, ...boards.errors])].slice(0, 3)
 	};
 }

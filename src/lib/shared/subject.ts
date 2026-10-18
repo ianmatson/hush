@@ -1,7 +1,6 @@
 import { latestActivity, newestHumanComment } from './activity';
 import type { DashFacts } from './dashboard';
 import { NO_DECISIONS, type SubjectDecisions } from './decisions';
-import { githubItemUrl } from './item-page';
 import { requestedByName, sameLogin, type ReviewRequest } from './logins';
 import { SUBJECT_TYPE } from './query';
 import type {
@@ -11,6 +10,7 @@ import type {
 	Enrichment,
 	LastComment,
 	LatestReview,
+	Mergeable,
 	RuleFacts,
 	StackLink
 } from './types';
@@ -53,7 +53,7 @@ export interface SubjectFacts {
 	// PRs only (empty or null for issues).
 	ci: CiState | null;
 	reviewDecision: Enrichment['reviewDecision'];
-	mergeable: Enrichment['mergeable'] | null;
+	mergeable: Mergeable | null;
 	additions: number;
 	deletions: number;
 	lastCommitAt: string | null;
@@ -73,13 +73,7 @@ export interface SubjectFacts {
 /** "owner/repo#123": the store's key. */
 export const subjectKey = (repo: string, number: number) => `${repo}#${number}`;
 
-/** Both URL forms GitHub uses for a subject (threads store either). */
-export function subjectUrls(key: string): [string, string] {
-	const [repo, n] = key.split('#');
-	return [githubItemUrl(repo, Number(n), 'pr'), githubItemUrl(repo, Number(n), 'issue')];
-}
-
-export function reviewDecisionOf(
+function reviewDecisionOf(
 	s: Pick<SubjectFacts, 'reviewDecision' | 'verdicts'>
 ): Enrichment['reviewDecision'] {
 	if (s.reviewDecision) return s.reviewDecision;
@@ -88,41 +82,20 @@ export function reviewDecisionOf(
 	return null;
 }
 
-/**
- * The newest approval or change request by someone who is neither you nor the author.
- * GitHub's `latestOpinionatedReviews` gives each reviewer's latest one.
- */
-export function lastVerdictOf(s: SubjectFacts, me: string): { by: string; at: string } | null {
-	const skip = new Set([me.toLowerCase(), s.author.toLowerCase()]);
-	let best: { by: string; at: string } | null = null;
-	for (const v of s.verdicts) {
-		if (skip.has(v.by.toLowerCase())) continue;
-		if (v.state !== 'APPROVED' && v.state !== 'CHANGES_REQUESTED') continue;
-		if (!best || Date.parse(v.at) > Date.parse(best.at)) best = { by: v.by, at: v.at };
-	}
-	return best;
-}
-
 /** The facts that category rules and decisions read about a subject. */
 export function enrichmentOf(
 	s: SubjectFacts,
-	me: string,
 	decisions: SubjectDecisions = NO_DECISIONS
 ): Enrichment {
 	const base: Enrichment = {
 		kind: s.kind,
-		number: s.number,
-		url: s.url,
 		author: s.author,
 		authorIsBot: s.authorIsBot,
 		labels: s.labels.map((l) => l.name),
-		assignedToMe: s.assignees.some((a) => sameLogin(a, me)),
 		assignees: s.assignees,
 		reviewRequests: s.reviewRequests.map((r) => r.name),
 		lastComment: s.lastComment,
 		previousComment: s.previousComment ?? null,
-		commentsNeedMe: decisions.commentsNeedMe,
-		urgent: decisions.urgent,
 		smart: decisions.smart,
 		jevChoices: decisions.choices,
 		createdAt: s.createdAt,
@@ -135,17 +108,10 @@ export function enrichmentOf(
 		state: s.state,
 		draft: s.draft,
 		reviewDecision: reviewDecisionOf(s),
-		mergeable: s.mergeable ?? undefined,
 		ci: s.ci,
 		lastCommitAt: s.lastCommitAt,
-		openThreads: s.openThreads,
-		lastVerdict: lastVerdictOf(s, me),
-		myReview: s.myReview,
 		latestReview: s.latestReview,
 		reviewed: !!s.latestReview,
-		reviewRequestedFromMe: requestedByName(s.reviewRequests, me),
-		// Short slugs; turnFactsFromEnrichment adds the org back.
-		requestedTeams: s.reviewRequests.filter((r) => r.team).map((r) => r.name.split('/').pop()!),
 		additions: s.additions,
 		deletions: s.deletions
 	};
@@ -231,4 +197,4 @@ export const subjectRuleFacts = (
 	s: SubjectFacts,
 	me: string,
 	decisions: SubjectDecisions = NO_DECISIONS
-): RuleFacts => ruleFactsOf(s, enrichmentOf(s, me, decisions), me, { activity: latestActivity(s) });
+): RuleFacts => ruleFactsOf(s, enrichmentOf(s, decisions), me, { activity: latestActivity(s) });

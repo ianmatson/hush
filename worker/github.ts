@@ -196,34 +196,6 @@ export interface GhNotification {
 	repository: { full_name: string; html_url: string; name: string; owner: { login: string } };
 }
 
-/** API subject URL → github.com URL. */
-export function subjectHtmlUrl(n: GhNotification): string {
-	const repo = n.repository.html_url;
-	const u = n.subject.url;
-	switch (n.subject.type) {
-		case 'PullRequest':
-		case 'Issue':
-		case 'Commit':
-			if (u)
-				return u
-					.replace('https://api.github.com/repos/', 'https://github.com/')
-					.replace('/pulls/', '/pull/')
-					.replace('/commits/', '/commit/');
-			return repo;
-		case 'Release':
-			return `${repo}/releases`;
-		case 'Discussion':
-			return `${repo}/discussions`;
-		case 'CheckSuite':
-			return `${repo}/actions`;
-		case 'RepositoryVulnerabilityAlert':
-		case 'RepositoryDependabotAlertsThread':
-			return `${repo}/security/dependabot`;
-		default:
-			return repo;
-	}
-}
-
 export function subjectNumber(n: {
 	subject: Pick<GhNotification['subject'], 'type' | 'url'>;
 }): number | null {
@@ -238,21 +210,6 @@ export interface NotificationsPage {
 	lastModified: string | null;
 	pollInterval: number;
 	retryAt?: number;
-	/** Org ids that GitHub left out because the token is not SAML-authorized for them. */
-	ssoHiddenOrgs: string[];
-	/** Every page was read (no "next" page was left). */
-	complete: boolean;
-}
-
-/** Parse `X-GitHub-SSO: partial-results; organizations=1,2`. */
-export function parseSsoHeader(value: string | null): string[] {
-	const m = value?.match(/partial-results;\s*organizations=([\d,\s]+)/i);
-	return m
-		? m[1]
-				.split(',')
-				.map((x) => x.trim())
-				.filter(Boolean)
-		: [];
 }
 
 export function rateLimitRetryAt(headers: Headers, now = Date.now()): number | undefined {
@@ -267,21 +224,20 @@ export function rateLimitRetryAt(headers: Headers, now = Date.now()): number | u
 	return quotaUsedUp && reset > 0 ? reset * SECOND_MS : undefined;
 }
 
+const MAX_NOTIFICATION_PAGES = 2;
+
 /**
  * Fetch the notification list. With `ifModifiedSince`, GitHub answers 304 when nothing changed,
  * and a 304 does not count against the rate limit.
  */
 export async function listNotifications(
 	token: string,
-	opts: { ifModifiedSince?: string | null; all?: boolean; since?: string; maxPages?: number }
+	opts: { ifModifiedSince?: string | null }
 ): Promise<NotificationsPage> {
-	const params = new URLSearchParams({ per_page: '50' });
-	if (opts.all) params.set('all', 'true');
-	if (opts.since) params.set('since', opts.since);
-	let url: string | null = `/notifications?${params}`;
+	let url: string | null = '/notifications?per_page=50';
 	const items: GhNotification[] = [];
 	let first: Response | null = null;
-	for (let page = 0; url && page < (opts.maxPages ?? 2); page++) {
+	for (let page = 0; url && page < MAX_NOTIFICATION_PAGES; page++) {
 		const res = await gh(token, url, {
 			headers:
 				page === 0 && opts.ifModifiedSince ? { 'If-Modified-Since': opts.ifModifiedSince } : {}
@@ -297,9 +253,7 @@ export async function listNotifications(
 		items,
 		lastModified: res.headers.get('Last-Modified'),
 		pollInterval: Number(res.headers.get('X-Poll-Interval') ?? 60) || 60,
-		retryAt: rateLimitRetryAt(res.headers),
-		ssoHiddenOrgs: parseSsoHeader(res.headers.get('X-GitHub-SSO')),
-		complete: res.status === 200 && url === null
+		retryAt: rateLimitRetryAt(res.headers)
 	};
 }
 
@@ -604,7 +558,7 @@ async function inRequests<T>(
 }
 
 /** Results for each dashboard search (it asks for no more). */
-export const SEARCH_MAX = SOURCE_RESULTS_MAX;
+const SEARCH_MAX = SOURCE_RESULTS_MAX;
 /** Short searches in one request: their answers are small. */
 const SEARCH_CHUNK = 10;
 /** Items with all their details in one request: these answers are big. */
@@ -635,7 +589,7 @@ export async function searchShort(
 	hits: SearchHit[];
 	errors: string[];
 	failedSections: Set<string>;
-	failedQueries?: ExpandedQuery[];
+	failedQueries: ExpandedQuery[];
 }> {
 	const errors: string[] = [];
 	const hits: SearchHit[] = [];

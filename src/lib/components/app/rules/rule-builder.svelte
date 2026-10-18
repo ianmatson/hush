@@ -24,7 +24,7 @@
 		jev?: boolean;
 	}
 
-	export const RULE_TEMPLATES: RuleTemplate[] = [
+	const RULE_TEMPLATES: RuleTemplate[] = [
 		{ label: 'Opened by a bot', hint: 'Any bot account', query: 'author:bots', icon: Bot },
 		{
 			label: 'Dependency updates',
@@ -70,6 +70,7 @@
 		describeBuilder,
 		MATCHES_EVERYTHING,
 		emptyCondition,
+		EMPTY_BUILDER,
 		queryToBuilder,
 		type BuilderCondition,
 		type BuilderGroup,
@@ -118,9 +119,7 @@
 		{ value: 'any', label: 'any' }
 	];
 
-	let builder = $state<BuilderState>(
-		untrack(() => queryToBuilder(value, place) ?? { mode: 'all', items: [] })
-	);
+	let builder = $state<BuilderState>(untrack(() => queryToBuilder(value, place) ?? EMPTY_BUILDER));
 	let textMode = $state(untrack(() => queryToBuilder(value, place) === null));
 	let emitted = untrack(() => value);
 

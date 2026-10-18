@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
 	import type { Snippet } from 'svelte';
 	import { flip } from 'svelte/animate';
-	import { slide } from 'svelte/transition';
+	import { fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { ListDrag } from '$lib/drag.svelte';
 	import { moveItem } from '$lib/draft-edits';
@@ -15,6 +15,8 @@
 		row,
 		ghost,
 		label,
+		empty,
+		flyInNewRows = false,
 		class: className = '',
 		rowClass = ''
 	}: {
@@ -24,6 +26,8 @@
 		row: Snippet<[T, number, Snippet]>;
 		ghost: Snippet<[T]>;
 		label: string;
+		empty?: string;
+		flyInNewRows?: boolean;
 		class?: string;
 		rowClass?: string | ((item: T) => string);
 	} = $props();
@@ -31,6 +35,7 @@
 	const PLACEHOLDER = '__placeholder';
 	const FLIP = { duration: 220, easing: cubicOut };
 	const GAP_MOTION = { duration: 180, easing: cubicOut };
+	const NEW_ROW_MOTION = { y: -6, duration: 180 };
 
 	function moveTo(from: number, to: number) {
 		if (to >= 0 && to < items.length) onchange(moveItem(items, from, to - from));
@@ -58,7 +63,10 @@
 	});
 
 	function gapIn(node: Element, r: { item: T | null }) {
-		if (r.item) return { duration: 0 };
+		if (r.item)
+			return flyInNewRows && !drag.active && !drag.settling
+				? fly(node, NEW_ROW_MOTION)
+				: { duration: 0 };
 		return drag.fresh ? { duration: 0 } : slide(node, GAP_MOTION);
 	}
 	function gapOut(node: Element, r: { item: T | null }) {
@@ -110,6 +118,9 @@
 					{/if}
 				</li>
 			{/each}
+			{#if !items.length && empty}
+				<li class="px-2 py-3 text-sm text-muted-foreground">{empty}</li>
+			{/if}
 		</ul>
 	</section>
 </div>

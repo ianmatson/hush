@@ -26,7 +26,7 @@
 	import SnoozeSheet from './snooze-sheet.svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
-	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
+	import { commandFor, ignoreKey } from '$lib/keys.svelte';
 	import { itemPagePath } from '$lib/shared/item-page';
 	import { goto } from '$app/navigation';
 	import { flip } from 'svelte/animate';
@@ -109,7 +109,6 @@
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
@@ -1122,7 +1121,6 @@
 		bind:open={() => snoozeSheetIds !== null, (open) => !open && (snoozeSheetIds = null)}
 		subjects={ids.map((x) => byId(x)?.kind ?? 'other')}
 		disabled={one ? alreadyTrue(one) : []}
-		untilNewActivity
 		onpick={(choice) => snooze(ids, choice)}
 	/>
 {/if}

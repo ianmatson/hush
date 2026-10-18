@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createTabCounts } from '$lib/tab-counts.svelte';
-	import { faviconHref, loadPrefs, tabStatusOf, withPrefix } from '$lib/tab-status';
+	import { faviconHref, loadPrefs, TAB_STATUS_KEY, tabStatusOf, withPrefix } from '$lib/tab-status';
 
 	const tabCounts = createTabCounts();
 
@@ -50,13 +50,13 @@
 
 		// Settings changes, in this tab or another one.
 		const reload = () => (prefs = loadPrefs());
-		const onStorage = (e: StorageEvent) => e.key === 'hush:tab-status' && reload();
-		window.addEventListener('hush:tab-status', reload);
+		const onStorage = (e: StorageEvent) => e.key === TAB_STATUS_KEY && reload();
+		window.addEventListener(TAB_STATUS_KEY, reload);
 		window.addEventListener('storage', onStorage);
 
 		return () => {
 			observer.disconnect();
-			window.removeEventListener('hush:tab-status', reload);
+			window.removeEventListener(TAB_STATUS_KEY, reload);
 			window.removeEventListener('storage', onStorage);
 			document.title = withPrefix(document.title, '');
 			if (icon) icon.href = originalIcon;

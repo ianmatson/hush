@@ -29,7 +29,7 @@ interface FixedGrouping {
 export const NOT_SORTED_SECTION = 'Not sorted';
 export const NO_STATUS_SECTION = 'No status';
 export const NOT_IN_PROJECT_SECTION = 'Not in project';
-export const UNKNOWN_PROJECT_SECTION = 'Project data unavailable';
+const UNKNOWN_PROJECT_SECTION = 'Project data unavailable';
 export const CLOSED_SECTION = 'Merged and closed';
 export const CUSTOM_GROUP_BY: GroupBy = 'custom';
 const CATEGORY_PREFIX = 'category:';

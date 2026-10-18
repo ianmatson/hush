@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { FAQ } from '$lib/components/site/landing/landing-content';
 import { brokenLinks } from '$lib/site-links';
 import { SITE_PAGES } from '$lib/site-pages';
-import { SEARCH_SNIPPET_LENGTH } from './site';
+
+const SEARCH_SNIPPET_LENGTH = 160;
 
 const LANDING_PAGE_SOURCE = Object.values(
 	import.meta.glob('/src/routes/(site)/+page.svelte', {

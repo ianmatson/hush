@@ -14,7 +14,7 @@ export function setKeyChanges(changes: Record<string, string[]>) {
 }
 
 /** The keys in effect now. */
-export const currentBindings = () => bindings(keymap.changes);
+const currentBindings = () => bindings(keymap.changes);
 
 /** The command this key press runs in these scopes (the first scope wins), or null. */
 export function commandFor(e: KeyboardEvent, scopes: KeyScope[]): string | null {

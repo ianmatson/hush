@@ -234,8 +234,8 @@ const RENAMED: Record<string, string> = {
 	by: 'from'
 };
 
-export const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
-export const WORD = new Map(WORDS.map((w) => [w.key, w]));
+const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
+const WORD = new Map(WORDS.map((w) => [w.key, w]));
 const ONE_GLOB_FIELDS = new Set<Field>(['repo', 'org', 'author', 'by', 'assignee']);
 
 export const wordWorksIn = (w: Pick<QueryWord, 'key' | 'runs'>, place: QueryPlace) =>
@@ -245,7 +245,7 @@ export const wordWorksIn = (w: Pick<QueryWord, 'key' | 'runs'>, place: QueryPlac
 			!(place === 'rule' && w.key === 'category') &&
 			!(place === 'section' && w.key === 'about');
 
-export const wordsFor = (place: QueryPlace) => WORDS.filter((w) => wordWorksIn(w, place));
+const wordsFor = (place: QueryPlace) => WORDS.filter((w) => wordWorksIn(w, place));
 
 /** Split `a,b` values; a quoted part keeps its commas. */
 export function splitValues(raw: string): string[] {
@@ -383,24 +383,8 @@ export const quote = (x: string) => (/[\s,":()]/.test(x) ? `"${x.replace(/"/g, '
 const asList = (x: unknown): string[] =>
 	x === undefined ? [] : Array.isArray(x) ? x.map(String) : [String(x)];
 
-/** Write conditions as a query, in the order of WORDS (then is:, then the free words). */
 /** The longest query that a rule or a view can store. */
-export const MAX_QUERY = 300;
-
-const compiled = new Map<string, RuleMatch>();
-/**
- * A stored query as conditions, cached (rules are matched against every thread). A part with an
- * error is left out; validation refuses such a query before it is saved.
- */
-export function compileQuery(query: string): RuleMatch {
-	let when = compiled.get(query);
-	if (!when) {
-		when = parseQuery(query).when;
-		if (compiled.size > 500) compiled.clear();
-		compiled.set(query, when);
-	}
-	return when;
-}
+const MAX_QUERY = 300;
 
 const NO_CATEGORY_IN_RULES = 'Category rules cannot use category:.';
 const NO_ABOUT_IN_SECTIONS =
@@ -565,7 +549,7 @@ type Token =
 const OR_WORD = 'OR';
 const EVERYTHING: QueryExpr = { kind: 'match', when: {} };
 
-export function tokenize(query: string): Token[] {
+function tokenize(query: string): Token[] {
 	const out: Token[] = [];
 	let i = 0;
 	while (i < query.length) {
@@ -665,10 +649,6 @@ export function compileExpr(query: string): QueryExpr {
 	return expr;
 }
 
-export function isSimpleQuery(query: string): boolean {
-	return compileExpr(query).kind === 'match';
-}
-
 export function exprMatches(expr: QueryExpr, matchLeaf: (when: RuleMatch) => boolean): boolean {
 	switch (expr.kind) {
 		case 'match':
@@ -682,7 +662,7 @@ export function exprMatches(expr: QueryExpr, matchLeaf: (when: RuleMatch) => boo
 	}
 }
 
-export function leavesOf(expr: QueryExpr): RuleMatch[] {
+function leavesOf(expr: QueryExpr): RuleMatch[] {
 	switch (expr.kind) {
 		case 'match':
 			return [expr.when];
@@ -718,6 +698,7 @@ export const usesAbout = (expr: QueryExpr) => leavesOf(expr).some((w) => !!w.abo
 export const aboutTexts = (query: string) =>
 	leavesOf(compileExpr(query)).flatMap((when) => when.about ?? []);
 
+/** Write conditions as a query, in the order of WORDS (then is:, then the free words). */
 export function formatQuery(when: RuleMatch): string {
 	const parts: string[] = [];
 	for (const w of WORDS) {

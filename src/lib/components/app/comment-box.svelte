@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { acting, composer, sendAction, type ComposeIntent } from '$lib/gh-act.svelte';
@@ -23,7 +23,8 @@
 		type UserSuggestion
 	} from '$lib/shared/suggest';
 	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
-	import { draftKey, loadDraft, saveDraft } from '$lib/drafts';
+	import { loadDraft, saveDraft } from '$lib/drafts';
+	import { subjectKey } from '$lib/shared/subject';
 	import SuggestMenu from './suggest-menu.svelte';
 	import AttachButton from './attach-button.svelte';
 	import { DROP_TARGET_CLASS, Uploads } from '$lib/attachments.svelte';
@@ -47,14 +48,8 @@
 	};
 	const review = $derived(can('approve') || can('request_changes'));
 
-	const draft = $derived(draftKey(p.repo, p.number));
-	let text = $state('');
-	let loadedDraft = '';
-	$effect.pre(() => {
-		if (draft === loadedDraft) return;
-		loadedDraft = draft;
-		text = loadDraft(draft);
-	});
+	const draft = $derived(subjectKey(p.repo, p.number));
+	let text = $state(untrack(() => loadDraft(draft)));
 	$effect(() => saveDraft(draft, text));
 
 	let box = $state<HTMLTextAreaElement | null>(null);

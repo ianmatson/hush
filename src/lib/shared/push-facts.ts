@@ -8,7 +8,7 @@ import { DEFAULT_PUSH_FACTS, PUSH_FACTS, type PushFact } from './push-fact-list'
 
 export { DEFAULT_PUSH_FACTS, PUSH_FACTS, type PushFact };
 
-export const pushFactOk = (v: unknown): v is PushFact => PUSH_FACTS.some((f) => f.id === v);
+const pushFactOk = (v: unknown): v is PushFact => PUSH_FACTS.some((f) => f.id === v);
 
 export function validatePushFacts(v: unknown): string | null {
 	if (!Array.isArray(v)) return '"pushFacts" must be a list.';
@@ -104,12 +104,7 @@ export function itemPush(
 		markState(mark, before.updatedAt, before, me, now).kind === 'snoozed'
 	) {
 		if (!wanted.has('snooze-over')) return null;
-		const outcome = snoozeOutcome(
-			mark.snoozeEvent,
-			enrichmentOf(after, me),
-			mark.snoozedAt ?? 0,
-			me
-		);
+		const outcome = snoozeOutcome(mark.snoozeEvent, enrichmentOf(after), mark.snoozedAt ?? 0, me);
 		return {
 			reason: 'snooze-over',
 			title: outcome.wake ? `Snooze over: ${outcome.reason}` : 'Snooze over'

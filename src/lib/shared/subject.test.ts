@@ -3,15 +3,7 @@ import { itemQueryFacts } from './categories';
 import { finishItem } from './dashboard';
 import { groupItems } from './grouping';
 import { queryMatches } from './rules';
-import {
-	dashFactsOf,
-	enrichmentOf,
-	lastVerdictOf,
-	subjectKey,
-	subjectRuleFacts,
-	subjectUrls,
-	type SubjectFacts
-} from './subject';
+import { dashFactsOf, enrichmentOf, subjectRuleFacts, type SubjectFacts } from './subject';
 import type { LastComment } from './types';
 
 const ME = 'ian';
@@ -54,45 +46,20 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 	};
 }
 
-describe('subject keys', () => {
-	it('gives both URL forms of a key', () => {
-		expect(subjectUrls(subjectKey('o/r', 12))).toEqual([
-			'https://github.com/o/r/pull/12',
-			'https://github.com/o/r/issues/12'
-		]);
-	});
-});
-
 describe('views of one subject', () => {
-	it('the verdict skips you and the author, and counts only approvals and change requests', () => {
-		const s = pr({
-			verdicts: [
-				{ by: 'ian', at: T2, state: 'APPROVED' },
-				{ by: 'alice', at: T2, state: 'APPROVED' },
-				{ by: 'bob', at: T1, state: 'CHANGES_REQUESTED' },
-				{ by: 'carol', at: T2, state: 'COMMENTED' }
-			]
-		});
-		expect(lastVerdictOf(s, ME)).toEqual({ by: 'bob', at: T1 });
-	});
-
-	it('the facts keep your request, short team slugs, and your review', () => {
+	it('the facts keep review requests, assignees, and labels', () => {
 		const e = enrichmentOf(
 			pr({
 				reviewRequests: [
 					{ team: false, name: 'Ian' },
 					{ team: true, name: 'acme/website' }
 				],
-				myReview: { at: T1, state: 'COMMENTED' },
 				assignees: ['IAN']
-			}),
-			ME
+			})
 		);
 		expect(e).toMatchObject({
-			reviewRequestedFromMe: true,
-			requestedTeams: ['website'],
-			myReview: { at: T1, state: 'COMMENTED' },
-			assignedToMe: true,
+			reviewRequests: ['Ian', 'acme/website'],
+			assignees: ['IAN'],
 			labels: ['website']
 		});
 	});
@@ -116,12 +83,11 @@ describe('views of one subject', () => {
 
 	it('an issue keeps only issue facts', () => {
 		const e = enrichmentOf(
-			pr({ kind: 'issue', state: 'closed', url: 'https://github.com/o/r/issues/1' }),
-			ME
+			pr({ kind: 'issue', state: 'closed', url: 'https://github.com/o/r/issues/1' })
 		);
 		expect(e.state).toBe('closed');
 		expect(e).not.toHaveProperty('ci');
-		expect(e).not.toHaveProperty('reviewRequestedFromMe');
+		expect(e).not.toHaveProperty('reviewed');
 	});
 });
 
@@ -184,7 +150,7 @@ describe('review decision', () => {
 	it('comes from the verdicts when the repository does not require reviews', () => {
 		const approved = pr({ reviewDecision: null, verdicts: [verdict('bob', 'APPROVED')] });
 		expect(decisionOf(approved)).toBe('APPROVED');
-		expect(enrichmentOf(approved, ME).reviewDecision).toBe('APPROVED');
+		expect(enrichmentOf(approved).reviewDecision).toBe('APPROVED');
 		expect(
 			decisionOf(
 				pr({

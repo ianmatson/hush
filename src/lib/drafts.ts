@@ -7,8 +7,6 @@ const DRAFT_MAX_AGE_MS = 30 * DAY_MS;
 type Draft = { text: string; savedAt: number };
 type Drafts = Record<string, Draft>;
 
-export const draftKey = (repo: string, number: number) => `${repo}#${number}`;
-
 function readDrafts(): Drafts {
 	if (!browser) return {};
 	try {

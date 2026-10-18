@@ -4,7 +4,7 @@ export type AttachmentKind = 'image' | 'video';
 
 const MB = 1024 * 1024;
 
-export const ATTACHMENT_TYPES = {
+const ATTACHMENT_TYPES = {
 	'image/png': 'image',
 	'image/jpeg': 'image',
 	'image/gif': 'image',
@@ -22,7 +22,7 @@ export const MAX_ATTACHMENT_BYTES: Record<AttachmentKind, number> = {
 	video: 100 * MB
 };
 
-export const MAX_ATTACHMENT_NAME = 255;
+const MAX_ATTACHMENT_NAME = 255;
 
 export const ATTACHMENT_ACCEPT = Object.keys(ATTACHMENT_TYPES).join(',');
 

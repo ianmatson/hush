@@ -6,7 +6,7 @@ import { THEMES, type ThemeSwatch } from '$lib/themes/list';
  * of light and dark mode: each one has both. mode-watcher saves it per browser, like the mode;
  * app.html applies it before the first paint, so the page does not flash in the default colors.
  */
-export const DEFAULT_THEME = 'default';
+const DEFAULT_THEME = 'default';
 
 const DEFAULT: { id: string; label: string; light: ThemeSwatch; dark: ThemeSwatch } = {
 	id: DEFAULT_THEME,

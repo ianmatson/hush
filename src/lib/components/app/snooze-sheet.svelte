@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import type { SnoozeChoice } from '$lib/shared/item-snooze';
 	import { eventsFor, type SnoozeEvent } from '$lib/shared/snooze';
 	import { snoozeOptions } from '$lib/time';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
@@ -11,19 +12,17 @@
 		open = $bindable(false),
 		subjects,
 		disabled = [],
-		untilNewActivity = false,
 		onpick
 	}: {
 		open?: boolean;
 		subjects: ('pr' | 'issue' | 'other')[];
 		disabled?: SnoozeEvent[];
-		untilNewActivity?: boolean;
-		onpick: (body: { until?: number; event?: SnoozeEvent }) => void;
+		onpick: (choice: SnoozeChoice) => void;
 	} = $props();
 
 	const events = $derived(eventsFor(subjects));
-	const pick = (body: { until?: number; event?: SnoozeEvent }) => {
-		onpick(body);
+	const pick = (choice: SnoozeChoice) => {
+		onpick(choice);
 		open = false;
 	};
 </script>
@@ -31,13 +30,11 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-h-[calc(100dvh_-_2rem)] gap-3 overflow-y-auto sm:max-w-sm">
 		<Dialog.Header><Dialog.Title>Snooze</Dialog.Title></Dialog.Header>
-		{#if untilNewActivity}
-			<section class="grid gap-0.5 border-b pb-3">
-				<Button variant="ghost" class="h-10 justify-start" onclick={() => pick({})}
-					>Until new activity</Button
-				>
-			</section>
-		{/if}
+		<section class="grid gap-0.5 border-b pb-3">
+			<Button variant="ghost" class="h-10 justify-start" onclick={() => pick({})}
+				>Until new activity</Button
+			>
+		</section>
 		<section class="grid gap-0.5">
 			<h3 class="flex items-center gap-1.5 px-1 pb-1 text-xs text-muted-foreground">
 				<AlarmClock class="size-3.5" />Until a time

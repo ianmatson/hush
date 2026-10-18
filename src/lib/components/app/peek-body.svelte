@@ -86,13 +86,6 @@
 		editingId = null;
 		void tick().then(() => editTrigger?.focus());
 	}
-	// A new item starts with the passed checks folded.
-	$effect(() => {
-		void repo;
-		void number;
-		allChecks = false;
-		editingId = null;
-	});
 
 	const STATE = {
 		open: { label: 'Open', tone: 'bg-signal-merge/12 text-signal-merge' },

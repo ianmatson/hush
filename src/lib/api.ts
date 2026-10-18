@@ -73,7 +73,6 @@ export const api = {
 	}) => ok(client.api.actions.$post({ json: a })),
 	editComment: (id: string, body: string) =>
 		ok(client.api.comments.edit.$post({ json: { id, body } })),
-	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	suggest: (repo: string, kind: 'user' | 'ref', q: string, from: string) =>
 		ok(client.api.suggest.$get({ query: { repo, kind, q, from } })),
 	react: (id: string, content: ReactionContent, add: boolean) =>
@@ -85,6 +84,7 @@ export const api = {
 				{ headers: { 'Content-Type': 'application/octet-stream' }, init: { body: file } }
 			)
 		),
+	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */
 	orgs: () => ok(client.api.account.orgs.$get()),

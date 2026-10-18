@@ -1,6 +1,6 @@
 export const PULL_FILES_PER_PAGE = 100;
 export const PULL_FILES_MAX_PAGES = 30;
-export const LARGE_FILE_CHANGES = 400;
+const LARGE_FILE_CHANGES = 400;
 
 export type PullFileStatus =
 	'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged';
@@ -436,7 +436,7 @@ export interface ReviewThread {
 	totalComments: number;
 }
 
-export const threadAnchor = (side: 'LEFT' | 'RIGHT', line: number) => `${side}:${line}`;
+const threadAnchor = (side: 'LEFT' | 'RIGHT', line: number) => `${side}:${line}`;
 
 export const threadElementId = (threadId: string) => `thread-${threadId}`;
 

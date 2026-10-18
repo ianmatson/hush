@@ -12,7 +12,6 @@ import {
 	graphqlWriteFailure,
 	listNotifications,
 	needsDetails,
-	parseSsoHeader,
 	peekEntryFromRest,
 	rateLimitRetryAt,
 	refusal,
@@ -611,17 +610,6 @@ describe('peekEntryFromRest', () => {
 			html: ''
 		});
 		expect(entry.at).toBe('2026-10-07T11:00:00Z');
-	});
-});
-
-describe('parseSsoHeader', () => {
-	it('reads the org ids GitHub left out', () => {
-		expect(parseSsoHeader('partial-results; organizations=21955855,20582480')).toEqual([
-			'21955855',
-			'20582480'
-		]);
-		expect(parseSsoHeader(null)).toEqual([]);
-		expect(parseSsoHeader('required; url=https://github.com/orgs/x/sso')).toEqual([]);
 	});
 });
 

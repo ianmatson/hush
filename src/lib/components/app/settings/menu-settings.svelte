@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
+	import type { Component, Snippet } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
@@ -8,7 +8,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Command from '$lib/components/ui/command';
-	import SortableList from '$lib/components/app/sortable-list.svelte';
+	import ReorderList from '$lib/components/app/reorder-list.svelte';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
@@ -134,6 +135,31 @@
 	{/if}
 {/snippet}
 
+{#snippet menuLine(row: Row, handle: Snippet, index: number | null)}
+	<div
+		class="flex min-w-0 cursor-grab items-center gap-2 px-1.5 py-1 text-sm active:cursor-grabbing"
+	>
+		{@render handle()}
+		<div class="flex min-w-0 flex-1 items-center gap-2">{@render menuRow(row)}</div>
+		<span class="flex shrink-0 items-center" data-no-drag>
+			{#if index !== null}
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Remove from the menu"
+					onclick={() => remove(index)}><X /></Button
+				>
+			{/if}
+		</span>
+	</div>
+{/snippet}
+
+{#snippet ghostHandle()}
+	<span class="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/60"
+		><GripVertical class="size-4" /></span
+	>
+{/snippet}
+
 <div class="grid gap-6">
 	<div>
 		<h2 class="text-base font-semibold tracking-tight">Menus</h2>
@@ -154,22 +180,19 @@
 					>
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-4">
-					<SortableList
+					<ReorderList
 						items={rows}
+						key={(r) => r.key}
 						onchange={set}
 						label="Menu items in order"
 						empty="The menu is empty."
+						flyInNewRows
+						class="gap-0.5"
+						rowClass="rounded-lg bg-card"
 					>
-						{#snippet row(r)}{@render menuRow(r)}{/snippet}
-						{#snippet actions(_, k)}
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Remove from the menu"
-								onclick={() => remove(k)}><X /></Button
-							>
-						{/snippet}
-					</SortableList>
+						{#snippet row(r, k, handle)}{@render menuLine(r, handle, k)}{/snippet}
+						{#snippet ghost(r)}{@render menuLine(r, ghostHandle, null)}{/snippet}
+					</ReorderList>
 
 					<div class="border-t pt-4">
 						<Button variant="outline" size="sm" onclick={() => (adding = true)}

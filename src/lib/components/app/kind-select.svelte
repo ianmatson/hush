@@ -2,7 +2,6 @@
 	import type { DashKind } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import Check from '@lucide/svelte/icons/check';
 	import CircleDot from '@lucide/svelte/icons/circle-dot';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
 	import Layers from '@lucide/svelte/icons/layers';

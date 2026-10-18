@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { queryMatches } from './rules';
-import {
-	aboutTexts,
-	compileExpr,
-	isSimpleQuery,
-	parseExpr,
-	queryError,
-	numberMatches
-} from './query';
+import { aboutTexts, compileExpr, parseExpr, queryError, numberMatches } from './query';
 import type { Enrichment, RuleFacts } from './types';
 
 const ME = 'ian';
@@ -36,9 +29,9 @@ const matches = (query: string, t: RuleFacts) => queryMatches(query, t);
 
 describe('parseExpr', () => {
 	it('keeps a plain query as one simple condition', () => {
-		expect(isSimpleQuery('repo:acme/* label:bug login')).toBe(true);
-		expect(isSimpleQuery('')).toBe(true);
-		expect(isSimpleQuery('-author:bots -is:draft')).toBe(true);
+		expect(compileExpr('repo:acme/* label:bug login').kind).toBe('match');
+		expect(compileExpr('').kind).toBe('match');
+		expect(compileExpr('-author:bots -is:draft').kind).toBe('match');
 	});
 	it('builds OR, groups, and NOT', () => {
 		expect(compileExpr('label:bug OR label:crash').kind).toBe('or');

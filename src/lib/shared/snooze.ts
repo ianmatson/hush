@@ -48,7 +48,7 @@ export function eventHappened(
 	since: number,
 	me: string
 ): boolean {
-	if (!e || e.kind === 'other') return false;
+	if (!e) return false;
 	switch (event) {
 		case 'ci_pass':
 			return ciPassing(e.ci);

@@ -13,7 +13,7 @@ import { MINUTE_MS } from '$lib/shared/durations';
 import { pullFilePageCount } from '$lib/shared/diff';
 import { api, ApiError } from '$lib/api';
 import { withUnsavedSettings } from '$lib/unsaved-settings';
-import type { DashKind, MeDTO, PeekDTO, Settings } from '$lib/shared/types';
+import type { DashKind, MeDTO, Settings } from '$lib/shared/types';
 
 export const queryClient = new QueryClient({
 	// Any "not signed in" answer ends the session in this tab, once.
@@ -49,12 +49,13 @@ const MEMORY_ONLY_KEYS = new Set([
 
 const TYPED_QUERY_FRESH_MS = 5 * MINUTE_MS;
 const TYPED_QUERY_GC_MS = 5 * MINUTE_MS;
+const QUERY_CACHE_KEY = 'hush:query-cache';
 
 /** Cache in localStorage so a reload shows the last data at once, then revalidates. */
 export const persistOptions = {
 	persister: createSyncStoragePersister({
 		storage: browser ? window.localStorage : undefined,
-		key: 'hush:query-cache',
+		key: QUERY_CACHE_KEY,
 		throttleTime: 1000
 	}),
 	maxAge: 24 * 60 * MINUTE_MS,
@@ -192,10 +193,10 @@ export function updateCachedSettings(change: (settings: Settings) => Settings) {
 }
 
 /** Forget everything, e.g. on sign-out. */
-export function clearCache() {
+function clearCache() {
 	queryClient.clear();
 	if (!browser) return;
-	localStorage.removeItem('hush:query-cache');
+	localStorage.removeItem(QUERY_CACHE_KEY);
 	localStorage.removeItem(DRAFTS_KEY);
 }
 

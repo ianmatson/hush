@@ -11,8 +11,8 @@
 	import { cn } from '$lib/utils';
 	import { groupByOk, type GroupByOption } from '$lib/shared/grouping';
 	import { KEEP_CLOSED_HOURS } from '$lib/shared/closed-items';
-	import { SORT_BY, SORT_BY_ORDER, isDefaultSort, sortWithBy } from '$lib/shared/sorting';
-	import type { GroupBy, ViewSort, ViewSortBy, ViewSortDir } from '$lib/shared/types';
+	import { SORT_BY, SORT_BY_ORDER, isDefaultSort, isSortBy, sortWithBy } from '$lib/shared/sorting';
+	import type { GroupBy, ViewSort, ViewSortDir } from '$lib/shared/types';
 
 	let {
 		groupBy,
@@ -42,7 +42,6 @@
 		closedLabel: string;
 	} = $props();
 
-	const isSortBy = (v: string): v is ViewSortBy => v in SORT_BY;
 	const startsNewKind = (k: number) =>
 		k > 0 && groupByChoices[k].kind !== groupByChoices[k - 1].kind;
 	const summary = $derived(

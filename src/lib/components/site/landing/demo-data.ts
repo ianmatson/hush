@@ -80,7 +80,7 @@ export interface DemoLabel {
 	color: string;
 }
 
-export const DEMO_REPO = 'PostHog/posthog.com';
+const DEMO_REPO = 'PostHog/posthog.com';
 const REPO_URL = `https://github.com/${DEMO_REPO}`;
 const pull = (n: number, tab = '') => `${REPO_URL}/pull/${n}${tab}`;
 const issue = (n: number) => `${REPO_URL}/issues/${n}`;
@@ -471,7 +471,7 @@ export const GROUP_BY_CHOICES: { id: DemoGroupBy; label: string }[] = [
 const SMALL_LINES = 100;
 const linesOf = (item: DemoDashItem) => (item.diff ? item.diff.additions + item.diff.deletions : 0);
 
-export const CUSTOM_SECTIONS: {
+const CUSTOM_SECTIONS: {
 	name: string;
 	rule: string;
 	matches: (i: DemoDashItem) => boolean;

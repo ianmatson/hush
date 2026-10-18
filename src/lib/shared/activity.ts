@@ -35,7 +35,7 @@ export function replyFromOthers(
 	return reply && !sameLogin(reply.author, me) && isAfter(reply.createdAt, since) ? reply : null;
 }
 
-export const reviewByBot = (r: LatestReview) => r.authorIsBot ?? isBot(r.author);
+const reviewByBot = (r: LatestReview) => r.authorIsBot ?? isBot(r.author);
 
 export function reviewFromOthers(
 	r: LatestReview | null | undefined,
@@ -68,12 +68,4 @@ export function latestActivity(
 		});
 	if (e.lastCommitAt) found.push({ by: null, bot: false, what: 'pushed', at: e.lastCommitAt });
 	return found.sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
-}
-
-/** "@alice commented on your PR", "New commits on this PR", "You approved this PR". */
-export function activityText(a: Activity, me: string, subject: string): string {
-	if (a.what === 'pushed') return `New commits on ${subject}`;
-	const who = sameLogin(a.by, me) ? 'You' : `@${a.by}`;
-	if (a.what === 'commented') return `${who} commented on ${subject}`;
-	return `${who} ${a.what} ${subject}`;
 }

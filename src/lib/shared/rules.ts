@@ -6,7 +6,7 @@ import { compileExpr, dateMatches, exprMatches, ME, numberMatches } from './quer
 import { conditionId } from './decisions';
 
 /** Convert a simple glob (only `*` and `?`) to a case-insensitive regex. */
-export function globToRegExp(glob: string): RegExp {
+function globToRegExp(glob: string): RegExp {
 	const src = glob
 		.split('')
 		.map((c) => (c === '*' ? '.*' : c === '?' ? '.' : c.replace(/[.+^${}()|[\]\\/]/g, '\\$&')))
@@ -75,12 +75,12 @@ export function ruleMatches(m: RuleMatch, t: RuleFacts): boolean {
 	if (m.type && !m.type.includes(t.subjectType)) return false;
 	if (!loginOrBotMatches(e?.author, !!e?.authorIsBot, withMe(m.author, t.me), m.bot)) return false;
 	if (m.assignee !== undefined) {
-		const assignees = e?.assignees ?? (e?.assignedToMe ? [t.me] : []);
+		const assignees = e?.assignees ?? [];
 		const wanted = withMe(m.assignee, t.me);
 		if (!assignees.some((a) => matchGlobs(a, wanted))) return false;
 	}
 	if (m.reviewRequested?.length) {
-		const requested = e?.reviewRequests ?? (e?.reviewRequestedFromMe ? [t.me] : []);
+		const requested = e?.reviewRequests ?? [];
 		const wanted = withMe(m.reviewRequested, t.me);
 		if (!requested.some((r) => matchGlobs(r, wanted))) return false;
 	}

@@ -39,9 +39,9 @@ export const TABLE_COLUMNS: TableColumnInfo[] = [
 ];
 
 export const TABLE_AVATAR_REM = 1.25;
-export const TABLE_GAP_REM = 0.5;
-export const TABLE_PADDING_REM = 1;
-export const TABLE_MIN_TITLE_REM = 10;
+const TABLE_GAP_REM = 0.5;
+const TABLE_PADDING_REM = 1;
+const TABLE_MIN_TITLE_REM = 10;
 
 export const tableRowMinRem = (columns: TableColumnInfo[]) =>
 	TABLE_PADDING_REM +

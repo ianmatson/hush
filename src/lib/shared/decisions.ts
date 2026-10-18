@@ -5,13 +5,13 @@ import type { SubjectFacts } from './subject';
 import type { LastComment } from './types';
 
 export const YES_AT = 0.8;
-export const NO_AT = 0.2;
-export const URGENT_SCORE = 1.5;
+const NO_AT = 0.2;
+const URGENT_SCORE = 1.5;
 export const BODY_EXCERPT_CHARS = 500;
 export const MAX_SMART_CONDITIONS = 30;
-export const CHARS_PER_TOKEN = 4;
+const CHARS_PER_TOKEN = 4;
 
-export const URGENCY_LEVELS = [
+const URGENCY_LEVELS = [
 	'Routine: no time pressure',
 	'Soon: someone waits on it, or it should be done this week',
 	'Blocking: it blocks a release, other work, or users, or it is about an incident or an outage'
@@ -145,7 +145,7 @@ function rolesOf(s: SubjectFacts, me: string): string[] {
 	return roles;
 }
 
-export function decisionState(s: SubjectFacts, me: string): DecisionState {
+function decisionState(s: SubjectFacts, me: string): DecisionState {
 	return {
 		title: s.title,
 		repo: s.repo,

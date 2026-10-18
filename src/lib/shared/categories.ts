@@ -17,7 +17,7 @@ export const MAX_CATEGORY_GROUPS = 10;
 export const MAX_CATEGORIES = 20;
 export const MAX_DESCRIPTION_CHARS = 200;
 export const MAX_MARK_NAME_CHARS = 40;
-export const MIN_JEV_OPTIONS = 2;
+const MIN_JEV_OPTIONS = 2;
 
 export const MARK_COLORS: MarkColor[] = [
 	'gray',
@@ -110,9 +110,6 @@ export const allCategories = (groups: CategoryGroup[]) => groups.flatMap((g) => 
 export const categoryQueryName = (group: CategoryGroup, category: ItemCategory) =>
 	`${group.name}${CATEGORY_SEPARATOR}${category.name}`;
 
-export const groupOf = (groups: CategoryGroup[], categoryId: string) =>
-	groups.find((g) => g.categories.some((c) => c.id === categoryId));
-
 export function groupChoice(g: CategoryGroup): DecisionChoice | null {
 	const described = g.categories.filter((c) => c.description.trim());
 	if (described.length < MIN_JEV_OPTIONS) return null;
@@ -125,7 +122,7 @@ export const groupChoices = (groups: CategoryGroup[]) =>
 
 const usableRules = new Map<string, boolean>();
 
-export function ruleUsable(rule: string): boolean {
+function ruleUsable(rule: string): boolean {
 	let ok = usableRules.get(rule);
 	if (ok === undefined) {
 		ok = !!rule.trim() && !queryError(rule);

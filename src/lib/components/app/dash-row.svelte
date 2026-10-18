@@ -65,7 +65,6 @@
 		oncopy: (i: DashItem) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
-		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
 		menu?: () => MenuEntry[];
 		stack?: { position: number; size: number };
 	} = $props();

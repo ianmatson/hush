@@ -37,8 +37,7 @@ const key = (id: string) => keysOf(id)[0];
 
 export const VIEW_KEY_SCOPES: KeyScope[] = ['list', 'item', 'dash'];
 
-export const anyUnread = (ctx: ItemActionContext, ids: string[]) =>
-	ids.some((id) => ctx.byId(id)?.unread);
+const anyUnread = (ctx: ItemActionContext, ids: string[]) => ids.some((id) => ctx.byId(id)?.unread);
 
 const itemsOf = (ctx: ItemActionContext, ids: string[]) => ids.flatMap((id) => ctx.byId(id) ?? []);
 
@@ -325,7 +324,6 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					key: id,
 					label: n('Snooze'),
 					icon: AlarmClock,
-					untilNewActivity: true,
 					subjects: selected.map((i) => i?.kind ?? 'other'),
 					disabled: ids.length === 1 && one ? alreadyTrue(one) : [],
 					onpick: (choice) => ctx.snooze(ids, choice),

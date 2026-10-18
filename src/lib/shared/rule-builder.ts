@@ -39,8 +39,8 @@ export interface BuilderState {
 	items: (BuilderCondition | BuilderGroup)[];
 }
 
-export const TEXT_WORD = 'text';
-export const IS_WORD = 'is';
+const TEXT_WORD = 'text';
+const IS_WORD = 'is';
 
 export type FieldInput = 'list' | 'choice' | 'size' | 'about' | 'text';
 
@@ -171,7 +171,7 @@ const TEXT_FIELD: BuilderField = {
 const WORD_FIELDS = WORDS.map(wordField);
 const typeFieldIndex = WORD_FIELDS.findIndex((f) => f.word === 'type');
 
-export const BUILDER_FIELDS: BuilderField[] = [
+const BUILDER_FIELDS: BuilderField[] = [
 	...WORD_FIELDS.slice(0, typeFieldIndex),
 	IS_FIELD,
 	...WORD_FIELDS.slice(typeFieldIndex).filter((f) => f.runs === 'both'),
@@ -279,7 +279,7 @@ function searchToBuilder(search: string): BuilderState | null {
 }
 
 export function queryToBuilder(query: string, place: QueryPlace = 'rule'): BuilderState | null {
-	if (!query.trim()) return { mode: 'all', items: [] };
+	if (!query.trim()) return EMPTY_BUILDER;
 	if (place === 'search') return searchToBuilder(query);
 	const { expr, errors } = parseExpr(query);
 	if (errors.length) return null;
@@ -346,7 +346,7 @@ function dateWords(spec: string): string {
 	return `${parsed.op ? DATE_COMPARISON_WORDS[parsed.op] : 'on'} ${dayWords(parsed.value)}`;
 }
 
-export function describeCondition(c: BuilderCondition): string {
+function describeCondition(c: BuilderCondition): string {
 	const field = builderField(c.word);
 	const values = c.values.filter((v) => v.trim());
 	if (!values.length) return '';

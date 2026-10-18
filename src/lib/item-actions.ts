@@ -24,7 +24,7 @@ const refetchDash = (items: DashItem[]) => refetchUnlessLive(...dashKeysOf(items
 
 export const willMute = (items: Pick<DashItem, 'muted'>[]) => !items.every((i) => i.muted);
 
-export function dashItemsOf(ids: string[]): DashItem[] {
+function dashItemsOf(ids: string[]): DashItem[] {
 	const cached = DASH_KINDS.flatMap(
 		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.items ?? []
 	);
@@ -32,7 +32,7 @@ export function dashItemsOf(ids: string[]): DashItem[] {
 	return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-export function patchDashItems(ids: Set<string>, patch: (x: DashItem) => DashItem) {
+function patchDashItems(ids: Set<string>, patch: (x: DashItem) => DashItem) {
 	for (const kind of DASH_KINDS)
 		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
 			old?.items.some((x) => ids.has(x.id))

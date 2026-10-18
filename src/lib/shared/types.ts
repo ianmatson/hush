@@ -30,21 +30,17 @@ export interface LatestReview {
 	state: string;
 }
 
+export type Mergeable = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+
 /** Extra facts about a thread's subject, fetched from GraphQL. */
 export interface Enrichment {
-	kind: 'pr' | 'issue' | 'other';
-	number?: number;
-	url?: string;
+	kind: DashKind;
 	state?: 'open' | 'closed' | 'merged';
 	draft?: boolean;
 	author?: string;
 	authorIsBot?: boolean;
 	reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
-	mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
 	ci?: CiState | null;
-	reviewRequestedFromMe?: boolean;
-	requestedTeams?: string[];
-	assignedToMe?: boolean;
 	labels?: string[];
 	additions?: number;
 	deletions?: number;
@@ -53,17 +49,9 @@ export interface Enrichment {
 	lastCommitAt?: string | null;
 	/** PRs: the newest review. */
 	latestReview?: LatestReview | null;
-	/** PRs: your own newest review. */
-	myReview?: { at: string; state: string } | null;
-	/** PRs: review threads nobody resolved yet (up to 50). */
-	openThreads?: number;
-	/** PRs: the newest approval or change request by someone who is not you or the author. */
-	lastVerdict?: { by: string; at: string } | null;
 	previousComment?: LastComment | null;
 	assignees?: string[];
 	reviewRequests?: string[];
-	commentsNeedMe?: boolean | null;
-	urgent?: boolean;
 	smart?: string[];
 	jevChoices?: Record<string, string>;
 	createdAt?: string;
@@ -294,7 +282,7 @@ export interface DashItem {
 	// Pull requests only.
 	ci: CiState | null;
 	reviewDecision: Enrichment['reviewDecision'];
-	mergeable: Enrichment['mergeable'] | null;
+	mergeable: Mergeable | null;
 	additions: number;
 	deletions: number;
 	requestedMe: boolean;
@@ -415,10 +403,6 @@ export interface MeDTO {
 	smartDecisionsChecking: boolean;
 }
 
-/**
- * The orgs your GitHub sign-in can see. GitHub leaves out, with no error or count, every org that
- * has not approved Hush; so Hush cannot tell which orgs are missing, only show what it sees.
- */
 export interface SlackStatusDTO {
 	available: boolean;
 	connection: { teamName: string; connectedAt: number } | null;
@@ -439,6 +423,10 @@ export interface SlackMentionsPageDTO {
 	nextCursor: string | null;
 }
 
+/**
+ * The orgs your GitHub sign-in can see. GitHub leaves out, with no error or count, every org that
+ * has not approved Hush; so Hush cannot tell which orgs are missing, only show what it sees.
+ */
 export type OrgAccess =
 	{ available: false } | { available: true; orgs: string[]; approveUrl: string };
 

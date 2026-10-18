@@ -39,11 +39,13 @@ export const DOT_COLORS: Record<DotColor, string> = {
 	green: '#22c55e'
 };
 
-const KEY = 'hush:tab-status';
+export const TAB_STATUS_KEY = 'hush:tab-status';
 
 export function loadPrefs(): TabStatusPrefs {
 	try {
-		const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<TabStatusPrefs> & {
+		const raw = JSON.parse(
+			localStorage.getItem(TAB_STATUS_KEY) ?? '{}'
+		) as Partial<TabStatusPrefs> & {
 			v?: number;
 		};
 		const prefs: TabStatusPrefs = {
@@ -60,9 +62,9 @@ export function loadPrefs(): TabStatusPrefs {
 }
 
 export function savePrefs(p: TabStatusPrefs) {
-	localStorage.setItem(KEY, JSON.stringify({ ...p, v: PREFS_VERSION }));
+	localStorage.setItem(TAB_STATUS_KEY, JSON.stringify({ ...p, v: PREFS_VERSION }));
 	// Let the live component in this tab pick up the change.
-	window.dispatchEvent(new CustomEvent('hush:tab-status'));
+	window.dispatchEvent(new CustomEvent(TAB_STATUS_KEY));
 }
 
 export const total = (counts: Counts, sources: CountSource[]) =>

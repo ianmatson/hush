@@ -69,7 +69,7 @@ export async function boardShort(
 	hits: SearchHit[];
 	errors: string[];
 	failedSections: Set<string>;
-	failedQueries?: ExpandedQuery[];
+	failedQueries: ExpandedQuery[];
 }> {
 	const hits: SearchHit[] = [];
 	const errors: string[] = [];
@@ -98,7 +98,6 @@ export async function boardShort(
 				if (!definitive) failedQueries.push(query);
 			}
 			if (!project) {
-				failedSections.add(query.section);
 				if (!answer.errors.length) errors.push(notFound(board));
 				return;
 			}

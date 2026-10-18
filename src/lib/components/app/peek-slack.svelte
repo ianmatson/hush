@@ -44,12 +44,6 @@
 	let scroller = $state<HTMLElement | null>(null);
 	let sentinel = $state<HTMLElement | null>(null);
 
-	$effect(() => {
-		void repo;
-		void number;
-		open = false;
-	});
-
 	function sentinelNearEnd() {
 		if (!scroller || !sentinel) return false;
 		const end = scroller.getBoundingClientRect().bottom + LOAD_AHEAD_PX;

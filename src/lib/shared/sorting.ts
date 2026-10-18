@@ -92,7 +92,7 @@ export const reversedSort = (s: ViewSort): ViewSort => ({
 	dir: s.dir === 'asc' ? 'desc' : 'asc'
 });
 
-const isSortBy = (v: unknown): v is ViewSortBy => typeof v === 'string' && v in SORT_BY;
+export const isSortBy = (v: unknown): v is ViewSortBy => typeof v === 'string' && v in SORT_BY;
 
 export function viewSortError(v: unknown): string | null {
 	if (typeof v !== 'object' || v === null) return '"sort" must be an object.';
