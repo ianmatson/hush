@@ -63,7 +63,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { QueryPlace } from '$lib/shared/query';
+	import { queryError, type QueryPlace } from '$lib/shared/query';
 	import {
 		builderToQuery,
 		fieldsFor,
@@ -141,6 +141,9 @@
 	}
 
 	const canShowVisually = $derived(queryToBuilder(value, place) !== null);
+	const tooNestedForBuilder = $derived(
+		!canShowVisually && !!value.trim() && queryError(value, place) === null
+	);
 	const summary = $derived.by(() => {
 		const text = describeBuilder(builder);
 		return emptyText && text === MATCHES_EVERYTHING ? emptyText : text;
@@ -263,7 +266,7 @@
 
 	{#if textMode}
 		<QueryInput bind:value {id} {place} label="Query" />
-		{#if !canShowVisually && value.trim()}
+		{#if tooNestedForBuilder}
 			<p class="text-xs text-muted-foreground">
 				The visual builder shows one level of groups. This query stays in text.
 			</p>

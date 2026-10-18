@@ -67,6 +67,11 @@ describe('splitSearch', () => {
 	it('checks the Hush words', () => {
 		expect(splitSearch('size:big').errors[0]).toMatch(/size:big/);
 	});
+	it('refuses an is: value that GitHub does not know, instead of finding nothing', () => {
+		expect(splitSearch('repo:acme/web is:banana').errors[0]).toMatch(/Unknown “is:banana”/);
+		expect(splitSearch('is:pr,banana').errors[0]).toMatch(/Unknown “is:banana”/);
+		expect(splitSearch('is:unmerged -is:draft is:Open').errors).toEqual([]);
+	});
 });
 
 describe('dates', () => {
