@@ -16,6 +16,8 @@
 	import Settings from '@lucide/svelte/icons/settings';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
+	import { MediaQuery } from 'svelte/reactivity';
 	import BookOpen from '@lucide/svelte/icons/book-open';
 	import { SITE_URL } from '$lib/site';
 	import Search from '@lucide/svelte/icons/search';
@@ -26,6 +28,7 @@
 	import Tip from './tip.svelte';
 
 	const me = createQuery(meQuery);
+	const touchOnly = new MediaQuery('pointer: coarse');
 	const prs = createQuery(() => dashQuery('pr'));
 	const issues = createQuery(() => dashQuery('issue'));
 	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
@@ -235,6 +238,13 @@
 						<DropdownMenu.Item onclick={() => goto('/settings')}
 							><Settings /> Settings</DropdownMenu.Item
 						>
+						{#if !touchOnly.current}
+							<DropdownMenu.Item onclick={() => goto('/settings/keys')}
+								><Keyboard /> Keyboard shortcuts<DropdownMenu.Shortcut
+									>{keysOf('list.help')[0] ?? ''}</DropdownMenu.Shortcut
+								></DropdownMenu.Item
+							>
+						{/if}
 						<DropdownMenu.Item>
 							{#snippet child({ props })}
 								<a {...props} href="{SITE_URL}/docs" target="_blank" rel="noreferrer"

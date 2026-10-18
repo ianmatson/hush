@@ -38,6 +38,8 @@
 	import GhActions from '$lib/components/app/gh-actions.svelte';
 	import PullFiles from '$lib/components/app/pull-files.svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
+	import SnoozeButton from '$lib/components/app/snooze-button.svelte';
+	import { alreadyTrue } from '$lib/shared/snooze';
 	import { cn } from '$lib/utils';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -290,6 +292,17 @@
 			</nav>
 		{/if}
 		<span class="mx-1 h-5 w-px bg-border"></span>
+		{#if dashItem}
+			{@const i = dashItem}
+			<SnoozeButton
+				snoozed={!!i.dismissed}
+				subjects={[i.kind]}
+				disabled={alreadyTrue(i)}
+				labelClass="hidden sm:inline"
+				onpick={(choice) => itemActions.snooze([i.id], choice)}
+				onwake={() => itemActions.unsnooze([i.id])}
+			/>
+		{/if}
 		<GhActions {repo} {number} need={null} />
 		<Button
 			variant="ghost"

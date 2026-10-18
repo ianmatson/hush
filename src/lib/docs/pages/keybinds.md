@@ -3,7 +3,7 @@ title: Keybinds
 description: Every keyboard shortcut, the command palette, and how to change any key.
 ---
 
-Hush works from the keyboard. Press {{key:list.help}} on any list or full page to see the shortcuts that work there, with your keys.
+Hush works from the keyboard. Press {{key:list.help}} on any list or full page to see the shortcuts that work there, with your keys. **Keyboard shortcuts** in the account menu opens all of them, in Settings → Keybinds.
 
 ## Search and commands
 

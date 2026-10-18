@@ -8,11 +8,13 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-sm">
+	<Dialog.Content class="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] sm:max-w-sm">
 		<Dialog.Header>
 			<Dialog.Title>Keyboard shortcuts</Dialog.Title>
 		</Dialog.Header>
-		<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+		<dl
+			class="-mr-4 grid min-h-0 grid-cols-[auto_1fr] gap-x-4 gap-y-2 overflow-y-auto pr-4 text-sm"
+		>
 			{#each shortcuts as [k, d] (k)}
 				<dt><Kbd>{k}</Kbd></dt>
 				<dd class="text-muted-foreground">{d}</dd>

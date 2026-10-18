@@ -101,15 +101,23 @@
 		{/if}
 		{#if shown}
 			{@const url = shown.url}
-			<Button
-				variant="ghost"
-				{size}
-				href={url}
-				onclick={() => noteOpened(url)}
-				target="_blank"
-				rel="noreferrer"
-				aria-label="Open on GitHub"><ExternalLink /></Button
-			>
+			<Tip text="Open on GitHub ({keysOf('list.openGitHub')[0] ?? ''})">
+				{#snippet children(props)}
+					<Button
+						{...props}
+						variant="ghost"
+						{size}
+						href={url}
+						onclick={(e: MouseEvent) => {
+							(props.onclick as ((e: MouseEvent) => void) | undefined)?.(e);
+							noteOpened(url);
+						}}
+						target="_blank"
+						rel="noreferrer"
+						aria-label="Open on GitHub"><ExternalLink /></Button
+					>
+				{/snippet}
+			</Tip>
 		{/if}
 	{/snippet}
 	{#if shown}

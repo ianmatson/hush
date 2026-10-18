@@ -79,6 +79,8 @@
 		clearSentDraft(sentKey, sent);
 		composer.intent = 'comment';
 		if (draft === sentKey && text === sent) text = '';
+		const nothingLeftToWrite = !text && document.activeElement === box;
+		if (nothingLeftToWrite) box?.blur();
 	}
 
 	// --- "@" and "#" suggestions, as on GitHub (shared/suggest.ts) ---------------------------
