@@ -86,11 +86,7 @@
 					],
 					url: i.url,
 					where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${i.state === 'open' ? turn[i.turn] : i.turnReason}`,
-					run: () =>
-						peek(
-							{ page: 'view', view: home.id, kind: i.kind, id: i.id },
-							`/v/${home.id}?show=${i.kind}`
-						)
+					run: () => peek({ page: 'view', view: home.id, kind: i.kind, id: i.id }, `/v/${home.id}`)
 				}))
 		);
 	});

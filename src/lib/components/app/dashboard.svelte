@@ -73,7 +73,6 @@
 		ViewSort
 	} from '$lib/shared/types';
 	import { viewKinds } from '$lib/shared/item-views';
-	import { page } from '$app/state';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import {
@@ -129,15 +128,10 @@
 	const showingKey = (id: string) => `hush:view-kind:${id}`;
 	function readShowing(v: ItemView): Showing {
 		const options = showingOptions(v);
-		const asked = page.url.searchParams.get('show') ?? localStorage.getItem(showingKey(v.id));
+		const asked = localStorage.getItem(showingKey(v.id));
 		return options.find((k) => k === asked) ?? options[0] ?? 'pr';
 	}
 	let showing = $state<Showing>(readShowing(untrack(() => view)));
-	const showParam = $derived(page.url.searchParams.get('show'));
-	$effect(() => {
-		void showParam;
-		untrack(() => (showing = readShowing(view)));
-	});
 	function show(next: Showing) {
 		showing = next;
 		localStorage.setItem(showingKey(view.id), next);
