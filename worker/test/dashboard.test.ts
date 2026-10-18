@@ -7,7 +7,10 @@ import type { DashItem, DashResponse } from '../../src/lib/shared/types';
 import type { Who } from '../poller/shared';
 import { subjectFixture } from './subject-fixtures';
 
-vi.mock('../poller/sync', () => ({ PollerSync: class {} }));
+vi.mock('../poller/base', () => ({ PollerBase: class {} }));
+vi.mock('../poller/sync', async () => ({
+	PollerSync: (await import('../poller/alerts')).PollerAlerts
+}));
 vi.mock('../github', async (importOriginal) => ({
 	...(await importOriginal<typeof import('../github')>()),
 	fetchDetails: vi.fn(),
@@ -30,6 +33,9 @@ class TestDashboard extends PollerDashboard {
 	}
 	rebuildAfter(changedAt: number) {
 		return this.rebuildTracked('pr', changedAt);
+	}
+	queued<T>(work: () => Promise<T>) {
+		return this.exclusive(work);
 	}
 }
 
@@ -79,8 +85,11 @@ function harness() {
 	const trackedBuild = vi.fn();
 	const poller = Object.assign(Object.create(TestDashboard.prototype) as TestDashboard, {
 		dashBuilds: new Map(),
+		dashRefreshing: new Map(),
+		dashRetryAt: new Map(),
 		broadcast: vi.fn(),
 		ctx: {
+			waitUntil: () => {},
 			storage: {
 				get: vi.fn(async (key: string | string[]) =>
 					Array.isArray(key)
@@ -337,5 +346,81 @@ describe('one dashboard build at a time', () => {
 		await afterBoardChange;
 		expect(searchShort).toHaveBeenCalledTimes(2);
 		expect(searches.mostAtOnce).toBe(1);
+	});
+});
+
+describe('dashboard builds share the poll queue', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(boardShort).mockResolvedValue(NOTHING_FOUND);
+		vi.mocked(searchShort).mockResolvedValue(NOTHING_FOUND);
+		vi.mocked(itemStatuses).mockResolvedValue({ projects: [], statusOf: new Map(), errors: [] });
+	});
+
+	function holdQueue(poller: TestDashboard) {
+		let release!: () => void;
+		const held = poller.queued(() => new Promise<void>((done) => (release = done)));
+		return { held, release: () => release() };
+	}
+
+	const settle = () => new Promise((done) => setTimeout(done, 5));
+
+	it('starts a Refresh build only after the running cycle or recheck ends', async () => {
+		const { poller } = harness();
+		const queue = holdQueue(poller);
+		const refresh = poller.dashboard('pr', true);
+		await settle();
+		expect(searchShort).not.toHaveBeenCalled();
+		queue.release();
+		await queue.held;
+		await refresh;
+		expect(searchShort).toHaveBeenCalled();
+	});
+
+	it('runs a recheck queued during a Refresh build after that build writes its cache', async () => {
+		const { poller } = harness();
+		let answer!: () => void;
+		vi.mocked(searchShort).mockImplementationOnce(
+			() => new Promise((resolve) => (answer = () => resolve(NOTHING_FOUND)))
+		);
+		const refresh = poller.dashboard('pr', true);
+		await vi.waitFor(() => expect(searchShort).toHaveBeenCalled());
+		const recheck = vi.fn(async () => {});
+		const queuedRecheck = poller.queued(recheck);
+		await settle();
+		expect(recheck).not.toHaveBeenCalled();
+		answer();
+		await Promise.all([refresh, queuedRecheck]);
+		expect(recheck).toHaveBeenCalled();
+	});
+
+	it('starts a background refresh of an old dashboard only after the running cycle ends', async () => {
+		const { poller, data, storage } = harness();
+		data.sourceItems = data.items;
+		data.fetchedAt = 0;
+		storage.set('dash:pr', { ...(storage.get('dash:pr') as object), data });
+		const queue = holdQueue(poller);
+		expect(await poller.dashboard('pr')).toMatchObject({ refreshing: true });
+		await settle();
+		expect(searchShort).not.toHaveBeenCalled();
+		queue.release();
+		await vi.waitFor(() => expect(searchShort).toHaveBeenCalled());
+	});
+
+	it('starts a board rebuild only after the running cycle ends', async () => {
+		const { poller } = harness();
+		const queue = holdQueue(poller);
+		const rebuild = poller.rebuildBoards();
+		await settle();
+		expect(boardShort).not.toHaveBeenCalled();
+		queue.release();
+		await rebuild;
+		expect(boardShort).toHaveBeenCalled();
+	});
+
+	it('lets a cycle rebuild its dashboards without waiting on its own queue', async () => {
+		const { poller } = harness();
+		await poller.queued(() => poller.rebuildAfter(0));
+		expect(searchShort).toHaveBeenCalled();
 	});
 });

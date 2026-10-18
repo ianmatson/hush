@@ -57,6 +57,16 @@ describe('holdReason and heldAreDue', () => {
 		expect(heldAreDue(limited, NOW, twoRecent)).toBe(false);
 		expect(heldAreDue(limited, NOW, oneRecent)).toBe(true);
 	});
+	it('holds a due digest until the limit has room again', () => {
+		const both = { ...noDelivery, pushDigestMinutes: 5, pushLimit: { count: 1, minutes: 60 } };
+		const digestDue = NOW - 10 * MIN;
+		expect(heldAreDue(both, NOW, { recentSends: [NOW - MIN], lastDigestAt: digestDue })).toBe(
+			false
+		);
+		expect(heldAreDue(both, NOW, { recentSends: [NOW - 61 * MIN], lastDigestAt: digestDue })).toBe(
+			true
+		);
+	});
 	it('holds in quiet hours before anything else', () => {
 		const quiet = {
 			...noDelivery,

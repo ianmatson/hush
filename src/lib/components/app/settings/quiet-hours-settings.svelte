@@ -26,7 +26,7 @@
 			patch === null
 				? null
 				: { ...(quiet ?? { ...DEFAULT_QUIET_HOURS, timeZone: browserZone }), ...patch };
-		return saveSettings({ quietHours: next }, next ? 'Quiet hours saved' : 'Quiet hours off');
+		return saveSettings({ quietHours: next });
 	}
 
 	function setClock(key: 'from' | 'to', value: string) {

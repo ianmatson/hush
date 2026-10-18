@@ -9,6 +9,12 @@ const { default: diff } = await import('../routes/diff');
 
 afterEach(() => vi.unstubAllGlobals());
 
+const executionCtx = {
+	waitUntil: () => {},
+	passThroughOnException: () => {},
+	props: {}
+} as unknown as ExecutionContext;
+
 const SANDBOX_ONLY = { GITHUB_WRITES: 'off', GITHUB_WRITES_ALLOW: 'sandbox/web' };
 
 function harness() {
@@ -32,7 +38,8 @@ function harness() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			},
-			env
+			env,
+			executionCtx
 		);
 	return { post, recheck };
 }

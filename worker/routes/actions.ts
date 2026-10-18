@@ -15,7 +15,8 @@ import {
 import { linkStack, mergeStackThrough, readPrRefs, readStack } from '../stacks';
 import { stackMergePlan } from '../../src/lib/shared/stack-merge';
 import { REACTION_CONTENTS } from '../../src/lib/shared/reactions';
-import { routes, poller, json } from '../app';
+import { routes, json } from '../app';
+import { refreshWrittenSubject } from '../subject-writes';
 import { writeBlockForEveryRepo, writeBlockForNode, writeBlockForRepo } from '../write-gate';
 
 // --- Actions on GitHub (approve, comment, merge…), with the token Hush reads with ----------
@@ -196,9 +197,7 @@ const app = routes()
 		}
 		if (failure) return c.json({ error: failure.error }, failure.status);
 		if (noSubject) return c.json({ ok: true as const, entry, stillMerging });
-		await poller(c.env, u.id)
-			.recheck(repo, number)
-			.catch(() => {});
+		refreshWrittenSubject(c, { repo, number });
 		return c.json({ ok: true as const, entry, stillMerging });
 	})
 	.post('/api/comments/edit', json<{ id: string; body: string }>(), async (c) => {
@@ -250,9 +249,7 @@ const app = routes()
 				{ error: result?.errors[0]?.message ?? 'GitHub could not save the comment.' },
 				result ? failedWriteStatus(result.status) : 502
 			);
-		await poller(c.env, u.id)
-			.recheck(parent.repository.nameWithOwner, parent.number)
-			.catch(() => {});
+		refreshWrittenSubject(c, { repo: parent.repository.nameWithOwner, number: parent.number });
 		return c.json({ id: entry.id, body: entry.body, html: entry.bodyHTML });
 	})
 	// Add or remove your reaction on a comment, a review, or a description.

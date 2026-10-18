@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import { onDestroy, onMount, type Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { takeSearchParams } from '$lib/search-params';
 	import { page } from '$app/state';
@@ -18,6 +18,7 @@
 	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
 	import { peek } from '$lib/peek.svelte';
+	import { cn } from '$lib/utils';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -45,13 +46,11 @@
 	const me = createQuery(meQuery);
 	// Signed in: open the live socket (the server says what changed). Once per page: the profile
 	// can flicker while the saved cache loads, and sign-out reloads the page anyway.
-	let liveStarted = false;
+	let stopLive: (() => void) | undefined;
 	$effect(() => {
-		if (me.data && !liveStarted) {
-			liveStarted = true;
-			connectLive();
-		}
+		if (me.data && !stopLive) stopLive = connectLive();
 	});
+	onDestroy(() => stopLive?.());
 
 	const clearMode = $derived(me.data?.settings.clearNotifications);
 	$effect(() => {
@@ -84,6 +83,7 @@
 	const ready = $derived(
 		!isRestoring.current && (me.data !== undefined || signedOut || onLogin || me.isError)
 	);
+	const unreachable = $derived(me.isError && !signedOut && !onLogin);
 </script>
 
 <!-- Links load their page's code as soon as they are on screen (not on hover), so a first
@@ -97,11 +97,24 @@
 			<CommandPalette />
 			<AlertsPanel />
 		{/if}
-		{#if me.isError && !signedOut && !onLogin}
-			<p class="mx-auto max-w-4xl px-3 pt-6 text-sm text-destructive sm:px-4">
-				Hush cannot reach its server: {me.error.message}
+		{#if unreachable}
+			<p
+				role="alert"
+				class={cn(
+					'mx-auto flex max-w-4xl flex-wrap items-baseline gap-x-2 px-3 text-sm text-destructive sm:px-4',
+					me.data ? 'pt-2' : 'pt-6'
+				)}
+			>
+				<span>Hush cannot reach its server: {me.error?.message}</span>
+				<button
+					type="button"
+					class="underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+					disabled={me.isFetching}
+					onclick={() => me.refetch()}>Retry</button
+				>
 			</p>
-		{:else}
+		{/if}
+		{#if !unreachable || me.data}
 			{@render children()}
 		{/if}
 	{/if}

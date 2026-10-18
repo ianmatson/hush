@@ -4,6 +4,7 @@ import type { SubjectFacts } from '../../src/lib/shared/subject';
 import type { Who } from '../poller/shared';
 import type { GhNotification, SubjectReads } from '../github';
 
+vi.mock('cloudflare:workers', () => ({ DurableObject: class {} }));
 vi.mock('../poller/subjects', () => ({ PollerSubjects: class {} }));
 vi.mock('../poller/data', async () => ({
 	PollerData: (await import('../poller/sync')).PollerSync
@@ -18,6 +19,7 @@ const { PollerSync } = await import('../poller/sync');
 const { fetchSubjects } = await import('../github');
 const { listNotifications } = await import('../github');
 const { Poller } = await import('../poller');
+const { PollerAlerts } = await import('../poller/alerts');
 const who: Who = {
 	userId: 1,
 	me: 'ian',
@@ -262,7 +264,8 @@ function pollerHarness() {
 		keepTrackedFresh,
 		cleanup,
 		fillDecisions: async () => {},
-		flushHeld
+		flushHeld,
+		exclusive: (PollerAlerts.prototype as unknown as { exclusive: unknown }).exclusive
 	});
 	values.set('userId', 1);
 	values.set('lastActive', Date.now());
@@ -300,6 +303,22 @@ describe('poll cycle', () => {
 		const status = await poller.pollNow();
 		expect(status.nextPollAt).toBe(clock.alarm);
 		expect(flushHeld).toHaveBeenCalledTimes(2);
+	});
+
+	it('runs one cycle for an alarm and a manual sync that overlap', async () => {
+		const { poller, flushHeld } = pollerHarness();
+		let answer!: (value: Awaited<ReturnType<typeof listNotifications>>) => void;
+		vi.mocked(listNotifications).mockReturnValue(
+			new Promise((resolve) => {
+				answer = resolve;
+			})
+		);
+		const alarm = poller.alarm();
+		const sync = poller.pollNow();
+		answer({ ...page, status: 304 });
+		await Promise.all([alarm, sync]);
+		expect(listNotifications).toHaveBeenCalledTimes(1);
+		expect(flushHeld).toHaveBeenCalledTimes(1);
 	});
 
 	it('treats a 403 without rate limit headers as an ordinary failure', async () => {

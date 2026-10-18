@@ -20,6 +20,7 @@ const logFailure = (step: string) => (err: unknown) =>
 
 export class Poller extends PollerData {
 	private running: Promise<void> | null = null;
+	private cycling: Promise<void> | null = null;
 	/** Time of the last good poll by this instance. Covers the moment between alarms (no alarm set). */
 	private lastGoodPoll = 0;
 
@@ -111,11 +112,18 @@ export class Poller extends PollerData {
 		await this.cycle();
 	}
 
-	private async cycle(): Promise<void> {
+	private cycle(): Promise<void> {
+		this.cycling ??= this.exclusive(() => this.runCycle()).finally(() => {
+			this.cycling = null;
+		});
+		return this.cycling;
+	}
+
+	private async runCycle(): Promise<void> {
 		try {
+			await this.flushHeld().catch(logFailure('held alerts'));
 			await this.runOnce();
 			await this.runDecisionFill();
-			await this.flushHeld().catch(logFailure('held alerts'));
 		} finally {
 			await this.schedule();
 		}

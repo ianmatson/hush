@@ -12,6 +12,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import SlackLogo from './slack-logo.svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 
 	let {
 		repo,
@@ -28,6 +29,13 @@
 	}));
 	const found = $derived(mentions.data?.pages.flatMap((p) => p.mentions) ?? []);
 	const shown = $derived(mentionsConnected && found.length > 0);
+	const slackFailed = $derived(slack.isError && !slack.data);
+	const mentionsFailed = $derived(mentionsConnected && mentions.isError && !mentions.data);
+	const retrying = $derived(slack.isFetching || mentions.isFetching);
+	function retryFirstLoad() {
+		if (slackFailed) slack.refetch();
+		else mentions.refetch();
+	}
 	const countLabel = $derived(`${found.length}${mentions.hasNextPage ? '+' : ''}`);
 	const label = $derived(
 		`Mentioned in Slack: ${countLabel} ${found.length === 1 && !mentions.hasNextPage ? 'message' : 'messages'}`
@@ -51,8 +59,14 @@
 	}
 
 	async function loadMore() {
-		if (!mentions.hasNextPage || mentions.isFetchingNextPage) return;
-		await mentions.fetchNextPage();
+		if (!mentions.hasNextPage || mentions.isFetchingNextPage || mentions.isFetchNextPageError)
+			return;
+		await fetchNextPage();
+	}
+
+	async function fetchNextPage() {
+		const page = await mentions.fetchNextPage();
+		if (page.isError) return;
 		await tick();
 		if (sentinelNearEnd()) loadMore();
 	}
@@ -73,9 +87,30 @@
 	});
 </script>
 
-{#if mentionsConnected}
+{#if mentionsConnected || slackFailed}
 	<div class={cn('relative h-5 w-14 shrink-0', className)}>
-		{#if shown}
+		{#if slackFailed || mentionsFailed}
+			<div class="absolute inset-y-0 right-0 flex items-center">
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								type="button"
+								class="flex h-6 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
+								aria-label="Slack mentions did not load. Retry"
+								disabled={retrying}
+								onclick={retryFirstLoad}
+							>
+								<SlackLogo class="size-3.5" />
+								<RotateCw class={cn('size-3', retrying && 'animate-spin')} />
+							</button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content>Slack mentions did not load. Retry</Tooltip.Content>
+				</Tooltip.Root>
+			</div>
+		{:else if shown}
 			<div class="absolute inset-y-0 right-0 flex items-center" in:fly={APPEAR}>
 				<Popover.Root bind:open>
 					<Tooltip.Root>
@@ -128,7 +163,18 @@
 									</a>
 								</li>
 							{/each}
-							{#if mentions.hasNextPage}
+							{#if mentions.hasNextPage && mentions.isFetchNextPageError && !mentions.isFetchingNextPage}
+								<li
+									class="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground"
+								>
+									More messages did not load.
+									<button
+										type="button"
+										class="font-medium text-foreground underline-offset-2 hover:underline"
+										onclick={fetchNextPage}>Retry</button
+									>
+								</li>
+							{:else if mentions.hasNextPage}
 								<li bind:this={sentinel} class="flex justify-center py-1 text-muted-foreground">
 									<LoaderCircle class="size-3.5 animate-spin" aria-label="Loading more messages" />
 								</li>

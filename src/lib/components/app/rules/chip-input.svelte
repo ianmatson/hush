@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
 	import { randomId } from '$lib/draft-edits';
-	import type { ValueSuggestion } from '$lib/shared/rule-builder';
+	import { withChips, type ValueSuggestion } from '$lib/shared/rule-builder';
 	import * as Popover from '$lib/components/ui/popover';
 	import X from '@lucide/svelte/icons/x';
 
@@ -19,7 +19,6 @@
 		label: string;
 	} = $props();
 
-	const SEPARATOR = /[,\n]/;
 	const MAX_SHOWN = 8;
 	const listId = randomId('chips');
 
@@ -46,16 +45,14 @@
 		!!matches[k].group && matches[k].group !== matches[k - 1]?.group;
 
 	function add(raw: string) {
-		const fresh = raw
-			.split(SEPARATOR)
-			.map((v) => v.trim())
-			.filter((v) => v && !values.includes(v));
-		if (fresh.length) onchange([...values, ...fresh]);
+		const next = withChips(values, raw);
+		if (next.length > values.length) onchange(next);
 		draft = '';
 		active = NONE;
 	}
 
 	function onkeydown(e: KeyboardEvent) {
+		if (e.isComposing) return;
 		if (showList && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
 			e.preventDefault();
 			const step = e.key === 'ArrowDown' ? 1 : -1;

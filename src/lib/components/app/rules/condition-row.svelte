@@ -1,8 +1,14 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import {
 		builderField,
+		SIZE_COMPARISONS,
+		sizeDraftOf,
+		sizeValue,
 		type BuilderCondition,
 		type BuilderField,
+		type SizeComparison,
+		type SizeDraft,
 		type ValueSuggestions
 	} from '$lib/shared/rule-builder';
 	import { Input } from '$lib/components/ui/input';
@@ -46,20 +52,16 @@
 	);
 	const set = (patch: Partial<BuilderCondition>) => onchange({ ...condition, ...patch });
 
-	const SIZE_OPS = [
-		{ value: '<', label: 'under' },
-		{ value: '>', label: 'over' },
-		{ value: '..', label: 'between' }
-	];
-	const sizeParts = $derived.by(() => {
-		const v = condition.values[0] ?? '';
-		const range = /^(\d+)\.\.(\d+)$/.exec(v);
-		if (range) return { op: '..', a: range[1], b: range[2] };
-		const m = /^(<=?|>=?)?(\d*)$/.exec(v);
-		return { op: m?.[1]?.startsWith('>') ? '>' : '<', a: m?.[2] ?? '', b: '' };
+	let sizeDraft = $state(untrack(() => sizeDraftOf(condition.values[0] ?? '')));
+	$effect.pre(() => {
+		const value = condition.values[0] ?? '';
+		untrack(() => {
+			if (value !== sizeValue(sizeDraft)) sizeDraft = sizeDraftOf(value);
+		});
 	});
-	function setSize(op: string, a: string, b: string) {
-		const value = op === '..' ? (a && b ? `${a}..${b}` : '') : a ? `${op}${a}` : '';
+	function setSize(patch: Partial<SizeDraft>) {
+		sizeDraft = { ...sizeDraft, ...patch };
+		const value = sizeValue(sizeDraft);
 		set({ values: value ? [value] : [] });
 	}
 
@@ -116,40 +118,44 @@
 				</Select.Content>
 			</Select.Root>
 		{:else if field.input === 'size'}
-			<Select.Root
-				type="single"
-				value={sizeParts.op}
-				onValueChange={(op) => setSize(op, sizeParts.a, sizeParts.b)}
-			>
-				<Select.Trigger size="sm" class="w-26" aria-label="Comparison"
-					>{SIZE_OPS.find((o) => o.value === sizeParts.op)?.label}</Select.Trigger
+			<div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+				<Select.Root
+					type="single"
+					value={sizeDraft.op}
+					onValueChange={(op) => setSize({ op: op as SizeComparison })}
 				>
-				<Select.Content>
-					{#each SIZE_OPS as o (o.value)}
-						<Select.Item value={o.value} label={o.label} />
-					{/each}
-				</Select.Content>
-			</Select.Root>
-			<Input
-				type="number"
-				min={0}
-				class="h-7 w-24"
-				aria-label="Number of {field.unit ?? 'lines'}"
-				value={sizeParts.a}
-				oninput={(e) => setSize(sizeParts.op, e.currentTarget.value, sizeParts.b)}
-			/>
-			{#if sizeParts.op === '..'}
-				<span class="text-xs text-muted-foreground">and</span>
-				<Input
-					type="number"
-					min={0}
-					class="h-7 w-24"
-					aria-label="Up to this number of {field.unit ?? 'lines'}"
-					value={sizeParts.b}
-					oninput={(e) => setSize(sizeParts.op, sizeParts.a, e.currentTarget.value)}
-				/>
-			{/if}
-			<span class="text-xs text-muted-foreground">{field.unit ?? 'lines'}</span>
+					<Select.Trigger size="sm" class="w-26" aria-label="Comparison"
+						>{SIZE_COMPARISONS.find((o) => o.value === sizeDraft.op)?.label}</Select.Trigger
+					>
+					<Select.Content>
+						{#each SIZE_COMPARISONS as o (o.value)}
+							<Select.Item value={o.value} label={o.label} />
+						{/each}
+					</Select.Content>
+				</Select.Root>
+				<div class="flex min-w-0 items-center gap-1.5">
+					<Input
+						type="number"
+						min={0}
+						class="h-7 w-24 min-w-20"
+						aria-label="Number of {field.unit ?? 'lines'}"
+						value={sizeDraft.from}
+						oninput={(e) => setSize({ from: e.currentTarget.value })}
+					/>
+					{#if sizeDraft.op === '..'}
+						<span class="text-xs text-muted-foreground">and</span>
+						<Input
+							type="number"
+							min={0}
+							class="h-7 w-24 min-w-20"
+							aria-label="Up to this number of {field.unit ?? 'lines'}"
+							value={sizeDraft.to}
+							oninput={(e) => setSize({ to: e.currentTarget.value })}
+						/>
+					{/if}
+					<span class="text-xs text-muted-foreground">{field.unit ?? 'lines'}</span>
+				</div>
+			</div>
 		{:else if field.input === 'about' || field.input === 'text'}
 			<Input
 				class="h-7 min-w-0 flex-1"

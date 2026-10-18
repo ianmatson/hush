@@ -45,3 +45,7 @@ export function saveDraft(key: string, text: string) {
 export function clearDraft(key: string) {
 	saveDraft(key, '');
 }
+
+export function clearSentDraft(key: string, sent: string) {
+	if (loadDraft(key) === sent) clearDraft(key);
+}

@@ -66,6 +66,20 @@ describe('SettingsDraft', () => {
 		expect(draft.dirty).toBe(true);
 	});
 
+	it('does not discard while a save is in flight', async () => {
+		const server = { current: { name: 'Mine', hideBots: false } };
+		let answer: (saved: boolean) => void = () => {};
+		const save = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)));
+		const { draft } = draftOf(server, save);
+
+		editing(draft).name = 'Reviews';
+		const saving = draft.save();
+		draft.discard();
+		expect(editing(draft).name).toBe('Reviews');
+		answer(true);
+		await saving;
+	});
+
 	it('stays unsaved when the save fails', async () => {
 		const server = { current: { name: 'Mine', hideBots: false } };
 		const { draft } = draftOf(

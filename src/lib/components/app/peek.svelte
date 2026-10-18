@@ -51,23 +51,33 @@
 		if (ui.alertsOpen && untrack(() => target)) onclose();
 	});
 
-	const fullPagePath = $derived(target?.number ? itemPagePathFromGitHubUrl(target.url) : null);
+	let closingTarget = $state<PeekTarget | null>(null);
+	$effect.pre(() => {
+		if (target) closingTarget = target;
+	});
+	const shown = $derived(target ?? closingTarget);
+
+	const fullPagePath = $derived(shown?.number ? itemPagePathFromGitHubUrl(shown.url) : null);
 </script>
 
 <!-- The bottom bar: the page's own buttons (Done, Snooze…), then the actions on GitHub. -->
 {#snippet bar()}
 	{@render footer?.()}
-	{#if target?.number}
-		<GhActions repo={target.repo} number={target.number} need={target.need ?? null} />
+	{#if shown?.number}
+		<GhActions repo={shown.repo} number={shown.number} need={shown.need ?? null} />
 	{/if}
 {/snippet}
 
 <SidePanel
 	open={!!target}
 	{onclose}
+	onclosecomplete={() => {
+		if (!target) closingTarget = null;
+	}}
 	label="peek"
-	title={target?.title ?? 'Peek'}
-	footer={footer || target?.number ? bar : undefined}
+	title={shown?.title ?? 'Peek'}
+	contentKey={shown ? `${shown.repo}#${shown.number}` : undefined}
+	footer={footer || shown?.number ? bar : undefined}
 >
 	{#snippet start(wide)}
 		{#if wide}
@@ -89,20 +99,21 @@
 				{/snippet}
 			</Tip>
 		{/if}
-		{#if target}
+		{#if shown}
+			{@const url = shown.url}
 			<Button
 				variant="ghost"
 				{size}
-				href={target.url}
-				onclick={() => target && noteOpened(target.url)}
+				href={url}
+				onclick={() => noteOpened(url)}
 				target="_blank"
 				rel="noreferrer"
 				aria-label="Open on GitHub"><ExternalLink /></Button
 			>
 		{/if}
 	{/snippet}
-	{#if target}
+	{#if shown}
 		{@render header?.()}
-		<PeekContent repo={target.repo} number={target.number} title={target.title} />
+		<PeekContent repo={shown.repo} number={shown.number} title={shown.title} />
 	{/if}
 </SidePanel>

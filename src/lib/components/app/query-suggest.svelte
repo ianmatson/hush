@@ -52,7 +52,7 @@
 		};
 		const onBlur = () => setTimeout(() => (open = false), 120);
 		const onKey = (e: KeyboardEvent) => {
-			if (!open || !items.length) return;
+			if (e.isComposing || !open || !items.length) return;
 			if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 				e.preventDefault();
 				active = (active + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;

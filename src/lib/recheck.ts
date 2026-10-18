@@ -1,5 +1,6 @@
+import type { QueryKey } from '@tanstack/svelte-query';
 import { api } from '$lib/api';
-import { keys, refetchUnlessLive } from '$lib/queries';
+import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
 import { parseGitHubItemUrl } from '$lib/shared/item-page';
 import { subjectKey } from '$lib/shared/subject';
 
@@ -35,9 +36,24 @@ async function checkReturned() {
 	if (!due.length) return;
 	for (const [key] of due) opened.delete(key);
 	await Promise.all(
-		due.slice(-MAX_PER_RETURN).map(([, o]) => api.recheck(o.repo, o.number).catch(() => null))
+		due.slice(-MAX_PER_RETURN).map(([, o]) =>
+			api.recheck(o.repo, o.number).then(
+				() => void refreshItemDetails(o.repo, o.number),
+				() => null
+			)
+		)
 	);
 	await refetchUnlessLive(keys.dashAll);
+}
+
+export function refreshItemDetails(repo: string, number: number) {
+	const queryKeys: QueryKey[] = [
+		keys.peek(repo, number),
+		keys.reviewThreads(repo, number),
+		keys.pullViewed(repo, number),
+		['pull-files', repo, number]
+	];
+	return Promise.all(queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }
 
 /** Start listening; returns the cleanup. Call once, from the app shell. */

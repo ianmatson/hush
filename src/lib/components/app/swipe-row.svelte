@@ -7,7 +7,8 @@
 		icon: Component;
 		/** Background and text classes of the revealed area. */
 		tone: string;
-		run: () => void;
+		leaves: boolean;
+		run: () => unknown;
 	}
 
 	/** Only one row rests open at a time: opening one closes the last. */
@@ -16,7 +17,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { cn } from '$lib/utils';
 	import { rowMenus } from '$lib/row-menus.svelte';
 
@@ -42,6 +43,9 @@
 	const REST = 88;
 	/** A swipe shorter than this goes back when you let go. */
 	const OPEN_AT = 40;
+	const SLIDE_MS = 200;
+	const LIST_OUTRO_MS = 200;
+	const LABEL_AT = 72;
 
 	let el = $state<HTMLElement | null>(null);
 	let dx = $state(0);
@@ -52,26 +56,66 @@
 	let buzzed = false;
 	/** The click that ends a swipe, or that closes an open row, must not also open the row. */
 	let swallowClick = false;
+	let committing = false;
+	let destroyed = false;
+	let settling = $state<{ sign: number; centered: boolean; label: boolean } | null>(null);
+	let settleRun = 0;
 
 	const actLine = () => Math.max(160, width * 0.55);
-	const side = $derived(dx > 0 ? right : dx < 0 ? left : null);
-	const acts = $derived(!!side && Math.abs(dx) >= actLine());
+	const sign = $derived(dx !== 0 ? Math.sign(dx) : (settling?.sign ?? 0));
+	const side = $derived(sign > 0 ? right : sign < 0 ? left : null);
+	const acts = $derived(dx !== 0 && !!side && Math.abs(dx) >= actLine());
 	const resting = $derived(!dragging && Math.abs(dx) === REST);
+	const centered = $derived(resting || !!settling?.centered);
+	const showsLabel = $derived(Math.abs(dx) >= LABEL_AT || !!settling?.label);
+
+	$effect(() => () => {
+		destroyed = true;
+	});
+
+	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+	async function slideEnded() {
+		await tick();
+		const node = el;
+		if (!node) return;
+		await new Promise<void>((resolve) => {
+			const done = () => {
+				node.removeEventListener('transitionend', onEnd);
+				clearTimeout(fallback);
+				resolve();
+			};
+			const onEnd = (e: TransitionEvent) => {
+				if (e.target === node && e.propertyName === 'transform') done();
+			};
+			const fallback = setTimeout(done, SLIDE_MS);
+			node.addEventListener('transitionend', onEnd);
+		});
+	}
+
+	async function slideBack() {
+		if (dx === 0) return;
+		const run = ++settleRun;
+		settling = { sign: Math.sign(dx), centered: resting, label: Math.abs(dx) >= LABEL_AT };
+		dx = 0;
+		await slideEnded();
+		if (run === settleRun) settling = null;
+	}
 
 	function close() {
-		dx = 0;
+		void slideBack();
 		if (closeOpen === close) closeOpen = null;
 	}
 	// A click on any row (and so on this one) closes it, the same as the row menus.
 	$effect(() => {
 		void rowMenus.epoch;
 		untrack(() => {
-			if (!dragging && dx) close();
+			if (!dragging && dx && !committing) close();
 		});
 	});
 
 	function down(e: PointerEvent) {
-		if (e.pointerType !== 'touch' || (!left && !right) || !el) return;
+		if (e.pointerType !== 'touch' || (!left && !right) || !el || committing) return;
 		start = { x: e.clientX, y: e.clientY, id: e.pointerId, from: dx };
 		horizontal = false;
 		buzzed = false;
@@ -88,6 +132,8 @@
 			if (Math.abs(mx) < Math.abs(my) * 1.3) return void (start = null);
 			horizontal = true;
 			dragging = true;
+			settleRun++;
+			settling = null;
 			el?.setPointerCapture(e.pointerId);
 		}
 		let d = start.from + mx;
@@ -123,14 +169,23 @@
 		close();
 	}
 
-	function run(act: SwipeSide) {
-		// Slide out, act, and come back (the list removes the row if the action moves it).
+	async function run(act: SwipeSide) {
+		if (committing) return;
+		committing = true;
+		settleRun++;
+		settling = null;
 		dx = dx >= 0 ? width || 400 : -(width || 400);
 		if (closeOpen === close) closeOpen = null;
-		setTimeout(() => {
-			act.run();
-			dx = 0;
-		}, 180);
+		await slideEnded();
+		if (destroyed) return;
+		const acted = Promise.resolve(act.run());
+		if (act.leaves) {
+			await acted;
+			await wait(LIST_OUTRO_MS);
+			if (destroyed) return;
+		}
+		committing = false;
+		void slideBack();
 	}
 
 	function swallow() {
@@ -141,12 +196,12 @@
 	function cancel() {
 		start = null;
 		dragging = false;
-		if (Math.abs(dx) !== REST) close();
+		if (Math.abs(dx) !== REST && !committing) close();
 	}
 </script>
 
 <div class="relative overflow-hidden rounded-xl">
-	{#if dx !== 0 && side}
+	{#if side}
 		<!-- The whole card's shape in the action's color: it shows behind the row's rounded corners
 		     too, so the edges meet with no gap. The part that the row leaves free is the button. -->
 		<div class={cn('absolute inset-0', side.tone)} aria-hidden="true"></div>
@@ -155,8 +210,8 @@
 			class={cn(
 				'absolute inset-y-0 flex items-center gap-2 overflow-hidden px-4 text-sm font-medium whitespace-nowrap',
 				side.tone,
-				dx > 0 ? 'left-0 justify-start' : 'right-0 justify-end',
-				resting && 'justify-center',
+				sign > 0 ? 'left-0 justify-start' : 'right-0 justify-end',
+				centered && 'justify-center',
 				!dragging && 'transition-[width] duration-200'
 			)}
 			style:width="{Math.abs(dx)}px"
@@ -165,7 +220,7 @@
 			onclick={() => side && run(side)}
 		>
 			<side.icon class={cn('size-5 shrink-0 transition-transform', acts && 'scale-110')} />
-			{#if Math.abs(dx) >= 72}<span>{side.label}</span>{/if}
+			{#if showsLabel}<span>{side.label}</span>{/if}
 		</button>
 	{/if}
 	<!-- The row inside has its role; the same actions are in its menu and on the keys. -->
@@ -174,7 +229,7 @@
 		bind:this={el}
 		class={cn(
 			'relative touch-pan-y rounded-xl',
-			dx !== 0 && 'bg-background',
+			sign !== 0 && 'bg-background',
 			!dragging && 'transition-transform duration-200'
 		)}
 		style:transform={dx ? `translateX(${dx}px)` : undefined}

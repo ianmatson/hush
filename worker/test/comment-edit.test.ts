@@ -8,6 +8,12 @@ const { default: actions } = await import('../routes/actions');
 
 afterEach(() => vi.unstubAllGlobals());
 
+const executionCtx = {
+	waitUntil: () => {},
+	passThroughOnException: () => {},
+	props: {}
+} as unknown as ExecutionContext;
+
 const parent = { number: 7, repository: { nameWithOwner: 'sandbox/web' } };
 const ownComment = {
 	__typename: 'IssueComment',
@@ -36,7 +42,8 @@ function harness(gate: Partial<Env> = {}) {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			},
-			env
+			env,
+			executionCtx
 		);
 	return { edit, recheck };
 }

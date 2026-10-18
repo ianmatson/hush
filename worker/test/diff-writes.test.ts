@@ -8,6 +8,12 @@ const { default: diff } = await import('../routes/diff');
 
 afterEach(() => vi.unstubAllGlobals());
 
+const executionCtx = {
+	waitUntil: () => {},
+	passThroughOnException: () => {},
+	props: {}
+} as unknown as ExecutionContext;
+
 function harness() {
 	const recheck = vi.fn(async () => ({ ok: true }));
 	const env = { POLLER: { idFromName: () => 'test', get: () => ({ recheck }) } } as unknown as Env;
@@ -67,7 +73,8 @@ describe('subject reconciliation after diff writes', () => {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(writes[2][1])
 				},
-				env
+				env,
+				executionCtx
 			);
 			expect(response.status).toBe(200);
 			expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -98,11 +105,43 @@ describe('subject reconciliation after diff writes', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			},
-			env
+			env,
+			executionCtx
 		);
 		expect(response.status).toBe(200);
 		expect(requests.map((query) => query.startsWith('query'))).toEqual([true, false]);
 		expect(recheck).toHaveBeenCalledWith('sandbox/web', 7);
+	});
+
+	it('answers without waiting for the refresh to finish', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(
+					Response.json({
+						data: {
+							node: { pullRequest: { number: 7, repository: { nameWithOwner: 'sandbox/web' } } }
+						}
+					})
+				)
+				.mockResolvedValueOnce(Response.json({ data: {} }))
+		);
+		const { app, env, recheck } = harness();
+		recheck.mockReturnValue(new Promise<{ ok: boolean }>(() => {}));
+		const waitUntil = vi.fn();
+		const response = await app.request(
+			'/api/diff/review/submit',
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(writes[2][1])
+			},
+			env,
+			{ ...executionCtx, waitUntil }
+		);
+		expect(response.status).toBe(200);
+		expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise));
 	});
 
 	it.each([
@@ -145,7 +184,8 @@ describe('subject reconciliation after diff writes', () => {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(writes[2][1])
 				},
-				env
+				env,
+				executionCtx
 			);
 			expect(response.status).toBe(status);
 			expect(await response.json()).toEqual({ error });

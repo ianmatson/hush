@@ -14,6 +14,6 @@
 		>
 			You have unsaved changes.
 		</p>{/if}
-	<Button variant="ghost" size="sm" onclick={draft.discard}>Discard</Button>
+	<Button variant="ghost" size="sm" onclick={draft.discard} disabled={draft.saving}>Discard</Button>
 	<Button size="sm" onclick={draft.save} disabled={!!error || draft.saving}>Save</Button>
 </div>

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$app/environment', () => ({ browser: false }));
 vi.mock('$lib/api', () => ({ api: {}, ApiError: class extends Error {} }));
 
-const { keys, persistOptions, queryClient, refetchUnlessLive } = await import('./queries');
+const { keys, persistOptions, queryClient, refetchUnlessLive, suggestQuery } =
+	await import('./queries');
 const { live } = await import('./live-state.svelte');
 
 describe('refetchUnlessLive', () => {
@@ -25,6 +26,14 @@ describe('refetchUnlessLive', () => {
 	});
 });
 
+describe('suggestQuery', () => {
+	it('keeps answers for different source repos apart', () => {
+		const fromWeb = suggestQuery('acme/api', 'ref', '12', 'acme/web').queryKey;
+		const fromApi = suggestQuery('acme/api', 'ref', '12', 'acme/api').queryKey;
+		expect(fromWeb).not.toEqual(fromApi);
+	});
+});
+
 describe('persisted cache', () => {
 	const persisted = (queryKey: readonly unknown[]) =>
 		persistOptions.dehydrateOptions.shouldDehydrateQuery({
@@ -33,7 +42,7 @@ describe('persisted cache', () => {
 		});
 
 	it('keeps the answers to each typed word in memory only', () => {
-		expect(persisted(keys.suggest('acme/web', 'user', 'oct'))).toBe(false);
+		expect(persisted(keys.suggest('acme/web', 'user', 'oct', 'acme/web'))).toBe(false);
 		expect(persisted(keys.searchCount('repo:acme/web is:open'))).toBe(false);
 	});
 

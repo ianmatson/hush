@@ -1,5 +1,6 @@
 import type { DashKind, Settings } from '../../src/lib/shared/types';
 import type { ProjectAccess } from '../../src/lib/shared/projects';
+import type { SubjectFacts } from '../../src/lib/shared/subject';
 import { APP_FOCUS_LASTS_MS } from '../../src/lib/shared/push-policy';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 
@@ -50,3 +51,6 @@ export interface Who {
 	settings: Settings;
 	projectAccess: ProjectAccess;
 }
+
+export const olderThan = (incoming: SubjectFacts, stored: SubjectFacts | null | undefined) =>
+	!!stored && Date.parse(incoming.updatedAt) < Date.parse(stored.updatedAt);

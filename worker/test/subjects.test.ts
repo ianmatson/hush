@@ -106,7 +106,8 @@ function harness() {
 		run: vi.fn(),
 		transaction: vi.fn((action: () => void) => action()),
 		decideSubjects: vi.fn(async () => {}),
-		decisionsOf: vi.fn(() => new Map())
+		decisionsOf: vi.fn(() => new Map()),
+		exclusive: <T>(work: () => Promise<T>) => work()
 	});
 	return { poller, cache, broadcast };
 }
@@ -169,6 +170,26 @@ describe('subject dashboard updates', () => {
 		expect(cache.get('dash:pr')!.data.items[0].projectStatus).toEqual({ 'PostHog/7': 'done' });
 		expect(cache.get('dash:pr')!.data.projects?.[0].statuses[0].name).toBe('Done');
 		expect(broadcast).toHaveBeenCalledWith({ type: 'dash', kind: 'pr' });
+	});
+
+	it('ignores a read older than the stored facts', async () => {
+		const { poller, cache } = harness();
+		const earlier = new Date(Date.parse(now) - 60_000).toISOString();
+		await poller.recordFetched({ ...subject, title: 'Old title', updatedAt: earlier });
+		expect(poller.run).not.toHaveBeenCalled();
+		expect(poller.decideSubjects).not.toHaveBeenCalled();
+		expect(cache.get('dash:pr')!.data.items[0].title).toBe('Fix it');
+	});
+
+	it('accepts a read with the same update time, because CI can change on its own', async () => {
+		const { poller } = harness();
+		await poller.recordFetched({ ...subject, ci: 'FAILURE' });
+		expect(poller.run).toHaveBeenCalledWith(
+			expect.stringContaining('INSERT INTO subjects'),
+			'PostHog/posthog.com#1',
+			expect.stringContaining('"ci":"FAILURE"'),
+			expect.any(Number)
+		);
 	});
 
 	it.each([
