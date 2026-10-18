@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ABOUT } from '$lib/about';
-import { comparePath } from '$lib/compare';
-import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
-import { DOCS, docPath, renderMarkdown } from '$lib/docs';
 import { parseQuery } from '$lib/shared/query';
 import { DEFAULT_SETTINGS } from '$lib/shared/settings';
 import { mergeSettings, validateSettings } from '$lib/shared/settings-schema';
 import type { Settings } from '$lib/shared/types';
-import { LAST_CHECKED, guidePath } from '.';
+import { LAST_CHECKED } from '$lib/site';
+import { brokenLinksOf } from '$lib/site-links';
+import { pagesOf } from '$lib/site-pages';
+import { guidePath } from '.';
 import { GUIDES, GUIDES_INDEX } from './content';
 
 const SOURCES_HEADING = '## Sources';
@@ -27,9 +26,6 @@ const bodyBeforeSources = (markdown: string) => {
 
 const externalLinks = (markdown: string) =>
 	[...withoutCode(markdown).matchAll(/\]\((https?:\/\/[^)]+)\)/g)].map((m) => m[1]);
-
-const anchorsOf = (markdown: string) =>
-	new Set([...renderMarkdown(markdown).html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
 
 describe('guides', () => {
 	it('have a title that says what they do, and a description', () => {
@@ -91,26 +87,6 @@ describe('guides', () => {
 	});
 
 	it('link only to pages and sections that exist', () => {
-		const pages = [
-			...DOCS.map((d) => ({ path: docPath(d), markdown: d.markdown })),
-			...ABOUT.map((p) => ({ path: `/${p.slug}`, markdown: p.markdown })),
-			...COMPARE.map((p) => ({ path: comparePath(p), markdown: p.markdown })),
-			{ path: COMPARE_INDEX.path, markdown: COMPARE_INDEX.markdown },
-			...GUIDES.map((g) => ({ path: guidePath(g), markdown: g.markdown })),
-			{ path: GUIDES_INDEX.path, markdown: GUIDES_INDEX.markdown }
-		];
-		const anchors = new Map(pages.map((p) => [p.path, anchorsOf(p.markdown)]));
-		const guides = pages.filter(
-			(p) => p.path === GUIDES_INDEX.path || p.path.startsWith(`${GUIDES_INDEX.path}/`)
-		);
-		for (const page of guides)
-			for (const [, href] of renderMarkdown(page.markdown).html.matchAll(/ href="([^"]+)"/g)) {
-				if (/^https:\/\//.test(href)) continue;
-				const [path, hash] = href.split('#');
-				const target = path || page.path;
-				expect(anchors.has(target), `${page.path} links to ${href}`).toBe(true);
-				if (hash)
-					expect(anchors.get(target)!.has(hash), `${page.path} links to ${href}`).toBe(true);
-			}
+		for (const page of pagesOf('guides')) expect(brokenLinksOf(page), page.path).toEqual([]);
 	});
 });

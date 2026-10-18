@@ -16,7 +16,7 @@ description: Notifier for GitHub counts unread GitHub notifications on a toolbar
 | ------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | What it is               | Toolbar badge and alerts                                            | Views of pull requests and issues, with pushes                                |
 | Where it runs            | Chrome (also Edge, Opera, Brave) and Firefox                        | Web app (installable), on Cloudflare                                          |
-| Price                    | Free                                                                | Free in beta; planned $3 a month or $30 a year                                |
+| Price                    | Free                                                                | {{value:hush-price}}                                                          |
 | Open source              | Yes (MIT)                                                           | Yes (AGPL-3.0)                                                                |
 | Where your data is       | In your browser; no server                                          | On Hush's servers; token encrypted                                            |
 | Sorting                  | None; can count only threads you participate in                     | Sections by role, status, repository, category, project status, or your rules |

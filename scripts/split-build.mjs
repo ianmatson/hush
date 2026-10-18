@@ -31,21 +31,21 @@ rmSync(DIST, { recursive: true, force: true });
 const shell = 'app.html';
 const pages = htmlFiles().filter((f) => f !== shell);
 
-// Files only the site uses (the docs folder also has each page as Markdown).
-const siteOnly = [
-	...pages,
-	'docs',
-	'compare',
-	'guides',
-	'sitemap.xml',
-	'llms.txt',
-	'llms-full.txt',
-	'og.png'
-];
+const appDir = readdirSync(BUILD).find((d) => existsSync(join(BUILD, d, 'immutable')));
+if (!appDir) throw new Error(`split: no immutable folder in ${BUILD}/`);
 
-// --- The app: everything but the site's files; the shell is its index.html.
+const APP_ICONS = ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const PUSH_BADGE = 'badge-72.png';
+const SERVICE_WORKER = 'service-worker.js';
+const WEB_MANIFEST = 'manifest.webmanifest';
+const APP_FILES = [appDir, shell, SERVICE_WORKER, WEB_MANIFEST, PUSH_BADGE, ...APP_ICONS];
+const APP_ONLY_FILES = [shell, SERVICE_WORKER, WEB_MANIFEST, PUSH_BADGE];
+
 const app = join(DIST, 'app');
-cpSync(BUILD, app, { recursive: true, filter: (src) => !siteOnly.includes(relative(BUILD, src)) });
+for (const name of APP_FILES) {
+	if (!existsSync(join(BUILD, name))) throw new Error(`split: the app needs ${BUILD}/${name}`);
+	cpSync(join(BUILD, name), join(app, name), { recursive: true });
+}
 renameSync(join(app, shell), join(app, 'index.html'));
 writeFileSync(
 	join(app, '_redirects'),
@@ -62,8 +62,6 @@ writeFileSync(
 // Files in SvelteKit's immutable folder have a content hash in their names, so they never
 // change: the browser keeps them and does not ask again (by default every file is checked on
 // each use). The folder is found in the build, so a changed kit.appDir needs no change here.
-const appDir = readdirSync(BUILD).find((d) => existsSync(join(BUILD, d, 'immutable')));
-if (!appDir) throw new Error(`split: no immutable folder in ${BUILD}/`);
 const IMMUTABLE = `/${appDir}/immutable/*\n  Cache-Control: public, max-age=31536000, immutable\n`;
 // Security headers for the app. Scripts: its own files, and the app shell's inline start-up
 // script by its hash. Images: GitHub's servers (avatars, and images and emoji in comments, which
@@ -100,8 +98,10 @@ writeFileSync(
 
 // --- The site: the prerendered pages and the shared assets, not the app.
 const site = join(DIST, 'site');
-const appOnly = [shell, 'service-worker.js', 'manifest.webmanifest'];
-cpSync(BUILD, site, { recursive: true, filter: (src) => !appOnly.includes(relative(BUILD, src)) });
+cpSync(BUILD, site, {
+	recursive: true,
+	filter: (src) => !APP_ONLY_FILES.includes(relative(BUILD, src))
+});
 // Security headers. The site loads only its own code: scripts from this origin, and the inline
 // scripts of the built pages by their hash (so an added or third-party script does not run).
 const hashes = new Set(pages.flatMap((f) => inlineHashes(readFileSync(join(BUILD, f), 'utf8'))));
@@ -117,7 +117,18 @@ const csp = [
 	"form-action 'self'",
 	"frame-ancestors 'none'"
 ].join('; ');
-writeFileSync(join(site, '_headers'), `/*\n${SECURITY(csp)}${IMMUTABLE}`);
+const UTF8_TEXT = [
+	['/*.md', 'text/markdown'],
+	['/llms.txt', 'text/plain'],
+	['/llms-full.txt', 'text/plain'],
+	['/robots.txt', 'text/plain']
+]
+	.map(([path, type]) => `${path}\n  Content-Type: ${type}; charset=utf-8\n`)
+	.join('');
+writeFileSync(join(site, '_headers'), `/*\n${SECURITY(csp)}${IMMUTABLE}${UTF8_TEXT}`);
+const SECTION_HOME_MARKDOWN = ['docs', 'guides', 'compare'].map(
+	(section) => `/${section}.md /${section}/index.md 301`
+);
 // Docs pages of the reverted "lanes" layout.
 writeFileSync(
 	join(site, '_redirects'),
@@ -128,6 +139,7 @@ writeFileSync(
 		'/docs/inbox.md /docs/views.md 301',
 		'/docs/where-hush-looks /docs/pull-requests-and-issues 301',
 		'/docs/where-hush-looks.md /docs/pull-requests-and-issues.md 301',
+		...SECTION_HOME_MARKDOWN,
 		''
 	].join('\n')
 );

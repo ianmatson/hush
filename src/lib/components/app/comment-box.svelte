@@ -13,19 +13,16 @@
 	import { meQuery, queryClient, suggestQuery } from '$lib/queries';
 	import {
 		applyPick,
-		closedShortcodeBefore,
-		emojiForShortcode,
 		rankEmoji,
 		rankRefs,
 		rankUsers,
-		replaceWithEmoji,
 		triggerAt,
 		type RefSuggestion,
 		type Suggestion,
 		type Trigger,
 		type UserSuggestion
 	} from '$lib/shared/suggest';
-	import { loadEmojiList } from '$lib/emoji';
+	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
 	import { draftKey, loadDraft, saveDraft } from '$lib/drafts';
 	import SuggestMenu from './suggest-menu.svelte';
 	import AttachButton from './attach-button.svelte';
@@ -204,21 +201,6 @@
 			});
 	}
 
-	async function expandClosedShortcode() {
-		const el = box;
-		if (!el || el.selectionStart !== el.selectionEnd) return;
-		const caret = el.selectionStart;
-		const closed = closedShortcodeBefore(text, caret);
-		if (!closed) return;
-		const textWhenTyped = text;
-		const emoji = emojiForShortcode(await loadEmojiList(), closed.shortcode);
-		if (!emoji || text !== textWhenTyped) return;
-		const r = replaceWithEmoji(text, caret, closed.start, emoji);
-		text = r.text;
-		await tick();
-		el.setSelectionRange(r.caret, r.caret);
-	}
-
 	function close() {
 		trigger = null;
 		items = [];
@@ -284,7 +266,11 @@
 				aria-expanded={!!trigger}
 				oninput={() => {
 					update();
-					void expandClosedShortcode();
+					void expandClosedShortcode(
+						box,
+						() => text,
+						(next) => (text = next)
+					);
 				}}
 				onclick={update}
 				onkeyup={(e) => {

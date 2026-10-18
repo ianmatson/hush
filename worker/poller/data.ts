@@ -25,6 +25,7 @@ import { sendPush, vapidFromEnv } from '../webpush';
 import { PollerDashboard } from './dashboard';
 import { FILL_MAX, IN_KEYS, type PollStatus } from './shared';
 import { MINUTE_MS } from '../../src/lib/shared/durations';
+import { MAX_PUSH_DEVICES } from '../../src/lib/shared/push-policy';
 import { DECISION_FILL_KEY } from './decisions';
 import { allCategories, pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
 
@@ -34,7 +35,6 @@ const PLACEMENT_KEYS = ['categoryGroups', 'views'] as const;
 /** A request the Durable Object refused; the route answers with this status. */
 export type Refusal = { error: string; status: 400 | 404 | 500 };
 
-const MAX_DEVICES = 10;
 const FEED_ENTRIES = 50;
 const SEEN_EVERY = 5 * MINUTE_MS;
 const MAX_MARKED_KEYS = 50;
@@ -309,9 +309,9 @@ export abstract class PollerData extends PollerDashboard {
 			'SELECT COUNT(*) AS n FROM push_devices WHERE endpoint != ?',
 			endpoint
 		);
-		if ((others?.n ?? 0) >= MAX_DEVICES)
+		if ((others?.n ?? 0) >= MAX_PUSH_DEVICES)
 			return {
-				error: `Up to ${MAX_DEVICES} devices can get push. Remove one in Settings first.`,
+				error: `Up to ${MAX_PUSH_DEVICES} devices can get push. Remove one in Settings first.`,
 				status: 400
 			};
 		this.run(

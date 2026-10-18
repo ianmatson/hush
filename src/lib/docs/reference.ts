@@ -1,6 +1,6 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
 import { KEEP_CLOSED_HOURS } from '$lib/shared/closed-items';
-import { MAX_QUERIES } from '$lib/shared/dashboard';
+import { MAX_QUERIES, MAX_TEAMS_PER_SECTION } from '$lib/shared/dashboard';
 import {
 	DEFAULT_VIEWS,
 	MAX_SEARCH_CHARS,
@@ -26,7 +26,7 @@ import {
 	keyText,
 	type KeyScope
 } from '$lib/shared/keymap';
-import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
+import { DEFAULT_MENUS, MAX_MENU_ITEMS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import {
 	IS_VALUES,
 	MAX_CONDITION_CHARS,
@@ -68,8 +68,10 @@ import {
 	APP_FOCUS_LASTS_MS,
 	DIGEST_MINUTES,
 	LIMIT_COUNT,
-	LIMIT_MINUTES
+	LIMIT_MINUTES,
+	MAX_PUSH_DEVICES
 } from '$lib/shared/push-policy';
+import { PLANNED_PRICE } from '$lib/pricing';
 
 /**
  * The generated parts of the docs: tables built from the same tables the app uses (settings,
@@ -296,7 +298,7 @@ ${table(
 	},
 	'dash.excludedTeams': {
 		type: 'array of strings',
-		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR_MS} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first 15 teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
+		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR_MS} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first ${MAX_TEAMS_PER_SECTION} teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
 
 \`\`\`json settings
 { "dash": { "excludedTeams": ["acme/everyone", "acme/contractors"] } }
@@ -558,9 +560,9 @@ function limitsReference(): string {
 			['Views', String(MAX_VIEWS)],
 			['Searches in a view', String(MAX_VIEW_SEARCHES)],
 			['GitHub searches for pull requests, and for issues', String(MAX_QUERIES)],
-			['Items per menu', '60'],
-			['Keys per command', '4'],
-			['Push devices', '10'],
+			['Items per menu', String(MAX_MENU_ITEMS)],
+			['Keys per command', String(MAX_KEYS_PER_COMMAND)],
+			['Push devices', String(MAX_PUSH_DEVICES)],
 			['Category groups', String(MAX_CATEGORY_GROUPS)],
 			['Categories in a group', String(MAX_CATEGORIES)],
 			['Different about: conditions in categories', String(MAX_SMART_CONDITIONS)],
@@ -603,6 +605,24 @@ export const REFERENCES: Record<string, (args: string[]) => string> = {
 		Object.values(MERGE_LABEL)
 			.map((l) => `- ${l}`)
 			.join('\n')
+};
+
+const between = (r: { min: number; max: number }) => `${r.min} to ${r.max}`;
+
+export const VALUES: Record<string, string> = {
+	'hush-price': PLANNED_PRICE,
+	'max-views': String(MAX_VIEWS),
+	'max-view-searches': String(MAX_VIEW_SEARCHES),
+	'max-search-chars': String(MAX_SEARCH_CHARS),
+	'max-view-name-chars': String(MAX_VIEW_NAME_CHARS),
+	'max-view-sections': String(MAX_VIEW_SECTIONS),
+	'max-category-groups': String(MAX_CATEGORY_GROUPS),
+	'max-categories': String(MAX_CATEGORIES),
+	'max-mark-name-chars': String(MAX_MARK_NAME_CHARS),
+	'max-description-chars': String(MAX_DESCRIPTION_CHARS),
+	'digest-minutes': between(DIGEST_MINUTES),
+	'limit-count': between(LIMIT_COUNT),
+	'limit-minutes': between(LIMIT_MINUTES)
 };
 
 /** The id of a heading: lower case, words joined with dashes. */

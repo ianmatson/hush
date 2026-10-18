@@ -1,10 +1,5 @@
-import { error } from '@sveltejs/kit';
-import { GUIDES, guideBySlug } from '$lib/guides/content';
+import { pageRoute } from '$lib/site-routes';
 
-export const entries = () => GUIDES.map((p) => ({ slug: p.slug }));
-
-export function load({ params }) {
-	const page = guideBySlug(params.slug);
-	if (!page) error(404, 'No such page');
-	return { page };
-}
+const route = pageRoute('guides');
+export const entries = route.entries;
+export const load = route.load;

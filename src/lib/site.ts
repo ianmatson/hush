@@ -16,3 +16,5 @@ export const REPO_URL = 'https://github.com/ianmatson/hush';
 export const SUPPORT_EMAIL = 'support@hush-gh.com';
 
 export const SEARCH_SNIPPET_LENGTH = 160;
+
+export const LAST_CHECKED = '3 October 2026';

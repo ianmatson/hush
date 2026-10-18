@@ -15,7 +15,7 @@ export const DEFAULT_DASH: DashSettings = {
 
 /** GitHub allows about this many searches per GraphQL request before costs climb. */
 export const MAX_QUERIES = 40;
-const MAX_TEAMS_PER_SECTION = 15;
+export const MAX_TEAMS_PER_SECTION = 15;
 
 export interface ExpandedQuery {
 	section: string;

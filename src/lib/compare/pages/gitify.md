@@ -16,7 +16,7 @@ description: Gitify puts GitHub notifications in your menu bar, for free. Hush i
 | ------------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | What it is               | A notification tray app                                                                       | Views of pull requests and issues, with pushes                                   |
 | Where it runs            | Desktop: macOS, Windows, Linux (menu bar or tray)                                             | Web app (installable), on Cloudflare                                             |
-| Price                    | Free                                                                                          | Free in beta; planned $3 a month or $30 a year                                   |
+| Price                    | Free                                                                                          | {{value:hush-price}}                                                             |
 | Open source              | Yes (MIT)                                                                                     | Yes (AGPL-3.0)                                                                   |
 | Where your data is       | On your computer; token in the OS keychain                                                    | On Hush's servers; token encrypted                                               |
 | Sort order               | GitHub's reasons, with filters; group by repository or date                                   | Sections by role, status, repository, category, project status, or your rules    |

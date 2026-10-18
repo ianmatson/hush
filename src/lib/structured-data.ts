@@ -1,4 +1,5 @@
 import { PRICING_NOTE } from '$lib/pricing';
+import { htmlToPlainText } from '$lib/shared/html';
 import { REPO_URL, SHORT_NAME, SITE_NAME, SITE_URL } from '$lib/site';
 
 export type JsonLd = Record<string, unknown>;
@@ -43,25 +44,6 @@ export function softwareData(): JsonLd {
 export interface FaqItem {
 	question: string;
 	answerHtml: string;
-}
-
-const HTML_TAG = /<[^>]*>/g;
-const HTML_ENTITY = /&(?:amp|lt|gt|quot|#39|nbsp);/g;
-const HTML_ENTITIES: Record<string, string> = {
-	'&amp;': '&',
-	'&lt;': '<',
-	'&gt;': '>',
-	'&quot;': '"',
-	'&#39;': "'",
-	'&nbsp;': ' '
-};
-
-export function htmlToPlainText(html: string): string {
-	return html
-		.replace(HTML_TAG, '')
-		.replace(HTML_ENTITY, (entity) => HTML_ENTITIES[entity])
-		.replace(/\s+/g, ' ')
-		.trim();
 }
 
 export function faqData(items: FaqItem[]): JsonLd {

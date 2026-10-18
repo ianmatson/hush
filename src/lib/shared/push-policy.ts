@@ -27,6 +27,7 @@ export const CLEAR_NOTIFICATIONS_OPTIONS: { id: ClearNotifications; label: strin
 ];
 
 export const DIGEST_MINUTES = { min: 5, max: 240 } as const;
+export const MAX_PUSH_DEVICES = 10;
 export const LIMIT_COUNT = { min: 1, max: 50 } as const;
 export const LIMIT_MINUTES = { min: 5, max: 240 } as const;
 

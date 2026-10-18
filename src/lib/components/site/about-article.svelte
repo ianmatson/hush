@@ -1,27 +1,27 @@
 <script lang="ts">
 	import SiteMeta from './site-meta.svelte';
 	import MarkdownBody from './markdown-body.svelte';
-	import type { AboutPage } from '$lib/about';
 	import { renderMarkdown } from '$lib/docs';
 	import { SITE_NAME } from '$lib/site';
+	import type { SitePage } from '$lib/site-pages';
 
 	/** A page for one question (privacy, security): a title, a lead, and its Markdown. */
-	let { page }: { page: AboutPage } = $props();
+	let { page }: { page: SitePage } = $props();
 	const rendered = $derived(renderMarkdown(page.markdown));
 </script>
 
 <SiteMeta
 	title="{page.title} · {SITE_NAME}"
 	description={page.description}
-	path="/{page.slug}"
-	markdownPath="/{page.slug}.md"
+	path={page.path}
+	markdownPath={page.markdownPath}
 />
 
 <article>
 	<h1>{page.title}</h1>
 	<p class="lead">{page.description}</p>
 	<MarkdownBody html={rendered.html} />
-	<p class="md"><a href="/{page.slug}.md">This page as Markdown</a></p>
+	<p class="md"><a href={page.markdownPath}>This page as Markdown</a></p>
 </article>
 
 <style>

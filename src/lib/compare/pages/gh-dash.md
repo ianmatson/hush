@@ -15,7 +15,7 @@ description: gh-dash and Hush both put pull requests and issues into sections fr
 |                          | gh-dash                                                                            | Hush                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Where it runs            | Terminal, as a `gh` CLI extension                                                  | Web app (installable), on Cloudflare                                                         |
-| Price                    | Free                                                                               | Free in beta; planned $3 a month or $30 a year                                               |
+| Price                    | Free                                                                               | {{value:hush-price}}                                                                         |
 | Open source              | Yes (MIT)                                                                          | Yes (AGPL-3.0)                                                                               |
 | Where your data is       | On your computer; uses your `gh` sign-in                                           | On Hush's servers; token encrypted                                                           |
 | Pull requests and issues | Sections from GitHub searches, in YAML                                             | Views of up to 5 searches each, with Hush words such as `size:<50` and `repo:acme/*`         |

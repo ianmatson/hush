@@ -1,5 +1,12 @@
 import type { MockPerson } from './mock';
 import type { RefSuggestion, UserSuggestion } from '$lib/shared/suggest';
+import {
+	EVERYTHING_ELSE_SECTION,
+	ROLE_SECTIONS,
+	STATUS_SECTIONS,
+	type RoleSection,
+	type StatusSection
+} from '$lib/shared/grouping-sections';
 
 export type DemoCheckState = 'success' | 'failure' | 'pending';
 export type DemoGhAction = 'approve' | 'rerun' | 'merge' | 'none';
@@ -44,9 +51,6 @@ export interface DemoPeek {
 	main: DemoGhAction;
 }
 
-export type DemoRole = 'opened' | 'reviews' | 'assigned' | 'involved';
-export type DemoStatus =
-	'no-review' | 'in-review' | 'changes' | 'approved' | 'drafts' | 'unassigned' | 'assigned';
 export type DemoGroupBy = 'role' | 'status' | 'custom';
 
 export interface DemoDashItem {
@@ -58,8 +62,8 @@ export interface DemoDashItem {
 	reason: string;
 	tone?: 'bad' | 'stale';
 	group: 'yours' | 'team' | 'waiting' | 'other';
-	role: DemoRole;
-	status: DemoStatus;
+	role: RoleSection;
+	status: StatusSection;
 	ago: string;
 	actionLabel: string;
 	url: string;
@@ -315,7 +319,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			repo: DEMO_REPO,
 			number: 20454,
 			person: DEMO_GH.cleoPleurodon,
-			reason: 'Review for your team',
+			reason: 'Review for PostHog/team-website',
 			group: 'team',
 			role: 'reviews',
 			status: 'in-review',
@@ -429,7 +433,7 @@ export const DEMO_DASH: Record<'pulls' | 'issues', DemoDashItem[]> = {
 			repo: DEMO_REPO,
 			number: 20423,
 			person: DEMO_GH.ivanagas,
-			reason: 'Mentions you',
+			reason: 'Mine',
 			group: 'other',
 			role: 'involved',
 			status: 'unassigned',
@@ -464,23 +468,6 @@ export const GROUP_BY_CHOICES: { id: DemoGroupBy; label: string }[] = [
 	{ id: 'custom', label: 'Custom sections' }
 ];
 
-export const ROLE_SECTIONS: { id: DemoRole; label: string }[] = [
-	{ id: 'opened', label: 'You opened' },
-	{ id: 'reviews', label: 'Reviews' },
-	{ id: 'assigned', label: 'Assigned to you' },
-	{ id: 'involved', label: 'Involved' }
-];
-
-export const STATUS_SECTIONS: { id: DemoStatus; label: string }[] = [
-	{ id: 'no-review', label: 'No review yet' },
-	{ id: 'in-review', label: 'In review' },
-	{ id: 'changes', label: 'Changes requested' },
-	{ id: 'approved', label: 'Approved' },
-	{ id: 'drafts', label: 'Drafts' },
-	{ id: 'unassigned', label: 'Unassigned' },
-	{ id: 'assigned', label: 'Assigned' }
-];
-
 const SMALL_LINES = 100;
 const linesOf = (item: DemoDashItem) => (item.diff ? item.diff.additions + item.diff.deletions : 0);
 
@@ -496,8 +483,6 @@ export const CUSTOM_SECTIONS: {
 		matches: (i) => !!i.diff && linesOf(i) < SMALL_LINES
 	}
 ];
-
-export const EVERYTHING_ELSE = 'Everything else';
 
 const REF_STATE: Partial<Record<DemoPeek['state'], RefSuggestion['state']>> = {
 	open: 'open',
@@ -545,16 +530,21 @@ export function demoSections(items: DemoDashItem[], by: DemoGroupBy): DemoSectio
 			rule: s.rule,
 			items: []
 		}));
-		const rest: DemoSection = { key: EVERYTHING_ELSE, label: EVERYTHING_ELSE, items: [] };
+		const rest: DemoSection = {
+			key: EVERYTHING_ELSE_SECTION,
+			label: EVERYTHING_ELSE_SECTION,
+			items: []
+		};
 		for (const i of items) {
 			const k = CUSTOM_SECTIONS.findIndex((s) => s.matches(i));
 			(k < 0 ? rest : named[k]).items.push(i);
 		}
 		return [...named, rest].filter((s) => s.items.length);
 	}
-	const fixed = by === 'role' ? ROLE_SECTIONS : STATUS_SECTIONS;
-	const valueOf = (i: DemoDashItem) => (by === 'role' ? i.role : i.status);
+	const fixed: readonly { key: string; label: string }[] =
+		by === 'role' ? ROLE_SECTIONS : STATUS_SECTIONS;
+	const valueOf = (i: DemoDashItem): string => (by === 'role' ? i.role : i.status);
 	return fixed
-		.map((s) => ({ key: s.id, label: s.label, items: items.filter((i) => valueOf(i) === s.id) }))
+		.map((s) => ({ key: s.key, label: s.label, items: items.filter((i) => valueOf(i) === s.key) }))
 		.filter((s) => s.items.length);
 }

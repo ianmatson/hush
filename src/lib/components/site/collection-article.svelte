@@ -1,61 +1,74 @@
 <script lang="ts">
 	import SiteMeta from './site-meta.svelte';
 	import MarkdownBody from './markdown-body.svelte';
-	import { REPO_URL, SITE_NAME } from '$lib/site';
+	import { SITE_NAME } from '$lib/site';
 	import { articleData } from '$lib/structured-data';
 	import { renderMarkdown } from '$lib/docs';
-	import { compareMarkdownPath, comparePath, type ComparePage } from '$lib/compare';
-	import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
+	import { collectionHome, pagesOf, sourceEditUrl, type SitePage } from '$lib/site-pages';
 
-	let { page }: { page: ComparePage } = $props();
+	let {
+		page,
+		section,
+		type,
+		moreTitle,
+		othersLayout
+	}: {
+		page: SitePage;
+		section: string;
+		type: 'Article' | 'TechArticle';
+		moreTitle: string;
+		othersLayout: 'pills' | 'list';
+	} = $props();
 	const rendered = $derived(renderMarkdown(page.markdown));
-	const others = $derived(COMPARE.filter((p) => p !== page));
-	const source = $derived(`${REPO_URL}/blob/main/src/lib/compare/pages/${page.slug}.md`);
+	const homePage = $derived(collectionHome(page.collection)!);
+	const others = $derived(
+		pagesOf(page.collection).filter((p) => p.path !== page.path && p.path !== homePage.path)
+	);
 </script>
 
 <SiteMeta
 	title="{page.title} · {SITE_NAME}"
 	description={page.description}
-	path={comparePath(page)}
+	path={page.path}
 	ogType="article"
-	markdownPath={compareMarkdownPath(page)}
+	markdownPath={page.markdownPath}
 	structuredData={articleData({
-		type: 'Article',
+		type,
 		title: page.title,
 		description: page.description,
-		path: comparePath(page),
+		path: page.path,
 		crumbs: [
 			{ name: SITE_NAME, path: '/' },
-			{ name: 'Compare', path: COMPARE_INDEX.path },
-			{ name: page.title, path: comparePath(page) }
+			{ name: section, path: homePage.path },
+			{ name: page.title, path: page.path }
 		]
 	})}
 />
 
-<div class="compare">
+<div class="collection">
 	<article>
-		<p class="eyebrow"><a href={COMPARE_INDEX.path}>Compare</a></p>
+		<p class="eyebrow"><a href={homePage.path}>{section}</a></p>
 		<h1>{page.title}</h1>
 		<p class="lead">{page.description}</p>
 		<MarkdownBody html={rendered.html} />
 
 		<footer>
-			<p class="others-title">More comparisons</p>
-			<ul class="others">
-				{#each others as other (other.slug)}
-					<li><a href={comparePath(other)}>{other.title}</a></li>
+			<p class="others-title">{moreTitle}</p>
+			<ul class="others {othersLayout}">
+				{#each others as other (other.path)}
+					<li><a href={other.path}>{other.title}</a></li>
 				{/each}
 			</ul>
 			<p class="meta">
-				<a href={compareMarkdownPath(page)}>This page as Markdown</a>
-				<a href={source} rel="noreferrer">Suggest a correction</a>
+				<a href={page.markdownPath}>This page as Markdown</a>
+				<a href={sourceEditUrl(page)} rel="noreferrer">Suggest a correction</a>
 			</p>
 		</footer>
 	</article>
 </div>
 
 <style>
-	.compare {
+	.collection {
 		max-width: 46rem;
 		margin: 0 auto;
 		padding: clamp(2.5rem, 7vw, 4.5rem) 1.5rem 5rem;
@@ -94,21 +107,35 @@
 		color: var(--muted-foreground);
 	}
 	.others {
-		display: flex;
-		flex-wrap: wrap;
 		gap: 0.5rem;
 		margin-top: 0.625rem;
 	}
 	.others a {
-		display: inline-block;
-		padding: 0.375rem 0.75rem;
 		border: 1px solid var(--border);
-		border-radius: 999px;
-		font-size: 0.8125rem;
 		transition: background 0.15s;
 	}
 	.others a:hover {
 		background: var(--muted);
+	}
+	.pills {
+		display: flex;
+		flex-wrap: wrap;
+	}
+	.pills a {
+		display: inline-block;
+		padding: 0.375rem 0.75rem;
+		border-radius: 999px;
+		font-size: 0.8125rem;
+	}
+	.list {
+		display: grid;
+	}
+	.list a {
+		display: block;
+		padding: 0.625rem 0.875rem;
+		border-radius: 0.625rem;
+		font-size: 0.875rem;
+		line-height: 1.4;
 	}
 	.meta {
 		display: flex;

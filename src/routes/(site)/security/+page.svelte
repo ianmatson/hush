@@ -1,8 +1,8 @@
 <script lang="ts">
 	import AboutArticle from '$lib/components/site/about-article.svelte';
-	import { aboutBySlug } from '$lib/about';
+	import { sitePageAt } from '$lib/site-pages';
 
-	const page = aboutBySlug('security')!;
+	const page = sitePageAt('/security');
 </script>
 
 <AboutArticle {page} />
