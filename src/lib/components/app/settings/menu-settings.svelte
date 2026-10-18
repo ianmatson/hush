@@ -1,17 +1,10 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
-	import { untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import {
-		DEFAULT_MENUS,
-		MENU_ITEMS,
-		MENUS_VERSION,
-		SEP,
-		tidySeparators,
-		type MenuKind
-	} from '$lib/shared/menus';
+	import { createSettingsDraft } from '$lib/settings-draft.svelte';
+	import { DEFAULT_MENUS, MENU_ITEMS, SEP, tidySeparators } from '$lib/shared/menus';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Command from '$lib/components/ui/command';
@@ -31,27 +24,22 @@
 
 	const me = createQuery(meQuery);
 	let adding = $state(false);
-	const saved = $derived(me.data?.settings.menus);
 
 	/** One entry of the list. Separators repeat, so each row has its own stable key. */
 	type Row = { id: string; key: string };
 	let nextKey = 0;
 	const toRows = (ids: string[]): Row[] =>
 		ids.map((id) => ({ id, key: id === SEP ? `sep-${nextKey++}` : id }));
+	const isSep = (id: string) => id === SEP;
 
-	const kind: MenuKind = 'dash';
-	let draft = $state<Record<MenuKind, Row[]>>({ dash: [] });
-	const ids = (k: MenuKind) => draft[k].map((r) => r.id);
-	let dirty = $state(false);
-	let saving = $state(false);
-	const load = (s: { dash: string[] }) => (draft = { dash: toRows(s.dash) });
-	// Fill the editor once the settings arrive, and after each save.
-	$effect(() => {
-		const s = saved;
-		untrack(() => {
-			if (s && !dirty) load(s);
-		});
+	const editor = createSettingsDraft<string[], Row[]>({
+		saved: () => me.data?.settings.menus.dash,
+		toDraft: toRows,
+		fromDraft: (rows) => rows.map((r) => r.id),
+		save: (ids) => saveSettings({ menus: { dash: tidySeparators(ids, isSep) } }, 'Menus saved')
 	});
+	const rows = $derived(editor.draft ?? []);
+	const ids = $derived(rows.map((r) => r.id));
 
 	const ICONS: Record<string, Component> = {
 		peek: PanelRightOpen,
@@ -65,7 +53,7 @@
 		selectAll: SquareCheck
 	};
 	const iconOf = (id: string) => ICONS[id] ?? ArrowRightLeft;
-	const info = (id: string) => MENU_ITEMS[kind].find((i) => i.id === id);
+	const info = (id: string) => MENU_ITEMS.dash.find((i) => i.id === id);
 	/** Preview labels: what the menu says for a typical item. */
 	const PREVIEW: Record<string, string> = {
 		main: 'Review',
@@ -75,29 +63,13 @@
 	};
 	const SUBMENUS = new Set(['snooze']);
 
-	const unused = $derived(MENU_ITEMS[kind].filter((i) => !ids(kind).includes(i.id)));
-	const preview = $derived(tidySeparators(ids(kind), (id) => id === SEP));
+	const unused = $derived(MENU_ITEMS.dash.filter((i) => !ids.includes(i.id)));
+	const preview = $derived(tidySeparators(ids, isSep));
 
-	function set(list: Row[]) {
-		draft[kind] = list;
-		dirty = true;
-	}
-	const remove = (k: number) => set(draft[kind].filter((_, i) => i !== k));
-	const add = (id: string) => set([...draft[kind], ...toRows([id])]);
-
-	async function save() {
-		saving = true;
-		// Separators at the ends or next to each other do nothing; save the tidy list.
-		const menus = {
-			dash: tidySeparators(ids('dash'), (id) => id === SEP),
-			v: MENUS_VERSION
-		};
-		if (await saveSettings({ menus }, 'Menus saved')) dirty = false;
-		saving = false;
-	}
-	function reset() {
-		set(toRows(DEFAULT_MENUS[kind]));
-	}
+	const set = (list: Row[]) => (editor.draft = list);
+	const remove = (k: number) => set(rows.filter((_, i) => i !== k));
+	const add = (id: string) => set([...rows, ...toRows([id])]);
+	const reset = () => set(toRows(DEFAULT_MENUS.dash));
 </script>
 
 <!-- Items not in the menu, to add: a searchable list, not a wall of buttons. -->
@@ -171,7 +143,7 @@
 		</p>
 	</div>
 
-	{#if saved}
+	{#if editor.draft}
 		<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
 			<Card.Root>
 				<Card.Header>
@@ -183,7 +155,7 @@
 				</Card.Header>
 				<Card.Content class="grid grid-cols-[minmax(0,1fr)] gap-4">
 					<SortableList
-						items={draft[kind]}
+						items={rows}
 						onchange={set}
 						label="Menu items in order"
 						empty="The menu is empty."
@@ -208,17 +180,12 @@
 				<Card.Footer class="flex flex-wrap justify-between gap-2 border-t">
 					<Button variant="ghost" size="sm" onclick={reset}>Reset to default</Button>
 					<div class="flex gap-2">
-						{#if dirty}
-							<Button
-								variant="ghost"
-								size="sm"
-								onclick={() => {
-									dirty = false;
-									if (saved) load(saved);
-								}}>Cancel</Button
-							>
+						{#if editor.dirty}
+							<Button variant="ghost" size="sm" onclick={editor.discard}>Cancel</Button>
 						{/if}
-						<Button size="sm" disabled={!dirty || saving} onclick={save}>Save</Button>
+						<Button size="sm" disabled={!editor.dirty || editor.saving} onclick={editor.save}
+							>Save</Button
+						>
 					</div>
 				</Card.Footer>
 			</Card.Root>

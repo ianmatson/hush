@@ -2,18 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, parseSettings } from './settings';
 import {
 	SETTINGS_DOCS,
+	SETTINGS_SECTIONS,
+	defaultOf,
 	mergeSettings,
+	settingsChanges,
 	settingsFile,
 	settingsFromFile,
 	settingsOverrides,
+	validateAboutConditions,
 	validateSettings
 } from './settings-schema';
+import { MAX_SMART_CONDITIONS } from './decisions';
 
 describe('settings file', () => {
 	it('has only your changes', () => {
 		const s = mergeSettings(DEFAULT_SETTINGS, {
 			pushWhileOpen: true,
-			dash: { staleDays: 5 } as never
+			dash: { staleDays: 5 }
 		});
 		const file = settingsFile(s);
 		expect(file.settings).toEqual({ pushWhileOpen: true, dash: { staleDays: 5 } });
@@ -77,7 +82,7 @@ describe('settings schema', () => {
 	});
 
 	it('keeps the rest of a group', () => {
-		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } as never });
+		const s = mergeSettings(DEFAULT_SETTINGS, { dash: { hideBots: false } });
 		expect(s.dash.staleDays).toEqual(DEFAULT_SETTINGS.dash.staleDays);
 		expect(settingsOverrides(s)).toEqual({ dash: { hideBots: false } });
 	});
@@ -136,5 +141,71 @@ describe('swipe settings', () => {
 		expect(check({ dash: { left: 'merge', right: 'snooze' } })).toMatch(/swipe.dash.left/);
 		expect(check({ dash: { up: 'snooze' } })).toMatch(/left.*right/);
 		expect(check({ inbox: {} })).toMatch(/swipe.inbox/);
+	});
+});
+
+describe('settingsChanges', () => {
+	it('has only the settings that changed', () => {
+		const base = { pushWhileOpen: false, views: DEFAULT_SETTINGS.views };
+		expect(settingsChanges(base, { ...base, pushWhileOpen: true })).toEqual({
+			pushWhileOpen: true
+		});
+		expect(settingsChanges(base, base)).toEqual({});
+	});
+
+	it('has only the keys of a group that changed, so other changes to the group stay', () => {
+		const base = { dash: DEFAULT_SETTINGS.dash };
+		const next = { dash: { ...DEFAULT_SETTINGS.dash, excludedTeams: ['acme/everyone'] } };
+		const patch = settingsChanges(base, next);
+		expect(patch).toEqual({ dash: { excludedTeams: ['acme/everyone'] } });
+		const changedElsewhere = mergeSettings(DEFAULT_SETTINGS, {
+			dash: { hideBots: !DEFAULT_SETTINGS.dash.hideBots }
+		});
+		expect(mergeSettings(changedElsewhere, patch).dash).toEqual({
+			...changedElsewhere.dash,
+			excludedTeams: ['acme/everyone']
+		});
+	});
+});
+
+describe('about: conditions', () => {
+	const PER_GROUP = 15;
+	const topic = (i: number) => ({
+		id: `topic-${i}`,
+		name: `Topic ${i}`,
+		color: 'blue' as const,
+		rule: `about:"topic ${i}"`,
+		description: ''
+	});
+	const groupsWith = (count: number) =>
+		Array.from({ length: Math.ceil(count / PER_GROUP) }, (_, g) => ({
+			id: `topics-${g}`,
+			name: `Topics ${g}`,
+			categories: Array.from({ length: Math.min(PER_GROUP, count - g * PER_GROUP) }, (_, i) =>
+				topic(g * PER_GROUP + i)
+			)
+		}));
+
+	it(`allows up to ${MAX_SMART_CONDITIONS} different conditions, the same check as a save`, () => {
+		const atLimit = { categoryGroups: groupsWith(MAX_SMART_CONDITIONS) };
+		const overLimit = { categoryGroups: groupsWith(MAX_SMART_CONDITIONS + 1) };
+		expect(validateAboutConditions(atLimit)).toBeNull();
+		expect(validateAboutConditions(overLimit)).toMatch(/about: conditions/);
+		expect(validateSettings(mergeSettings(DEFAULT_SETTINGS, overLimit), ['categoryGroups'])).toBe(
+			validateAboutConditions(overLimit)
+		);
+	});
+});
+
+describe('defaultOf', () => {
+	it('reads a setting and a key of a group', () => {
+		expect(defaultOf('pushRepeat')).toBe(DEFAULT_SETTINGS.pushRepeat);
+		expect(defaultOf('dash.hideBots')).toBe(DEFAULT_SETTINGS.dash.hideBots);
+	});
+});
+
+describe('settings sections', () => {
+	it('names the page of every documented setting', () => {
+		for (const d of SETTINGS_DOCS) if (d.page) expect(SETTINGS_SECTIONS[d.page].label).toBeTruthy();
 	});
 });

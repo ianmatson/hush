@@ -3,6 +3,7 @@ import {
 	digestWindowIsOver,
 	heldAreDue,
 	holdReason,
+	isWholeIn,
 	keptSends,
 	limitRoom,
 	mayBuzzAgain,
@@ -110,5 +111,21 @@ describe('validation', () => {
 		expect(validateDigestMinutes(30.5)).not.toBeNull();
 		expect(validatePushLimit({ count: 0, minutes: 30 })).not.toBeNull();
 		expect(validatePushLimit({ count: 3, minutes: 30, burst: 1 })).not.toBeNull();
+	});
+});
+
+describe('isWholeIn', () => {
+	const range = { min: 5, max: 240 };
+
+	it('takes whole numbers from min to max', () => {
+		expect(isWholeIn(5, range)).toBe(true);
+		expect(isWholeIn(240, range)).toBe(true);
+	});
+
+	it('refuses numbers out of range, parts of a number, and other types', () => {
+		expect(isWholeIn(4, range)).toBe(false);
+		expect(isWholeIn(241, range)).toBe(false);
+		expect(isWholeIn(7.5, range)).toBe(false);
+		expect(isWholeIn('30', range)).toBe(false);
 	});
 });

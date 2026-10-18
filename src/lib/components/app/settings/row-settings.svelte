@@ -18,7 +18,7 @@
 
 	function toggle(part: string, on: boolean) {
 		const hidden = rows[kind].filter((p) => p !== part);
-		return saveSettings({ rows: { ...rows, [kind]: on ? hidden : [...hidden, part] } });
+		return saveSettings({ rows: { [kind]: on ? hidden : [...hidden, part] } });
 	}
 
 	const isDefault = $derived(JSON.stringify(rows[kind]) === JSON.stringify(DEFAULT_ROWS[kind]));
@@ -32,7 +32,7 @@
 				variant="ghost"
 				size="xs"
 				disabled={isDefault}
-				onclick={() => saveSettings({ rows: { ...rows, [kind]: DEFAULT_ROWS[kind] } })}
+				onclick={() => saveSettings({ rows: { [kind]: DEFAULT_ROWS[kind] } })}
 				><RotateCcw /> Defaults</Button
 			></Card.Action
 		>

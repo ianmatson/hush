@@ -35,7 +35,7 @@
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, queryClient, setSettings } from '$lib/queries';
+	import { dashQuery, keys, queryClient } from '$lib/queries';
 	import { applySettings } from '$lib/save-settings';
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
@@ -565,11 +565,9 @@
 		const settings = me.data?.settings;
 		if (!settings) return;
 		const views = settings.views.map((v) => (v.id === view.id ? { ...v, ...patch } : v));
-		setSettings({ ...settings, views });
 		try {
 			await applySettings({ views });
 		} catch (err) {
-			setSettings(settings);
 			toast.error((err as Error).message);
 		}
 	}

@@ -21,6 +21,7 @@
 		searchKinds
 	} from '$lib/shared/item-views';
 	import { viewFeedView } from '$lib/shared/views';
+	import { moveItem, unusedName } from '$lib/draft-edits';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
@@ -128,17 +129,16 @@
 	}
 
 	function addSection() {
-		const used = new Set(sections.map((s) => s.name.toLowerCase()));
-		let n = sections.length + 1;
-		while (used.has(`section ${n}`)) n++;
-		view.sections = [...sections, { name: `Section ${n}`, rule: '' }];
+		const name = unusedName(
+			'Section',
+			sections.map((s) => s.name),
+			sections.length + 1
+		);
+		view.sections = [...sections, { name, rule: '' }];
 	}
 
 	function moveSection(index: number, by: number) {
-		const list = [...sections];
-		const [s] = list.splice(index, 1);
-		list.splice(index + by, 0, s);
-		view.sections = list;
+		view.sections = moveItem(sections, index, by);
 	}
 
 	function setSection(index: number, patch: Partial<ViewSection>) {

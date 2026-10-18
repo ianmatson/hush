@@ -6,6 +6,7 @@ import type { CategoryPin } from '$lib/shared/categories';
 import type { DashKind, MergeMethod, ReactionContent, Settings } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
+import type { SettingsPatch } from '$lib/shared/settings-schema';
 import type {
 	CommentTarget,
 	CommitDiff,
@@ -93,9 +94,11 @@ export const api = {
 	/** You looked at these PRs or issues ("owner/repo#123"). */
 	seen: (keys: string[]) => ok(client.api.seen.$post({ json: { keys } })),
 	unseen: (keys: string[]) => ok(client.api.unseen.$post({ json: { keys } })),
-	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
+	saveSettings: (s: SettingsPatch) =>
+		ok(client.api.settings.$put({ json: s as Partial<Settings> })),
 	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */
-	replaceSettings: (s: Partial<Settings>) => ok(client.api.settings.all.$put({ json: s })),
+	replaceSettings: (s: SettingsPatch) =>
+		ok(client.api.settings.all.$put({ json: s as Partial<Settings> })),
 	vapidKey: () => ok(client.api.push['vapid-key'].$get()),
 	subscriptions: () => ok(client.api.push.subscriptions.$get()),
 	subscribe: (sub: PushSubscriptionJSON, label: string) =>

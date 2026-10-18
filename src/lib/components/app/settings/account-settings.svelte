@@ -2,10 +2,11 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { loadOrgs, orgNote, setOrgNoteOff } from '$lib/org-note.svelte';
-	import { keys, leaveTo, meQuery, queryClient, sessionsQuery } from '$lib/queries';
+	import { keys, leaveTo, meQuery, queryClient, sessionsQuery, signOut } from '$lib/queries';
+	import { takeSearchParams } from '$lib/search-params';
+	import { GITHUB_MARK } from '$lib/components/site/github-mark';
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -39,11 +40,6 @@
 		}
 	}
 
-	async function signOut() {
-		await api.logout().catch(() => {});
-		leaveTo('/login');
-	}
-
 	// The orgs your sign-in can see: loaded when this page opens, unless this browser said
 	// "Don't show again" (then only on request). GitHub omits orgs that have not approved Hush.
 	const access = $derived(orgNote.access);
@@ -64,16 +60,7 @@
 	let switchError = $state<string | null>(null);
 	onMount(() => {
 		if (!orgNote.off || orgNote.access) showOrgs();
-		const url = new URL(location.href);
-		switchError = url.searchParams.get('token_error');
-		if (switchError) {
-			url.searchParams.delete('token_error');
-			goto(url.pathname + url.search + url.hash, {
-				replaceState: true,
-				noScroll: true,
-				keepFocus: true
-			});
-		}
+		switchError = takeSearchParams('token_error').token_error;
 	});
 
 	// A custom token, in place of the one from your GitHub sign-in.
@@ -203,9 +190,7 @@
 					{:else}
 						<Badge variant="outline"
 							><svg viewBox="0 0 16 16" class="size-3" aria-hidden="true" fill="currentColor"
-								><path
-									d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-								/></svg
+								><path d={GITHUB_MARK} /></svg
 							>GitHub sign-in</Badge
 						>
 					{/if}

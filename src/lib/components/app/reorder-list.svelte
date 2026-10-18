@@ -4,6 +4,7 @@
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { ListDrag } from '$lib/drag.svelte';
+	import { moveItem } from '$lib/draft-edits';
 	import { cn } from '$lib/utils';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 
@@ -32,11 +33,7 @@
 	const GAP_MOTION = { duration: 180, easing: cubicOut };
 
 	function moveTo(from: number, to: number) {
-		if (to < 0 || to >= items.length) return;
-		const next = [...items];
-		const [x] = next.splice(from, 1);
-		next.splice(to, 0, x);
-		onchange(next);
+		if (to >= 0 && to < items.length) onchange(moveItem(items, from, to - from));
 	}
 
 	const drag = new ListDrag({

@@ -102,7 +102,12 @@ export function keptSends(recentSends: number[], now: number, limit: PushLimit |
 	return recentSends.filter((at) => at > windowStart).slice(-LIMIT_COUNT.max);
 }
 
-const isWholeIn = (v: unknown, range: { min: number; max: number }) =>
+export interface WholeRange {
+	min: number;
+	max: number;
+}
+
+export const isWholeIn = (v: unknown, range: WholeRange): v is number =>
 	Number.isInteger(v) && (v as number) >= range.min && (v as number) <= range.max;
 
 export function validatePushRepeat(v: unknown): string | null {

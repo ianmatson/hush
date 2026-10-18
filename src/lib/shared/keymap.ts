@@ -233,6 +233,8 @@ export function keyText(chord: string, mac: boolean): string {
 	return [...parts.map((m) => mod[m]), shown].join(mac ? ' ' : ' + ');
 }
 
+export const MAX_KEYS_PER_COMMAND = 4;
+
 export const knownKeys = (saved: Record<string, string[]> | undefined): Record<string, string[]> =>
 	Object.fromEntries(Object.entries(saved ?? {}).filter(([id]) => COMMAND.has(id)));
 
@@ -242,8 +244,8 @@ export function validateKeys(v: unknown): string | null {
 		return '"keys" must be an object: { "command id": ["key", …] }.';
 	for (const [id, list] of Object.entries(v)) {
 		if (!COMMAND.has(id)) return `"keys": unknown command "${id}".`;
-		if (!Array.isArray(list) || list.length > 4)
-			return `"keys.${id}" must be a list of up to 4 keys.`;
+		if (!Array.isArray(list) || list.length > MAX_KEYS_PER_COMMAND)
+			return `"keys.${id}" must be a list of up to ${MAX_KEYS_PER_COMMAND} keys.`;
 		for (const k of list) if (!validChord(k)) return `"keys.${id}": "${String(k)}" is not a key.`;
 	}
 	return null;

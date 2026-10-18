@@ -3,8 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
-	import { alertsQuery, dashQuery, leaveTo, meQuery } from '$lib/queries';
+	import { alertsQuery, dashQuery, meQuery, signOut } from '$lib/queries';
 	import { fitItems } from '$lib/fit';
 	import { tick } from 'svelte';
 	import type { DashResponse } from '$lib/shared/types';
@@ -74,11 +73,6 @@
 		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	const MORE_CLASS =
 		'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground hover:text-foreground';
-
-	async function signOut() {
-		await api.logout().catch(() => {});
-		leaveTo('/login');
-	}
 </script>
 
 {#snippet badge(n: number | null | undefined, extra = '')}

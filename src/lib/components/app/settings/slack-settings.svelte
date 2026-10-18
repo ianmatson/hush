@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	import { takeSearchParams } from '$lib/search-params';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
 	import { keys, meQuery, queryClient, slackQuery } from '$lib/queries';
@@ -22,10 +22,8 @@
 	const me = createQuery(meQuery);
 	const channels = $derived(me.data?.settings.alertChannels);
 
-	function saveChannel(channel: keyof AlertChannels, on: boolean) {
-		if (!channels) return Promise.resolve(false);
-		return saveSettings({ alertChannels: { ...channels, [channel]: on } });
-	}
+	const saveChannel = (channel: keyof AlertChannels, on: boolean) =>
+		saveSettings({ alertChannels: { [channel]: on } });
 	const mentions = $derived(slack.data?.mentions);
 
 	type Action = 'test' | 'disconnect' | 'disconnect-mentions';
@@ -55,20 +53,13 @@
 	};
 
 	onMount(() => {
-		const url = new URL(location.href);
-		const connected = CONNECTED_TOASTS[url.searchParams.get(CONNECTED_PARAM) ?? ''];
-		const error = url.searchParams.get(ERROR_PARAM);
+		const params = takeSearchParams(CONNECTED_PARAM, ERROR_PARAM);
+		const connected = CONNECTED_TOASTS[params[CONNECTED_PARAM] ?? ''];
+		const error = params[ERROR_PARAM];
 		if (!connected && !error) return;
 		queryClient.invalidateQueries({ queryKey: keys.slack });
 		if (connected) toast.success(connected);
 		if (error) toast.error(error);
-		url.searchParams.delete(CONNECTED_PARAM);
-		url.searchParams.delete(ERROR_PARAM);
-		goto(url.pathname + url.search + url.hash, {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true
-		});
 	});
 </script>
 

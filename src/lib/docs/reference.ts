@@ -18,7 +18,14 @@ import {
 	MAX_DESCRIPTION_CHARS,
 	MAX_MARK_NAME_CHARS
 } from '$lib/shared/categories';
-import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
+import {
+	COMMAND,
+	COMMANDS,
+	MAX_KEYS_PER_COMMAND,
+	SCOPE_LABEL,
+	keyText,
+	type KeyScope
+} from '$lib/shared/keymap';
 import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import {
 	IS_VALUES,
@@ -29,8 +36,12 @@ import {
 } from '$lib/shared/query';
 import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
 import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
-import { DEFAULT_SETTINGS } from '$lib/shared/settings';
-import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
+import {
+	defaultOf,
+	SETTINGS_DOCS,
+	SETTINGS_SECTIONS,
+	type SettingsPage
+} from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
 import { THEMES } from '$lib/themes/list';
@@ -81,20 +92,7 @@ const table = (head: string[], rows: string[][]) =>
 		...rows.map((r) => `| ${r.map(cell).join(' | ')} |`)
 	].join('\n');
 
-const PAGE: Record<SettingsPage, string> = {
-	general: 'Settings → General',
-	views: 'Settings → Views',
-	categories: 'Settings → Categories',
-	notifications: 'Settings → Notifications',
-	keys: 'Settings → Keybinds'
-};
-
-/** The default of a setting key, also of a group key such as "dash.pr". */
-export function defaultOf(key: string): unknown {
-	const [group, sub] = key.split('.');
-	const v = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[group];
-	return sub ? (v as Record<string, unknown>)[sub] : v;
-}
+const settingsPageName = (page: SettingsPage) => `Settings → ${SETTINGS_SECTIONS[page].label}`;
 
 /**
  * What the docs add to each setting: its type, and what it controls in more depth than the
@@ -367,7 +365,7 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	},
 	keys: {
 		type: 'object: command id → array of keys',
-		body: `The keyboard shortcuts that you changed. For each [command id](/docs/keybinds#all-shortcuts), the keys that replace its default keys, up to 4. \`[]\` turns the shortcut off. Commands that you do not list keep their defaults.
+		body: `The keyboard shortcuts that you changed. For each [command id](/docs/keybinds#all-shortcuts), the keys that replace its default keys, up to ${MAX_KEYS_PER_COMMAND}. \`[]\` turns the shortcut off. Commands that you do not list keep their defaults.
 
 How to write a key:
 
@@ -391,7 +389,7 @@ function settingsReference(): string {
 				`[${code(d.key)}](#${slug(d.key)})`,
 				SETTING_DETAILS[d.key]?.type ?? '',
 				def.length > 40 ? '(see below)' : code(def),
-				d.page ? PAGE[d.page] : 'settings.json only'
+				d.page ? settingsPageName(d.page) : 'settings.json only'
 			];
 		})
 	);
@@ -401,7 +399,7 @@ function settingsReference(): string {
 		const detail = SETTING_DETAILS[d.key];
 		return [
 			`### ${d.key}`,
-			`**Type:** ${detail?.type ?? ''} · **Default:** ${text.length > 60 ? 'below' : code(text)} · **In the app:** ${d.page ? PAGE[d.page] : 'none (settings.json only)'}`,
+			`**Type:** ${detail?.type ?? ''} · **Default:** ${text.length > 60 ? 'below' : code(text)} · **In the app:** ${d.page ? settingsPageName(d.page) : 'none (settings.json only)'}`,
 			d.description,
 			detail?.body ?? '',
 			text.length > 60 && !d.key.startsWith('dash.') ? `The default:\n\n${pretty(def)}` : ''

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
+	import { randomId } from '$lib/draft-edits';
 	import type { ValueSuggestion } from '$lib/shared/rule-builder';
 	import * as Popover from '$lib/components/ui/popover';
 	import X from '@lucide/svelte/icons/x';
@@ -20,7 +21,7 @@
 
 	const SEPARATOR = /[,\n]/;
 	const MAX_SHOWN = 8;
-	const listId = `chips-${Math.random().toString(36).slice(2, 8)}`;
+	const listId = randomId('chips');
 
 	let anchor = $state<HTMLDivElement | null>(null);
 	let draft = $state('');

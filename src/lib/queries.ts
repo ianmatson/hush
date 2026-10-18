@@ -11,6 +11,7 @@ import { live } from '$lib/live-state.svelte';
 import { DRAFTS_KEY } from '$lib/drafts';
 import { pullFilePageCount } from '$lib/shared/diff';
 import { api, ApiError } from '$lib/api';
+import { withUnsavedSettings } from '$lib/unsaved-settings';
 import type { DashKind, MeDTO, PeekDTO, Settings } from '$lib/shared/types';
 
 const MIN = 60_000;
@@ -113,10 +114,15 @@ const afterNextPoll = (extra: number) => (): number | false => {
 	return wait > 5_000 ? Math.min(wait, 16 * MIN) : MIN;
 };
 
+async function fetchMe() {
+	const me = await api.me();
+	return { ...me, settings: withUnsavedSettings(me.settings) };
+}
+
 export const meQuery = () =>
 	queryOptions({
 		queryKey: keys.me,
-		queryFn: api.me,
+		queryFn: fetchMe,
 		staleTime: MIN,
 		refetchInterval: afterNextPoll(5_000)
 	});
@@ -177,8 +183,13 @@ export const searchCountQuery = (q: string) =>
 		retry: false
 	});
 
-export function setSettings(settings: Settings) {
-	queryClient.setQueryData<MeDTO>(keys.me, (old) => (old ? { ...old, settings } : old));
+export const cachedSettings = (): Settings | undefined =>
+	queryClient.getQueryData<MeDTO>(keys.me)?.settings;
+
+export function updateCachedSettings(change: (settings: Settings) => Settings) {
+	queryClient.setQueryData<MeDTO>(keys.me, (old) =>
+		old ? { ...old, settings: change(old.settings) } : old
+	);
 }
 
 /** Forget everything, e.g. on sign-out. */
@@ -201,6 +212,11 @@ export function leaveTo(path: '/login' | '/v') {
 	leaving = true;
 	clearCache();
 	location.replace(path);
+}
+
+export async function signOut() {
+	await api.logout().catch(() => {});
+	leaveTo('/login');
 }
 
 /** One PR or issue for the peek panel. Fetched when opened (about 1 GraphQL point), never polled. */

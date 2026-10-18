@@ -6,6 +6,7 @@ import {
 	commandIn,
 	conflicts,
 	keyText,
+	MAX_KEYS_PER_COMMAND,
 	validChord,
 	validateKeys
 } from './keymap';
@@ -78,5 +79,10 @@ describe('keymap', () => {
 		expect(validateKeys({ 'dash.snooze': ['Shift+Mod+d'] })).toMatch(/not a key/);
 		expect(validateKeys({ 'dash.snooze': 'd' })).toMatch(/list/);
 		expect(validateKeys([])).toMatch(/object/);
+		const keys = ['a', 'b', 'c', 'd', 'e'];
+		expect(validateKeys({ 'dash.snooze': keys.slice(0, MAX_KEYS_PER_COMMAND) })).toBeNull();
+		expect(validateKeys({ 'dash.snooze': keys.slice(0, MAX_KEYS_PER_COMMAND + 1) })).toMatch(
+			/up to/
+		);
 	});
 });
