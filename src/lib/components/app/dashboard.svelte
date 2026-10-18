@@ -73,7 +73,6 @@
 		ViewSort
 	} from '$lib/shared/types';
 	import { viewKinds } from '$lib/shared/item-views';
-	import { page } from '$app/state';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import {
@@ -129,15 +128,11 @@
 	const showingKey = (id: string) => `hush:view-kind:${id}`;
 	function readShowing(v: ItemView): Showing {
 		const options = showingOptions(v);
-		const asked = page.url.searchParams.get('show') ?? localStorage.getItem(showingKey(v.id));
-		return options.find((k) => k === asked) ?? options[0] ?? 'pr';
+		const asked = localStorage.getItem(showingKey(v.id));
+		const everythingItFinds = options.includes('both') ? 'both' : options[0];
+		return options.find((k) => k === asked) ?? everythingItFinds ?? 'pr';
 	}
 	let showing = $state<Showing>(readShowing(untrack(() => view)));
-	const showParam = $derived(page.url.searchParams.get('show'));
-	$effect(() => {
-		void showParam;
-		untrack(() => (showing = readShowing(view)));
-	});
 	function show(next: Showing) {
 		showing = next;
 		localStorage.setItem(showingKey(view.id), next);
@@ -231,7 +226,14 @@
 	const tableLayout = $derived(me.data?.settings.rowLayout === 'table');
 	const tableColumns = $derived(me.data?.settings.tableColumns ?? []);
 
-	const snoozedCount = $derived(data?.items.filter((i) => i.dismissed && inView(i)).length ?? 0);
+	const putAside = $derived((data?.items ?? []).filter((i) => i.dismissed && inView(i)));
+	const snoozedCount = $derived(putAside.length);
+	const putAsideLabel = $derived.by(() => {
+		const muted = putAside.some((i) => i.muted);
+		const snoozed = putAside.some((i) => !i.muted);
+		if (muted && snoozed) return 'Snoozed and muted';
+		return muted ? 'Muted' : 'Snoozed';
+	});
 	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
 
 	const peekOwner = $derived(`view:${view.id}:${showing}`);
@@ -862,7 +864,7 @@
 					onclick={() => (showSnoozed = !showSnoozed)}
 				>
 					<AlarmClock /><span class="hidden sm:inline"
-						>{showSnoozed ? 'Showing snoozed' : 'Snoozed'}</span
+						>{showSnoozed ? `Showing ${putAsideLabel.toLowerCase()}` : putAsideLabel}</span
 					>
 					{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
 				</Button>

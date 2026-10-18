@@ -228,7 +228,7 @@
 				<div class="grid gap-1.5">
 					<h3 class="text-xs font-medium text-muted-foreground">Reviews</h3>
 					{#if !pr.reviews.length && !pr.requested.length}
-						<p class="text-muted-foreground">No reviews yet.</p>
+						<p class="text-muted-foreground">No approvals or change requests yet.</p>
 					{/if}
 					{#each pr.reviews as r (r.who.login)}
 						{@const rv = REVIEW[r.state] ?? REVIEW.COMMENTED}

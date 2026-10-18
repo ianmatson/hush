@@ -80,6 +80,30 @@ describe('SettingsDraft', () => {
 		await saving;
 	});
 
+	it('saves only your edits on top of what another tab saved meanwhile', async () => {
+		type Views = { views: { id: string; name: string }[] };
+		const server: { current: Views } = {
+			current: {
+				views: [
+					{ id: 'mine', name: 'Mine' },
+					{ id: 'theirs', name: 'Theirs' }
+				]
+			}
+		};
+		const save = vi.fn(async () => true);
+		const draft = new SettingsDraft<Views>({ saved: () => server.current, save });
+		draft.reloadWhileClean();
+		draft.draft!.views[0].name = 'Mine, renamed';
+		server.current = { views: [{ id: 'mine', name: 'Mine' }] };
+
+		await draft.save();
+
+		const kept = { views: [{ id: 'mine', name: 'Mine, renamed' }] };
+		expect(save).toHaveBeenCalledWith(kept, server.current);
+		expect(draft.draft).toEqual(kept);
+		expect(draft.dirty).toBe(false);
+	});
+
 	it('stays unsaved when the save fails', async () => {
 		const server = { current: { name: 'Mine', hideBots: false } };
 		const { draft } = draftOf(

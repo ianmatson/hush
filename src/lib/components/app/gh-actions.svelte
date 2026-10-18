@@ -62,7 +62,8 @@
 		return c ? keysOf(c)[0] : undefined;
 	};
 
-	const armedConfirm = new ArmedConfirm();
+	const GH_ACTION_CONFIRM_MS = 10_000;
+	const armedConfirm = new ArmedConfirm(GH_ACTION_CONFIRM_MS);
 	onDestroy(() => armedConfirm.dispose());
 	const confirmKey = (id: GhActionId) => `${repo}#${number}:${id}`;
 	const confirming = (id: GhActionId) => armedConfirm.isArmed(confirmKey(id));

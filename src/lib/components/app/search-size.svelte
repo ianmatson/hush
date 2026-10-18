@@ -16,11 +16,13 @@
 		return () => clearTimeout(timer);
 	});
 
+	const countable = $derived(!!settled.query && !splitSearch(settled.query).errors.length);
 	const count = createQuery(() => ({
 		...searchCountQuery(settled.query),
-		enabled: !!settled.query && !splitSearch(settled.query).errors.length
+		enabled: countable
 	}));
 
+	const stillTyping = $derived(query.trim() !== settled.query);
 	const unscoped = $derived(!!query.trim() && searchIsUnscoped(query));
 	const hushWords = $derived(splitSearch(query).hush);
 	const fmt = (n: number) => n.toLocaleString();
@@ -48,8 +50,8 @@
 		>
 	</p>
 {/if}
-{#if settled.query}
-	{#if count.isPending}
+{#if countable}
+	{#if count.isPending || stillTyping}
 		<p class="text-xs text-muted-foreground">Counting what GitHub finds…</p>
 	{:else if count.isError}
 		<p class="text-xs text-muted-foreground">GitHub could not count this search.</p>

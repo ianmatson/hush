@@ -20,7 +20,7 @@ The address follows the peek: when you open the peek or move it to another item,
 
 ### Full page
 
-The full page shows the same pull request or issue as the peek, in a wider column, with the actions on GitHub in a bar at the bottom.
+The full page shows the same pull request or issue as the peek, in a wider column, with the actions on GitHub in a bar at the bottom. For an item in your views, the bar also has **Snooze**.
 
 - Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
 - {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.

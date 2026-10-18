@@ -229,12 +229,24 @@ export const IS_VALUES: Record<string, string> = {
 	merged: 'Merged'
 };
 
+const GITHUB_ONLY_IS_VALUES = [
+	'unmerged',
+	'public',
+	'private',
+	'locked',
+	'unlocked',
+	'queued',
+	'blocked',
+	'blocking'
+];
+const SEARCH_IS_VALUES = [...Object.keys(IS_VALUES), ...GITHUB_ONLY_IS_VALUES];
+
 /** Words that were renamed: a clear error, not a silent miss. */
 const RENAMED: Record<string, string> = {
 	by: 'from'
 };
 
-const QUERY_KEYS = [...WORDS.map((w) => w.key), 'is'];
+const HUSH_READABLE_KEYS = [...WORDS.filter((w) => w.field).map((w) => w.key), 'is'];
 const WORD = new Map(WORDS.map((w) => [w.key, w]));
 const ONE_GLOB_FIELDS = new Set<Field>(['repo', 'org', 'author', 'by', 'assignee']);
 
@@ -318,7 +330,7 @@ export function parseQuery(query: string): ParsedQuery {
 		}
 		const w = WORD.get(key);
 		if (!w) {
-			errors.push(`Unknown “${rawKey}:”. Use ${QUERY_KEYS.join(', ')}.`);
+			errors.push(`Unknown “${rawKey}:”. Use ${HUSH_READABLE_KEYS.join(', ')}.`);
 			continue;
 		}
 		if (!w.field) {
@@ -419,6 +431,11 @@ const runsInHush = (w: QueryWord, value: string) =>
 	(w.runs === 'both' &&
 		((!!w.bots && value.toLowerCase() === BOTS_VALUE) || HUSH_VALUE.test(value)));
 
+const unknownIsValue = (raw: string) =>
+	splitValues(raw)
+		.map((x) => x.toLowerCase())
+		.find((x) => !SEARCH_IS_VALUES.includes(x));
+
 export function splitSearch(search: string): SplitSearch {
 	if (readsBoard(search)) return { github: search.trim(), hush: '', errors: [] };
 	const github: string[] = [];
@@ -430,6 +447,11 @@ export function splitSearch(search: string): SplitSearch {
 			continue;
 		}
 		const term = parseTerm(t.text);
+		const unknownIs = term?.key.toLowerCase() === 'is' ? unknownIsValue(term.raw) : undefined;
+		if (unknownIs) {
+			errors.push(`Unknown “is:${unknownIs}”. Use ${SEARCH_IS_VALUES.join(', ')}.`);
+			continue;
+		}
 		const w = term ? WORD.get(term.key.toLowerCase()) : undefined;
 		if (!term || !w) {
 			github.push(t.text);
