@@ -187,8 +187,9 @@
 			<div class="open-copy">
 				<p>
 					The app, the server, and this site are on GitHub under AGPL‑3.0. Read what Hush does with
-					your token, or run your own copy on your own Cloudflare account. Hush has no analytics,
-					and it shares nothing.
+					your token, or run your own copy on your own Cloudflare account. Hush has no analytics.
+					Apart from the services it runs on, only TypeSafe's Jev model reads your PRs and issues,
+					for smart decisions, and you can turn those off.
 				</p>
 				<p class="muted">{PRICING_NOTE}</p>
 				<p class="links">

@@ -112,7 +112,8 @@
 		<p class="text-sm text-muted-foreground">
 			Sort your PRs and issues into groups. Each item gets one category from each group: the first
 			one whose rule matches, top to bottom, or else the one that Jev picks from the descriptions.
-			If neither works, the item is “Not sorted” in that group. Rules use the
+			Jev picks only when a group has two or more categories with a description. If neither works,
+			the item is “Not sorted” in that group. Rules use the
 			<a class="underline" href="/docs/query-language" target="_blank" rel="noreferrer"
 				>query language</a
 			>.
