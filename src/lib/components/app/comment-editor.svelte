@@ -4,6 +4,7 @@
 	import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { DROP_TARGET_CLASS, Uploads, getAttachTarget } from '$lib/attachments.svelte';
+	import { MAX_COMMENT_LENGTH } from '$lib/shared/actions';
 	import type { PeekDTO, PeekEntry } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -25,11 +26,10 @@
 	let saving = $state(false);
 	let error = $state('');
 	const uploads = new Uploads(getAttachTarget());
-	const maxLength = 65_536;
 	const canSave = $derived(
 		!!text.trim() &&
 			text.trim() !== entry.body?.trim() &&
-			text.length <= maxLength &&
+			text.length <= MAX_COMMENT_LENGTH &&
 			!saving &&
 			!uploads.pending
 	);
@@ -77,7 +77,7 @@
 		rows="5"
 		aria-label="Edit the comment"
 		aria-invalid={!!error}
-		maxlength={maxLength}
+		maxlength={MAX_COMMENT_LENGTH}
 		disabled={saving}
 		class={cn(
 			'w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50',

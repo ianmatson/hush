@@ -7,7 +7,7 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, leaveTo, meQuery, queryClient, refetchUnlessLive } from '$lib/queries';
+	import { dashQuery, keys, meQuery, queryClient, refetchUnlessLive, signOut } from '$lib/queries';
 	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
@@ -26,8 +26,15 @@
 	import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
 	import ToggleLeft from '@lucide/svelte/icons/toggle-left';
 	import ToggleRight from '@lucide/svelte/icons/toggle-right';
-	import { saveSettings } from '$lib/save-settings';
 	import { SETTING_TOGGLES } from '$lib/setting-toggles';
+	import { SETTINGS_SECTIONS, type SettingsSection } from '$lib/shared/settings-schema';
+
+	const SETTINGS_JSON_SLUG = 'json';
+	const SETTINGS_JSON: SettingsSection = {
+		label: 'settings.json',
+		href: '/settings/json',
+		keywords: ['json', 'advanced', 'all', 'every', 'raw']
+	};
 
 	/**
 	 * ⌘K / Ctrl+K: find a PR or issue (Enter peeks, ⌘Enter opens GitHub), run an action on the
@@ -97,27 +104,14 @@
 			keywords: ['view', 'prs', 'issues', ...v.searches],
 			run: () => goto(`/v/${v.id}`)
 		})),
-		...(
-			[
-				['general', 'General', 'appearance menus account export import'],
-				['keys', 'Keybinds', 'keyboard shortcuts keybindings hotkeys keys'],
-				['json', 'settings.json', 'json advanced all every raw'],
-				['views', 'Views', 'views searches sources tracked teams dashboards'],
-				[
-					'categories',
-					'Categories',
-					'categories groups rules labels effort impact feeds smart jev'
-				],
-				['notifications', 'Notifications', 'push quiet']
-			] as const
-		)
-			.filter(([slug]) => slug !== 'keys' || !touchOnly.current)
-			.map(([slug, name, more]) => ({
+		...[...Object.entries(SETTINGS_SECTIONS), [SETTINGS_JSON_SLUG, SETTINGS_JSON] as const]
+			.filter(([, section]) => !section.needsKeyboard || !touchOnly.current)
+			.map(([slug, section]) => ({
 				id: `go:settings/${slug}`,
-				label: `Settings: ${name}`,
+				label: `Settings: ${section.label}`,
 				icon: Settings,
-				keywords: ['settings', 'preferences', slug, ...more.split(' ')],
-				run: () => goto(`/settings/${slug}`)
+				keywords: ['settings', 'preferences', slug, ...section.keywords],
+				run: () => goto(section.href)
 			}))
 	]);
 
@@ -161,10 +155,7 @@
 			label: 'Sign out',
 			icon: LogOut,
 			keywords: ['logout', 'log out'],
-			run: async () => {
-				await api.logout().catch(() => {});
-				leaveTo('/login');
-			}
+			run: signOut
 		}
 	]);
 
@@ -179,7 +170,7 @@
 				icon: on ? ToggleRight : ToggleLeft,
 				keywords: ['setting', 'toggle', 'enable', 'disable', t.key, ...t.keywords],
 				where: on ? 'On' : 'Off',
-				run: () => saveSettings(t.patch(settings, !on), `${t.label}: ${on ? 'off' : 'on'}`)
+				run: () => t.save(!on, `${t.label}: ${on ? 'off' : 'on'}`)
 			};
 		});
 	});

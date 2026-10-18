@@ -10,6 +10,7 @@
 		chordOf,
 		conflicts,
 		keyText,
+		MAX_KEYS_PER_COMMAND,
 		type KeyCommand,
 		type KeyScope
 	} from '$lib/shared/keymap';
@@ -32,7 +33,6 @@
 	const me = createQuery(meQuery);
 	const changes = $derived(me.data?.settings.keys ?? {});
 	const map = $derived(bindings(changes));
-	const MAX_KEYS = 4;
 
 	let search = $state('');
 	let capturing = $state<string | null>(null);
@@ -183,7 +183,7 @@
 									class="rounded-md border border-dashed border-primary px-2 py-0.5 text-xs text-primary"
 									aria-live="polite">Press a key… (Esc cancels)</span
 								>
-							{:else if keys.length < MAX_KEYS}
+							{:else if keys.length < MAX_KEYS_PER_COMMAND}
 								<Button
 									variant="ghost"
 									size="icon-xs"

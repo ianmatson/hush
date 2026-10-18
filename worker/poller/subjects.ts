@@ -1,11 +1,12 @@
 import { placeItem } from '../../src/lib/shared/categories';
+import { HOUR_MS } from '../../src/lib/shared/durations';
 import { keptAfterChange, stillKept } from '../../src/lib/shared/closed-items';
 import { finishItem, keepItem, sortItems } from '../../src/lib/shared/dashboard';
-import type { DashItem, DashResponse, RuleFacts } from '../../src/lib/shared/types';
+import type { DashItem, DashResponse } from '../../src/lib/shared/types';
 import {
 	dashFactsOf,
-	enrichmentOf,
 	subjectKey,
+	subjectRuleFacts,
 	type SubjectFacts
 } from '../../src/lib/shared/subject';
 import type { SubjectDecisions } from '../../src/lib/shared/decisions';
@@ -20,13 +21,25 @@ import { itemQueryFacts } from '../../src/lib/shared/categories';
 import { viewsPassingFilters } from '../../src/lib/shared/item-views';
 import type { PushCandidate } from './alerts';
 import { PollerDecisions } from './decisions';
-import { TRACKED_SEEN_REFRESH, type Who } from './shared';
+import { IN_KEYS, TRACKED_SEEN_REFRESH, type Who } from './shared';
 
-/** SQLite binds at most this many values per statement here; longer IN lists go in chunks. */
-const CHUNK = 90;
-const marks = (n: number) => Array(n).fill('?').join(',');
 const parse = (json: string | undefined) => (json ? (JSON.parse(json) as SubjectFacts) : null);
-const NEW_SUBJECT_WINDOW_MS = 60 * 60_000;
+const NEW_SUBJECT_WINDOW_MS = HOUR_MS;
+
+type SnoozedRow = {
+	item_id: string;
+	updated_at: string;
+	snoozed_until: number | null;
+	snooze_event: SnoozeEvent | null;
+	snoozed_at: number | null;
+};
+
+const markOf = (row: SnoozedRow): ItemMark => ({
+	updatedAt: row.updated_at,
+	snoozedUntil: row.snoozed_until,
+	snoozeEvent: row.snooze_event,
+	snoozedAt: row.snoozed_at
+});
 
 /**
  * The subject store. Every GitHub read of a PR or issue goes through `record`, which keeps the
@@ -37,18 +50,15 @@ export abstract class PollerSubjects extends PollerDecisions {
 		who: Who,
 		subjects: SubjectFacts[],
 		opts: { dash?: boolean; quiet?: boolean; mentions?: Map<string, FactEvent> } = {}
-	): Promise<{ changed: number; dashChanged: boolean }> {
+	): Promise<void> {
 		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const keys = [...fresh.keys()];
-		const stored = new Map<string, string>();
-		for (let i = 0; i < keys.length; i += CHUNK) {
-			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; facts: string }>(
-				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				stored.set(r.key, r.facts);
-		}
+		const stored = new Map(
+			this.allIn<{ key: string; facts: string }>(
+				`SELECT key, facts FROM subjects WHERE key ${IN_KEYS}`,
+				keys
+			).map((r) => [r.key, r.facts])
+		);
 		const changed = [...fresh].filter(([k, x]) => stored.get(k) !== JSON.stringify(x));
 		const now = Date.now();
 		this.transaction(() => {
@@ -70,9 +80,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 			);
 			await this.pushFactsOf(who, pushable, stored, decided, mentions);
 		}
-		const dashChanged =
-			opts.dash !== false ? await this.patchDashCaches(who, subjects, decided) : false;
-		return { changed: changed.length, dashChanged };
+		if (opts.dash !== false) await this.patchDashCaches(who, subjects, decided);
 	}
 
 	private async pushFactsOf(
@@ -86,24 +94,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		if (!wanted.size || !changed.length) return;
 		if (!(await this.ctx.storage.get<boolean>('initialized'))) return;
 		const myTeams = new Set((await this.teams()).teams.map((t) => t.slug));
-		const keys = changed.map(([k]) => k);
-		const marksOf = new Map<string, ItemMark>();
-		for (let i = 0; i < keys.length; i += CHUNK) {
-			const chunk = keys.slice(i, i + CHUNK);
-			for (const m of this.all<{
-				item_id: string;
-				updated_at: string;
-				snoozed_until: number | null;
-				snooze_event: SnoozeEvent | null;
-				snoozed_at: number | null;
-			}>(`SELECT * FROM dash_snoozed WHERE item_id IN (${marks(chunk.length)})`, ...chunk))
-				marksOf.set(m.item_id, {
-					updatedAt: m.updated_at,
-					snoozedUntil: m.snoozed_until,
-					snoozeEvent: m.snooze_event,
-					snoozedAt: m.snoozed_at
-				});
-		}
+		const marksOf = this.itemMarks(changed.map(([k]) => k));
 		const now = Date.now();
 		const candidates: PushCandidate[] = changed.flatMap(([key, after]) => {
 			const push = itemPush(
@@ -284,29 +275,29 @@ export abstract class PollerSubjects extends PollerDecisions {
 	}
 
 	protected storedSubjectFacts(keys: string[]): Map<string, SubjectFacts> {
-		const out = new Map<string, SubjectFacts>();
-		for (let i = 0; i < keys.length; i += CHUNK) {
-			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; facts: string }>(
-				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				out.set(r.key, JSON.parse(r.facts) as SubjectFacts);
-		}
-		return out;
+		return new Map(
+			this.allIn<{ key: string; facts: string }>(
+				`SELECT key, facts FROM subjects WHERE key ${IN_KEYS}`,
+				keys
+			).map((r) => [r.key, JSON.parse(r.facts) as SubjectFacts])
+		);
+	}
+
+	protected itemMarks(keys: string[]): Map<string, ItemMark> {
+		return new Map(
+			this.allIn<SnoozedRow>(`SELECT * FROM dash_snoozed WHERE item_id ${IN_KEYS}`, keys).map(
+				(row) => [row.item_id, markOf(row)]
+			)
+		);
 	}
 
 	protected itemPins(keys: string[]): Map<string, string[]> {
-		const out = new Map<string, string[]>();
-		for (let i = 0; i < keys.length; i += CHUNK) {
-			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; pinned: string }>(
-				`SELECT key, pinned FROM item_pins WHERE key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				out.set(r.key, JSON.parse(r.pinned) as string[]);
-		}
-		return out;
+		return new Map(
+			this.allIn<{ key: string; pinned: string }>(
+				`SELECT key, pinned FROM item_pins WHERE key ${IN_KEYS}`,
+				keys
+			).map((r) => [r.key, JSON.parse(r.pinned) as string[]])
+		);
 	}
 
 	protected placeItems(
@@ -324,30 +315,22 @@ export abstract class PollerSubjects extends PollerDecisions {
 		return items.map((i) => {
 			const s = facts.get(i.id);
 			if (!s) return { ...i, categories: [], pinnedCategories: [] };
-			const d = decided.get(i.id);
-			const t: RuleFacts = {
-				repo: s.repo,
-				subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
-				title: s.title,
-				enrichment: enrichmentOf(s, who.me, d),
-				me: who.me
-			};
-			const placed = placeItem(t, pins.get(i.id), who.settings.categoryGroups);
+			const placed = placeItem(
+				subjectRuleFacts(s, who.me, decided.get(i.id)),
+				pins.get(i.id),
+				who.settings.categoryGroups
+			);
 			return { ...i, categories: placed.categories, pinnedCategories: placed.pinned };
 		});
 	}
 
 	private trackedSeenAt(keys: string[]): Map<string, number> {
-		const out = new Map<string, number>();
-		for (let i = 0; i < keys.length; i += CHUNK) {
-			const chunk = keys.slice(i, i + CHUNK);
-			for (const r of this.all<{ key: string; seen_at: number }>(
-				`SELECT key, seen_at FROM tracked_items WHERE key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				out.set(r.key, r.seen_at);
-		}
-		return out;
+		return new Map(
+			this.allIn<{ key: string; seen_at: number }>(
+				`SELECT key, seen_at FROM tracked_items WHERE key ${IN_KEYS}`,
+				keys
+			).map((r) => [r.key, r.seen_at])
+		);
 	}
 
 	protected trackedItemKeys(keys: string[]): Set<string> {
@@ -399,25 +382,20 @@ export abstract class PollerSubjects extends PollerDecisions {
 	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Stores its facts,
 	 * which updates its entry in the cached dashboards. About 1 point.
 	 */
-	async recheck(repo: string, number: number): Promise<{ ok: true }> {
+	async recheck(repo: string, number: number): Promise<{ ok: true } | { error: string }> {
 		const who = await this.who();
 		if (!who) return { ok: true };
 		const [owner, name] = repo.split('/');
 		const key = subjectKey(repo, number);
-		const fetched = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
-		const sub = fetched.get(key);
+		const reads = await fetchSubjects(who.token, [{ key, owner, repo: name, number }], who.me);
+		const sub = reads.subjects.get(key);
 		if (sub) await this.record(who, [sub]);
-		return { ok: true };
+		if (sub || reads.deletedOrNoAccess.has(key)) return { ok: true };
+		return { error: reads.errors[0] ?? 'GitHub did not return this PR or issue.' };
 	}
 
-	/**
-	 * Facts that the API fetched (the peek): store them and update every view. `changed` tells the
-	 * browser to refetch its lists.
-	 */
-	async recordFetched(sub: SubjectFacts): Promise<{ changed: boolean }> {
+	async recordFetched(sub: SubjectFacts): Promise<void> {
 		const who = await this.who();
-		if (!who) return { changed: false };
-		const out = await this.record(who, [sub]);
-		return { changed: out.changed > 0 || out.dashChanged };
+		if (who) await this.record(who, [sub]);
 	}
 }

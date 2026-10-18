@@ -1,15 +1,18 @@
 <script lang="ts">
 	import { SITE_URL } from '$lib/site';
 	import { tick, untrack } from 'svelte';
-	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
 	import { feedsQuery, keys, meQuery, queryClient, teamsQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
+	import { createSettingsDraft } from '$lib/settings-draft.svelte';
+	import { takeSearchParams } from '$lib/search-params';
+	import { moveItem, randomId } from '$lib/draft-edits';
 	import { validateDash } from '$lib/shared/dashboard';
 	import { DEFAULT_VIEWS, MAX_VIEWS, validateViews } from '$lib/shared/item-views';
+	import { settingsChanges } from '$lib/shared/settings-schema';
 	import type { DashSettings, ItemView } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
@@ -17,42 +20,42 @@
 	import * as Alert from '$lib/components/ui/alert';
 	import ViewCard from '$lib/components/app/view-card.svelte';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import UnsavedChangesBar from '$lib/components/app/settings/unsaved-changes-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Plus from '@lucide/svelte/icons/plus';
+
+	const NEW_VIEW_PARAM = 'new';
 
 	const me = createQuery(meQuery);
 	const teams = createQuery(teamsQuery);
 	const feeds = createQuery(feedsQuery);
 
-	interface Draft {
+	interface ViewsDraft {
 		dash: DashSettings;
 		views: ItemView[];
 	}
-	let draft = $state<Draft | null>(null);
-	let saved = $state('');
-	const savedIds = $derived(new Set((me.data?.settings.views ?? []).map((v) => v.id)));
-	$effect(() => {
-		const settings = me.data?.settings;
-		untrack(() => {
-			if (settings && !draft) {
-				const initial: Draft = { dash: settings.dash, views: settings.views };
-				draft = structuredClone($state.snapshot(initial));
-				saved = JSON.stringify(initial);
-				if (page.url.searchParams.get('new') === '1') {
-					addView();
-					goto('/settings/views', { replaceState: true, noScroll: true, keepFocus: true });
-				} else if (page.url.hash) void tick().then(() => scrollTo(page.url.hash.slice(1)));
-			}
-		});
+	const editor = createSettingsDraft<ViewsDraft>({
+		saved: () => {
+			const settings = me.data?.settings;
+			return settings && { dash: settings.dash, views: settings.views };
+		},
+		save: (next, base) => saveSettings(settingsChanges(base, next), 'Views saved')
 	});
-	const dirty = $derived(!!draft && JSON.stringify(draft) !== saved);
-	const error = $derived(draft ? (validateDash(draft.dash) ?? validateViews(draft.views)) : null);
-	let saving = $state(false);
+	const savedIds = $derived(new Set((me.data?.settings.views ?? []).map((v) => v.id)));
+	const loaded = $derived(!!editor.draft);
+	const error = $derived(
+		editor.draft ? (validateDash(editor.draft.dash) ?? validateViews(editor.draft.views)) : null
+	);
 	let refreshingTeams = $state(false);
 
-	beforeNavigate((nav) => {
-		if (dirty && !confirm('Leave without saving your view changes?')) nav.cancel();
+	$effect(() => {
+		if (!loaded) return;
+		const { hash } = page.url;
+		untrack(() => {
+			if (takeSearchParams(NEW_VIEW_PARAM)[NEW_VIEW_PARAM] === '1') addView();
+			else if (hash) void tick().then(() => scrollTo(hash.slice(1)));
+		});
 	});
 
 	function scrollTo(elementId: string) {
@@ -60,8 +63,9 @@
 	}
 
 	function addView() {
+		const draft = editor.draft;
 		if (!draft) return;
-		const id = `view-${Math.random().toString(36).slice(2, 8)}`;
+		const id = randomId('view');
 		draft.views = [
 			...draft.views,
 			{ id, name: 'New view', searches: ['is:open'], groupBy: 'status' }
@@ -73,18 +77,18 @@
 	}
 
 	function moveView(index: number, by: number) {
-		if (!draft) return;
-		const list = [...draft.views];
-		const [v] = list.splice(index, 1);
-		list.splice(index + by, 0, v);
-		draft.views = list;
+		const draft = editor.draft;
+		if (draft) draft.views = moveItem(draft.views, index, by);
 	}
 
-	async function save() {
-		if (!draft || error) return;
-		saving = true;
-		if (await saveSettings($state.snapshot(draft), 'Views saved')) saved = JSON.stringify(draft);
-		saving = false;
+	function deleteView(id: string) {
+		const draft = editor.draft;
+		if (draft) draft.views = draft.views.filter((x) => x.id !== id);
+	}
+
+	function resetViews() {
+		const draft = editor.draft;
+		if (draft) draft.views = structuredClone(DEFAULT_VIEWS);
 	}
 
 	async function refreshTeams() {
@@ -101,6 +105,7 @@
 	}
 
 	function toggleTeam(slug: string, tracked: boolean) {
+		const draft = editor.draft;
 		if (!draft) return;
 		draft.dash.excludedTeams = tracked
 			? draft.dash.excludedTeams.filter((t) => t !== slug)
@@ -108,7 +113,7 @@
 	}
 
 	const previewTeam = $derived(
-		teams.data?.teams.find((t) => !draft?.dash.excludedTeams.includes(t.slug))?.slug ?? null
+		teams.data?.teams.find((t) => !editor.draft?.dash.excludedTeams.includes(t.slug))?.slug ?? null
 	);
 </script>
 
@@ -130,7 +135,8 @@
 		</p>
 	</div>
 
-	{#if draft}
+	{#if editor.draft}
+		{@const draft = editor.draft}
 		{#each draft.views as v, index (v.id)}
 			<ViewCard
 				bind:view={draft.views[index]}
@@ -140,7 +146,7 @@
 				{previewTeam}
 				feeds={feeds.data}
 				onmove={(by) => moveView(index, by)}
-				ondelete={() => draft && (draft.views = draft.views.filter((x) => x.id !== v.id))}
+				ondelete={() => deleteView(v.id)}
 			/>
 		{/each}
 
@@ -151,11 +157,7 @@
 				onclick={addView}
 				disabled={draft.views.length >= MAX_VIEWS}><Plus /> Add view</Button
 			>
-			<Button
-				variant="ghost"
-				size="sm"
-				onclick={() => draft && (draft.views = structuredClone(DEFAULT_VIEWS))}
-			>
+			<Button variant="ghost" size="sm" onclick={resetViews}>
 				<RotateCcw /> Defaults
 			</Button>
 		</div>
@@ -230,17 +232,6 @@
 			</Card.Content>
 		</Card.Root>
 
-		<div
-			class="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border bg-background/90 p-3 shadow-sm backdrop-blur"
-			class:hidden={!dirty}
-		>
-			{#if error}<p class="mr-auto text-xs text-destructive">{error}</p>{:else}<p
-					class="mr-auto text-xs text-muted-foreground"
-				>
-					You have unsaved changes.
-				</p>{/if}
-			<Button variant="ghost" size="sm" onclick={() => (draft = JSON.parse(saved))}>Discard</Button>
-			<Button size="sm" onclick={save} disabled={!!error || saving}>Save</Button>
-		</div>
+		<UnsavedChangesBar draft={editor} {error} />
 	{/if}
 </div>

@@ -117,8 +117,9 @@ Hush decides whose turn it is from the facts of each item: CI, reviews, review r
 
 A review request to one of your teams is **your team's turn**: the row says “Review for acme/web”. Other items wait on someone else (“Waiting for review”, “You approved”), or on nobody (“Draft”, “Bot PR”).
 
-- **Bots:** a pull request that a bot opened is not your turn, unless it asks for your review by name. A comment by a bot is not a reply.
+- **Bots:** a pull request that a bot opened is not your turn, unless it asks for your review by name. A comment or a review by a bot is not a reply. A bot comment after a person's comment does not hide that comment.
 - **Review requests** end only when GitHub no longer asks you. A review by someone else does not end your request.
+- **Approvals:** when a repository does not require reviews, GitHub gives no review decision. Hush then reads the newest approval or change request of each reviewer: one change request makes it “Changes requested”, else one approval makes it approved. The turn, `review:`, and Group by **Status** all use this.
 - **Smart decisions:** with [smart decisions](/docs/settings#smartdecisions) on (the default), Jev reads the newest comments. When they need nothing from you (thanks, approval, a status update, +1), they are not your turn. The row then says “no reply needed”.
 - [Categories](/docs/categories) do not change whose turn it is.
 
@@ -185,7 +186,7 @@ Snooze takes an item out of the list for a while. Choose **Snooze** in the item'
 
 - **Until new activity**: the item comes back when something new happens on it on GitHub, such as a comment, a review, or a commit. This is {{key:dash.snooze}}.
 - **A time**: 1 hour, 3 hours, tomorrow at 9:00 ({{key:dash.snoozeTomorrow}}), or next Monday at 9:00. The item comes back at that time, also if something happens before.
-- **Until something happens**: CI passes, CI finishes, someone approves, a new review, new commits, someone replies, or it is merged or closed. The item comes back when that happens, when it is merged or closed, or after 7 days. A merged or closed item comes back in [Merged and closed](#merged-and-closed). A choice that is already true is greyed out.
+- **Until something happens**: CI passes, CI finishes, someone approves, a new review, new commits, someone replies, or it is merged or closed. Comments and reviews by bots do not count. The item comes back when that happens, when it is merged or closed, or after 7 days. A merged or closed item comes back in [Merged and closed](#merged-and-closed). A choice that is already true is greyed out.
 
 **Mute** takes an item out of the list until you unmute it.
 

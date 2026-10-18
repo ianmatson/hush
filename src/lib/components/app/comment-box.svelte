@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { acting, composer, sendAction, type ComposeIntent } from '$lib/gh-act.svelte';
@@ -9,25 +9,22 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
 	import { caretXY } from '$lib/caret';
-	import { meQuery, queryClient } from '$lib/queries';
+	import { meQuery, queryClient, suggestQuery } from '$lib/queries';
 	import {
 		applyPick,
-		closedShortcodeBefore,
-		emojiForShortcode,
 		rankEmoji,
 		rankRefs,
 		rankUsers,
-		replaceWithEmoji,
 		triggerAt,
 		type RefSuggestion,
 		type Suggestion,
 		type Trigger,
 		type UserSuggestion
 	} from '$lib/shared/suggest';
-	import { loadEmojiList } from '$lib/emoji';
-	import { draftKey, loadDraft, saveDraft } from '$lib/drafts';
+	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
+	import { loadDraft, saveDraft } from '$lib/drafts';
+	import { subjectKey } from '$lib/shared/subject';
 	import SuggestMenu from './suggest-menu.svelte';
 	import AttachButton from './attach-button.svelte';
 	import { DROP_TARGET_CLASS, Uploads } from '$lib/attachments.svelte';
@@ -51,14 +48,8 @@
 	};
 	const review = $derived(can('approve') || can('request_changes'));
 
-	const draft = $derived(draftKey(p.repo, p.number));
-	let text = $state('');
-	let loadedDraft = '';
-	$effect.pre(() => {
-		if (draft === loadedDraft) return;
-		loadedDraft = draft;
-		text = loadDraft(draft);
-	});
+	const draft = $derived(subjectKey(p.repo, p.number));
+	let text = $state(untrack(() => loadDraft(draft)));
 	$effect(() => saveDraft(draft, text));
 
 	let box = $state<HTMLTextAreaElement | null>(null);
@@ -79,7 +70,7 @@
 
 	async function submit(intent: ComposeIntent) {
 		const body = text.trim();
-		if (uploads.pending) return;
+		if (uploads.pending || acting.id) return;
 		if (intent !== 'approve' && !body) return void box?.focus();
 		if (!(await sendAction(p, intent, { body: body || undefined }))) return;
 		toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
@@ -117,22 +108,12 @@
 		].filter((x) => x.login !== 'ghost');
 	});
 
-	const suggestKey = (t: RemoteTrigger) =>
-		[
-			'suggest',
-			t.kind === 'ref' && t.repo ? t.repo : p.repo,
-			t.kind,
-			t.query.toLowerCase()
-		] as const;
+	const suggestionsFor = (t: RemoteTrigger) =>
+		suggestQuery(t.kind === 'ref' && t.repo ? t.repo : p.repo, t.kind, t.query, p.repo);
 
 	function fetchSuggestions(t: RemoteTrigger) {
-		const repo = t.kind === 'ref' && t.repo ? t.repo : p.repo;
 		// Only the words so far: the list waits for a short pause (GitHub limits searches).
-		return queryClient.fetchQuery({
-			queryKey: suggestKey(t),
-			queryFn: () => api.suggest(repo, t.kind, t.query, p.repo).then((r) => r.items),
-			staleTime: 5 * 60_000
-		});
+		return queryClient.fetchQuery(suggestionsFor(t));
 	}
 
 	function place(el: HTMLTextAreaElement, t: Trigger) {
@@ -176,7 +157,7 @@
 				? rankUsers(participants, u as UserSuggestion[], t.query, me.data?.login ?? '')
 				: rankRefs(u as RefSuggestion[], t.query);
 		// Saved answers and the conversation's people show at once; the rest after the answer.
-		const saved = queryClient.getQueryData<Suggestion[]>(suggestKey(t));
+		const saved = queryClient.getQueryData(suggestionsFor(t).queryKey);
 		if (saved) items = mine(saved);
 		else if (t.kind === 'user') items = mine(same ? items : []);
 		else if (!same) items = [];
@@ -213,21 +194,6 @@
 			.finally(() => {
 				if (n === asked) loading = false;
 			});
-	}
-
-	async function expandClosedShortcode() {
-		const el = box;
-		if (!el || el.selectionStart !== el.selectionEnd) return;
-		const caret = el.selectionStart;
-		const closed = closedShortcodeBefore(text, caret);
-		if (!closed) return;
-		const textWhenTyped = text;
-		const emoji = emojiForShortcode(await loadEmojiList(), closed.shortcode);
-		if (!emoji || text !== textWhenTyped) return;
-		const r = replaceWithEmoji(text, caret, closed.start, emoji);
-		text = r.text;
-		await tick();
-		el.setSelectionRange(r.caret, r.caret);
 	}
 
 	function close() {
@@ -295,7 +261,11 @@
 				aria-expanded={!!trigger}
 				oninput={() => {
 					update();
-					void expandClosedShortcode();
+					void expandClosedShortcode(
+						box,
+						() => text,
+						(next) => (text = next)
+					);
 				}}
 				onclick={update}
 				onkeyup={(e) => {
@@ -315,7 +285,7 @@
 					}
 					if (commandFor(e, ['editor']) === 'editor.send') {
 						e.preventDefault();
-						submit(composer.intent);
+						if (!e.repeat) submit(composer.intent);
 					} else if (e.key === 'Escape') {
 						e.preventDefault();
 						box?.blur();

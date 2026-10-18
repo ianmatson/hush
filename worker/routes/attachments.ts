@@ -4,12 +4,12 @@ import {
 	attachmentKind,
 	attachmentName
 } from '../../src/lib/shared/attachments';
+import { parseRepoFullName } from '../../src/lib/shared/item-page';
 import { userToken } from '../db';
-import { gh } from '../github';
+import { gh, refusal } from '../github';
 import { query, routes } from '../app';
 import { writeBlockForRepo } from '../write-gate';
 
-const NAME = /^(?!\.+$)[A-Za-z0-9_.-]{1,100}$/;
 const UPLOAD_URL = 'https://uploads.github.com/user-attachments/assets';
 const UPLOAD_WAIT_MS = 120_000;
 
@@ -18,8 +18,7 @@ type RepoAnswer = { id?: number; permissions?: { push?: boolean } };
 async function uploadRefusal(res: Response): Promise<string> {
 	if (res.status === 404) return ATTACH_NEEDS_WRITE;
 	if (res.status === 429) return 'GitHub is limiting uploads. Wait a minute and try again.';
-	const j = (await res.json().catch(() => ({}))) as { message?: string };
-	return j.message || `GitHub returned ${res.status}.`;
+	return refusal(res);
 }
 
 const app = routes().post(
@@ -27,9 +26,7 @@ const app = routes().post(
 	query<{ repo: string; name: string; type: string }>(),
 	async (c) => {
 		const { repo = '', name = '', type = '' } = c.req.valid('query');
-		const [owner, repoName, extra] = repo.split('/');
-		if (!NAME.test(owner ?? '') || !NAME.test(repoName ?? '') || extra !== undefined)
-			return c.json({ error: 'Not a repository.' }, 400);
+		if (!parseRepoFullName(repo)) return c.json({ error: 'Not a repository.' }, 400);
 		const blocked = writeBlockForRepo(c.env, repo);
 		if (blocked) return c.json({ error: blocked }, 403);
 		const kind = attachmentKind(type);

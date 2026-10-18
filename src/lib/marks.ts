@@ -1,3 +1,4 @@
+import { itemCategoriesIn } from '$lib/shared/categories';
 import type { MarkColor, Settings } from '$lib/shared/types';
 
 export interface RowMark {
@@ -36,9 +37,13 @@ export function rowMarks(
 	categoryIds: string[] | undefined,
 	settings: Pick<Settings, 'categoryGroups'> | undefined
 ): RowMark[] {
-	return (settings?.categoryGroups ?? []).flatMap((g) =>
-		g.categories
-			.filter((c) => categoryIds?.includes(c.id))
-			.map((c) => ({ key: c.id, name: c.name, group: g.name, color: c.color, icon: c.icon }))
+	return itemCategoriesIn(settings?.categoryGroups ?? [], categoryIds).map(
+		({ group, category }) => ({
+			key: category.id,
+			name: category.name,
+			group: group.name,
+			color: category.color,
+			icon: category.icon
+		})
 	);
 }

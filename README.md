@@ -42,7 +42,7 @@ Static assets  → the SPA (build/)
 
 ## Docs
 
-The user docs are at [hush-gh.com/docs](https://hush-gh.com/docs): one Markdown file per page in `src/lib/docs/pages/`, in the order of `NAV` in `src/lib/docs/index.ts`. A line `{{ref:settings}}` inserts a table made from the app's own tables (settings, keybinds, query words, menus, actions, limits: `src/lib/docs/reference.ts`), and `{{key:dash.snooze}}` a command's default keys, so the docs follow the code. Every page is also Markdown (`/docs/<page>.md`), listed in `/llms.txt`, and all in `/llms-full.txt`. `src/lib/docs/docs.test.ts` checks that every setting is documented, that every example in the docs is valid, and that every link works.
+The user docs are at [hush-gh.com/docs](https://hush-gh.com/docs): one Markdown file per page in `src/lib/docs/pages/`, in the order of `NAV` in `src/lib/docs/index.ts`. A line `{{ref:settings}}` inserts a table made from the app's own tables (settings, keybinds, query words, menus, actions, limits: `src/lib/docs/reference.ts`), `{{key:dash.snooze}}` a command's default keys, and `{{value:max-views}}` one value from the code, such as a limit or Hush's price (`VALUES` in `reference.ts`), so the docs follow the code. Every page of the site (docs, guides, comparisons, and the pricing, privacy, and security pages) is in `SITE_PAGES` (`src/lib/site-pages.ts`): each one is also Markdown (`/docs/<page>.md`; the home page of a section is `/docs/index.md`), listed in `/llms.txt`, all in `/llms-full.txt`, and in `/sitemap.xml`. `src/lib/docs/docs.test.ts` checks that every setting is documented, that every example in the docs is valid, and that every link works.
 
 ## Local development
 
@@ -122,7 +122,7 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 
-Each push to `main` deploys with GitHub Actions (`.github/workflows/deploy.yml`): it runs `pnpm check`, `pnpm test`, and `pnpm run deploy`. It needs two repository secrets: `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` with the permissions Workers Scripts: Edit, D1: Edit, Workers Routes: Edit (zone hush-gh.com), and DNS: Edit (zone hush-gh.com, for the custom domains). Run it by hand from the Actions tab with **Run workflow**.
+Each pull request runs `pnpm check`, `pnpm test`, and `pnpm lint` (`.github/workflows/ci.yml`). Each push to `main` deploys with GitHub Actions (`.github/workflows/deploy.yml`): it runs `pnpm check`, `pnpm test`, `pnpm lint`, and `pnpm run deploy`. It needs two repository secrets: `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` with the permissions Workers Scripts: Edit, D1: Edit, Workers Routes: Edit (zone hush-gh.com), and DNS: Edit (zone hush-gh.com, for the custom domains). Run it by hand from the Actions tab with **Run workflow**.
 
 `deploy` refreshes the wrangler login first and retries the migration step once: right after a token refresh, the D1 API can refuse the new token for a few seconds (error 7403).
 

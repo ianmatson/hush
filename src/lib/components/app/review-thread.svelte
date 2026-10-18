@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
+	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
@@ -40,7 +41,8 @@
 	let sending = $state<'reply' | 'resolve' | 'edit' | 'delete' | null>(null);
 	let editingId = $state<string | null>(null);
 	let editText = $state('');
-	let deletingId = $state<string | null>(null);
+	const deleteConfirm = new ArmedConfirm();
+	onDestroy(() => deleteConfirm.dispose());
 	const uploads = new Uploads(getAttachTarget());
 	const isPending = $derived(thread.comments.some((c) => c.pending));
 
@@ -53,9 +55,9 @@
 	}
 
 	async function deleteComment(id: string) {
-		if (deletingId !== id) return void (deletingId = id);
+		if (!deleteConfirm.isArmed(id)) return deleteConfirm.arm(id);
 		await run('delete', () => api.editReviewComment(id, null));
-		deletingId = null;
+		deleteConfirm.disarm();
 	}
 
 	async function run(
@@ -183,11 +185,11 @@
 									type="button"
 									class={cn(
 										'hover:text-foreground',
-										deletingId === comment.id && 'text-destructive'
+										deleteConfirm.isArmed(comment.id) && 'text-destructive'
 									)}
 									disabled={!!sending}
 									onclick={() => void deleteComment(comment.id)}
-									>{deletingId === comment.id ? 'Confirm: delete' : 'Delete'}</button
+									>{deleteConfirm.isArmed(comment.id) ? 'Confirm: delete' : 'Delete'}</button
 								>
 							{/if}
 						</span>

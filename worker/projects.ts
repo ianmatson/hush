@@ -12,34 +12,38 @@ import {
 } from '../src/lib/shared/projects';
 import { SOURCE_RESULTS_MAX } from '../src/lib/shared/item-views';
 import type { DashProject } from '../src/lib/shared/types';
-import { gh, hasGraphqlErrorAt, type GraphqlError, type SearchHit } from './github';
+import {
+	githubStatusMessage,
+	graphql,
+	hasGraphqlErrorAt,
+	type GraphqlError,
+	type SearchHit
+} from './github';
 
 type Node = Record<string, any>;
 
 interface GraphqlAnswer {
 	data: Node | null;
 	errors: string[];
-	graphqlErrors?: GraphqlError[];
+	graphqlErrors: GraphqlError[];
 }
 
-async function graphql(
+const GITHUB_DID_NOT_ANSWER = 'GitHub did not answer. Hush tries again later.';
+
+async function projectGraphql(
 	token: string,
 	query: string,
 	variables: Record<string, unknown>
 ): Promise<GraphqlAnswer> {
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query, variables })
-	}).catch(() => null);
-	if (!res) return { data: null, errors: ['GitHub did not answer. Hush tries again later.'] };
-	const json = (await res.json().catch(() => null)) as {
-		data?: Node;
-		errors?: GraphqlError[];
-	} | null;
-	const errors = (json?.errors ?? []).map((e) => e.message);
-	if (!json && res.ok) errors.push('GitHub did not answer. Hush tries again later.');
-	if (!res.ok && !errors.length) errors.push(`GitHub returned ${res.status}.`);
-	return { data: res.ok ? (json?.data ?? null) : null, errors, graphqlErrors: json?.errors };
+	const result = await graphql(token, query, variables).catch(() => null);
+	if (!result) return { data: null, errors: [GITHUB_DID_NOT_ANSWER], graphqlErrors: [] };
+	const errors = result.errors.map((e) => e.message);
+	if (!result.ok && !errors.length) errors.push(githubStatusMessage(result.status));
+	return {
+		data: result.ok ? (result.data ?? null) : null,
+		errors,
+		graphqlErrors: result.errors
+	};
 }
 
 const friendly = (errors: string[]) =>
@@ -65,7 +69,7 @@ export async function boardShort(
 	hits: SearchHit[];
 	errors: string[];
 	failedSections: Set<string>;
-	failedQueries?: ExpandedQuery[];
+	failedQueries: ExpandedQuery[];
 }> {
 	const hits: SearchHit[] = [];
 	const errors: string[] = [];
@@ -75,7 +79,7 @@ export async function boardShort(
 		queries.map(async (query) => {
 			const board = boardQueryOf(query.q);
 			if (!board) return;
-			const answer = await graphql(token, BOARD_ITEMS, {
+			const answer = await projectGraphql(token, BOARD_ITEMS, {
 				o: board.owner,
 				n: board.number,
 				f: board.filter,
@@ -88,13 +92,12 @@ export async function boardShort(
 				const definitive =
 					!project &&
 					(!answer.errors.length ||
-						answer.graphqlErrors?.some(
+						answer.graphqlErrors.some(
 							(error) => error.type === 'NOT_FOUND' || error.type === 'FORBIDDEN'
 						));
 				if (!definitive) failedQueries.push(query);
 			}
 			if (!project) {
-				failedSections.add(query.section);
 				if (!answer.errors.length) errors.push(notFound(board));
 				return;
 			}
@@ -116,7 +119,7 @@ export async function boardShort(
 export async function boardCount(token: string, query: string): Promise<number | null> {
 	const board = boardQueryOf(query);
 	if (!board) return null;
-	const answer = await graphql(token, BOARD_ITEMS, {
+	const answer = await projectGraphql(token, BOARD_ITEMS, {
 		o: board.owner,
 		n: board.number,
 		f: board.filter,
@@ -205,7 +208,7 @@ export async function itemStatuses(
 	const nodes: (Node | null)[] = [];
 	const errors: string[] = [];
 	for (let i = 0; i < ids.length; i += STATUSES_CHUNK) {
-		const answer = await graphql(token, ITEM_STATUSES, {
+		const answer = await projectGraphql(token, ITEM_STATUSES, {
 			ids: ids.slice(i, i + STATUSES_CHUNK),
 			after: null
 		});
@@ -213,7 +216,7 @@ export async function itemStatuses(
 		const pageNodes = (answer.data?.nodes as (Node | null)[] | undefined) ?? [];
 		const completeNodes = await Promise.all(
 			pageNodes.map(async (node, index) => {
-				if (!usableStatusNode(node, index, answer.graphqlErrors ?? [])) return null;
+				if (!usableStatusNode(node, index, answer.graphqlErrors)) return null;
 				if (!node) return null;
 				const items = [...(node.projectItems?.nodes ?? [])];
 				let pageInfo = node.projectItems?.pageInfo;
@@ -225,12 +228,15 @@ export async function itemStatuses(
 						return null;
 					}
 					cursors.add(cursor);
-					const next = await graphql(token, ITEM_STATUSES, { ids: [node.id], after: cursor });
+					const next = await projectGraphql(token, ITEM_STATUSES, {
+						ids: [node.id],
+						after: cursor
+					});
 					errors.push(...friendly(next.errors));
 					const nextNode = next.data?.nodes?.[0];
 					if (
 						!Array.isArray(nextNode?.projectItems?.nodes) ||
-						!usableStatusNode(nextNode, 0, next.graphqlErrors ?? [])
+						!usableStatusNode(nextNode, 0, next.graphqlErrors)
 					)
 						return null;
 					items.push(...nextNode.projectItems.nodes);
@@ -300,7 +306,7 @@ export async function projectsOf(
 ): Promise<ProjectsDTO> {
 	const none: ProjectsDTO = { access, contentId: null, items: [], others: [] };
 	if (access === 'none') return none;
-	const answer = await graphql(token, ITEMS_OF, { o: owner, r: repo, n: number });
+	const answer = await projectGraphql(token, ITEMS_OF, { o: owner, r: repo, n: number });
 	const subject = answer.data?.repository?.issueOrPullRequest;
 	if (!subject?.id) {
 		if (answer.errors.length) throw new Error(friendly(answer.errors)[0]);
@@ -335,25 +341,28 @@ export async function editProject(token: string, edit: ProjectEdit): Promise<str
 		case 'status':
 			return first(
 				edit.optionId
-					? await graphql(token, SET_STATUS, {
+					? await projectGraphql(token, SET_STATUS, {
 							p: edit.projectId,
 							i: edit.itemId,
 							f: edit.fieldId,
 							o: edit.optionId
 						})
-					: await graphql(token, CLEAR_STATUS, {
+					: await projectGraphql(token, CLEAR_STATUS, {
 							p: edit.projectId,
 							i: edit.itemId,
 							f: edit.fieldId
 						})
 			);
 		case 'remove':
-			return first(await graphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
+			return first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
 		case 'move': {
-			const added = await graphql(token, ADD_ITEM, { p: edit.toProjectId, c: edit.contentId });
+			const added = await projectGraphql(token, ADD_ITEM, {
+				p: edit.toProjectId,
+				c: edit.contentId
+			});
 			if (added.errors.length || !added.data?.addProjectV2ItemById?.item?.id)
 				return first(added) ?? 'GitHub did not add the item to the project.';
-			return first(await graphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
+			return first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
 		}
 	}
 }

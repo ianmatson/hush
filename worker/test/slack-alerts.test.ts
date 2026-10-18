@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deliveredByAnyChannel } from '../alert-channels';
-import { b64urlEncode, encryptSecret } from '../crypto';
+import { b64urlEncode } from '../../src/lib/shared/bytes';
+import { encryptSecret } from '../crypto';
 import type { Env } from '../db';
 import type { SlackMessage } from '../slack';
 import { sendSlackAlerts, slackAlertOf } from '../slack-alerts';

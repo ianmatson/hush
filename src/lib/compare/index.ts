@@ -1,9 +1,5 @@
-export interface ComparePage {
-	slug: string;
-	title: string;
-	description: string;
-	markdown: string;
-}
+import type { MarkdownPage } from '$lib/docs';
+import { PLANNED_PRICE } from '$lib/pricing';
 
 export interface CompareOverview {
 	name: string;
@@ -13,12 +9,10 @@ export interface CompareOverview {
 	chooseItFor: string;
 }
 
-export const LAST_CHECKED = '3 October 2026';
-
 export const HUSH_OVERVIEW: CompareOverview = {
 	name: 'Hush',
 	kind: 'Web app (installable), hosted',
-	price: 'Free in beta; planned $3 a month',
+	price: PLANNED_PRICE,
 	openSource: 'Yes (AGPL-3.0)',
 	chooseItFor: 'Your PRs and issues in views you define, with pushes for the facts you choose'
 };
@@ -84,5 +78,7 @@ export const COMPARE_OVERVIEW: Record<string, CompareOverview> = {
 
 export const COMPARE_ORDER = Object.keys(COMPARE_OVERVIEW);
 
-export const comparePath = (p: Pick<ComparePage, 'slug'>) => `/compare/${p.slug}`;
-export const compareMarkdownPath = (p: Pick<ComparePage, 'slug'>) => `/compare/${p.slug}.md`;
+export const COMPARE_PATH = '/compare';
+export const comparePath = (p: Pick<MarkdownPage, 'slug'>) => `${COMPARE_PATH}/${p.slug}`;
+export const compareSourceFile = (p: Pick<MarkdownPage, 'slug'>) =>
+	`src/lib/compare/pages/${p.slug}.md`;

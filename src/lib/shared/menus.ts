@@ -112,13 +112,15 @@ export function tidySeparators<T>(list: T[], isSep: (x: T) => boolean): T[] {
 	return out;
 }
 
+export const MAX_MENU_ITEMS = 60;
+
 export function validateMenus(m: unknown): string | null {
 	if (typeof m !== 'object' || m === null) return 'Menus must be an object.';
 	for (const kind of ['dash'] as MenuKind[]) {
 		const list = (m as Record<string, unknown>)[kind];
 		if (list === undefined) continue;
-		if (!Array.isArray(list) || list.length > 60)
-			return `The ${kind} menu must be a list of up to 60 items.`;
+		if (!Array.isArray(list) || list.length > MAX_MENU_ITEMS)
+			return `The ${kind} menu must be a list of up to ${MAX_MENU_ITEMS} items.`;
 		const known = new Set(MENU_ITEMS[kind].map((i) => i.id));
 		const seen = new Set<string>();
 		for (const id of list) {

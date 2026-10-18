@@ -15,15 +15,11 @@ import { sendSlackAlerts } from '../slack-alerts';
 import { slackConnection } from '../slack-store';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import { PollerBase } from './base';
-import { MAX_INDIVIDUAL_PUSHES, ALERT_LOG_KEEP, PUSH_MARK_KEEP } from './shared';
+import { IN_KEYS, MAX_INDIVIDUAL_PUSHES, ALERT_LOG_KEEP, PUSH_MARK_KEEP } from './shared';
 
-const marks = (n: number) => Array(n).fill('?').join(',');
-const SQL_BATCH = 90;
 const MAX_HELD_MESSAGES = 10;
 const DIGEST_LINES = 4;
 const isItemKey = (tag: string | undefined): tag is string => !!tag?.includes('#');
-
-export const SNOOZE_OVER_REASON = 'snooze-over';
 
 export interface PushCandidate {
 	itemKey: string;
@@ -36,7 +32,6 @@ export interface PushCandidate {
 type OpenChannels = { push: boolean; slack: boolean };
 
 type Held = { count: number; messages: PushMessage[]; duringQuiet: boolean };
-type LegacyQuietHeld = { count: number; lines: string[] };
 
 /** Push alerts: send them, record them in the alert history, and update them when resolved. */
 export abstract class PollerAlerts extends PollerBase {
@@ -82,7 +77,7 @@ export abstract class PollerAlerts extends PollerBase {
 		const outgoing =
 			messages.length <= MAX_INDIVIDUAL_PUSHES
 				? messages
-				: [digestOf(messages, messages.length, false, await this.origin())];
+				: [digestOf(messages, messages.length, false, this.origin())];
 		const room = urgent ? outgoing.length : limitRoom(settings, now, state);
 		const sendable = outgoing.slice(0, room);
 		const overLimit = outgoing.slice(room);
@@ -102,23 +97,25 @@ export abstract class PollerAlerts extends PollerBase {
 		const settings = await this.settings();
 		const now = Date.now();
 		if (!settings.pushWhileOpen && this.appInFocus(now))
-			return void (await this.ctx.storage.delete(['held', 'quietHeld']));
+			return void (await this.ctx.storage.delete('held'));
 		const state = await this.deliveryState();
 		if (!heldAreDue(settings, now, state)) return;
-		await this.ctx.storage.delete(['held', 'quietHeld']);
-		const onlyOne = held.count === 1 && held.messages.length === 1;
-		const message = onlyOne
-			? held.messages[0]
-			: digestOf(held.messages, held.count, held.duringQuiet, await this.origin());
-		await this.recordSend(settings, now, state, 1, true);
-		if (!(await this.sendNow([message]))) await this.hold(held, { startsDigestWindow: false });
+		await this.ctx.storage.delete('held');
+		let delivered = false;
+		try {
+			const onlyOne = held.count === 1 && held.messages.length === 1;
+			const message = onlyOne
+				? held.messages[0]
+				: digestOf(held.messages, held.count, held.duringQuiet, this.origin());
+			await this.recordSend(settings, now, state, 1, true);
+			delivered = await this.sendNow([message]);
+		} finally {
+			if (!delivered) await this.hold(held, { startsDigestWindow: false });
+		}
 	}
 
 	protected clearPushMarks(itemKeys: string[]) {
-		for (let i = 0; i < itemKeys.length; i += SQL_BATCH) {
-			const batch = itemKeys.slice(i, i + SQL_BATCH);
-			this.run(`DELETE FROM push_marks WHERE key IN (${marks(batch.length)})`, ...batch);
-		}
+		this.runIn(`DELETE FROM push_marks WHERE key ${IN_KEYS}`, itemKeys);
 	}
 
 	protected forgetOldPushMarks(now: number) {
@@ -146,20 +143,17 @@ export abstract class PollerAlerts extends PollerBase {
 		return !!(await slackConnection(this.env, userId));
 	}
 
-	private async origin(): Promise<string> {
-		return (await this.ctx.storage.get<string>('origin')) ?? '';
+	private origin(): string {
+		return this.env.APP_URL;
 	}
 
 	private pushMarks(itemKeys: string[]): Map<string, PushMark> {
 		const found = new Map<string, PushMark>();
-		for (let i = 0; i < itemKeys.length; i += SQL_BATCH) {
-			const batch = itemKeys.slice(i, i + SQL_BATCH);
-			for (const r of this.all<{ key: string; pushed_at: number; reason: string }>(
-				`SELECT key, pushed_at, reason FROM push_marks WHERE key IN (${marks(batch.length)})`,
-				...batch
-			))
-				found.set(r.key, { pushedAt: r.pushed_at, reason: r.reason });
-		}
+		for (const r of this.allIn<{ key: string; pushed_at: number; reason: string }>(
+			`SELECT key, pushed_at, reason FROM push_marks WHERE key ${IN_KEYS}`,
+			itemKeys
+		))
+			found.set(r.key, { pushedAt: r.pushed_at, reason: r.reason });
 		return found;
 	}
 
@@ -199,17 +193,9 @@ export abstract class PollerAlerts extends PollerBase {
 	}
 
 	private async held(): Promise<Held> {
-		const s = await this.ctx.storage.get(['held', 'quietHeld']);
-		const held = s.get('held') as Held | undefined;
-		if (held) return held;
-		const legacy = s.get('quietHeld') as LegacyQuietHeld | undefined;
-		if (!legacy) return { count: 0, messages: [], duringQuiet: false };
-		const home = `${await this.origin()}/`;
-		return {
-			count: legacy.count,
-			messages: legacy.lines.map((title) => ({ title, body: '', url: home })),
-			duringQuiet: true
-		};
+		return (
+			(await this.ctx.storage.get<Held>('held')) ?? { count: 0, messages: [], duringQuiet: false }
+		);
 	}
 
 	private async hold(incoming: Held, opts: { startsDigestWindow: boolean }) {
@@ -245,7 +231,7 @@ export abstract class PollerAlerts extends PollerBase {
 
 	private async sendSlackNow(messages: PushMessage[]): Promise<boolean> {
 		const userId = await this.ctx.storage.get<number>('userId');
-		return userId ? sendSlackAlerts(this.env, userId, messages, await this.origin()) : false;
+		return userId ? sendSlackAlerts(this.env, userId, messages, this.origin()) : false;
 	}
 
 	private async sendPushNow(messages: PushMessage[]): Promise<boolean> {
@@ -253,7 +239,7 @@ export abstract class PollerAlerts extends PollerBase {
 			'SELECT endpoint, p256dh, auth FROM push_devices'
 		);
 		if (!messages.length || !devices.length || !this.env.VAPID_PRIVATE_KEY) return false;
-		const vapid = vapidFromEnv(this.env, await this.origin());
+		const vapid = vapidFromEnv(this.env, this.origin());
 		const gone: string[] = [];
 		let accepted = 0;
 		for (const d of devices) {
@@ -270,8 +256,7 @@ export abstract class PollerAlerts extends PollerBase {
 				}
 			}
 		}
-		if (gone.length)
-			this.run(`DELETE FROM push_devices WHERE endpoint IN (${marks(gone.length)})`, ...gone);
+		this.runIn(`DELETE FROM push_devices WHERE endpoint ${IN_KEYS}`, gone);
 		return accepted > 0;
 	}
 

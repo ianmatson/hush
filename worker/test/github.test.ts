@@ -1,16 +1,615 @@
-import { describe, expect, it } from 'vitest';
-import { parseSsoHeader } from '../github';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+	DETAILS_TTL,
+	failedWriteStatus,
+	fetchDetails,
+	fetchPeek,
+	fetchSubjects,
+	forTeams,
+	gh,
+	graphql,
+	graphqlFailure,
+	graphqlWriteFailure,
+	listNotifications,
+	needsDetails,
+	peekEntryFromRest,
+	rateLimitRetryAt,
+	refusal,
+	restWriteFailure,
+	searchShort,
+	SUBJECT_FIELDS,
+	toSubject
+} from '../github';
+import type { SubjectFacts } from '../../src/lib/shared/subject';
 import { tokenHelp } from '../../src/lib/token-help';
 import { vapidFromEnv } from '../webpush';
 
-describe('parseSsoHeader', () => {
-	it('reads the org ids GitHub left out', () => {
-		expect(parseSsoHeader('partial-results; organizations=21955855,20582480')).toEqual([
-			'21955855',
-			'20582480'
+afterEach(() => vi.unstubAllGlobals());
+
+const body = (init?: RequestInit) =>
+	JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
+
+describe('gh', () => {
+	afterEach(() => vi.useRealTimers());
+
+	it('leaves no timer behind once GitHub answers, so the Durable Object can sleep', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('{}'))
+		);
+		await gh('t', '/user');
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it('gives up when GitHub does not answer', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(_url: string, init?: RequestInit) =>
+					new Promise<Response>((_, reject) =>
+						init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+					)
+			)
+		);
+		const answer = gh('t', '/user');
+		vi.runAllTimers();
+		await expect(answer).rejects.toMatchObject({ name: 'TimeoutError' });
+	});
+});
+
+describe('searchShort', () => {
+	it('asks only for IDs and update times, and keys each hit', async () => {
+		const sent: string[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				sent.push(body(init).query);
+				const node = {
+					__typename: 'PullRequest',
+					id: 'PR_1',
+					number: 7,
+					updatedAt: '2026-09-02T00:00:00Z',
+					repository: { nameWithOwner: 'o/r' }
+				};
+				return new Response(
+					JSON.stringify({ data: { s0: { nodes: [node] }, s1: { nodes: [node] } } })
+				);
+			})
+		);
+		const q = [
+			{ section: 'mine', q: 'is:pr author:@me' },
+			{ section: 'reviewed', q: 'is:pr reviewed-by:@me' }
+		];
+		const r = await searchShort('t', q);
+		expect(sent).toHaveLength(1);
+		expect(sent[0]).not.toMatch(/statusCheckRollup|reviewThreads/);
+		expect(r.hits.map((h) => [h.query.section, h.key])).toEqual([
+			['mine', 'o/r#7'],
+			['reviewed', 'o/r#7']
 		]);
-		expect(parseSsoHeader(null)).toEqual([]);
-		expect(parseSsoHeader('required; url=https://github.com/orgs/x/sso')).toEqual([]);
+	});
+
+	it('asks again in halves when GitHub takes too long', async () => {
+		const sizes: number[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				const n = (body(init).query.match(/search\(/g) ?? []).length;
+				sizes.push(n);
+				if (n > 1) return new Response('', { status: 502 });
+				return new Response(JSON.stringify({ data: { s0: { nodes: [] } } }));
+			})
+		);
+		const q = Array.from({ length: 6 }, (_, i) => ({ section: 'mine', q: `is:pr q${i}` }));
+		const r = await searchShort('t', q);
+		expect(r.errors).toEqual([]);
+		expect(sizes.filter((n) => n === 1)).toHaveLength(6);
+	});
+
+	it('says so when even one search takes too long, or gets no answer', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('', { status: 504 }))
+		);
+		expect((await searchShort('t', [{ section: 'm', q: 'x' }])).errors[0]).toMatch(/too long/);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				throw new DOMException('The operation timed out.', 'TimeoutError');
+			})
+		);
+		expect((await searchShort('t', [{ section: 'm', q: 'x' }])).errors[0]).toMatch(
+			/did not answer/
+		);
+	});
+});
+
+describe('fetchDetails', () => {
+	it('does not replace subject facts from a partial node while retaining other complete nodes', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						nodes: [
+							{ id: 'PR_1', __typename: 'PullRequest', labels: null },
+							{ id: 'I_2', __typename: 'Issue' }
+						]
+					},
+					errors: [{ message: 'Labels failed', path: ['nodes', 0, 'labels'] }]
+				})
+			)
+		);
+		const result = await fetchDetails('t', 'ian', ['PR_1', 'I_2']);
+		expect(result.subjects.has('PR_1')).toBe(false);
+		expect(result.subjects.has('I_2')).toBe(true);
+		expect(result.errors).toEqual(['Labels failed']);
+	});
+
+	it('reads the full facts by node ID, 20 in a request', async () => {
+		const asked: string[][] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				const ids = body(init).variables.ids as string[];
+				asked.push(ids);
+				return new Response(
+					JSON.stringify({
+						data: {
+							nodes: ids.map((id) => ({
+								__typename: 'Issue',
+								id,
+								number: 1,
+								title: 't',
+								url: 'https://github.com/o/r/issues/1',
+								state: 'OPEN',
+								createdAt: '2026-09-01T00:00:00Z',
+								updatedAt: '2026-09-02T00:00:00Z',
+								repository: { nameWithOwner: 'o/r' },
+								author: { login: 'alice' }
+							}))
+						}
+					})
+				);
+			})
+		);
+		const ids = Array.from({ length: 45 }, (_, i) => `I_${i}`);
+		const r = await fetchDetails('t', 'ian', ids);
+		expect(asked.map((a) => a.length)).toEqual([20, 20, 5]);
+		expect(r.subjects.size).toBe(45);
+	});
+});
+
+describe('notification rate limits', () => {
+	const now = Date.parse('2026-10-17T12:00:00Z');
+	const resetAt = now + 45 * 60_000;
+	const headers = (values: Record<string, string>) => new Headers(values);
+
+	it('waits for Retry-After on a secondary rate limit', () => {
+		expect(
+			rateLimitRetryAt(
+				headers({
+					'Retry-After': '60',
+					'X-RateLimit-Remaining': '4000',
+					'X-RateLimit-Reset': String(resetAt / 1000)
+				}),
+				now
+			)
+		).toBe(now + 60_000);
+	});
+
+	it('waits for the reset only when the quota is used up', () => {
+		expect(
+			rateLimitRetryAt(
+				headers({ 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(resetAt / 1000) }),
+				now
+			)
+		).toBe(resetAt);
+	});
+
+	it('does not wait on a 403 that is not a rate limit', () => {
+		expect(
+			rateLimitRetryAt(
+				headers({ 'X-RateLimit-Remaining': '4999', 'X-RateLimit-Reset': String(resetAt / 1000) }),
+				now
+			)
+		).toBeUndefined();
+	});
+
+	it('reports the Retry-After time with the notification page', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response('{}', {
+						status: 403,
+						headers: { 'Retry-After': '120', 'X-RateLimit-Remaining': '10' }
+					})
+			)
+		);
+		const before = Date.now();
+		const page = await listNotifications('t', {});
+		expect(page.retryAt).toBeGreaterThanOrEqual(before + 120_000);
+		expect(page.retryAt).toBeLessThanOrEqual(Date.now() + 120_000);
+	});
+});
+
+describe('subject reads with partial GraphQL responses', () => {
+	it.each(['FORBIDDEN', 'NOT_FOUND'])(
+		'does not acknowledge a batch after a pathless %s error',
+		async (type) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () => Response.json({ errors: [{ message: 'Unavailable', type }] }))
+			);
+			const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
+			const reads = await fetchSubjects('t', refs, 'ian');
+			expect(reads.deletedOrNoAccess.size).toBe(0);
+		}
+	);
+	it('marks a definitively missing subject as unavailable instead of retryable', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ data: { t0: { issueOrPullRequest: null } } }))
+		);
+		const reads = await fetchSubjects(
+			't',
+			[{ key: 'n1', owner: 'o', repo: 'r', number: 1 }],
+			'ian'
+		);
+		expect(reads.deletedOrNoAccess).toEqual(new Set(['n1']));
+		expect(reads.githubDidNotAnswer.size).toBe(0);
+	});
+	it.each([403, 500])(
+		'reports every subject of a chunk that GitHub refused with %i',
+		async (status) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () => Response.json({ message: 'Refused' }, { status }))
+			);
+			const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
+			const reads = await fetchSubjects('t', refs, 'ian');
+			expect(reads.subjects.size).toBe(0);
+			expect(reads.githubDidNotAnswer).toEqual(new Set(['n1', 'n2']));
+			expect(reads.errors).toEqual([`GitHub returned ${status}.`]);
+		}
+	);
+	it('reads a timed-out chunk again in halves and keeps the half that answered', async () => {
+		const asked: number[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				const numbers = Object.entries(body(init).variables)
+					.filter(([name]) => /^n\d+$/.test(name))
+					.map(([, value]) => value as number);
+				asked.push(numbers.length);
+				if (numbers.length > 1 || numbers[0] === 2) return new Response('', { status: 502 });
+				return Response.json({
+					data: {
+						t0: {
+							issueOrPullRequest: {
+								__typename: 'Issue',
+								id: 'I_1',
+								number: 1,
+								repository: { nameWithOwner: 'o/r' }
+							}
+						}
+					}
+				});
+			})
+		);
+		const refs = [1, 2].map((number) => ({ key: 'n' + number, owner: 'o', repo: 'r', number }));
+		const reads = await fetchSubjects('t', refs, 'ian');
+		expect(asked).toEqual([2, 1, 1]);
+		expect([...reads.subjects.keys()]).toEqual(['n1']);
+		expect(reads.githubDidNotAnswer).toEqual(new Set(['n2']));
+	});
+	it('does not store partial facts from an aliased recheck or notification read', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						t0: {
+							issueOrPullRequest: { id: 'PR_1', __typename: 'PullRequest', reviewRequests: null }
+						},
+						t1: { issueOrPullRequest: { id: 'I_2', __typename: 'Issue' } }
+					},
+					errors: [
+						{
+							message: 'Review requests failed',
+							path: ['t0', 'issueOrPullRequest', 'reviewRequests']
+						}
+					]
+				})
+			)
+		);
+		const result = await fetchSubjects(
+			't',
+			[
+				{ key: 'pr', owner: 'o', repo: 'r', number: 1 },
+				{ key: 'issue', owner: 'o', repo: 'r', number: 2 }
+			],
+			'ian'
+		);
+		expect(result.subjects.has('pr')).toBe(false);
+		expect(result.subjects.has('issue')).toBe(true);
+	});
+
+	it('opens a partial peek without storing its incomplete subject facts', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						repository: {
+							issueOrPullRequest: { id: 'PR_1', __typename: 'PullRequest', labels: null }
+						}
+					},
+					errors: [
+						{ message: 'Labels failed', path: ['repository', 'issueOrPullRequest', 'labels'] }
+					]
+				})
+			)
+		);
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.can.id).toBe('PR_1');
+		expect(result?.subject).toBeNull();
+	});
+});
+
+describe('peek comment editing permissions', () => {
+	it.each(['Issue', 'PullRequest'])(
+		'keeps Markdown and only permits owned editable entries on a %s',
+		async (type) => {
+			const entries = [
+				{ __typename: 'IssueComment', viewerDidAuthor: true, viewerCanUpdate: true },
+				{ __typename: 'IssueComment', viewerDidAuthor: false, viewerCanUpdate: true },
+				{ __typename: 'IssueComment', viewerDidAuthor: true, viewerCanUpdate: false },
+				{ __typename: 'PullRequestReview', viewerDidAuthor: true, viewerCanUpdate: true }
+			].map((entry, i) => ({
+				...entry,
+				id: `entry_${i}`,
+				body: '**Markdown**',
+				bodyHTML: '<strong>Markdown</strong>'
+			}));
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () =>
+					Response.json({
+						data: {
+							repository: {
+								issueOrPullRequest: {
+									id: 'subject_1',
+									__typename: type,
+									timelineItems: { nodes: entries, totalCount: entries.length }
+								}
+							}
+						}
+					})
+				)
+			);
+			const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+			expect(result?.peek.timeline.items.map((entry) => entry.canEdit)).toEqual([
+				true,
+				false,
+				false,
+				true
+			]);
+			expect(result?.peek.timeline.items.every((entry) => entry.body === '**Markdown**')).toBe(
+				true
+			);
+		}
+	);
+});
+
+const facts = (over: Partial<SubjectFacts> = {}) =>
+	({
+		updatedAt: '2026-09-02T00:00:00Z',
+		ci: 'SUCCESS',
+		reviewRequests: [],
+		...over
+	}) as SubjectFacts;
+
+describe('needsDetails', () => {
+	const now = Date.parse('2026-09-02T12:00:00Z');
+	const recent = now - 60_000;
+	it('reads again what is new, changed, running CI, old, or a full refresh', () => {
+		expect(needsDetails(undefined, '2026-09-02T00:00:00Z', recent, now, false)).toBe(true);
+		expect(needsDetails(facts(), '2026-09-02T01:00:00Z', recent, now, false)).toBe(true);
+		expect(needsDetails(facts({ ci: 'PENDING' }), '2026-09-02T00:00:00Z', recent, now, false)).toBe(
+			true
+		);
+		expect(needsDetails(facts(), '2026-09-02T00:00:00Z', now - DETAILS_TTL - 1, now, false)).toBe(
+			true
+		);
+		expect(needsDetails(facts(), '2026-09-02T00:00:00Z', recent, now, true)).toBe(true);
+	});
+	it('keeps what Hush has for an item that did not change', () => {
+		expect(needsDetails(facts(), '2026-09-02T00:00:00Z', recent, now, false)).toBe(false);
+	});
+});
+
+describe('forTeams', () => {
+	const q = { section: 'review-team', q: 'x', teams: ['o/web'] };
+	it('keeps PRs that ask a tracked team', () => {
+		expect(forTeams(q, facts({ reviewRequests: [{ team: true, name: 'O/Web' }] }), 'ian')).toBe(
+			true
+		);
+		expect(forTeams(q, facts({ reviewRequests: [{ team: false, name: 'ian' }] }), 'ian')).toBe(
+			false
+		);
+		expect(forTeams({ section: 'mine', q: 'x' }, facts(), 'ian')).toBe(true);
+	});
+	it('also keeps PRs that ask you yourself, when the search says so', () => {
+		const both = { ...q, orDirect: true };
+		expect(forTeams(both, facts({ reviewRequests: [{ team: false, name: 'Ian' }] }), 'ian')).toBe(
+			true
+		);
+		expect(forTeams(both, facts({ reviewRequests: [{ team: false, name: 'bob' }] }), 'ian')).toBe(
+			false
+		);
+		expect(
+			forTeams(both, facts({ reviewRequests: [{ team: true, name: 'o/infra' }] }), 'ian')
+		).toBe(false);
+	});
+});
+
+describe('toSubject stack links', () => {
+	const pr = (number: number, baseRefName: string, under?: Record<string, unknown>) => ({
+		number,
+		title: `PR ${number}`,
+		url: `https://github.com/o/r/pull/${number}`,
+		isDraft: false,
+		baseRefName,
+		author: { login: 'alice' },
+		baseRef: { associatedPullRequests: { nodes: under ? [under] : [] } }
+	});
+	const top = (under: Record<string, unknown> | undefined, baseRefName = 'b2') => ({
+		__typename: 'PullRequest',
+		...pr(3, baseRefName, under),
+		repository: { nameWithOwner: 'o/r', defaultBranchRef: { name: 'main' } }
+	});
+
+	it('lists the open PRs under it, nearest first, down to the default branch', () => {
+		const s = toSubject(top(pr(2, 'b1', pr(1, 'main', pr(9, 'x')))));
+		expect(s.stackBelowNearestFirst?.map((l) => l.number)).toEqual([2, 1]);
+	});
+
+	it('has no links for a PR on the default branch', () => {
+		expect(toSubject(top(pr(2, 'b1'), 'main')).stackBelowNearestFirst).toEqual([]);
+	});
+
+	it('stops at a loop', () => {
+		const s = toSubject(top(pr(2, 'b1', pr(3, 'b2'))));
+		expect(s.stackBelowNearestFirst?.map((l) => l.number)).toEqual([2]);
+	});
+});
+
+describe('toSubject close facts', () => {
+	const CLOSED_AT = '2026-10-13T10:00:00Z';
+	const node = (over: Record<string, unknown>) => ({
+		number: 5,
+		url: 'https://github.com/o/r/issues/5',
+		repository: { nameWithOwner: 'o/r' },
+		author: { login: 'alice' },
+		...over
+	});
+	const issue = (state: string, stateReason: string | null) =>
+		toSubject(node({ __typename: 'Issue', state, stateReason, closedAt: CLOSED_AT }));
+
+	it('reads when a pull request or an issue closed', () => {
+		const merged = node({
+			__typename: 'PullRequest',
+			state: 'MERGED',
+			merged: true,
+			closedAt: CLOSED_AT
+		});
+		expect(toSubject(merged)).toMatchObject({
+			state: 'merged',
+			closedAt: CLOSED_AT,
+			closeReason: null
+		});
+		expect(toSubject(node({ __typename: 'Issue', state: 'OPEN', closedAt: null })).closedAt).toBe(
+			null
+		);
+	});
+
+	it('reads why an issue closed', () => {
+		expect(issue('CLOSED', 'COMPLETED').closeReason).toBe('completed');
+		expect(issue('CLOSED', 'NOT_PLANNED').closeReason).toBe('not_planned');
+		expect(issue('CLOSED', 'DUPLICATE').closeReason).toBe('duplicate');
+		expect(issue('CLOSED', null).closeReason).toBeNull();
+		expect(issue('OPEN', 'REOPENED').closeReason).toBeNull();
+	});
+});
+
+describe('toSubject reviews', () => {
+	const AT = '2026-10-13T10:00:00Z';
+	const reviewBy = (author: Record<string, unknown>) =>
+		toSubject({
+			__typename: 'PullRequest',
+			number: 7,
+			url: 'https://github.com/o/r/pull/7',
+			state: 'OPEN',
+			repository: { nameWithOwner: 'o/r' },
+			author: { login: 'alice' },
+			latestReview: { nodes: [{ author, submittedAt: AT, state: 'COMMENTED' }] }
+		}).latestReview;
+
+	it('marks a review by a GitHub App as a bot review', () => {
+		expect(reviewBy({ login: 'copilot-pull-request-reviewer', __typename: 'Bot' })).toEqual({
+			author: 'copilot-pull-request-reviewer',
+			authorIsBot: true,
+			at: AT,
+			state: 'COMMENTED'
+		});
+		expect(reviewBy({ login: 'bob', __typename: 'User' })?.authorIsBot).toBe(false);
+	});
+
+	it('asks only for submitted reviews, so a pending review hides no submitted one', () => {
+		const reviewArguments = SUBJECT_FIELDS.match(/reviews\([^)]*\)/g) ?? [];
+		expect(reviewArguments).toHaveLength(2);
+		for (const args of reviewArguments)
+			expect(args).toContain('states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]');
+		expect(SUBJECT_FIELDS).toMatch(
+			/latestReview: reviews\([^)]*\) \{ nodes \{ author \{ login __typename \}/
+		);
+	});
+});
+
+describe('peekEntryFromRest', () => {
+	const user = {
+		login: 'ann',
+		avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4',
+		type: 'User'
+	};
+
+	it('matches the peek timeline shape for a new comment', () => {
+		expect(
+			peekEntryFromRest('comment', {
+				node_id: 'IC_1',
+				html_url: 'https://github.com/o/r/pull/2#issuecomment-3',
+				body_html: '<p>hi</p>',
+				body: 'hi',
+				created_at: '2026-10-07T10:00:00Z',
+				user
+			})
+		).toEqual({
+			type: 'comment',
+			id: 'IC_1',
+			author: {
+				login: 'ann',
+				avatar: 'https://avatars.githubusercontent.com/u/1?v=4&s=48',
+				bot: false
+			},
+			at: '2026-10-07T10:00:00Z',
+			url: 'https://github.com/o/r/pull/2#issuecomment-3',
+			html: '<p>hi</p>',
+			body: 'hi',
+			canEdit: true,
+			reactions: { id: 'IC_1', canReact: true, groups: [] }
+		});
+	});
+
+	it('keeps the review state and its submit time', () => {
+		const entry = peekEntryFromRest('review', {
+			node_id: 'PRR_1',
+			html_url: 'https://github.com/o/r/pull/2#pullrequestreview-4',
+			submitted_at: '2026-10-07T11:00:00Z',
+			state: 'APPROVED',
+			user
+		});
+		expect(entry).toMatchObject({
+			type: 'review',
+			id: 'PRR_1',
+			state: 'APPROVED',
+			inline: 0,
+			html: ''
+		});
+		expect(entry.at).toBe('2026-10-07T11:00:00Z');
 	});
 });
 
@@ -39,5 +638,82 @@ describe('vapidFromEnv', () => {
 		expect(vapidFromEnv({ ...env, VAPID_SUBJECT: 'mailto:a@b.c' }, 'https://x').subject).toBe(
 			'mailto:a@b.c'
 		);
+	});
+});
+
+describe('graphql', () => {
+	it('returns the data and the GraphQL errors, without throwing', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({ data: { a: 1 }, errors: [{ message: 'Partial', path: ['b'] }] })
+			)
+		);
+		expect(await graphql('t', 'query { a b }', {})).toEqual({
+			ok: true,
+			status: 200,
+			data: { a: 1 },
+			errors: [{ message: 'Partial', path: ['b'] }]
+		});
+	});
+
+	it('keeps the status of a failure that has no readable answer', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('Bad gateway', { status: 502 }))
+		);
+		expect(await graphql('t', 'query { a }', {})).toEqual({
+			ok: false,
+			status: 502,
+			data: undefined,
+			errors: []
+		});
+	});
+
+	it('throws when a successful answer cannot be read, as when GitHub does not answer', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('not json'))
+		);
+		await expect(graphql('t', 'query { a }', {})).rejects.toThrow('GitHub did not answer.');
+	});
+});
+
+describe('GitHub failures', () => {
+	const result = (ok: boolean, status: number, messages: string[] = []) => ({
+		ok,
+		status,
+		errors: messages.map((message) => ({ message }))
+	});
+
+	it('gives the first GraphQL error, else the status, else nothing', () => {
+		expect(graphqlFailure(result(true, 200, ['First', 'Second']))).toBe('First');
+		expect(graphqlFailure(result(false, 401))).toBe('GitHub returned 401.');
+		expect(graphqlFailure(result(true, 200))).toBeNull();
+	});
+
+	it('answers 422 when GitHub refuses a write and 502 when GitHub fails', () => {
+		expect(failedWriteStatus(403)).toBe(422);
+		expect(failedWriteStatus(422)).toBe(422);
+		expect(failedWriteStatus(502)).toBe(502);
+		expect(graphqlWriteFailure(result(true, 200, ['Locked']))).toEqual({
+			error: 'Locked',
+			status: 422
+		});
+		expect(graphqlWriteFailure(null)).toEqual({ error: 'GitHub did not answer.', status: 502 });
+		expect(graphqlWriteFailure(result(true, 200))).toBeNull();
+	});
+
+	it('reads the reason of a REST refusal as one sentence', async () => {
+		expect(
+			await refusal(
+				Response.json(
+					{ message: 'Validation Failed', errors: [{ message: 'Line is outside the diff' }, 'x'] },
+					{ status: 422 }
+				)
+			)
+		).toBe('Validation Failed: Line is outside the diff: x');
+		expect(await refusal(new Response('', { status: 500 }))).toBe('GitHub returned 500.');
+		expect(await restWriteFailure(null)).toEqual({ error: 'GitHub did not answer.', status: 502 });
 	});
 });

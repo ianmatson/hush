@@ -1,5 +1,6 @@
 import type { DashSettings, Settings } from '$lib/shared/types';
 import { PUSH_FACTS, type PushFact } from '$lib/shared/push-facts';
+import { saveSettings, togglePushFact } from '$lib/save-settings';
 
 type BooleanKeys<T> = { [K in keyof T]: T[K] extends boolean ? K : never }[keyof T];
 
@@ -8,7 +9,7 @@ export interface SettingToggle {
 	label: string;
 	keywords: string[];
 	isOn: (s: Settings) => boolean;
-	patch: (s: Settings, on: boolean) => Partial<Settings>;
+	save: (on: boolean, message: string) => Promise<boolean>;
 }
 
 function topLevel(key: BooleanKeys<Settings>, label: string, keywords: string): SettingToggle {
@@ -17,7 +18,7 @@ function topLevel(key: BooleanKeys<Settings>, label: string, keywords: string): 
 		label,
 		keywords: keywords.split(' '),
 		isOn: (s) => s[key],
-		patch: (_, on) => ({ [key]: on })
+		save: (on, message) => saveSettings({ [key]: on }, message)
 	};
 }
 
@@ -27,7 +28,7 @@ function dash(key: BooleanKeys<DashSettings>, label: string, keywords: string): 
 		label,
 		keywords: keywords.split(' '),
 		isOn: (s) => s.dash[key],
-		patch: (s, on) => ({ dash: { ...s.dash, [key]: on } })
+		save: (on, message) => saveSettings({ dash: { [key]: on } }, message)
 	};
 }
 
@@ -37,9 +38,7 @@ function pushFact(f: { id: PushFact; label: string }): SettingToggle {
 		label: `Push: ${f.label.charAt(0).toLowerCase()}${f.label.slice(1)}`,
 		keywords: ['push', 'notifications', 'alerts', ...f.id.split('-')],
 		isOn: (s) => s.pushFacts.includes(f.id),
-		patch: (s, on) => ({
-			pushFacts: on ? [...new Set([...s.pushFacts, f.id])] : s.pushFacts.filter((x) => x !== f.id)
-		})
+		save: (on, message) => togglePushFact(f.id, on, message)
 	};
 }
 

@@ -2,7 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import type { DashProject, FeedDTO, GroupBy, ItemView, ViewSection } from '$lib/shared/types';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { meQuery } from '$lib/queries';
+	import { dashQuery, meQuery } from '$lib/queries';
 	import {
 		CUSTOM_GROUP_BY,
 		EVERYTHING_ELSE_SECTION,
@@ -10,7 +10,7 @@
 		groupByOptions,
 		type GroupByKind
 	} from '$lib/shared/grouping';
-	import { cachedItems, cachedProjects, previewItems, ruleSuggestions } from '$lib/rule-preview';
+	import { itemsIn, previewItems, projectsIn, ruleSuggestions } from '$lib/rule-preview';
 	import SearchSelect, { type SearchSelectGroup } from './search-select.svelte';
 	import {
 		githubSearchOf,
@@ -21,6 +21,7 @@
 		searchKinds
 	} from '$lib/shared/item-views';
 	import { viewFeedView } from '$lib/shared/views';
+	import { moveItem, unusedName } from '$lib/draft-edits';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Card from '$lib/components/ui/card';
@@ -83,7 +84,11 @@
 
 	const me = createQuery(meQuery);
 	const categoryGroups = $derived(me.data?.settings.categoryGroups ?? []);
-	const projects: DashProject[] = cachedProjects();
+	const savedDashboards = (['pr', 'issue'] as const).map((kind) =>
+		createQuery(() => ({ ...dashQuery(kind), enabled: false }))
+	);
+	const dashAnswers = $derived(savedDashboards.map((q) => q.data));
+	const projects = $derived<DashProject[]>(projectsIn(dashAnswers));
 	const groupChoices = $derived.by(() => {
 		const choices = groupByOptions(categoryGroups, projects, true);
 		return choices.some((o) => o.id === view.groupBy)
@@ -112,9 +117,10 @@
 		return [...byHeading.values()];
 	});
 	const sections = $derived(view.sections ?? []);
-	const suggestions = $derived(ruleSuggestions(me.data?.settings));
+	const savedItems = $derived(itemsIn(dashAnswers));
+	const suggestions = $derived(ruleSuggestions(me.data?.settings, savedItems));
 	const itemsInView = $derived(
-		cachedItems().filter((i) => i.sections.includes(view.id) && !i.keptAfterClose)
+		savedItems.filter((i) => i.sections.includes(view.id) && !i.keptAfterClose)
 	);
 
 	function setGroupBy(by: GroupBy) {
@@ -123,17 +129,16 @@
 	}
 
 	function addSection() {
-		const used = new Set(sections.map((s) => s.name.toLowerCase()));
-		let n = sections.length + 1;
-		while (used.has(`section ${n}`)) n++;
-		view.sections = [...sections, { name: `Section ${n}`, rule: '' }];
+		const name = unusedName(
+			'Section',
+			sections.map((s) => s.name),
+			sections.length + 1
+		);
+		view.sections = [...sections, { name, rule: '' }];
 	}
 
 	function moveSection(index: number, by: number) {
-		const list = [...sections];
-		const [s] = list.splice(index, 1);
-		list.splice(index + by, 0, s);
-		view.sections = list;
+		view.sections = moveItem(sections, index, by);
 	}
 
 	function setSection(index: number, patch: Partial<ViewSection>) {

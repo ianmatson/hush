@@ -1,24 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { cn } from '$lib/utils';
-	import Bell from '@lucide/svelte/icons/bell';
-	import LayoutList from '@lucide/svelte/icons/layout-list';
-	import Settings2 from '@lucide/svelte/icons/settings-2';
-	import Keyboard from '@lucide/svelte/icons/keyboard';
-	import Shapes from '@lucide/svelte/icons/shapes';
+	import { SETTINGS_SECTIONS, type SettingsPage } from '$lib/shared/settings-schema';
+	import { SETTINGS_ICONS } from '$lib/settings-icons';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Check from '@lucide/svelte/icons/check';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	let { children } = $props();
 
-	const sections = [
-		{ href: '/settings/general', label: 'General', icon: Settings2 },
-		{ href: '/settings/views', label: 'Views', icon: LayoutList },
-		{ href: '/settings/categories', label: 'Categories', icon: Shapes },
-		{ href: '/settings/notifications', label: 'Notifications', icon: Bell },
-		{ href: '/settings/keys', label: 'Keybinds', icon: Keyboard, needsKeyboard: true }
-	];
+	const sections = (Object.keys(SETTINGS_SECTIONS) as SettingsPage[]).map((section) => ({
+		...SETTINGS_SECTIONS[section],
+		icon: SETTINGS_ICONS[section]
+	}));
 	const current = $derived(sections.find((s) => page.url.pathname === s.href));
 </script>
 

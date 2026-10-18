@@ -30,6 +30,25 @@ describe('eventHappened', () => {
 			)
 		).toBe(true);
 	});
+	it('a review by a bot is not a reply or a new review', () => {
+		const copilot = pr({
+			latestReview: {
+				author: 'copilot-pull-request-reviewer',
+				authorIsBot: true,
+				at: later,
+				state: 'COMMENTED'
+			}
+		});
+		expect(eventHappened('reply', copilot, since, 'ian')).toBe(false);
+		expect(eventHappened('review', copilot, since, 'ian')).toBe(false);
+	});
+	it('a reply counts when a bot commented after it', () => {
+		const replied = pr({
+			previousComment: { author: 'bob', createdAt: later, authorIsBot: false, body: '', url: '' },
+			lastComment: { author: 'ci-bot', createdAt: later, authorIsBot: true, body: '', url: '' }
+		});
+		expect(eventHappened('reply', replied, since, 'ian')).toBe(true);
+	});
 	it('new commits and new reviews compare with the snooze time', () => {
 		expect(eventHappened('commits', pr({ lastCommitAt: later }), since, 'ian')).toBe(true);
 		expect(eventHappened('commits', pr({ lastCommitAt: before }), since, 'ian')).toBe(false);

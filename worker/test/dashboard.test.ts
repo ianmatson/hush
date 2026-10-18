@@ -28,6 +28,9 @@ class TestDashboard extends PollerDashboard {
 	cachedBuild() {
 		return this.buildDashboard('pr', false);
 	}
+	rebuildAfter(changedAt: number) {
+		return this.rebuildTracked('pr', changedAt);
+	}
 }
 
 function harness() {
@@ -75,6 +78,8 @@ function harness() {
 	const storage = new Map<string, unknown>([['dash:pr', { sig, data }]]);
 	const trackedBuild = vi.fn();
 	const poller = Object.assign(Object.create(TestDashboard.prototype) as TestDashboard, {
+		dashBuilds: new Map(),
+		broadcast: vi.fn(),
 		ctx: {
 			storage: {
 				get: vi.fn(async (key: string | string[]) =>
@@ -90,12 +95,7 @@ function harness() {
 		},
 		who: async () => who,
 		teams: async () => ({ teams: [] }),
-		all: (sql: string, ...keys: string[]) =>
-			sql.includes('FROM subjects')
-				? keys.flatMap((key) =>
-						facts.has(key) ? [{ key, facts: JSON.stringify(facts.get(key)) }] : []
-					)
-				: [],
+		all: () => [],
 		storedSubjectFacts: (keys: string[]) =>
 			new Map(keys.flatMap((key) => (facts.has(key) ? [[key, facts.get(key)]] : []))),
 		decideSubjects: async () => {},
@@ -118,22 +118,33 @@ function harness() {
 	return { poller, subjects, data, storage, trackedBuild };
 }
 
+const NOTHING_FOUND = {
+	hits: [],
+	errors: [],
+	failedSections: new Set<string>(),
+	failedQueries: []
+};
+
+const failEveryBoardQuery = () =>
+	vi.mocked(boardShort).mockImplementation(async (_token, queries) => ({
+		hits: [],
+		errors: ['Board failed'],
+		failedSections: new Set(queries.map((query) => query.section)),
+		failedQueries: queries
+	}));
+
 describe('dashboard source failure and local filters', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(boardShort).mockResolvedValue({ hits: [], errors: [], failedSections: new Set() });
-		vi.mocked(searchShort).mockResolvedValue({ hits: [], errors: [], failedSections: new Set() });
+		vi.mocked(boardShort).mockResolvedValue(NOTHING_FOUND);
+		vi.mocked(searchShort).mockResolvedValue(NOTHING_FOUND);
 		vi.mocked(itemStatuses).mockResolvedValue({ projects: [], statusOf: new Map(), errors: [] });
 	});
 
 	it('reads fresh facts when a successful source overlaps a failed source', async () => {
 		const { poller, subjects, storage } = harness();
 		storage.set('dash:read:pr', { 'sandbox/web#1': Date.now() });
-		vi.mocked(boardShort).mockResolvedValue({
-			hits: [],
-			errors: ['Board failed'],
-			failedSections: new Set(['website'])
-		});
+		failEveryBoardQuery();
 		vi.mocked(searchShort).mockResolvedValue({
 			hits: [
 				{
@@ -144,7 +155,8 @@ describe('dashboard source failure and local filters', () => {
 				}
 			],
 			errors: [],
-			failedSections: new Set()
+			failedSections: new Set(),
+			failedQueries: []
 		});
 		await poller.incrementalBuild();
 		expect(fetchDetails).toHaveBeenCalledWith('test', 'reviewer', ['PR_1']);
@@ -152,11 +164,7 @@ describe('dashboard source failure and local filters', () => {
 
 	it('retains a failed board source while removing confirmed absence from a successful source', async () => {
 		const { poller, trackedBuild } = harness();
-		vi.mocked(boardShort).mockResolvedValue({
-			hits: [],
-			errors: ['Board failed'],
-			failedSections: new Set(['website'])
-		});
+		failEveryBoardQuery();
 		const result = await poller.build();
 		expect(result.items.map((item) => [item.id, item.sections])).toEqual([
 			['sandbox/web#1', ['website']]
@@ -221,11 +229,7 @@ describe('dashboard source failure and local filters', () => {
 		const { poller, data, storage } = harness();
 		data.items[0].sections = ['website', 'mine'];
 		storage.set('dash:pr', { ...(storage.get('dash:pr') as object), data });
-		vi.mocked(boardShort).mockResolvedValue({
-			hits: [],
-			errors: ['Board failed'],
-			failedSections: new Set(['website'])
-		});
+		failEveryBoardQuery();
 		const result = await poller.build();
 		expect(result.items[0].sections).toEqual(['website']);
 	});
@@ -243,7 +247,8 @@ describe('dashboard source failure and local filters', () => {
 				}
 			],
 			errors: [],
-			failedSections: new Set()
+			failedSections: new Set(),
+			failedQueries: []
 		});
 		const result = await poller.build();
 		expect(result.items).toEqual([]);
@@ -255,5 +260,82 @@ describe('dashboard source failure and local filters', () => {
 		const result = await poller.cachedBuild();
 		expect(searchShort).toHaveBeenCalled();
 		expect(result.sourceItems).toBeDefined();
+	});
+});
+
+describe('one dashboard build at a time', () => {
+	function slowSearches() {
+		const searches = { running: 0, mostAtOnce: 0, answers: [] as (() => void)[] };
+		vi.mocked(searchShort).mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					searches.running++;
+					searches.mostAtOnce = Math.max(searches.mostAtOnce, searches.running);
+					searches.answers.push(() => {
+						searches.running--;
+						resolve(NOTHING_FOUND);
+					});
+				})
+		);
+		const answerNext = async () => {
+			await vi.waitFor(() => expect(searches.answers.length).toBeGreaterThan(0));
+			searches.answers.shift()!();
+		};
+		return { searches, answerNext };
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(boardShort).mockResolvedValue(NOTHING_FOUND);
+		vi.mocked(itemStatuses).mockResolvedValue({ projects: [], statusOf: new Map(), errors: [] });
+	});
+
+	it('shares a running build with a background rebuild', async () => {
+		const { poller } = harness();
+		const { searches, answerNext } = slowSearches();
+		const alarmRebuild = poller.incrementalBuild();
+		const staleRefresh = poller.incrementalBuild();
+		await answerNext();
+		expect(await staleRefresh).toBe(await alarmRebuild);
+		expect(searchShort).toHaveBeenCalledTimes(1);
+		expect(searches.mostAtOnce).toBe(1);
+	});
+
+	it('runs the Refresh build after a background rebuild, not next to it', async () => {
+		const { poller } = harness();
+		const { searches, answerNext } = slowSearches();
+		const alarmRebuild = poller.incrementalBuild();
+		const refresh = poller.build();
+		await answerNext();
+		await alarmRebuild;
+		await answerNext();
+		await refresh;
+		expect(searchShort).toHaveBeenCalledTimes(2);
+		expect(searches.mostAtOnce).toBe(1);
+	});
+
+	it('lets a background rebuild share a running Refresh build', async () => {
+		const { poller } = harness();
+		const { answerNext } = slowSearches();
+		const refresh = poller.build();
+		const alarmRebuild = poller.incrementalBuild();
+		await answerNext();
+		await Promise.all([refresh, alarmRebuild]);
+		expect(searchShort).toHaveBeenCalledTimes(1);
+	});
+
+	it('builds again after a board change that came during a build', async () => {
+		const { poller } = harness();
+		const { searches, answerNext } = slowSearches();
+		const alarmRebuild = poller.incrementalBuild();
+		await vi.waitFor(() => expect(searchShort).toHaveBeenCalledTimes(1));
+		await new Promise((done) => setTimeout(done, 2));
+		const afterBoardChange = poller.rebuildAfter(Date.now());
+		await answerNext();
+		await alarmRebuild;
+		await answerNext();
+		await afterBoardChange;
+		expect(searchShort).toHaveBeenCalledTimes(2);
+		expect(searches.mostAtOnce).toBe(1);
 	});
 });

@@ -2,7 +2,7 @@ import { createQuery } from '@tanstack/svelte-query';
 import { alertsQuery, dashQuery } from '$lib/queries';
 import { alertsSeen } from '$lib/alerts.svelte';
 import type { DashResponse } from '$lib/shared/types';
-import type { Counts } from '$lib/tab-status';
+import { countsAsUnread, newAlertCount, type Counts } from '$lib/tab-status';
 
 /**
  * The counts for the tab title, icon dot, and app badge. Same queries as the header, so this adds
@@ -14,10 +14,9 @@ export function createTabCounts(): { readonly current: Counts } {
 	const issues = createQuery(() => dashQuery('issue'));
 	const turns = (d: DashResponse | undefined, turn: 'you' | 'team') =>
 		d?.items.filter((i) => i.turn === turn && !i.dismissed).length ?? 0;
-	const unread = (d: DashResponse | undefined) =>
-		d?.items.filter((i) => i.unread && !i.dismissed && !i.keptAfterClose).length ?? 0;
+	const unread = (d: DashResponse | undefined) => d?.items.filter(countsAsUnread).length ?? 0;
 	const counts = $derived<Counts>({
-		alerts: alerts.data?.filter((a) => a.sentAt > alertsSeen.at).length ?? 0,
+		alerts: newAlertCount(alerts.data, alertsSeen.at),
 		unread: unread(prs.data) + unread(issues.data),
 		prYou: turns(prs.data, 'you'),
 		prTeam: turns(prs.data, 'team'),

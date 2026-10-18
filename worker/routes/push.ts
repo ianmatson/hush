@@ -20,7 +20,7 @@ const app = routes()
 		c.json(await poller(c.env, c.get('user').id).unsubscribe(c.req.valid('json').endpoint ?? ''))
 	)
 	.post('/api/push/test', async (c) => {
-		const r = await poller(c.env, c.get('user').id).testPush(new URL(c.req.url).origin);
+		const r = await poller(c.env, c.get('user').id).testPush();
 		if ('error' in r) return c.json({ error: r.error }, r.status);
 		return c.json(r);
 	});

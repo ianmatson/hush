@@ -3,7 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { getCookie } from 'hono/cookie';
 import { sha256 } from './crypto';
 import type { UserRow } from './db';
-import { SESSION_IDLE_DAYS, SESSION_TOUCH_MS } from '../src/lib/shared/session';
+import { SESSION_IDLE_MS, SESSION_TOUCH_MS } from '../src/lib/shared/session';
 import { clientIp, overLimit, SESSION_COOKIE, tooMany, type AppEnv, type Ctx } from './app';
 import alerts from './routes/alerts';
 import auth from './routes/auth';
@@ -24,7 +24,6 @@ import seen from './routes/seen';
 export { Poller } from './poller';
 
 const app = new Hono<AppEnv>();
-const DAY = 86_400_000;
 
 app.use('/api/auth/*', async (c, next) => {
 	if (await overLimit(c.env.AUTH_LIMIT, `login:${clientIp(c)}`)) return tooMany(c);
@@ -56,11 +55,12 @@ app.use('/api/*', async (c, next) => {
 		'/api/slack/interactions'
 	];
 	if (open.includes(c.req.path)) return next();
-	const sid = getCookie(c, SESSION_COOKIE);
-	if (!sid) {
+	const notSignedIn = async () => {
 		if (await overLimit(c.env.API_LIMIT, `ip:${clientIp(c)}`)) return tooMany(c);
 		return c.json({ error: 'Not signed in' }, 401);
-	}
+	};
+	const sid = getCookie(c, SESSION_COOKIE);
+	if (!sid) return notSignedIn();
 	// A session ends 30 days after sign-in, or after 7 days with no use.
 	const now = Date.now();
 	const hash = await sha256(sid);
@@ -68,9 +68,9 @@ app.use('/api/*', async (c, next) => {
 		`SELECT u.*, s.last_seen_at AS session_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.id_hash = ? AND s.expires_at > ? AND s.last_seen_at > ?`
 	)
-		.bind(hash, now, now - SESSION_IDLE_DAYS * DAY)
+		.bind(hash, now, now - SESSION_IDLE_MS)
 		.first<UserRow & { session_seen_at: number }>();
-	if (!row) return c.json({ error: 'Not signed in' }, 401);
+	if (!row) return notSignedIn();
 	if (await overLimit(c.env.API_LIMIT, `user:${row.id}`)) return tooMany(c);
 	// The last use, at most once an hour: enough for the 7-day limit, and few writes.
 	if (now - row.session_seen_at > SESSION_TOUCH_MS)

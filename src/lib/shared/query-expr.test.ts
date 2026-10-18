@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { queryMatches } from './rules';
-import {
-	aboutTexts,
-	compileExpr,
-	isSimpleQuery,
-	parseExpr,
-	queryError,
-	numberMatches
-} from './query';
+import { aboutTexts, compileExpr, parseExpr, queryError, numberMatches } from './query';
 import type { Enrichment, RuleFacts } from './types';
 
 const ME = 'ian';
@@ -36,9 +29,9 @@ const matches = (query: string, t: RuleFacts) => queryMatches(query, t);
 
 describe('parseExpr', () => {
 	it('keeps a plain query as one simple condition', () => {
-		expect(isSimpleQuery('repo:acme/* label:bug login')).toBe(true);
-		expect(isSimpleQuery('')).toBe(true);
-		expect(isSimpleQuery('-author:bots -is:draft')).toBe(true);
+		expect(compileExpr('repo:acme/* label:bug login').kind).toBe('match');
+		expect(compileExpr('').kind).toBe('match');
+		expect(compileExpr('-author:bots -is:draft').kind).toBe('match');
 	});
 	it('builds OR, groups, and NOT', () => {
 		expect(compileExpr('label:bug OR label:crash').kind).toBe('or');
@@ -116,5 +109,39 @@ describe('@me and the new words', () => {
 		expect(numberMatches('<=30', 30)).toBe(true);
 		expect(numberMatches('>=31', 30)).toBe(false);
 		expect(numberMatches('30', 30)).toBe(true);
+	});
+	it('label: takes wildcards', () => {
+		const t = thread({}, { labels: ['area/api', 'Bug'] });
+		expect(matches('label:area/*', t)).toBe(true);
+		expect(matches('label:bu?', t)).toBe(true);
+		expect(matches('label:team/*', t)).toBe(false);
+	});
+});
+
+describe('bots among other values', () => {
+	const bot = thread({}, { author: 'dependabot[bot]', authorIsBot: true });
+	const alice = thread();
+	const bob = thread({}, { author: 'bob' });
+
+	it('author:alice,bots matches either', () => {
+		expect(matches('author:alice,bots', alice)).toBe(true);
+		expect(matches('author:alice,bots', bot)).toBe(true);
+		expect(matches('author:alice,bots', bob)).toBe(false);
+		expect(matches('author:alice author:bots', bot)).toBe(true);
+	});
+
+	it('-author:bots still means a person', () => {
+		expect(matches('author:alice -author:bots', alice)).toBe(true);
+		expect(matches('author:dependabot* -author:bots', bot)).toBe(false);
+	});
+
+	it('from:bob,bots matches either, and a review by a bot is from a bot', () => {
+		const at = '2026-09-20T12:00:00Z';
+		const reviewedBy = (author: string, authorIsBot: boolean) =>
+			thread({}, { latestReview: { author, authorIsBot, at, state: 'COMMENTED' } });
+		expect(matches('from:bob,bots', reviewedBy('bob', false))).toBe(true);
+		expect(matches('from:bob,bots', reviewedBy('copilot-pull-request-reviewer', true))).toBe(true);
+		expect(matches('from:bob,bots', reviewedBy('carol', false))).toBe(false);
+		expect(matches('from:bots', reviewedBy('coderabbitai', true))).toBe(true);
 	});
 });

@@ -3,9 +3,14 @@
 	import { toast } from 'svelte-sonner';
 	import { meQuery } from '$lib/queries';
 	import { applySettings } from '$lib/save-settings';
-	import { DEFAULT_SETTINGS } from '$lib/shared/settings';
-	import { SETTINGS_DOCS, settingsOverrides } from '$lib/shared/settings-schema';
-	import type { Settings } from '$lib/shared/types';
+	import { createSettingsDraft } from '$lib/settings-draft.svelte';
+	import {
+		defaultOf,
+		SETTINGS_DOCS,
+		SETTINGS_SECTIONS,
+		settingsOverrides,
+		type SettingsPatch
+	} from '$lib/shared/settings-schema';
 	import { Button } from '$lib/components/ui/button';
 	import { commandFor } from '$lib/keys.svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -18,52 +23,57 @@
 	 * common settings; the rest are only here. (Export and import: settings-file.svelte.)
 	 */
 	const me = createQuery(meQuery);
-	const settings = $derived(me.data?.settings);
-	const saved = $derived(settings ? JSON.stringify(settingsOverrides(settings), null, 2) : '');
+	const LONG_DEFAULT_CHARS = 40;
 
-	let text = $state<string | null>(null);
 	let error = $state<string | null>(null);
-	let saving = $state(false);
-	const value = $derived(text ?? saved);
-	const dirty = $derived(text !== null && text !== saved);
+	const editor = createSettingsDraft<string>({
+		saved: () => {
+			const settings = me.data?.settings;
+			return settings && JSON.stringify(settingsOverrides(settings), null, 2);
+		},
+		save: saveText
+	});
 
-	async function save() {
-		let patch: Partial<Settings>;
+	function parsePatch(text: string): SettingsPatch | string {
+		let patch: unknown;
 		try {
-			patch = JSON.parse(value || '{}');
+			patch = JSON.parse(text || '{}');
 		} catch (err) {
-			error = `Not valid JSON: ${(err as Error).message}`;
-			return;
+			return `Not valid JSON: ${(err as Error).message}`;
 		}
-		if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
-			error = 'settings.json must be an object: { "key": value }.';
-			return;
+		if (typeof patch !== 'object' || patch === null || Array.isArray(patch))
+			return 'settings.json must be an object: { "key": value }.';
+		return patch as SettingsPatch;
+	}
+
+	async function saveText(text: string): Promise<boolean> {
+		const patch = parsePatch(text);
+		if (typeof patch === 'string') {
+			error = patch;
+			return false;
 		}
-		saving = true;
 		try {
 			await applySettings(patch, true);
 			toast.success('settings.json saved.');
-			text = null;
 			error = null;
+			return true;
 		} catch (err) {
 			error = (err as Error).message;
-		} finally {
-			saving = false;
+			return false;
 		}
 	}
 
-	const PAGE_LABEL: Record<string, string> = {
-		views: 'Views',
-		notifications: 'Notifications',
-		general: 'General',
-		keys: 'Keybinds'
-	};
-	function defaultOf(key: string): string {
-		const [top, sub] = key.split('.');
-		const d = (DEFAULT_SETTINGS as unknown as Record<string, Record<string, unknown>>)[top];
-		const v = sub ? d[sub] : d;
-		const s = JSON.stringify(v);
-		return Array.isArray(v) && v.length && s.length > 40 ? `[${v.length} items]` : s;
+	function discard() {
+		editor.discard();
+		error = null;
+	}
+
+	function defaultText(key: string): string {
+		const value = defaultOf(key);
+		const text = JSON.stringify(value);
+		return Array.isArray(value) && value.length && text.length > LONG_DEFAULT_CHARS
+			? `[${value.length} items]`
+			: text;
 	}
 </script>
 
@@ -86,15 +96,15 @@
 			wrap="off"
 			spellcheck={false}
 			aria-label="settings.json"
-			{value}
+			value={editor.draft ?? ''}
 			oninput={(e) => {
-				text = e.currentTarget.value;
+				editor.draft = e.currentTarget.value;
 				error = null;
 			}}
 			onkeydown={(e) => {
 				if (commandFor(e, ['editor']) === 'editor.save') {
 					e.preventDefault();
-					if (dirty) save();
+					if (editor.dirty) editor.save();
 				}
 			}}
 		/>
@@ -104,16 +114,9 @@
 			</p>
 		{/if}
 		<div class="flex flex-wrap gap-2">
-			<Button size="sm" disabled={!dirty || saving} onclick={save}>Save</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				disabled={!dirty}
-				onclick={() => {
-					text = null;
-					error = null;
-				}}>Cancel</Button
+			<Button size="sm" disabled={!editor.dirty || editor.saving} onclick={editor.save}>Save</Button
 			>
+			<Button variant="ghost" size="sm" disabled={!editor.dirty} onclick={discard}>Cancel</Button>
 		</div>
 
 		<details class="group rounded-lg border">
@@ -126,8 +129,8 @@
 						<dt class="flex flex-wrap items-baseline gap-x-2">
 							<code class="font-medium">{d.key}</code>
 							<span class="text-muted-foreground"
-								>{d.page ? PAGE_LABEL[d.page] : 'JSON only'} · default
-								<code>{defaultOf(d.key)}</code></span
+								>{d.page ? SETTINGS_SECTIONS[d.page].label : 'JSON only'} · default
+								<code>{defaultText(d.key)}</code></span
 							>
 						</dt>
 						<dd class="text-muted-foreground">{d.description}</dd>

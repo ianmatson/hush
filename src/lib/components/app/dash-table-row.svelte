@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { untrack, type ComponentProps } from 'svelte';
+	import type { ComponentProps } from 'svelte';
 	import { on } from 'svelte/events';
 	import { rowMenus } from '$lib/row-menus.svelte';
+	import { ciBadge } from '$lib/ci-badge';
 	import { keysOf } from '$lib/keys.svelte';
 	import type { DashItem } from '$lib/shared/types';
 	import {
@@ -23,9 +24,6 @@
 	import Bell from '@lucide/svelte/icons/bell';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Check from '@lucide/svelte/icons/check';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
-	import CircleX from '@lucide/svelte/icons/circle-x';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import Layers from '@lucide/svelte/icons/layers';
 	import Link from '@lucide/svelte/icons/link';
@@ -35,7 +33,7 @@
 	import type DashRow from './dash-row.svelte';
 	import Tip from './tip.svelte';
 
-	type CardRowProps = Omit<ComponentProps<typeof DashRow>, 'hidden'>;
+	type CardRowProps = Omit<ComponentProps<typeof DashRow>, 'hidden' | 'onopen'>;
 
 	let {
 		item: i,
@@ -54,10 +52,10 @@
 		stack
 	}: CardRowProps & { columns: TableColumn[]; hideColumnsToFit?: boolean } = $props();
 
-	let menuOpen = $state([false]);
+	let menuOpen = $state(false);
 	$effect(() => {
 		void rowMenus.epoch;
-		untrack(() => (menuOpen = menuOpen.map(() => false)));
+		menuOpen = false;
 	});
 
 	let row = $state<HTMLElement | null>(null);
@@ -99,15 +97,7 @@
 				: { tip: 'Updated', at: i.updatedAt }
 	);
 
-	const ci = $derived(
-		i.ci === 'SUCCESS'
-			? { icon: CircleCheck, tone: 'text-signal-merge', label: 'Checks pass' }
-			: i.ci === 'FAILURE' || i.ci === 'ERROR'
-				? { icon: CircleX, tone: 'text-signal-fail', label: 'Checks fail' }
-				: i.ci === 'PENDING' || i.ci === 'EXPECTED'
-					? { icon: CircleDashed, tone: 'text-signal-warn', label: 'Checks running' }
-					: null
-	);
+	const ci = $derived(ciBadge(i.ci));
 
 	const stop = (e: MouseEvent, act: () => void) => {
 		e.stopPropagation();
@@ -265,7 +255,7 @@
 
 	{#if menu}
 		<div class="shrink-0 sm:hidden">
-			<DropdownMenu.Root bind:open={menuOpen[0]}>
+			<DropdownMenu.Root bind:open={menuOpen}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button

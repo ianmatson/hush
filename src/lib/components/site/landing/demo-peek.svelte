@@ -4,6 +4,7 @@
 
 <script lang="ts">
 	import { buttonClass, cx } from './demo-ui';
+	import { demoKey } from './demo-keys';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import Link from '@lucide/svelte/icons/link';
@@ -24,15 +25,12 @@
 	import MockAvatar from './mock-avatar.svelte';
 	import SuggestMenu from '$lib/components/app/suggest-menu.svelte';
 	import { caretXY } from '$lib/caret';
-	import { loadEmojiList } from '$lib/emoji';
+	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
 	import {
 		applyPick,
-		closedShortcodeBefore,
-		emojiForShortcode,
 		rankEmoji,
 		rankRefs,
 		rankUsers,
-		replaceWithEmoji,
 		triggerAt,
 		type Suggestion,
 		type Trigger,
@@ -76,14 +74,16 @@
 		onclose: () => void;
 	} = $props();
 
-	let draft = $state('');
+	let drafts = $state<Record<string, string>>({});
 	let mode = $state<CommentMode>('comment');
 	let moreOpen = $state(false);
 	let box = $state<HTMLTextAreaElement | null>(null);
 
+	const draft = $derived(drafts[reference] ?? '');
+	const setDraft = (text: string) => (drafts[reference] = text);
+
 	$effect(() => {
 		void reference;
-		draft = '';
 		mode = 'comment';
 		moreOpen = false;
 	});
@@ -142,7 +142,7 @@
 		const body = draft.trim();
 		if (!body && mode !== 'approve') return;
 		oncomment(body, mode);
-		draft = '';
+		setDraft('');
 		mode = 'comment';
 	}
 
@@ -212,21 +212,6 @@
 		activeSuggestion = Math.min(activeSuggestion, Math.max(0, suggestions.length - 1));
 	}
 
-	async function expandClosedShortcode() {
-		const el = box;
-		if (!el || el.selectionStart !== el.selectionEnd) return;
-		const caret = el.selectionStart;
-		const closed = closedShortcodeBefore(draft, caret);
-		if (!closed) return;
-		const typed = draft;
-		const emoji = emojiForShortcode(await loadEmojiList(), closed.shortcode);
-		if (!emoji || draft !== typed) return;
-		const r = replaceWithEmoji(draft, caret, closed.start, emoji);
-		draft = r.text;
-		await tick();
-		el.setSelectionRange(r.caret, r.caret);
-	}
-
 	function closeSuggestions() {
 		trigger = null;
 		suggestions = [];
@@ -237,7 +222,7 @@
 		const el = box;
 		if (!el || !trigger) return;
 		const r = applyPick(draft, el.selectionStart, trigger, s);
-		draft = r.text;
+		setDraft(r.text);
 		closeSuggestions();
 		await tick();
 		el.focus();
@@ -276,8 +261,12 @@
 
 <div class="flex h-11 shrink-0 items-center gap-1 border-b px-2">
 	<span class="hidden px-2 text-xs text-muted-foreground lg:inline"
-		><kbd class="font-sans">J</kbd>/<kbd class="font-sans">K</kbd> to move ·
-		<kbd class="font-sans">S</kbd> snooze · <kbd class="font-sans">M</kbd> mute</span
+		><kbd class="font-sans">{demoKey('list.next')}</kbd>/<kbd class="font-sans"
+			>{demoKey('list.prev')}</kbd
+		>
+		to move ·
+		<kbd class="font-sans">{demoKey('dash.snooze')}</kbd> snooze ·
+		<kbd class="font-sans">{demoKey('dash.mute')}</kbd> mute</span
 	>
 	<span class="ml-auto flex items-center gap-1">
 		<button
@@ -417,11 +406,11 @@
 			<div class="grid gap-1.5">
 				<textarea
 					bind:this={box}
-					bind:value={draft}
+					bind:value={() => draft, setDraft}
 					onkeydown={onBoxKey}
 					oninput={() => {
 						updateSuggestions();
-						void expandClosedShortcode();
+						void expandClosedShortcode(box, () => draft, setDraft);
 					}}
 					onclick={updateSuggestions}
 					onblur={closeSuggestions}
@@ -442,7 +431,7 @@
 					/>
 				{/if}
 				<div class="flex items-center gap-2 text-xs text-muted-foreground">
-					<span>{draft.trim() ? 'Draft saved' : '⌘↵ to send'}</span>
+					<span>{draft.trim() ? 'Draft saved' : `${demoKey('editor.send')} to send`}</span>
 					<button
 						type="button"
 						class={buttonClass(mode === 'comment' ? 'outline' : 'default', 'xs', 'ml-auto')}
@@ -488,7 +477,8 @@
 								class="flex items-center rounded-md px-2 py-1.5 text-left hover:bg-muted"
 								onclick={() => startComment('approve')}
 								>Approve with a comment…<kbd
-									class="ml-auto pl-3 font-sans text-xs text-muted-foreground">A</kbd
+									class="ml-auto pl-3 font-sans text-xs text-muted-foreground"
+									>{demoKey('peek.approve')}</kbd
 								></button
 							>
 							<button
@@ -496,7 +486,7 @@
 								class="flex items-center rounded-md px-2 py-1.5 text-left hover:bg-muted"
 								onclick={() => startComment('changes')}
 								>Request changes…<kbd class="ml-auto pl-3 font-sans text-xs text-muted-foreground"
-									>⇧A</kbd
+									>{demoKey('peek.requestChanges')}</kbd
 								></button
 							>
 						{/if}
@@ -504,7 +494,8 @@
 							type="button"
 							class="flex items-center rounded-md px-2 py-1.5 text-left hover:bg-muted"
 							onclick={() => startComment('comment')}
-							>Comment<kbd class="ml-auto pl-3 font-sans text-xs text-muted-foreground">⇧C</kbd
+							>Comment<kbd class="ml-auto pl-3 font-sans text-xs text-muted-foreground"
+								>{demoKey('peek.comment')}</kbd
 							></button
 						>
 					</div>

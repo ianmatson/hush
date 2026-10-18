@@ -1,5 +1,13 @@
 import type { MergeMethod, PeekStack } from '../src/lib/shared/types';
-import { gh } from './github';
+import {
+	failedWriteStatus,
+	gh,
+	graphqlData,
+	refusal,
+	refusedWrite,
+	restWriteFailure,
+	type WriteFailure
+} from './github';
 
 const MAX_LEVELS_ABOVE = 10;
 const ASYNC_MERGE_POLLS = 8;
@@ -24,20 +32,9 @@ const json = (payload: unknown): RequestInit => ({
 	body: JSON.stringify(payload)
 });
 
-async function graphql<T>(token: string, query: string, variables: Record<string, unknown>) {
-	const res = await gh(token, '/graphql', json({ query, variables }));
-	const body = (await res.json().catch(() => ({}))) as {
-		data?: T;
-		errors?: { message: string }[];
-	};
-	if (!res.ok || body.errors?.length || !body.data)
-		throw new Error(body.errors?.[0]?.message ?? `GitHub returned ${res.status}.`);
-	return body.data;
-}
-
 export async function readPrRefs(token: string, repo: string, number: number): Promise<PrRefs> {
 	const [owner, name] = repo.split('/');
-	const data = await graphql<{
+	const data = await graphqlData<{
 		repository: {
 			defaultBranchRef: { name: string } | null;
 			pullRequest: { headRefName: string; baseRefName: string } | null;
@@ -59,7 +56,7 @@ export async function readPrRefs(token: string, repo: string, number: number): P
 
 async function openPrsOnBranch(token: string, repo: string, branch: string) {
 	const [owner, name] = repo.split('/');
-	const data = await graphql<{
+	const data = await graphqlData<{
 		repository: { pullRequests: { nodes: { number: number; headRefName: string }[] } } | null;
 	}>(
 		token,
@@ -119,39 +116,34 @@ export async function readStack(token: string, repo: string, pr: PrRefs): Promis
 	};
 }
 
-async function refusal(res: Response) {
-	const body = (await res.json().catch(() => ({}))) as {
-		message?: string;
-		errors?: ({ message?: string } | string)[];
-	};
-	const detail = body.errors?.map((e) => (typeof e === 'string' ? e : e.message)).filter(Boolean);
-	return (
-		[body.message, ...(detail ?? [])].filter(Boolean).join(': ') || `GitHub returned ${res.status}.`
-	);
-}
-
 export async function linkStack(
 	token: string,
 	repo: string,
 	chainBottomFirst: number[]
-): Promise<string | null> {
+): Promise<WriteFailure | null> {
 	const res = await gh(token, `/repos/${repo}/stacks`, json({ pull_requests: chainBottomFirst }));
-	return res.ok ? null : `GitHub could not link the stack: ${await refusal(res)}`;
+	if (res.ok) return null;
+	return {
+		error: `GitHub could not link the stack: ${await refusal(res)}`,
+		status: failedWriteStatus(res.status)
+	};
 }
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+export type StackMergeResult = WriteFailure | { stillMerging: boolean };
 
 export async function mergeStackThrough(
 	token: string,
 	repo: string,
 	number: number,
 	method: MergeMethod
-): Promise<string | null> {
+): Promise<StackMergeResult> {
 	const res = await gh(token, `/repos/${repo}/pulls/${number}/merge-async`, {
 		method: 'PUT',
 		body: JSON.stringify({ merge_method: method.toLowerCase(), merge_action: 'default' })
 	});
-	if (!res.ok) return refusal(res);
+	if (!res.ok) return restWriteFailure(res);
 	let result = (await res.json().catch(() => ({}))) as AsyncMergeResult;
 	const uuid = result.details?.uuid;
 	for (let poll = 0; result.status === 'pending' && uuid && poll < ASYNC_MERGE_POLLS; poll++) {
@@ -159,7 +151,7 @@ export async function mergeStackThrough(
 		const next = await gh(token, `/repos/${repo}/pulls/${number}/merge-async/${uuid}`);
 		if (next.ok) result = (await next.json().catch(() => result)) as AsyncMergeResult;
 	}
-	return result.status === 'failed'
-		? (result.details?.message ?? 'GitHub could not merge it.')
-		: null;
+	if (result.status === 'failed')
+		return refusedWrite(result.details?.message ?? 'GitHub could not merge it.');
+	return { stillMerging: result.status === 'pending' };
 }

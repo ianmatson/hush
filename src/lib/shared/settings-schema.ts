@@ -1,6 +1,6 @@
 import { KEEP_CLOSED_HOURS } from './closed-items';
 import { validateDash } from './dashboard';
-import { MAX_VIEW_SEARCHES, MAX_VIEWS, validateViews } from './item-views';
+import { MAX_VIEW_SEARCHES, MAX_VIEW_SECTIONS, MAX_VIEWS, validateViews } from './item-views';
 import {
 	markQueries,
 	MAX_CATEGORIES,
@@ -30,6 +30,53 @@ import type { Settings } from './types';
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
 export type SettingsPage = 'views' | 'categories' | 'notifications' | 'general' | 'keys';
+
+export interface SettingsSection {
+	label: string;
+	href: string;
+	keywords: string[];
+	needsKeyboard?: boolean;
+}
+
+export const SETTINGS_SECTIONS: Record<SettingsPage, SettingsSection> = {
+	general: {
+		label: 'General',
+		href: '/settings/general',
+		keywords: ['appearance', 'menus', 'account', 'export', 'import']
+	},
+	views: {
+		label: 'Views',
+		href: '/settings/views',
+		keywords: ['views', 'searches', 'sources', 'tracked', 'teams', 'dashboards']
+	},
+	categories: {
+		label: 'Categories',
+		href: '/settings/categories',
+		keywords: [
+			'categories',
+			'groups',
+			'rules',
+			'labels',
+			'effort',
+			'impact',
+			'feeds',
+			'smart',
+			'jev'
+		]
+	},
+	notifications: {
+		label: 'Notifications',
+		href: '/settings/notifications',
+		keywords: ['push', 'quiet']
+	},
+	keys: {
+		label: 'Keybinds',
+		href: '/settings/keys',
+		keywords: ['keyboard', 'shortcuts', 'keybindings', 'hotkeys', 'keys'],
+		needsKeyboard: true
+	}
+};
+
 export interface SettingInfo {
 	key: string;
 	page: SettingsPage | null;
@@ -101,7 +148,7 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 	{
 		key: 'views',
 		page: 'views',
-		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, category:<group id>, or project:<owner>/<number>, "sort": optional { "by": turn, updated, created, waiting, comments, size, or title, "dir": asc or desc, "turnFirst": true to keep your turn first in each section }, "pushNew": optional, true to push new items, "keepClosed": optional, false to take merged and closed items out at once (else they stay ${KEEP_CLOSED_HOURS} hours at the end) }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
+		description: `The views in the top bar, in order (up to ${MAX_VIEWS}). Each is { "id", "name", "searches": up to ${MAX_VIEW_SEARCHES} GitHub searches, "groupBy": none, role, status, repo, author, label, assignee, custom (the view's own "sections"), category:<group id>, or project:<owner>/<number>, "sections": optional, up to ${MAX_VIEW_SECTIONS} custom sections of { "name", "rule": a query }, "sort": optional { "by": turn, updated, created, waiting, comments, size, or title, "dir": asc or desc, "turnFirst": true to keep your turn first in each section }, "pushNew": optional, true to push new items, "keepClosed": optional, false to take merged and closed items out at once (else they stay ${KEEP_CLOSED_HOURS} hours at the end) }. @me is you; @team runs once per tracked team. A search without is:pr or is:issue finds both.`
 	},
 	{
 		key: 'categoryGroups',
@@ -172,8 +219,26 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 ];
 
 /** Settings that are objects of their own settings (a change to one key keeps the others). */
-const GROUPS = new Set<keyof Settings>(['dash', 'menus', 'swipe', 'rows', 'alertChannels']);
+const GROUP_KEYS = [
+	'dash',
+	'menus',
+	'swipe',
+	'rows',
+	'alertChannels'
+] as const satisfies readonly (keyof Settings)[];
+type SettingsGroupKey = (typeof GROUP_KEYS)[number];
+const GROUPS = new Set<keyof Settings>(GROUP_KEYS);
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+export type SettingsPatch = {
+	[K in keyof Settings]?: K extends SettingsGroupKey ? Partial<Settings[K]> : Settings[K];
+};
+
+export function defaultOf(settingKey: string): unknown {
+	const [top, groupKey] = settingKey.split('.');
+	const value = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[top];
+	return groupKey ? (value as Record<string, unknown>)[groupKey] : value;
+}
 
 /**
  * Only what differs from the defaults: what Hush stores, what settings.json shows, and what a
@@ -198,13 +263,31 @@ export function settingsOverrides(s: Settings): Partial<Settings> {
 }
 
 /** Put a patch on settings: groups keep the keys the patch does not have. */
-export function mergeSettings(base: Settings, patch: Partial<Settings>): Settings {
+export function mergeSettings(base: Settings, patch: SettingsPatch): Settings {
 	const next = { ...base } as Record<string, unknown>;
 	for (const [k, v] of Object.entries(patch))
 		next[k] = GROUPS.has(k as keyof Settings)
 			? { ...(base[k as keyof Settings] as object), ...(v as object) }
 			: v;
 	return next as unknown as Settings;
+}
+
+function changedGroupKeys(base: object, next: object): object {
+	const was = base as Record<string, unknown>;
+	return Object.fromEntries(Object.entries(next).filter(([key, value]) => !same(value, was[key])));
+}
+
+export function settingsChanges(base: Partial<Settings>, next: Partial<Settings>): SettingsPatch {
+	const changes: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(next)) {
+		const was = base[key as keyof Settings];
+		if (same(value, was)) continue;
+		changes[key] =
+			GROUPS.has(key as keyof Settings) && was
+				? changedGroupKeys(was as object, value as object)
+				: value;
+	}
+	return changes as SettingsPatch;
 }
 
 const bool = (k: string) => (v: unknown) =>
@@ -256,12 +339,13 @@ export function validateSettings(next: Settings, keys: string[]): string | null 
 				if (sub !== 'v' && !SETTINGS_DOCS.some((d) => d.key === `${k}.${sub}`))
 					return `Unknown setting "${k}.${sub}".`;
 	}
-	if (
-		keys.includes('categoryGroups') &&
-		smartConditions(markQueries(next)).length > MAX_SMART_CONDITIONS
-	)
-		return `Category rules can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`;
-	return null;
+	return keys.includes('categoryGroups') ? validateAboutConditions(next) : null;
+}
+
+export function validateAboutConditions(settings: Pick<Settings, 'categoryGroups'>): string | null {
+	return smartConditions(markQueries(settings)).length > MAX_SMART_CONDITIONS
+		? `Category rules can have up to ${MAX_SMART_CONDITIONS} different about: conditions.`
+		: null;
 }
 
 /**

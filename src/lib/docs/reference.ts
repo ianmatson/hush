@@ -1,6 +1,6 @@
 import { GH_ACTIONS, MERGE_LABEL } from '$lib/shared/actions';
 import { KEEP_CLOSED_HOURS } from '$lib/shared/closed-items';
-import { MAX_QUERIES } from '$lib/shared/dashboard';
+import { MAX_QUERIES, MAX_TEAMS_PER_SECTION } from '$lib/shared/dashboard';
 import {
 	DEFAULT_VIEWS,
 	MAX_SEARCH_CHARS,
@@ -18,8 +18,15 @@ import {
 	MAX_DESCRIPTION_CHARS,
 	MAX_MARK_NAME_CHARS
 } from '$lib/shared/categories';
-import { COMMAND, COMMANDS, SCOPE_LABEL, keyText, type KeyScope } from '$lib/shared/keymap';
-import { DEFAULT_MENUS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
+import {
+	COMMAND,
+	COMMANDS,
+	MAX_KEYS_PER_COMMAND,
+	SCOPE_LABEL,
+	keyText,
+	type KeyScope
+} from '$lib/shared/keymap';
+import { DEFAULT_MENUS, MAX_MENU_ITEMS, MENU_ITEMS, SEP, type MenuKind } from '$lib/shared/menus';
 import {
 	IS_VALUES,
 	MAX_CONDITION_CHARS,
@@ -29,10 +36,15 @@ import {
 } from '$lib/shared/query';
 import { BODY_EXCERPT_CHARS, MAX_SMART_CONDITIONS, YES_AT } from '$lib/shared/decisions';
 import { DEFAULT_DAILY_TOKENS } from '../../../worker/decide';
-import { DEFAULT_SETTINGS } from '$lib/shared/settings';
-import { SETTINGS_DOCS, type SettingsPage } from '$lib/shared/settings-schema';
+import {
+	defaultOf,
+	SETTINGS_DOCS,
+	SETTINGS_SECTIONS,
+	type SettingsPage
+} from '$lib/shared/settings-schema';
 import { SNOOZE_EVENTS, SNOOZE_EVENT_MAX_MS } from '$lib/shared/snooze';
 import { SESSION_DAYS, SESSION_IDLE_DAYS } from '$lib/shared/session';
+import { DAY_MS, HOUR_MS, MINUTE_MS } from '$lib/shared/durations';
 import { THEMES } from '$lib/themes/list';
 import { SORT_BY, SORT_BY_ORDER } from '$lib/shared/sorting';
 import { SWIPE_ACTIONS } from '$lib/shared/swipe';
@@ -56,18 +68,16 @@ import {
 	APP_FOCUS_LASTS_MS,
 	DIGEST_MINUTES,
 	LIMIT_COUNT,
-	LIMIT_MINUTES
+	LIMIT_MINUTES,
+	MAX_PUSH_DEVICES
 } from '$lib/shared/push-policy';
+import { PLANNED_PRICE } from '$lib/pricing';
 
 /**
  * The generated parts of the docs: tables built from the same tables the app uses (settings,
  * keys, query words, menus, actions), so the docs cannot drift from the product. A docs page
  * asks for one with a line of its own: {{ref:settings}}.
  */
-
-const MIN = 60_000;
-const HOUR = 60 * MIN;
-const DAY = 24 * HOUR;
 
 /** Text for a table cell: pipes and line breaks would end the cell. */
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -81,20 +91,7 @@ const table = (head: string[], rows: string[][]) =>
 		...rows.map((r) => `| ${r.map(cell).join(' | ')} |`)
 	].join('\n');
 
-const PAGE: Record<SettingsPage, string> = {
-	general: 'Settings → General',
-	views: 'Settings → Views',
-	categories: 'Settings → Categories',
-	notifications: 'Settings → Notifications',
-	keys: 'Settings → Keybinds'
-};
-
-/** The default of a setting key, also of a group key such as "dash.pr". */
-export function defaultOf(key: string): unknown {
-	const [group, sub] = key.split('.');
-	const v = (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[group];
-	return sub ? (v as Record<string, unknown>)[sub] : v;
-}
+const settingsPageName = (page: SettingsPage) => `Settings → ${SETTINGS_SECTIONS[page].label}`;
 
 /**
  * What the docs add to each setting: its type, and what it controls in more depth than the
@@ -144,7 +141,7 @@ A snooze that ends always pushes.
 	},
 	pushDigestMinutes: {
 		type: 'number or null',
-		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${POLL_ACTIVE / MIN} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
+		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${POLL_ACTIVE / MINUTE_MS} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
 
 \`\`\`json settings
 { "pushDigestMinutes": 60 }
@@ -160,7 +157,7 @@ A snooze that ends always pushes.
 	},
 	pushWhileOpen: {
 		type: 'boolean',
-		body: `Off (default): while you use Hush on any device, new items show in Hush and do not push. Hush counts as in use when its tab or app has focus and you used it in the last ${APP_FOCUS_LASTS_MS / MIN} minutes. On: pushes go at all times.`
+		body: `Off (default): while you use Hush on any device, new items show in Hush and do not push. Hush counts as in use when its tab or app has focus and you used it in the last ${APP_FOCUS_LASTS_MS / MINUTE_MS} minutes. On: pushes go at all times.`
 	},
 	'alertChannels.push': {
 		type: 'boolean',
@@ -213,7 +210,7 @@ When you turn it on, or add an \`about:\` condition, Hush checks the PRs and iss
 - \`sections\` (optional): up to ${MAX_VIEW_SECTIONS} custom sections, each \`{ "name", "rule" }\`: a unique name of up to ${MAX_SECTION_NAME_CHARS} characters, and a rule in the [query language](/docs/query-language). An item goes into the first section whose rule matches, then **Everything else**. \`"groupBy": "custom"\` needs at least one. See [Custom sections](/docs/pull-requests-and-issues#custom-sections).
 A view needs at least one search, and you keep at least one view.
 
-Hush runs the searches about every ${DASH_TTL / MIN} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MIN} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY} days. When you change \`views\`, the items that no view finds now stop at once.
+Hush runs the searches about every ${DASH_TTL / MINUTE_MS} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MINUTE_MS} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY_MS} days. When you change \`views\`, the items that no view finds now stop at once.
 
 A change to \`views\` replaces the whole list. To add a view, write the defaults below and your new one.
 
@@ -301,7 +298,7 @@ ${table(
 	},
 	'dash.excludedTeams': {
 		type: 'array of strings',
-		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first 15 teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
+		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR_MS} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first ${MAX_TEAMS_PER_SECTION} teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
 
 \`\`\`json settings
 { "dash": { "excludedTeams": ["acme/everyone", "acme/contractors"] } }
@@ -367,7 +364,7 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 	},
 	keys: {
 		type: 'object: command id → array of keys',
-		body: `The keyboard shortcuts that you changed. For each [command id](/docs/keybinds#all-shortcuts), the keys that replace its default keys, up to 4. \`[]\` turns the shortcut off. Commands that you do not list keep their defaults.
+		body: `The keyboard shortcuts that you changed. For each [command id](/docs/keybinds#all-shortcuts), the keys that replace its default keys, up to ${MAX_KEYS_PER_COMMAND}. \`[]\` turns the shortcut off. Commands that you do not list keep their defaults.
 
 How to write a key:
 
@@ -391,7 +388,7 @@ function settingsReference(): string {
 				`[${code(d.key)}](#${slug(d.key)})`,
 				SETTING_DETAILS[d.key]?.type ?? '',
 				def.length > 40 ? '(see below)' : code(def),
-				d.page ? PAGE[d.page] : 'settings.json only'
+				d.page ? settingsPageName(d.page) : 'settings.json only'
 			];
 		})
 	);
@@ -401,7 +398,7 @@ function settingsReference(): string {
 		const detail = SETTING_DETAILS[d.key];
 		return [
 			`### ${d.key}`,
-			`**Type:** ${detail?.type ?? ''} · **Default:** ${text.length > 60 ? 'below' : code(text)} · **In the app:** ${d.page ? PAGE[d.page] : 'none (settings.json only)'}`,
+			`**Type:** ${detail?.type ?? ''} · **Default:** ${text.length > 60 ? 'below' : code(text)} · **In the app:** ${d.page ? settingsPageName(d.page) : 'none (settings.json only)'}`,
 			d.description,
 			detail?.body ?? '',
 			text.length > 60 && !d.key.startsWith('dash.') ? `The default:\n\n${pretty(def)}` : ''
@@ -533,7 +530,11 @@ function actionsReference(): string {
 
 function limitsReference(): string {
 	const dur = (ms: number) =>
-		ms >= DAY ? `${ms / DAY} days` : ms >= HOUR ? `${ms / HOUR} hours` : `${ms / MIN} minutes`;
+		ms >= DAY_MS
+			? `${ms / DAY_MS} days`
+			: ms >= HOUR_MS
+				? `${ms / HOUR_MS} hours`
+				: `${ms / MINUTE_MS} minutes`;
 	return table(
 		['What', 'Limit'],
 		[
@@ -559,9 +560,9 @@ function limitsReference(): string {
 			['Views', String(MAX_VIEWS)],
 			['Searches in a view', String(MAX_VIEW_SEARCHES)],
 			['GitHub searches for pull requests, and for issues', String(MAX_QUERIES)],
-			['Items per menu', '60'],
-			['Keys per command', '4'],
-			['Push devices', '10'],
+			['Items per menu', String(MAX_MENU_ITEMS)],
+			['Keys per command', String(MAX_KEYS_PER_COMMAND)],
+			['Push devices', String(MAX_PUSH_DEVICES)],
 			['Category groups', String(MAX_CATEGORY_GROUPS)],
 			['Categories in a group', String(MAX_CATEGORIES)],
 			['Different about: conditions in categories', String(MAX_SMART_CONDITIONS)],
@@ -604,6 +605,24 @@ export const REFERENCES: Record<string, (args: string[]) => string> = {
 		Object.values(MERGE_LABEL)
 			.map((l) => `- ${l}`)
 			.join('\n')
+};
+
+const between = (r: { min: number; max: number }) => `${r.min} to ${r.max}`;
+
+export const VALUES: Record<string, string> = {
+	'hush-price': PLANNED_PRICE,
+	'max-views': String(MAX_VIEWS),
+	'max-view-searches': String(MAX_VIEW_SEARCHES),
+	'max-search-chars': String(MAX_SEARCH_CHARS),
+	'max-view-name-chars': String(MAX_VIEW_NAME_CHARS),
+	'max-view-sections': String(MAX_VIEW_SECTIONS),
+	'max-category-groups': String(MAX_CATEGORY_GROUPS),
+	'max-categories': String(MAX_CATEGORIES),
+	'max-mark-name-chars': String(MAX_MARK_NAME_CHARS),
+	'max-description-chars': String(MAX_DESCRIPTION_CHARS),
+	'digest-minutes': between(DIGEST_MINUTES),
+	'limit-count': between(LIMIT_COUNT),
+	'limit-minutes': between(LIMIT_MINUTES)
 };
 
 /** The id of a heading: lower case, words joined with dashes. */

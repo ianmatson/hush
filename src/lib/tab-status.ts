@@ -1,5 +1,7 @@
 // Page title, favicon dot, and app badge from the notification counts. Preferences are per browser.
 
+import type { AlertDTO, DashItem } from '$lib/shared/types';
+
 export type CountSource = 'alerts' | 'unread' | 'prYou' | 'prTeam' | 'issueYou';
 export type Counts = Record<CountSource, number>;
 export type DotColor = 'red' | 'blue' | 'amber' | 'green';
@@ -37,11 +39,13 @@ export const DOT_COLORS: Record<DotColor, string> = {
 	green: '#22c55e'
 };
 
-const KEY = 'hush:tab-status';
+export const TAB_STATUS_KEY = 'hush:tab-status';
 
 export function loadPrefs(): TabStatusPrefs {
 	try {
-		const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<TabStatusPrefs> & {
+		const raw = JSON.parse(
+			localStorage.getItem(TAB_STATUS_KEY) ?? '{}'
+		) as Partial<TabStatusPrefs> & {
 			v?: number;
 		};
 		const prefs: TabStatusPrefs = {
@@ -58,13 +62,36 @@ export function loadPrefs(): TabStatusPrefs {
 }
 
 export function savePrefs(p: TabStatusPrefs) {
-	localStorage.setItem(KEY, JSON.stringify({ ...p, v: PREFS_VERSION }));
+	localStorage.setItem(TAB_STATUS_KEY, JSON.stringify({ ...p, v: PREFS_VERSION }));
 	// Let the live component in this tab pick up the change.
-	window.dispatchEvent(new CustomEvent('hush:tab-status'));
+	window.dispatchEvent(new CustomEvent(TAB_STATUS_KEY));
 }
 
 export const total = (counts: Counts, sources: CountSource[]) =>
 	sources.reduce((n, s) => n + (counts[s] ?? 0), 0);
+
+export const countsAsUnread = (i: Pick<DashItem, 'unread' | 'dismissed' | 'keptAfterClose'>) =>
+	!!i.unread && !i.dismissed && !i.keptAfterClose;
+
+export const newAlertCount = (alerts: Pick<AlertDTO, 'sentAt'>[] | undefined, seenAt: number) =>
+	alerts?.filter((a) => a.sentAt > seenAt).length ?? 0;
+
+export interface TabStatus {
+	titlePrefix: string;
+	dot: string | null;
+	dotCount: number | undefined;
+	badge: number;
+}
+
+export function tabStatusOf(counts: Counts, prefs: TabStatusPrefs): TabStatus {
+	const dotTotal = total(counts, prefs.favicon.sources);
+	return {
+		titlePrefix: titlePrefix(counts, prefs.title),
+		dot: prefs.favicon.enabled && dotTotal > 0 ? DOT_COLORS[prefs.favicon.color] : null,
+		dotCount: prefs.favicon.style === 'count' ? dotTotal : undefined,
+		badge: prefs.appBadge.enabled ? total(counts, prefs.appBadge.sources) : 0
+	};
+}
 
 /** "(7)" or "(7 · 3 PR · 2 issue)"; empty when nothing counts. Parts follow the SOURCES order. */
 export function titlePrefix(counts: Counts, t: TabStatusPrefs['title']): string {

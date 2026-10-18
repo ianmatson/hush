@@ -33,7 +33,9 @@ describe('parsePeekLink', () => {
 			'a/b/0',
 			'a/b/c/1',
 			'https://example.com/a/b/pull/1',
-			'a b/c/1'
+			'a b/c/1',
+			'../web/1',
+			'https://github.com/acme/../pull/1'
 		])
 			expect(parsePeekLink(bad)).toBeNull();
 	});

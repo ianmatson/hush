@@ -1,7 +1,6 @@
+import { MINUTE_MS } from './durations';
 import { inQuietHours } from './quiet';
 import type { Settings } from './types';
-
-const MINUTE_MS = 60_000;
 
 export const APP_FOCUS_MESSAGE = 'focus';
 export const APP_BLUR_MESSAGE = 'blur';
@@ -28,6 +27,7 @@ export const CLEAR_NOTIFICATIONS_OPTIONS: { id: ClearNotifications; label: strin
 ];
 
 export const DIGEST_MINUTES = { min: 5, max: 240 } as const;
+export const MAX_PUSH_DEVICES = 10;
 export const LIMIT_COUNT = { min: 1, max: 50 } as const;
 export const LIMIT_MINUTES = { min: 5, max: 240 } as const;
 
@@ -102,7 +102,12 @@ export function keptSends(recentSends: number[], now: number, limit: PushLimit |
 	return recentSends.filter((at) => at > windowStart).slice(-LIMIT_COUNT.max);
 }
 
-const isWholeIn = (v: unknown, range: { min: number; max: number }) =>
+export interface WholeRange {
+	min: number;
+	max: number;
+}
+
+export const isWholeIn = (v: unknown, range: WholeRange): v is number =>
 	Number.isInteger(v) && (v as number) >= range.min && (v as number) <= range.max;
 
 export function validatePushRepeat(v: unknown): string | null {

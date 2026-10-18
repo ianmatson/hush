@@ -16,7 +16,7 @@ description: Octobox is a mature, self-hostable web inbox for GitHub notificatio
 | -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | What it is           | A notification inbox                                                                      | Views of pull requests and issues, with pushes                                     |
 | Where it runs        | Web (octobox.io), or self-hosted (Docker, Heroku, OpenShift)                              | Web app (installable), on Cloudflare; self-hosting possible                        |
-| Price                | Free for open source; enhanced data for private repos from $10 per user per month         | Free in beta; planned $3 a month or $30 a year                                     |
+| Price                | Free for open source; enhanced data for private repos from $10 per user per month         | {{value:hush-price}}                                                               |
 | Open source          | Yes (AGPL-3.0)                                                                            | Yes (AGPL-3.0)                                                                     |
 | Sort order           | Time, with search and filters                                                             | Sections by role, status, repository, category, project status, or your rules      |
 | Filters              | Repo, org, type, reason, state, CI status, labels, author, assignee, bot, draft, and more | GitHub search and Hush words, such as `size:` and `repo:acme/*`; up to 12 views    |

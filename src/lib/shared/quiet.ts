@@ -27,7 +27,7 @@ export function inQuietHours(q: QuietHours | null, now = Date.now()): boolean {
 	return q.from < q.to ? minute >= q.from && minute < q.to : minute >= q.from || minute < q.to;
 }
 
-export function validTimeZone(timeZone: unknown): boolean {
+function validTimeZone(timeZone: unknown): boolean {
 	if (typeof timeZone !== 'string' || !timeZone) return false;
 	try {
 		new Intl.DateTimeFormat('en-US', { timeZone });

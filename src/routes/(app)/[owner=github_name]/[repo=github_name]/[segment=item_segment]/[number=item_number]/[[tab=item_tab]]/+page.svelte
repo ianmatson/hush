@@ -4,7 +4,7 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { commandFor, keysOf } from '$lib/keys.svelte';
+	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import { dashQuery, meQuery, peekQuery } from '$lib/queries';
 	import { noteOpened } from '$lib/recheck';
 	import { clearNotificationsFor } from '$lib/notification-clear';
@@ -24,7 +24,13 @@
 	import { shortcutsFor, shortcutsOf, type Shortcut } from '$lib/shortcuts';
 	import type { KeyScope } from '$lib/shared/keymap';
 	import type { DashItem } from '$lib/shared/types';
-	import { FILES_TAB, ITEM_PATH_SEGMENTS, itemPagePath } from '$lib/shared/item-page';
+	import {
+		FILES_TAB,
+		ITEM_PATH_SEGMENTS,
+		githubItemUrl,
+		itemPagePath,
+		kindOfItemSegment
+	} from '$lib/shared/item-page';
 	import { PEEK_PARAM, peekLinkParam } from '$lib/shared/peek-link';
 	import { subjectKey } from '$lib/shared/subject';
 	import { Button } from '$lib/components/ui/button';
@@ -51,13 +57,9 @@
 	const onFilesTab = $derived(page.params.tab === FILES_TAB && q.data?.kind !== 'issue');
 	const itemTitle = $derived(q.data?.title ?? `${repo}#${number}`);
 	const title = $derived(onFilesTab ? `Files · ${itemTitle}` : itemTitle);
-	const itemUrl = $derived(
-		q.data?.url ?? `https://github.com/${repo}/${page.params.segment}/${number}`
-	);
+	const kind = $derived(q.data?.kind ?? kindOfItemSegment(page.params.segment) ?? 'issue');
+	const itemUrl = $derived(q.data?.url ?? githubItemUrl(repo, number, kind));
 	const githubUrl = $derived(onFilesTab ? `${itemUrl}/${FILES_TAB}` : itemUrl);
-	const kind = $derived(
-		q.data?.kind ?? (page.params.segment === ITEM_PATH_SEGMENTS.pr ? 'pr' : 'issue')
-	);
 	const conversationPath = $derived(itemPagePath(repo, number, kind));
 	const filesPath = $derived(`${conversationPath}/${FILES_TAB}`);
 
@@ -179,13 +181,7 @@
 	]);
 
 	function onKey(e: KeyboardEvent) {
-		const target = e.target;
-		if (
-			e.defaultPrevented ||
-			(target instanceof Element &&
-				target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]'))
-		)
-			return;
+		if (ignoreKey(e)) return;
 		const cmd = commandFor(e, PAGE_KEY_SCOPES);
 		const run: Record<string, () => void> = {
 			'page.conversation': () => showTab(false),

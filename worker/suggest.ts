@@ -1,5 +1,5 @@
 import type { RefSuggestion, UserSuggestion } from '../src/lib/shared/suggest';
-import { gh, GitHubError } from './github';
+import { GitHubError, githubStatusMessage, graphql } from './github';
 
 // --- Suggestions for the comment box ("@" and "#"), from GitHub's public API ----------------
 // GitHub.com's own box uses private endpoints; these give the same people and items: the repo's
@@ -8,15 +8,11 @@ import { gh, GitHubError } from './github';
 
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-async function graphql(token: string, query: string, variables: Record<string, unknown>) {
-	const res = await gh(token, '/graphql', {
-		method: 'POST',
-		body: JSON.stringify({ query, variables })
-	});
-	if (!res.ok) throw new GitHubError(res.status, `GitHub returned ${res.status}.`);
-	const j = (await res.json()) as { data?: Json; errors?: { message: string }[] };
-	if (!j.data && j.errors?.length) throw new GitHubError(502, j.errors[0].message);
-	return j.data;
+async function suggestionData(token: string, query: string, variables: Record<string, unknown>) {
+	const { ok, status, data, errors } = await graphql<Json>(token, query, variables);
+	if (!ok) throw new GitHubError(status, githubStatusMessage(status));
+	if (!data && errors.length) throw new GitHubError(502, errors[0].message);
+	return data;
 }
 
 const USERS = `query($o: String!, $r: String!, $q: String, $t: String) {
@@ -36,7 +32,7 @@ export async function suggestUsers(
 ): Promise<UserSuggestion[]> {
 	// "org/te" asks only for teams; "al" asks for both.
 	const [first, team] = query.includes('/') ? query.split('/', 2) : [query, null];
-	const data = await graphql(token, USERS, {
+	const data = await suggestionData(token, USERS, {
 		o: owner,
 		r: repo,
 		q: team === null ? first : '',
@@ -102,7 +98,7 @@ export async function suggestRefs(
 	const n = /^\d{1,9}$/.test(query) ? Number(query) : 0;
 	const words = query.replace(/["\\]/g, '').trim();
 	const s = `repo:${owner}/${repo} ${n ? '' : words ? `${words} in:title ` : ''}sort:updated-desc`;
-	const data = await graphql(token, REFS, { o: owner, r: repo, s, n, byNumber: n > 0 });
+	const data = await suggestionData(token, REFS, { o: owner, r: repo, s, n, byNumber: n > 0 });
 	const name = other ? `${owner}/${repo}` : null;
 	return [data?.repository?.issueOrPullRequest, ...(data?.search?.nodes ?? [])].flatMap(
 		(x: Json) => toRef(x, name) ?? []

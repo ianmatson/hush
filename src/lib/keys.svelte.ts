@@ -14,7 +14,7 @@ export function setKeyChanges(changes: Record<string, string[]>) {
 }
 
 /** The keys in effect now. */
-export const currentBindings = () => bindings(keymap.changes);
+const currentBindings = () => bindings(keymap.changes);
 
 /** The command this key press runs in these scopes (the first scope wins), or null. */
 export function commandFor(e: KeyboardEvent, scopes: KeyScope[]): string | null {
@@ -25,4 +25,11 @@ export function commandFor(e: KeyboardEvent, scopes: KeyScope[]): string | null 
 /** A command's keys as people read them ("⌘ K", "Shift + A"). */
 export function keysOf(id: string): string[] {
 	return (currentBindings().get(id) ?? []).map((k) => keyText(k, isMac));
+}
+
+const OWNS_ITS_KEYS = 'input, textarea, [contenteditable], [role="menu"], [role="dialog"]';
+
+export function ignoreKey(e: KeyboardEvent): boolean {
+	const target = e.target;
+	return e.defaultPrevented || (target instanceof Element && !!target.closest(OWNS_ITS_KEYS));
 }

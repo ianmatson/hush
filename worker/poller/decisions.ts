@@ -15,15 +15,13 @@ import {
 } from '../../src/lib/shared/decisions';
 import { aboutTexts, compileExpr, type QueryExpr } from '../../src/lib/shared/query';
 import { groupChoices, markQueries } from '../../src/lib/shared/categories';
-import { enrichmentOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
-import type { RuleFacts, RuleMatch, Settings } from '../../src/lib/shared/types';
+import { subjectKey, subjectRuleFacts, type SubjectFacts } from '../../src/lib/shared/subject';
+import type { RuleMatch, Settings } from '../../src/lib/shared/types';
 import { dailyTokenBudget, decide, decisionsAvailable } from '../decide';
 import { PollerAlerts } from './alerts';
-import type { Who } from './shared';
+import { IN_KEYS, type Who } from './shared';
 
 const DECISION_CONCURRENCY = 6;
-const SQL_BATCH = 90;
-const marks = (n: number) => Array(n).fill('?').join(',');
 
 export const DECISION_FILL_KEY = 'decisionFill';
 const USAGE_KEY = 'decisionUsage';
@@ -80,21 +78,20 @@ function couldMatch(expr: QueryExpr, exactMatches: (when: RuleMatch) => boolean)
 }
 
 export abstract class PollerDecisions extends PollerAlerts {
+	private decisionRuns: Promise<void> = Promise.resolve();
+
 	protected decisionsOn(settings: Settings): boolean {
 		return settings.smartDecisions && decisionsAvailable(this.env);
 	}
 
 	private storedDecisions(keys: string[]): Map<string, StoredDecisions> {
 		const out = new Map<string, StoredDecisions>();
-		for (let i = 0; i < keys.length; i += SQL_BATCH) {
-			const batch = keys.slice(i, i + SQL_BATCH);
-			for (const r of this.all<{ key: string; answers: string }>(
-				`SELECT key, answers FROM decisions WHERE key IN (${marks(batch.length)})`,
-				...batch
-			)) {
-				const stored = parseStoredDecisions(r.answers);
-				if (stored) out.set(r.key, stored);
-			}
+		for (const r of this.allIn<{ key: string; answers: string }>(
+			`SELECT key, answers FROM decisions WHERE key ${IN_KEYS}`,
+			keys
+		)) {
+			const stored = parseStoredDecisions(r.answers);
+			if (stored) out.set(r.key, stored);
 		}
 		return out;
 	}
@@ -117,8 +114,14 @@ export abstract class PollerDecisions extends PollerAlerts {
 		return (await this.decisionUsage()).tokens >= dailyTokenBudget(this.env);
 	}
 
-	protected async decideSubjects(who: Who, subjects: SubjectFacts[]): Promise<void> {
-		if (!this.decisionsOn(who.settings) || !subjects.length) return;
+	protected decideSubjects(who: Who, subjects: SubjectFacts[]): Promise<void> {
+		if (!this.decisionsOn(who.settings) || !subjects.length) return Promise.resolve();
+		const run = this.decisionRuns.then(() => this.decideInTurn(who, subjects));
+		this.decisionRuns = run.catch(() => {});
+		return run;
+	}
+
+	private async decideInTurn(who: Who, subjects: SubjectFacts[]): Promise<void> {
 		const keyed = new Map(subjects.map((s) => [subjectKey(s.repo, s.number), s]));
 		const keys = [...keyed.keys()];
 		const stored = this.storedDecisions(keys);
@@ -134,13 +137,7 @@ export abstract class PollerDecisions extends PollerAlerts {
 	}
 
 	private conditionsFor(s: SubjectFacts, who: Who, scopes: ConditionScope[]): SmartCondition[] {
-		const facts: RuleFacts = {
-			repo: s.repo,
-			subjectType: s.kind === 'pr' ? 'PullRequest' : 'Issue',
-			title: s.title,
-			enrichment: enrichmentOf(s, who.me),
-			me: who.me
-		};
+		const facts = subjectRuleFacts(s, who.me);
 		return scopes
 			.filter(({ exprs }) =>
 				exprs.some((expr) => couldMatch(expr, (when) => ruleMatches(when, facts)) !== false)

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import type { SnoozeChoice } from '$lib/shared/item-snooze';
 	import { eventsFor, type SnoozeEvent } from '$lib/shared/snooze';
 	import { snoozeOptions } from '$lib/time';
 	import Zap from '@lucide/svelte/icons/zap';
@@ -14,15 +15,13 @@
 		menu = 'dropdown',
 		subjects,
 		disabled = [],
-		untilNewActivity = false,
 		onpick
 	}: {
 		menu?: 'dropdown' | 'context';
 		subjects: ('pr' | 'issue' | 'other')[];
 		/** Conditions that are already true; shown greyed out. */
 		disabled?: SnoozeEvent[];
-		untilNewActivity?: boolean;
-		onpick: (body: { until?: number; event?: SnoozeEvent }) => void;
+		onpick: (choice: SnoozeChoice) => void;
 	} = $props();
 
 	const M = $derived(menu === 'context' ? ContextMenu : DropdownMenu);
@@ -40,10 +39,8 @@
 	{/each}
 {/snippet}
 
-{#if untilNewActivity}
-	<M.Item onclick={() => onpick({})}>Until new activity</M.Item>
-	<M.Separator />
-{/if}
+<M.Item onclick={() => onpick({})}>Until new activity</M.Item>
+<M.Separator />
 {#each snoozeOptions() as opt (opt.label)}
 	<M.Item onclick={() => onpick({ until: opt.until })}>{opt.label}</M.Item>
 {/each}

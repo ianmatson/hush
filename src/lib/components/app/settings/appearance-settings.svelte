@@ -3,10 +3,10 @@
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { cn } from '$lib/utils';
 	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import SettingSelect from './setting-select.svelte';
 	import TabStatusSettings from '$lib/components/app/tab-status-settings.svelte';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
@@ -30,9 +30,7 @@
 
 	const me = createQuery(meQuery);
 	const views = $derived(me.data?.settings.views ?? []);
-	const starts = $derived<Record<string, string>>(
-		Object.fromEntries(views.map((v) => [`/v/${v.id}`, v.name]))
-	);
+	const starts = $derived(views.map((v) => ({ id: `/v/${v.id}`, label: v.name })));
 	let saved = $state<string | null>(null);
 	onMount(() => {
 		saved = localStorage.getItem(START_PAGE_KEY);
@@ -95,14 +93,7 @@
 				</Button>
 			</SettingRow>
 			<SettingRow label="Start page" description="The tab Hush opens first.">
-				<Select.Root type="single" value={start} onValueChange={chooseStart}>
-					<Select.Trigger class="w-40">{starts[start] ?? ''}</Select.Trigger>
-					<Select.Content>
-						{#each Object.entries(starts) as [value, label] (value)}
-							<Select.Item {value} {label} />
-						{/each}
-					</Select.Content>
-				</Select.Root>
+				<SettingSelect class="w-40" value={start} options={starts} onchange={chooseStart} />
 			</SettingRow>
 		</Card.Content>
 	</Card.Root>

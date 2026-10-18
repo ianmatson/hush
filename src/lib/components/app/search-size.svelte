@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
+	import { searchCountQuery } from '$lib/queries';
 	import { searchIsUnscoped, SOURCE_RESULTS_MAX, type SourceCount } from '$lib/shared/item-views';
 	import { splitSearch } from '$lib/shared/query';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -8,7 +8,6 @@
 	let { query }: { query: string } = $props();
 
 	const TYPING_PAUSE_MS = 600;
-	const COUNT_FRESH_MS = 5 * 60_000;
 
 	let settled = $state({ query: '' });
 	$effect(() => {
@@ -18,11 +17,8 @@
 	});
 
 	const count = createQuery(() => ({
-		queryKey: ['search-count', settled.query],
-		queryFn: () => api.countSearch(settled.query),
-		enabled: !!settled.query && !splitSearch(settled.query).errors.length,
-		staleTime: COUNT_FRESH_MS,
-		retry: false
+		...searchCountQuery(settled.query),
+		enabled: !!settled.query && !splitSearch(settled.query).errors.length
 	}));
 
 	const unscoped = $derived(!!query.trim() && searchIsUnscoped(query));

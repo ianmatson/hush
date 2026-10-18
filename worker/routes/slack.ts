@@ -1,5 +1,6 @@
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
+import { isDashKind, isGitHubName } from '../../src/lib/shared/item-page';
 import type { SlackMentionsPageDTO, SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
 import { poller, query, routes, type AppEnv } from '../app';
@@ -16,7 +17,6 @@ import {
 import {
 	SLACK_MENTIONS_USER_SCOPES,
 	exchangeMentionsCode,
-	isGitHubKind,
 	refreshSlackMentionsAccess,
 	searchMentions,
 	slackMentionsCallbackUrl,
@@ -40,7 +40,6 @@ const MENTIONS_STATE_COOKIE = 'hush_slack_mentions_oauth';
 const MENTIONS_STATE_COOKIE_PATH = '/api/slack/mentions';
 const STATE_MAX_AGE_SECONDS = 600;
 const SETTINGS_PATH = '/settings/notifications';
-const GITHUB_NAME = /^[A-Za-z0-9_.-]{1,100}$/;
 const SLACK_CURSOR = /^[A-Za-z0-9+/=_-]{1,500}$/;
 
 function startOAuth(
@@ -184,10 +183,10 @@ const app = routes()
 			if (cursor !== undefined && !SLACK_CURSOR.test(cursor))
 				return c.json({ error: 'Bad page cursor.' }, 400, noStore);
 			if (
-				!GITHUB_NAME.test(owner) ||
-				!GITHUB_NAME.test(repo) ||
+				!isGitHubName(owner) ||
+				!isGitHubName(repo) ||
 				!Number.isSafeInteger(number) ||
-				!isGitHubKind(kind)
+				!isDashKind(kind)
 			)
 				return c.json({ error: 'Bad PR or issue.' }, 400, noStore);
 			const userId = c.get('user').id;

@@ -2,28 +2,24 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
-	import { SWIPE_ACTIONS, type SwipeKind } from '$lib/shared/swipe';
+	import { SWIPE_ACTIONS, type SwipePair } from '$lib/shared/swipe';
 	import * as Card from '$lib/components/ui/card';
-	import * as Select from '$lib/components/ui/select';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import SettingSelect from './setting-select.svelte';
 
 	/** Swipe actions on touch screens: one action for each direction, in each list. */
 	const me = createQuery(meQuery);
-	const swipe = $derived(me.data?.settings.swipe);
+	const swipe = $derived(me.data?.settings.swipe.dash);
 
-	const LISTS: { kind: SwipeKind; label: string }[] = [
-		{ kind: 'dash', label: 'Pull requests and issues' }
-	];
+	const LIST_LABEL = 'Pull requests and issues';
 	const SIDES = [
 		{ side: 'right', label: 'Swipe right' },
 		{ side: 'left', label: 'Swipe left' }
 	] as const;
-	const labelOf = (kind: SwipeKind, id: string) =>
-		SWIPE_ACTIONS[kind].find((a) => a.id === id)?.label ?? id;
 
-	function set(kind: SwipeKind, side: 'left' | 'right', id: string) {
-		if (!swipe || swipe[kind][side] === id) return;
-		saveSettings({ swipe: { ...swipe, [kind]: { ...swipe[kind], [side]: id } } }, 'Saved');
+	function set(side: keyof SwipePair, id: string) {
+		if (!swipe || swipe[side] === id) return;
+		saveSettings({ swipe: { dash: { ...swipe, [side]: id } } }, 'Saved');
 	}
 </script>
 
@@ -35,30 +31,21 @@
 		</p>
 	</div>
 	{#if swipe}
-		{#each LISTS as l (l.kind)}
-			<Card.Root>
-				<Card.Header><Card.Title class="text-sm">{l.label}</Card.Title></Card.Header>
-				<Card.Content class="divide-y">
-					{#each SIDES as s (s.side)}
-						<SettingRow label={s.label}>
-							<Select.Root
-								type="single"
-								value={swipe[l.kind][s.side]}
-								onValueChange={(v) => set(l.kind, s.side, v)}
-							>
-								<Select.Trigger class="w-52" aria-label="{l.label}: {s.label}"
-									>{labelOf(l.kind, swipe[l.kind][s.side])}</Select.Trigger
-								>
-								<Select.Content>
-									{#each SWIPE_ACTIONS[l.kind] as a (a.id)}
-										<Select.Item value={a.id} label={a.label} />
-									{/each}
-								</Select.Content>
-							</Select.Root>
-						</SettingRow>
-					{/each}
-				</Card.Content>
-			</Card.Root>
-		{/each}
+		<Card.Root>
+			<Card.Header><Card.Title class="text-sm">{LIST_LABEL}</Card.Title></Card.Header>
+			<Card.Content class="divide-y">
+				{#each SIDES as s (s.side)}
+					<SettingRow label={s.label}>
+						<SettingSelect
+							class="w-52"
+							label="{LIST_LABEL}: {s.label}"
+							value={swipe[s.side]}
+							options={SWIPE_ACTIONS.dash}
+							onchange={(id) => set(s.side, id)}
+						/>
+					</SettingRow>
+				{/each}
+			</Card.Content>
+		</Card.Root>
 	{/if}
 </section>

@@ -1,20 +1,22 @@
-import { ABOUT } from '$lib/about';
-import { compareMarkdownPath } from '$lib/compare';
-import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
-import { DOCS, NAV, docMarkdownPath } from '$lib/docs';
-import { guideMarkdownPath } from '$lib/guides';
-import { GUIDES, GUIDES_INDEX } from '$lib/guides/content';
 import { SITE_URL } from '$lib/site';
+import { SITE_PAGES, type SitePage } from '$lib/site-pages';
 
 // The docs for agents, as https://llmstxt.org describes: what Hush is, then every page in
 // Markdown. /llms-full.txt has the pages themselves.
 export const prerender = true;
 
+const TEXT_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8' };
+
+function byGroup(pages: SitePage[]): Map<string, SitePage[]> {
+	const groups = new Map<string, SitePage[]>();
+	for (const page of pages) groups.set(page.group, [...(groups.get(page.group) ?? []), page]);
+	return groups;
+}
+
 export function GET() {
-	const groups = NAV.map(({ group }) => {
-		const lines = DOCS.filter((d) => d.group === group).map(
-			(d) =>
-				`- [${d.slug ? d.title : 'Overview'}](${SITE_URL}${docMarkdownPath(d)}): ${d.description}`
+	const groups = [...byGroup(SITE_PAGES)].map(([group, pages]) => {
+		const lines = pages.map(
+			(p) => `- [${p.navTitle}](${SITE_URL}${p.markdownPath}): ${p.description}`
 		);
 		return `## ${group}\n\n${lines.join('\n')}`;
 	});
@@ -25,20 +27,6 @@ export function GET() {
 All pages in one file: ${SITE_URL}/llms-full.txt
 
 ${groups.join('\n\n')}
-
-## ${GUIDES_INDEX.title}
-
-- [Overview](${SITE_URL}${GUIDES_INDEX.path}): ${GUIDES_INDEX.description}
-${GUIDES.map((p) => `- [${p.title}](${SITE_URL}${guideMarkdownPath(p)}): ${p.description}`).join('\n')}
-
-## About Hush
-
-${ABOUT.map((p) => `- [${p.title}](${SITE_URL}/${p.slug}.md): ${p.description}`).join('\n')}
-
-## ${COMPARE_INDEX.title}
-
-- [Overview](${SITE_URL}${COMPARE_INDEX.path}): ${COMPARE_INDEX.description}
-${COMPARE.map((p) => `- [${p.title}](${SITE_URL}${compareMarkdownPath(p)}): ${p.description}`).join('\n')}
 `;
-	return new Response(text, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+	return new Response(text, { headers: TEXT_HEADERS });
 }

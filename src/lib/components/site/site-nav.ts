@@ -13,9 +13,9 @@ export const GUIDE_PAGES: readonly SiteLink[] = GUIDE_ORDER.map((slug) => ({
 	label: GUIDE_LABELS[slug]
 }));
 
-export const COMPARE_INDEX: SiteLink = { href: '/compare', label: 'Compare' };
+const COMPARE_INDEX: SiteLink = { href: '/compare', label: 'Compare' };
 
-export const GUIDES_SECTION: SiteLink = { href: GUIDES_PATH, label: 'Guides' };
+const GUIDES_SECTION: SiteLink = { href: GUIDES_PATH, label: 'Guides' };
 
 const DOCS_SECTION: SiteLink = { href: '/docs', label: 'Docs' };
 const PRICING_SECTION: SiteLink = { href: '/pricing', label: 'Pricing' };

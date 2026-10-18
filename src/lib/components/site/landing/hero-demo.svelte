@@ -3,6 +3,8 @@
 	import { fly } from 'svelte/transition';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { cx } from './demo-ui';
+	import { demoKey } from './demo-keys';
+	import { bindings, chordOf, commandIn, type KeyScope } from '$lib/shared/keymap';
 	import Search from '@lucide/svelte/icons/search';
 	import Bell from '@lucide/svelte/icons/bell';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -40,6 +42,8 @@
 	const GROUP_BY_TOUR_MS = 3400;
 	const GROUP_BY_TOUR: DemoGroupBy[] = ['role', 'status', 'custom'];
 	const ALERT_ITEM = 'p-20508';
+	const DEMO_BINDINGS = bindings();
+	const DEMO_KEY_SCOPES: KeyScope[] = ['list', 'item', 'dash'];
 	const KINDS: { id: Kind; label: string }[] = [
 		{ id: 'pulls', label: 'Pull requests' },
 		{ id: 'issues', label: 'Issues' }
@@ -61,6 +65,7 @@
 	let groupMenuOpen = $state(false);
 	let alertShown = $state(true);
 	let touring = $state(false);
+	let tookOver = false;
 	let rerunningId = $state<string | null>(null);
 	let confirmingMergeId = $state<string | null>(null);
 	let toast = $state<Toast | null>(null);
@@ -120,7 +125,7 @@
 	}
 
 	function startTour() {
-		if (reducedMotion.current || touring) return;
+		if (reducedMotion.current || touring || tookOver) return;
 		touring = true;
 		tourTimer = setInterval(() => {
 			if (view !== 'mine' || kind !== 'pulls') return;
@@ -133,7 +138,7 @@
 		const seen = new IntersectionObserver(
 			([entry]) => {
 				if (entry.isIntersecting) startTour();
-				else if (touring) (clearInterval(tourTimer), (touring = false));
+				else stopTour();
 			},
 			{ threshold: 0.4 }
 		);
@@ -142,11 +147,12 @@
 	}
 
 	function takeOver() {
+		tookOver = true;
 		stopTour();
 	}
 
 	function setGroupBy(by: DemoGroupBy) {
-		stopTour();
+		takeOver();
 		groupBy[view] = by;
 		groupMenuOpen = false;
 	}
@@ -167,6 +173,8 @@
 	}
 
 	const snooze = (item: DemoDashItem) => leave(item, `Snoozed until new activity: ${item.title}`);
+	const snoozeTomorrow = (item: DemoDashItem) =>
+		leave(item, `Snoozed until tomorrow: ${item.title}`);
 	const mute = (item: DemoDashItem) => leave(item, `Muted: ${item.title}`);
 	const copy = (item: DemoDashItem) => showToast(`Copied the link to ${refOf(item)}.`);
 	const open = (item: DemoDashItem) => window.open(item.url, '_blank', 'noopener');
@@ -257,22 +265,18 @@
 		stageEl?.querySelector<HTMLElement>(`[data-demo-dash-row="${next.id}"] .row-main`)?.focus();
 	}
 
-	function cycleGroupBy() {
-		const at = GROUP_BY_TOUR.indexOf(groupBy[view]);
-		setGroupBy(GROUP_BY_TOUR[(at + 1) % GROUP_BY_TOUR.length]);
-	}
-
 	function onKey(e: KeyboardEvent) {
 		if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
 		if ((e.target as HTMLElement).closest('textarea, input')) return;
-		const key = e.key.toLowerCase();
-		if (key === 'j' || e.key === 'ArrowDown') moveCursor(1);
-		else if (key === 'k' || e.key === 'ArrowUp') moveCursor(-1);
-		else if (key === 'g') cycleGroupBy();
-		else if (key === 's' && current) snooze(current);
-		else if (key === 'm' && current) mute(current);
-		else if (key === 'c' && current) copy(current);
-		else if (e.key === 'Escape' && (peekOpen || groupMenuOpen))
+		const chord = chordOf(e);
+		const command = chord && commandIn(DEMO_BINDINGS, chord, DEMO_KEY_SCOPES);
+		if (command === 'list.next') moveCursor(1);
+		else if (command === 'list.prev') moveCursor(-1);
+		else if (command === 'dash.snooze' && current) snooze(current);
+		else if (command === 'dash.snoozeTomorrow' && current) snoozeTomorrow(current);
+		else if (command === 'dash.mute' && current) mute(current);
+		else if (command === 'list.copy' && current) copy(current);
+		else if (command === 'list.escape' && (peekOpen || groupMenuOpen))
 			((peekOpen = false), (groupMenuOpen = false));
 		else return;
 		e.preventDefault();
@@ -348,10 +352,12 @@
 					type="button"
 					class="flex h-7 items-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-md:w-7 max-md:justify-center max-sm:hidden md:border md:pr-1 md:pl-2 md:text-xs"
 					aria-label="Search and commands"
-					onclick={() => showToast('⌘K finds pull requests, issues, pages, and commands.')}
+					onclick={() =>
+						showToast(`${demoKey('palette')} finds pull requests, issues, pages, and commands.`)}
 				>
 					<Search class="size-4 md:size-3.5" /><span class="hidden md:inline">Search</span><kbd
-						class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline">⌘K</kbd
+						class="hidden rounded bg-muted px-1 font-sans text-[0.65rem] md:inline"
+						>{demoKey('palette')}</kbd
 					>
 				</button>
 				<button
@@ -512,8 +518,8 @@
 	A working demo with real pull requests and issues from <a
 		href="https://github.com/PostHog/posthog.com"
 		rel="noreferrer">PostHog/posthog.com</a
-	>. Change <b>Group by</b>, click a row, or use <kbd>J</kbd> <kbd>K</kbd> to move,
-	<kbd>G</kbd> to group another way, and <kbd>S</kbd> to snooze.
+	>. Change <b>Group by</b>, click a row, or use <kbd>{demoKey('list.next')}</kbd>
+	<kbd>{demoKey('list.prev')}</kbd> to move and <kbd>{demoKey('dash.snooze')}</kbd> to snooze.
 </p>
 
 <style>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ghActions, mainAction } from './actions';
+import { ghActions, hasWritePermission, mainAction } from './actions';
 import { NO_STACK } from './stack-merge';
 import type { PeekDTO } from './types';
 
@@ -99,5 +99,15 @@ describe('actions on GitHub', () => {
 		expect(mainAction('merge', ghActions(pr({}, { mergeState: 'DIRTY' })))?.id).toBe('comment');
 		expect(mainAction('fix_ci', ghActions(pr({}, { failedRuns: [1] })))?.id).toBe('rerun');
 		expect(mainAction(null, ghActions(pr()))?.id).toBe('comment');
+	});
+});
+
+describe('hasWritePermission', () => {
+	it('accepts the permissions that can write and merge', () => {
+		expect(['ADMIN', 'MAINTAIN', 'WRITE'].every(hasWritePermission)).toBe(true);
+		expect(hasWritePermission('TRIAGE')).toBe(false);
+		expect(hasWritePermission('READ')).toBe(false);
+		expect(hasWritePermission(null)).toBe(false);
+		expect(hasWritePermission(undefined)).toBe(false);
 	});
 });

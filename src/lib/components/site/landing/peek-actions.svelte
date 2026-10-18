@@ -4,6 +4,7 @@
 	import MockAvatar from './mock-avatar.svelte';
 	import PushAlert from './push-alert.svelte';
 	import { DEMO_GH } from './demo-data';
+	import { demoKey } from './demo-keys';
 
 	const DRAFT = 'Thanks for the cross-links, @r';
 	const SUGGESTIONS = [
@@ -11,12 +12,12 @@
 		{ handle: '@rubychilds', name: 'ruby childs', person: DEMO_GH.rubychilds }
 	];
 	const MORE = [
-		{ label: 'Request changes', key: '⇧A' },
-		{ label: 'Comment', key: '⇧C' },
-		{ label: 'Merge', key: '⇧M' },
+		{ label: 'Request changes', key: demoKey('peek.requestChanges') },
+		{ label: 'Comment', key: demoKey('peek.comment') },
+		{ label: 'Merge', key: demoKey('peek.merge') },
 		{ label: 'Enable auto-merge' },
-		{ label: 'Re-run failed jobs', key: '⇧R' },
-		{ label: 'Close', key: '⇧X' }
+		{ label: 'Re-run failed jobs', key: demoKey('peek.rerun') },
+		{ label: 'Close', key: demoKey('peek.closeReopen') }
 	];
 </script>
 
@@ -67,9 +68,9 @@
 		</div>
 
 		<div class="bar">
-			<span class="ghost">Snooze <kbd>S</kbd></span>
-			<span class="ghost mute">Mute <kbd>M</kbd></span>
-			<span class="primary">Approve <kbd>A</kbd></span>
+			<span class="ghost">Snooze <kbd>{demoKey('dash.snooze')}</kbd></span>
+			<span class="ghost mute">Mute <kbd>{demoKey('dash.mute')}</kbd></span>
+			<span class="primary">Approve <kbd>{demoKey('peek.approve')}</kbd></span>
 			<span class="ghost">More <ChevronDown size={12} /></span>
 		</div>
 

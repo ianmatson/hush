@@ -16,7 +16,7 @@ description: gh-hush is a GitHub CLI extension that clears notifications by your
 | -------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | What it is           | A command that cleans your GitHub inbox                  | Views of pull requests and issues, with pushes                               |
 | Where it runs        | Terminal, as a `gh` CLI extension                        | Web app (installable), on Cloudflare                                         |
-| Price                | Free                                                     | Free in beta; planned $3 a month or $30 a year                               |
+| Price                | Free                                                     | {{value:hush-price}}                                                         |
 | Open source          | Yes (MIT)                                                | Yes (AGPL-3.0)                                                               |
 | Where your data is   | On your computer; uses your `gh` sign-in                 | On Hush's servers; token encrypted                                           |
 | Rules                | YAML; first match wins; `keep` or `hush`                 | Searches for views; custom sections and categories, first match wins         |

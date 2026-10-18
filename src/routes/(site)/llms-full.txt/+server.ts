@@ -1,25 +1,11 @@
-import { ABOUT } from '$lib/about';
-import { comparePath } from '$lib/compare';
-import { COMPARE, COMPARE_INDEX } from '$lib/compare/content';
-import { DOCS, asMarkdown, docAsMarkdown } from '$lib/docs';
-import { guidePath } from '$lib/guides';
-import { GUIDES, GUIDES_INDEX } from '$lib/guides/content';
+import { asMarkdown } from '$lib/docs';
+import { SITE_PAGES } from '$lib/site-pages';
 
 // Every docs page in one Markdown file, in the order of the navigation, then the about pages.
 export const prerender = true;
 
 export function GET() {
-	return new Response(
-		[
-			...DOCS.map(docAsMarkdown),
-			...ABOUT.map((p) => asMarkdown(p, `/${p.slug}`)),
-			asMarkdown(GUIDES_INDEX, GUIDES_INDEX.path),
-			...GUIDES.map((p) => asMarkdown(p, guidePath(p))),
-			asMarkdown(COMPARE_INDEX, COMPARE_INDEX.path),
-			...COMPARE.map((p) => asMarkdown(p, comparePath(p)))
-		].join('\n\n---\n\n'),
-		{
-			headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-		}
-	);
+	return new Response(SITE_PAGES.map((p) => asMarkdown(p, p.path)).join('\n\n---\n\n'), {
+		headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+	});
 }

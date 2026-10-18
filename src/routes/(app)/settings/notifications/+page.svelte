@@ -1,141 +1,30 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
-	import { keys, meQuery, pushDevicesQuery, queryClient } from '$lib/queries';
-	import {
-		currentSubscription,
-		disablePush,
-		enablePush,
-		pushSupport,
-		type PushSupport
-	} from '$lib/push';
-	import { saveSettings } from '$lib/save-settings';
-	import { PUSH_FACTS, type PushFact } from '$lib/shared/push-facts';
-	import { fromClock, inQuietHours, toClock } from '$lib/shared/quiet';
-	import type { QuietHours } from '$lib/shared/types';
+	import { meQuery } from '$lib/queries';
+	import { saveSettings, togglePushFact } from '$lib/save-settings';
+	import { PUSH_FACTS } from '$lib/shared/push-facts';
 	import {
 		CLEAR_NOTIFICATIONS_OPTIONS,
 		DIGEST_MINUTES,
 		LIMIT_COUNT,
 		LIMIT_MINUTES,
 		PUSH_REPEAT_OPTIONS,
-		type ClearNotifications,
-		type PushLimit,
-		type PushRepeat
+		type PushLimit
 	} from '$lib/shared/push-policy';
-	import * as Select from '$lib/components/ui/select';
+	import * as Card from '$lib/components/ui/card';
+	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
+	import SettingRow from '$lib/components/app/setting-row.svelte';
+	import SettingSelect from '$lib/components/app/settings/setting-select.svelte';
+	import NumberSetting from '$lib/components/app/settings/number-setting.svelte';
+	import PushDevices from '$lib/components/app/settings/push-devices.svelte';
+	import QuietHoursSettings from '$lib/components/app/settings/quiet-hours-settings.svelte';
+	import SlackSettings from '$lib/components/app/settings/slack-settings.svelte';
 
 	const DEFAULT_DIGEST_MINUTES = 30;
 	const DEFAULT_PUSH_LIMIT: PushLimit = { count: 6, minutes: 30 };
 
-	const labelOf = <T extends string>(options: { id: T; label: string }[], id: T) =>
-		options.find((o) => o.id === id)?.label ?? id;
-
-	function wholeIn(value: string, range: { min: number; max: number }): number | null {
-		const n = Number(value);
-		return Number.isInteger(n) && n >= range.min && n <= range.max ? n : null;
-	}
-
-	import { ago } from '$lib/time';
-	import { Button } from '$lib/components/ui/button';
-	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
-	import { Input } from '$lib/components/ui/input';
-	import { Separator } from '$lib/components/ui/separator';
-	import * as Card from '$lib/components/ui/card';
-	import * as Alert from '$lib/components/ui/alert';
-	import SettingRow from '$lib/components/app/setting-row.svelte';
-	import SlackSettings from '$lib/components/app/settings/slack-settings.svelte';
-	import Trash from '@lucide/svelte/icons/trash';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-
 	const me = createQuery(meQuery);
-	const devices = createQuery(pushDevicesQuery);
 	const settings = $derived(me.data?.settings);
-
-	const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	const quiet = $derived(settings?.quietHours ?? null);
-	// Checked again each minute, for the "Quiet now" note.
-	let now = $state(Date.now());
-	onMount(() => {
-		const t = setInterval(() => (now = Date.now()), 60_000);
-		return () => clearInterval(t);
-	});
-	const quietNow = $derived(inQuietHours(quiet, now));
-
-	function setQuiet(patch: Partial<QuietHours> | null): Promise<boolean> {
-		const next: QuietHours | null =
-			patch === null
-				? null
-				: {
-						...(quiet ?? { from: 22 * 60, to: 7 * 60, weekends: false, timeZone: browserZone }),
-						...patch
-					};
-		return saveSettings({ quietHours: next }, next ? 'Quiet hours saved' : 'Quiet hours off');
-	}
-
-	function savePushFact(fact: PushFact, on: boolean) {
-		const current = settings?.pushFacts ?? [];
-		const next = on ? [...new Set([...current, fact])] : current.filter((f) => f !== fact);
-		return saveSettings({ pushFacts: next });
-	}
-
-	function setClock(key: 'from' | 'to', value: string) {
-		const m = fromClock(value);
-		if (m !== null && m !== quiet?.[key]) setQuiet({ [key]: m });
-	}
-
-	let support = $state<PushSupport>('unsupported');
-	let thisDevice = $state<PushSubscription | null>(null);
-	let busy = $state(false);
-
-	async function refreshDevice() {
-		support = pushSupport();
-		thisDevice = await currentSubscription().catch(() => null);
-		await queryClient.invalidateQueries({ queryKey: keys.pushDevices });
-	}
-
-	async function togglePush() {
-		busy = true;
-		try {
-			const turningOn = !thisDevice;
-			if (turningOn) await enablePush();
-			else await disablePush();
-			await refreshDevice();
-			toast.success(turningOn ? 'Push is on for this device.' : 'Push is off for this device.');
-		} catch (err) {
-			toast.error((err as Error).message);
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function testPush() {
-		try {
-			const { sent } = await api.testPush();
-			toast.success(`Sent a test notification to ${sent} device${sent === 1 ? '' : 's'}.`);
-		} catch (err) {
-			toast.error((err as Error).message);
-		}
-	}
-
-	async function removeDevice(endpoint: string) {
-		try {
-			await api.unsubscribe(endpoint);
-			if (thisDevice?.endpoint === endpoint) await thisDevice.unsubscribe();
-		} catch (err) {
-			toast.error((err as Error).message);
-		}
-		await refreshDevice();
-	}
-
-	onMount(() => {
-		support = pushSupport();
-		currentSubscription()
-			.then((s) => (thisDevice = s))
-			.catch(() => {});
-	});
 </script>
 
 <svelte:head><title>Notifications · Settings · Hush</title></svelte:head>
@@ -148,78 +37,7 @@
 		</p>
 	</div>
 
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>Devices</Card.Title>
-			<Card.Description
-				>Each browser or installed app that gets push notifications.</Card.Description
-			>
-		</Card.Header>
-		<Card.Content class="grid gap-4">
-			{#if support === 'needs-install'}
-				<Alert.Root>
-					<Alert.Description>
-						On iPhone and iPad, add Hush to your Home Screen first (Share → Add to Home Screen).
-						Then open it from there and turn on push.
-					</Alert.Description>
-				</Alert.Root>
-			{:else if support === 'unsupported'}
-				<Alert.Root
-					><Alert.Description>This browser does not support Web Push.</Alert.Description
-					></Alert.Root
-				>
-			{:else}
-				<div class="flex items-center justify-between gap-4">
-					<div>
-						<p class="text-sm font-medium">This device</p>
-						<p class="text-xs text-muted-foreground">
-							{thisDevice ? 'Receives push notifications.' : 'Push is off.'}
-						</p>
-					</div>
-					<div class="flex gap-2">
-						{#if devices.data?.length}<Button variant="outline" size="sm" onclick={testPush}
-								>Send test</Button
-							>{/if}
-						<Button
-							size="sm"
-							variant={thisDevice ? 'outline' : 'default'}
-							onclick={togglePush}
-							disabled={busy}
-						>
-							{#if busy}<LoaderCircle class="animate-spin" />{/if}
-							{thisDevice ? 'Turn off' : 'Turn on'}
-						</Button>
-					</div>
-				</div>
-			{/if}
-
-			{#if devices.data?.length}
-				<ul class="grid gap-1 rounded-lg border p-1 text-sm">
-					{#each devices.data as d (d.id)}
-						<li
-							class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
-						>
-							<span>
-								{d.label ?? 'Browser'}
-								{#if thisDevice?.endpoint === d.endpoint}<span
-										class="ml-1 text-xs text-muted-foreground">(this device)</span
-									>{/if}
-							</span>
-							<span class="flex items-center gap-2 text-xs text-muted-foreground">
-								added {ago(d.createdAt)}
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									aria-label="Remove device"
-									onclick={() => removeDevice(d.endpoint)}><Trash /></Button
-								>
-							</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</Card.Content>
-	</Card.Root>
+	<PushDevices />
 
 	<SlackSettings />
 
@@ -240,7 +58,7 @@
 						<SavedSwitch
 							id="push-{fact.id}"
 							checked={settings.pushFacts.includes(fact.id)}
-							onsave={(on) => savePushFact(fact.id, on)}
+							onsave={(on) => togglePushFact(fact.id, on)}
 						/>
 					</SettingRow>
 				{/each}
@@ -260,20 +78,13 @@
 					label="Push the same item again"
 					description="Opening Hush, or reading the item on GitHub, lets it push again."
 				>
-					<Select.Root
-						type="single"
+					<SettingSelect
+						class="w-64"
+						label="Push the same item again"
 						value={settings.pushRepeat}
-						onValueChange={(v) => saveSettings({ pushRepeat: v as PushRepeat })}
-					>
-						<Select.Trigger class="w-64" aria-label="Push the same item again"
-							>{labelOf(PUSH_REPEAT_OPTIONS, settings.pushRepeat)}</Select.Trigger
-						>
-						<Select.Content>
-							{#each PUSH_REPEAT_OPTIONS as o (o.id)}
-								<Select.Item value={o.id} label={o.label} />
-							{/each}
-						</Select.Content>
-					</Select.Root>
+						options={PUSH_REPEAT_OPTIONS}
+						onchange={(pushRepeat) => saveSettings({ pushRepeat })}
+					/>
 				</SettingRow>
 				<SettingRow
 					id="push-digest"
@@ -287,19 +98,13 @@
 					/>
 					{#snippet extra()}
 						{#if settings.pushDigestMinutes !== null}
-							<label class="flex items-center gap-2 text-sm"
-								>Every <Input
-									type="number"
-									class="h-8 w-16"
-									min={DIGEST_MINUTES.min}
-									max={DIGEST_MINUTES.max}
-									value={settings.pushDigestMinutes}
-									onchange={(e) => {
-										const minutes = wholeIn(e.currentTarget.value, DIGEST_MINUTES);
-										if (minutes !== null) saveSettings({ pushDigestMinutes: minutes });
-									}}
-								/> minutes</label
-							>
+							<NumberSetting
+								before="Every"
+								after="minutes"
+								value={settings.pushDigestMinutes}
+								range={DIGEST_MINUTES}
+								onsave={(pushDigestMinutes) => saveSettings({ pushDigestMinutes })}
+							/>
 						{/if}
 					{/snippet}
 				</SettingRow>
@@ -317,32 +122,20 @@
 						{#if settings.pushLimit}
 							{@const limit = settings.pushLimit}
 							<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-								<label class="flex items-center gap-2"
-									>At most <Input
-										type="number"
-										class="h-8 w-16"
-										min={LIMIT_COUNT.min}
-										max={LIMIT_COUNT.max}
-										value={limit.count}
-										onchange={(e) => {
-											const count = wholeIn(e.currentTarget.value, LIMIT_COUNT);
-											if (count !== null) saveSettings({ pushLimit: { ...limit, count } });
-										}}
-									/> pushes</label
-								>
-								<label class="flex items-center gap-2"
-									>in <Input
-										type="number"
-										class="h-8 w-16"
-										min={LIMIT_MINUTES.min}
-										max={LIMIT_MINUTES.max}
-										value={limit.minutes}
-										onchange={(e) => {
-											const minutes = wholeIn(e.currentTarget.value, LIMIT_MINUTES);
-											if (minutes !== null) saveSettings({ pushLimit: { ...limit, minutes } });
-										}}
-									/> minutes</label
-								>
+								<NumberSetting
+									before="At most"
+									after="pushes"
+									value={limit.count}
+									range={LIMIT_COUNT}
+									onsave={(count) => saveSettings({ pushLimit: { ...limit, count } })}
+								/>
+								<NumberSetting
+									before="in"
+									after="minutes"
+									value={limit.minutes}
+									range={LIMIT_MINUTES}
+									onsave={(minutes) => saveSettings({ pushLimit: { ...limit, minutes } })}
+								/>
 							</div>
 						{/if}
 					{/snippet}
@@ -375,87 +168,17 @@
 					label="Clear notifications"
 					description="Remove Hush notifications from a device when you use Hush there."
 				>
-					<Select.Root
-						type="single"
+					<SettingSelect
+						class="w-64"
+						label="Clear notifications"
 						value={settings.clearNotifications}
-						onValueChange={(v) => saveSettings({ clearNotifications: v as ClearNotifications })}
-					>
-						<Select.Trigger class="w-64" aria-label="Clear notifications"
-							>{labelOf(CLEAR_NOTIFICATIONS_OPTIONS, settings.clearNotifications)}</Select.Trigger
-						>
-						<Select.Content>
-							{#each CLEAR_NOTIFICATIONS_OPTIONS as o (o.id)}
-								<Select.Item value={o.id} label={o.label} />
-							{/each}
-						</Select.Content>
-					</Select.Root>
+						options={CLEAR_NOTIFICATIONS_OPTIONS}
+						onchange={(clearNotifications) => saveSettings({ clearNotifications })}
+					/>
 				</SettingRow>
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Quiet hours</Card.Title>
-				<Card.Description
-					>No pushes at these times. The alerts go in the bell history, and one push lists them when
-					quiet hours end.</Card.Description
-				>
-			</Card.Header>
-			<Card.Content class="divide-y">
-				<SettingRow
-					id="quiet-on"
-					label="Quiet hours"
-					description={quiet ? (quietNow ? 'Quiet now.' : 'Not quiet now.') : 'Off.'}
-				>
-					<SavedSwitch id="quiet-on" checked={!!quiet} onsave={(v) => setQuiet(v ? {} : null)} />
-					{#snippet extra()}
-						{#if quiet}
-							<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-								<label class="flex items-center gap-2"
-									>From <Input
-										type="time"
-										class="h-8 w-auto"
-										value={toClock(quiet.from)}
-										onchange={(e) => setClock('from', e.currentTarget.value)}
-									/></label
-								>
-								<label class="flex items-center gap-2"
-									>to <Input
-										type="time"
-										class="h-8 w-auto"
-										value={toClock(quiet.to)}
-										onchange={(e) => setClock('to', e.currentTarget.value)}
-									/></label
-								>
-								<span class="text-xs text-muted-foreground">
-									{quiet.from > quiet.to ? 'Ends the next morning.' : ''}
-									Time zone: {quiet.timeZone}.
-									{#if quiet.timeZone !== browserZone}
-										<button
-											type="button"
-											class="underline underline-offset-2 hover:text-foreground"
-											onclick={() => setQuiet({ timeZone: browserZone })}>Use {browserZone}</button
-										>
-									{/if}
-								</span>
-							</div>
-						{/if}
-					{/snippet}
-				</SettingRow>
-				{#if quiet}
-					<SettingRow
-						id="quiet-weekends"
-						label="All weekend"
-						description="Also quiet all day on Saturday and Sunday."
-					>
-						<SavedSwitch
-							id="quiet-weekends"
-							checked={quiet.weekends}
-							onsave={(v) => setQuiet({ weekends: v })}
-						/>
-					</SettingRow>
-				{/if}
-			</Card.Content>
-		</Card.Root>
+		<QuietHoursSettings quiet={settings.quietHours} />
 	{/if}
 </div>

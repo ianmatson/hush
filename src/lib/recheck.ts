@@ -1,5 +1,7 @@
 import { api } from '$lib/api';
 import { keys, refetchUnlessLive } from '$lib/queries';
+import { parseGitHubItemUrl } from '$lib/shared/item-page';
+import { subjectKey } from '$lib/shared/subject';
 
 /**
  * "Did it work?" You open a PR or issue on GitHub from Hush (to review, reply, fix CI…). When you
@@ -13,8 +15,13 @@ const MIN_AWAY_MS = 2000;
 
 /** Remember a github.com PR or issue URL. Other URLs (workflow runs, releases) are ignored. */
 export function noteOpened(url: string) {
-	const m = url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/(?:pull|issues)\/(\d+)/);
-	if (m) opened.set(`${m[1]}#${m[2]}`, { repo: m[1], number: Number(m[2]), at: Date.now() });
+	const item = parseGitHubItemUrl(url);
+	if (item)
+		opened.set(subjectKey(item.repo, item.number), {
+			repo: item.repo,
+			number: item.number,
+			at: Date.now()
+		});
 }
 
 export function openOnGitHub(url: string) {

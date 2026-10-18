@@ -1,6 +1,6 @@
 import type { MarkColor } from './types';
 
-export const PROJECT_SCOPE = 'project';
+const PROJECT_SCOPE = 'project';
 const READ_PROJECT_SCOPE = 'read:project';
 
 export type ProjectAccess = 'none' | 'read' | 'edit';
@@ -84,8 +84,6 @@ export const statusColor = (color: string): MarkColor => MARK_OF_PROJECT_COLOR[c
 
 export const statusOf = (status: ProjectStatus | null) =>
 	status?.options.find((o) => o.id === status.optionId) ?? null;
-
-export const statusName = (status: ProjectStatus | null) => statusOf(status)?.name ?? null;
 
 export type ProjectEdit =
 	| {

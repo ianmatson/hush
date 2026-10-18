@@ -9,7 +9,7 @@ This page is for AI agents, scripts, and people who automate their setup. It say
 
 - [/llms.txt](/llms.txt) lists every page, with its Markdown address.
 - [/llms-full.txt](/llms-full.txt) has every page in one file.
-- Every page is Markdown at its address plus `.md`: [/docs/settings.md](/docs/settings.md), [/docs/categories.md](/docs/categories.md)… The docs home is [/docs/index.md](/docs/index.md).
+- Every page is Markdown at its address plus `.md`: [/docs/settings.md](/docs/settings.md), [/docs/categories.md](/docs/categories.md)… The home pages of the docs, the guides, and the comparisons are [/docs/index.md](/docs/index.md), [/guides/index.md](/guides/index.md), and [/compare/index.md](/compare/index.md).
 
 The reference tables (settings, keys, query words, menu items) are made from Hush's own source code when the site is built, so they match the version that runs.
 
@@ -41,16 +41,16 @@ To make a settings file to import, put the settings in this wrapper:
 Check these, or Hush refuses the file:
 
 - The file has only settings that Hush knows: Hush refuses unknown keys. Categories are in `categoryGroups`.
-- `categoryGroups` has up to 10 groups. Each group has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to 40 characters), and `categories` (up to 20). Each item gets one category from each group, or none (“Not sorted”).
-- Each category has `id` (1 to 40 lower-case letters, digits, or dashes; unique across all groups), `name` (up to 40 characters), `color` (`gray`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, or `pink`), `rule` (a query, or `""`), `description` (up to 200 characters, or `""`), and an optional `icon` (`"lucide:<name>"` or one emoji).
+- `categoryGroups` has up to {{value:max-category-groups}} groups. Each group has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (up to {{value:max-mark-name-chars}} characters), and `categories` (up to {{value:max-categories}}). Each item gets one category from each group, or none (“Not sorted”).
+- Each category has `id` (1 to 40 lower-case letters, digits, or dashes; unique across all groups), `name` (up to {{value:max-mark-name-chars}} characters), `color` (`gray`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, or `pink`), `rule` (a query, or `""`), `description` (up to {{value:max-description-chars}} characters, or `""`), and an optional `icon` (`"lucide:<name>"` or one emoji).
 - Categories have no push settings. They mark items only; they do not change whose turn it is, snooze, mute, or pushes.
 - A category's `rule` uses only the words and values of the [query language](/docs/query-language#words), such as `repo:acme/*`, `label:bug`, `type:pr`. Up to 300 characters.
 - Category rules cannot use `category:`.
-- `views` has 1 to 12 views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to 40 characters), `searches` (up to 5 searches of 1 to 256 characters), and `groupBy` (`none`, `role`, `status`, `repo`, `author`, `label`, `assignee`, `custom`, `category:<group id>`, or `project:<owner>/<number>` for the Status of a GitHub project), and optionally `sort` (`{ "by", "dir", "turnFirst" }`: `by` is `turn`, `updated`, `created`, `waiting`, `comments`, `size`, or `title`; `dir` is `asc` or `desc`; `turnFirst` keeps your turn first in each section), `pushNew` (`true` to push its new items), `keepClosed` (`false` to take merged and closed items out at once; by default they stay 24 hours at the end of the list) and `sections` (up to 10 `{ "name", "rule" }`, for `groupBy: "custom"`; first match wins, then Everything else; rules cannot use `about:` or GitHub only words). A view needs at least one search. A search sends its GitHub words to GitHub and checks its Hush words on the results; it cannot use `OR`, parentheses, or `about:`.
+- `views` has 1 to {{value:max-views}} views. Each has `id` (1 to 40 lower-case letters, digits, or dashes; unique), `name` (1 to {{value:max-view-name-chars}} characters), `searches` (up to {{value:max-view-searches}} searches of 1 to {{value:max-search-chars}} characters), and `groupBy` (`none`, `role`, `status`, `repo`, `author`, `label`, `assignee`, `custom`, `category:<group id>`, or `project:<owner>/<number>` for the Status of a GitHub project), and optionally `sort` (`{ "by", "dir", "turnFirst" }`: `by` is `turn`, `updated`, `created`, `waiting`, `comments`, `size`, or `title`; `dir` is `asc` or `desc`; `turnFirst` keeps your turn first in each section), `pushNew` (`true` to push its new items), `keepClosed` (`false` to take merged and closed items out at once; by default they stay 24 hours at the end of the list) and `sections` (up to {{value:max-view-sections}} `{ "name", "rule" }`, for `groupBy: "custom"`; first match wins, then Everything else; rules cannot use `about:` or GitHub only words). A view needs at least one search. A search sends its GitHub words to GitHub and checks its Hush words on the results; it cannot use `OR`, parentheses, or `about:`.
 - Key names follow the [key format](/docs/settings#keys); command ids are in the [keybinds table](/docs/keybinds#all-shortcuts).
 - `quietHours.timeZone` is an IANA time zone, and `from` and `to` are minutes (0 to 1439) that differ.
 - `pushRepeat` is `"once"`, `"reason"`, or `"every"`. `clearNotifications` is `"open"`, `"item"`, or `"never"`.
-- `pushDigestMinutes` is `null` or a whole number from 5 to 240. `pushLimit` is `null` or `{ "count", "minutes" }`: `count` is 1 to 50, and `minutes` is 5 to 240.
+- `pushDigestMinutes` is `null` or a whole number from {{value:digest-minutes}}. `pushLimit` is `null` or `{ "count", "minutes" }`: `count` is {{value:limit-count}}, and `minutes` is {{value:limit-minutes}}.
 
 ## Recipes
 

@@ -6,6 +6,7 @@ import type { CategoryPin } from '$lib/shared/categories';
 import type { DashKind, MergeMethod, ReactionContent, Settings } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
+import type { SettingsPatch } from '$lib/shared/settings-schema';
 import type {
 	CommentTarget,
 	CommitDiff,
@@ -52,6 +53,11 @@ async function ok<R extends ClientResponse<unknown, number, string>>(
 	return data as Success<R>;
 }
 
+function itemParam(repo: string, number: number) {
+	const [owner, name] = repo.split('/');
+	return { owner, repo: name, number: String(number) };
+}
+
 export const api = {
 	me: () => ok(client.api.me.$get()),
 	/** An action on GitHub (approve, comment, merge…); the server reads the PR or issue again. */
@@ -67,7 +73,6 @@ export const api = {
 	}) => ok(client.api.actions.$post({ json: a })),
 	editComment: (id: string, body: string) =>
 		ok(client.api.comments.edit.$post({ json: { id, body } })),
-	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	suggest: (repo: string, kind: 'user' | 'ref', q: string, from: string) =>
 		ok(client.api.suggest.$get({ query: { repo, kind, q, from } })),
 	react: (id: string, content: ReactionContent, add: boolean) =>
@@ -79,6 +84,7 @@ export const api = {
 				{ headers: { 'Content-Type': 'application/octet-stream' }, init: { body: file } }
 			)
 		),
+	/** Use your own GitHub token in place of the one from Sign in with GitHub. */
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */
 	orgs: () => ok(client.api.account.orgs.$get()),
@@ -88,9 +94,11 @@ export const api = {
 	/** You looked at these PRs or issues ("owner/repo#123"). */
 	seen: (keys: string[]) => ok(client.api.seen.$post({ json: { keys } })),
 	unseen: (keys: string[]) => ok(client.api.unseen.$post({ json: { keys } })),
-	saveSettings: (s: Partial<Settings>) => ok(client.api.settings.$put({ json: s })),
+	saveSettings: (s: SettingsPatch) =>
+		ok(client.api.settings.$put({ json: s as Partial<Settings> })),
 	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */
-	replaceSettings: (s: Partial<Settings>) => ok(client.api.settings.all.$put({ json: s })),
+	replaceSettings: (s: SettingsPatch) =>
+		ok(client.api.settings.all.$put({ json: s as Partial<Settings> })),
 	vapidKey: () => ok(client.api.push['vapid-key'].$get()),
 	subscriptions: () => ok(client.api.push.subscriptions.$get()),
 	subscribe: (sub: PushSubscriptionJSON, label: string) =>
@@ -105,15 +113,13 @@ export const api = {
 	disconnectSlack: () => ok(client.api.slack.$delete()),
 	testSlack: () => ok(client.api.slack.test.$post()),
 	disconnectSlackMentions: () => ok(client.api.slack.mentions.$delete()),
-	slackMentions: (repo: string, number: number, kind: 'pr' | 'issue', cursor?: string) => {
-		const [owner, name] = repo.split('/');
-		return ok(
+	slackMentions: (repo: string, number: number, kind: DashKind, cursor?: string) =>
+		ok(
 			client.api.slack.mentions[':owner'][':repo'][':number'].$get({
-				param: { owner, repo: name, number: String(number) },
+				param: itemParam(repo, number),
 				query: cursor ? { kind, cursor } : { kind }
 			})
-		);
-	},
+		),
 	countSearch: (q: string) => ok(client.api.searches.count.$get({ query: { q } })),
 	dashboard: (kind: DashKind, refresh = false) =>
 		ok(
@@ -132,64 +138,50 @@ export const api = {
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),
-	peek: (repo: string, number: number) => {
-		const [owner, name] = repo.split('/');
-		return ok(
-			client.api.peek[':owner'][':repo'][':number'].$get({
-				param: { owner, repo: name, number: String(number) }
-			})
-		);
-	},
+	peek: (repo: string, number: number) =>
+		ok(client.api.peek[':owner'][':repo'][':number'].$get({ param: itemParam(repo, number) })),
 	pullFilesPage: async (repo: string, number: number, head: string, page: number) => {
-		const [owner, name] = repo.split('/');
 		const files: unknown = await ok(
 			client.api.diff[':owner'][':repo'][':number'].$get({
-				param: { owner, repo: name, number: String(number) },
+				param: itemParam(repo, number),
 				query: { page: String(page), head }
 			})
 		);
 		return files as PullFile[];
 	},
 	compareCommits: async (repo: string, number: number, base: string, head: string) => {
-		const [owner, name] = repo.split('/');
 		const result: unknown = await ok(
 			client.api.diff[':owner'][':repo'][':number'].compare.$get({
-				param: { owner, repo: name, number: String(number) },
+				param: itemParam(repo, number),
 				query: { base, head }
 			})
 		);
 		return result as CompareResult;
 	},
-	pullCommits: (repo: string, number: number) => {
-		const [owner, name] = repo.split('/');
-		return ok(
+	pullCommits: (repo: string, number: number) =>
+		ok(
 			client.api.diff[':owner'][':repo'][':number'].commits.$get({
-				param: { owner, repo: name, number: String(number) }
+				param: itemParam(repo, number)
 			})
-		);
-	},
+		),
 	commitDiff: async (repo: string, number: number, sha: string) => {
-		const [owner, name] = repo.split('/');
 		const result: unknown = await ok(
 			client.api.diff[':owner'][':repo'][':number'].commit[':sha'].$get({
-				param: { owner, repo: name, number: String(number), sha }
+				param: { ...itemParam(repo, number), sha }
 			})
 		);
 		return result as CommitDiff;
 	},
-	viewedFiles: (repo: string, number: number) => {
-		const [owner, name] = repo.split('/');
-		return ok(
+	viewedFiles: (repo: string, number: number) =>
+		ok(
 			client.api.diff[':owner'][':repo'][':number'].viewed.$get({
-				param: { owner, repo: name, number: String(number) }
+				param: itemParam(repo, number)
 			})
-		);
-	},
+		),
 	reviewThreads: async (repo: string, number: number) => {
-		const [owner, name] = repo.split('/');
 		const result: unknown = await ok(
 			client.api.diff[':owner'][':repo'][':number'].threads.$get({
-				param: { owner, repo: name, number: String(number) }
+				param: itemParam(repo, number)
 			})
 		);
 		return result as { threads: ReviewThread[]; pendingReview: PendingReview | null };
@@ -212,14 +204,8 @@ export const api = {
 		ok(client.api.diff.threads.resolve.$post({ json: { threadId, resolved } })),
 	setFileViewed: (pullRequestId: string, path: string, viewed: boolean) =>
 		ok(client.api.diff.viewed.$post({ json: { pullRequestId, path, viewed } })),
-	projects: (repo: string, number: number) => {
-		const [owner, name] = repo.split('/');
-		return ok(
-			client.api.projects[':owner'][':repo'][':number'].$get({
-				param: { owner, repo: name, number: String(number) }
-			})
-		);
-	},
+	projects: (repo: string, number: number) =>
+		ok(client.api.projects[':owner'][':repo'][':number'].$get({ param: itemParam(repo, number) })),
 	editProject: (edit: ProjectEdit) => ok(client.api.projects.item.$post({ json: edit })),
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),

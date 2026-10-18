@@ -1,16 +1,14 @@
+import { parseRepoFullName } from '../../src/lib/shared/item-page';
 import { userToken } from '../db';
 import { GitHubError } from '../github';
 import { suggestRefs, suggestUsers } from '../suggest';
 import { routes } from '../app';
 
-// GitHub owner or repo name. Names of only dots ("..") are not allowed.
-const NAME = /^(?!\.+$)[A-Za-z0-9_.-]{1,100}$/;
-
 const app = routes().get('/api/suggest', async (c) => {
 	const { repo = '', kind, q = '', from } = c.req.query();
-	const [owner, name, extra] = repo.split('/');
-	if (!NAME.test(owner ?? '') || !NAME.test(name ?? '') || extra !== undefined)
-		return c.json({ error: 'Not a repository.' }, 400);
+	const target = parseRepoFullName(repo);
+	if (!target) return c.json({ error: 'Not a repository.' }, 400);
+	const { owner, name } = target;
 	if (kind !== 'user' && kind !== 'ref') return c.json({ error: 'Unknown kind.' }, 400);
 	if (q.length > 100) return c.json({ error: 'Too long.' }, 400);
 	const token = await userToken(c.env, c.get('user'));

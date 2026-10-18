@@ -1,7 +1,13 @@
 <script lang="ts">
-	import GuideArticle from '$lib/components/site/guide-article.svelte';
+	import CollectionArticle from '$lib/components/site/collection-article.svelte';
 
 	let { data } = $props();
 </script>
 
-<GuideArticle page={data.page} />
+<CollectionArticle
+	page={data.page}
+	section="Guides"
+	type="TechArticle"
+	moreTitle="More guides"
+	othersLayout="list"
+/>

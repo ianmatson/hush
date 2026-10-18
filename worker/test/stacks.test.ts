@@ -113,7 +113,33 @@ describe('mergeStackThrough', () => {
 		});
 		const result = mergeStackThrough('t', 'acme/web', 1, 'SQUASH');
 		await vi.runAllTimersAsync();
-		expect(await result).toBe('Conflicts.');
+		expect(await result).toEqual({ error: 'Conflicts.', status: 422 });
+		vi.useRealTimers();
+	});
+
+	it('says the merge is still running when GitHub has not finished it', async () => {
+		vi.useFakeTimers();
+		gitHub((url) =>
+			url.includes('/merge-async/')
+				? { body: { status: 'pending' } }
+				: { status: 202, body: { status: 'pending', details: { uuid: 'u1' } } }
+		);
+		const result = mergeStackThrough('t', 'acme/web', 1, 'SQUASH');
+		await vi.runAllTimersAsync();
+		expect(await result).toEqual({ stillMerging: true });
+		vi.useRealTimers();
+	});
+
+	it('reports the merge done once GitHub finished it', async () => {
+		vi.useFakeTimers();
+		gitHub((url) =>
+			url.includes('/merge-async/')
+				? { body: { status: 'merged' } }
+				: { status: 202, body: { status: 'pending', details: { uuid: 'u1' } } }
+		);
+		const result = mergeStackThrough('t', 'acme/web', 1, 'SQUASH');
+		await vi.runAllTimersAsync();
+		expect(await result).toEqual({ stillMerging: false });
 		vi.useRealTimers();
 	});
 });

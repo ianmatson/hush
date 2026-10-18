@@ -1,7 +1,11 @@
 import { itemQueryFacts } from './categories';
 import { newestCloseFirst } from './closed-items';
+import { sameLogin } from './logins';
 import { queryMatches } from './rules';
 import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSection } from './types';
+import { EVERYTHING_ELSE_SECTION, ROLE_SECTIONS, STATUS_SECTIONS } from './grouping-sections';
+
+export { EVERYTHING_ELSE_SECTION };
 
 export interface Section {
 	key: string;
@@ -18,28 +22,21 @@ export interface GroupContext {
 }
 
 interface FixedGrouping {
-	sections: { key: string; label: string }[];
+	sections: readonly { key: string; label: string }[];
 	sectionOf: (i: DashItem, me: string) => string;
 }
 
 export const NOT_SORTED_SECTION = 'Not sorted';
 export const NO_STATUS_SECTION = 'No status';
 export const NOT_IN_PROJECT_SECTION = 'Not in project';
-export const UNKNOWN_PROJECT_SECTION = 'Project data unavailable';
-export const EVERYTHING_ELSE_SECTION = 'Everything else';
+const UNKNOWN_PROJECT_SECTION = 'Project data unavailable';
 export const CLOSED_SECTION = 'Merged and closed';
 export const CUSTOM_GROUP_BY: GroupBy = 'custom';
 const CATEGORY_PREFIX = 'category:';
 const PROJECT_PREFIX = 'project:';
-const sameLogin = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 const ROLE: FixedGrouping = {
-	sections: [
-		{ key: 'opened', label: 'You opened' },
-		{ key: 'reviews', label: 'Reviews' },
-		{ key: 'assigned', label: 'Assigned to you' },
-		{ key: 'involved', label: 'Involved' }
-	],
+	sections: ROLE_SECTIONS,
 	sectionOf(i, me) {
 		if (sameLogin(i.author, me)) return 'opened';
 		if (i.kind === 'pr' && (i.requestedMe || i.requestedTeams.length > 0 || i.myLastReviewAt))
@@ -50,15 +47,7 @@ const ROLE: FixedGrouping = {
 };
 
 const STATUS: FixedGrouping = {
-	sections: [
-		{ key: 'no-review', label: 'No review yet' },
-		{ key: 'in-review', label: 'In review' },
-		{ key: 'changes', label: 'Changes requested' },
-		{ key: 'approved', label: 'Approved' },
-		{ key: 'drafts', label: 'Drafts' },
-		{ key: 'unassigned', label: 'Unassigned' },
-		{ key: 'assigned', label: 'Assigned' }
-	],
+	sections: STATUS_SECTIONS,
 	sectionOf(i) {
 		if (i.kind === 'issue') return i.assignees.length ? 'assigned' : 'unassigned';
 		if (i.draft) return 'drafts';

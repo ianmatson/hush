@@ -1,9 +1,10 @@
 <script lang="ts">
 	import SiteMeta from './site-meta.svelte';
 	import MarkdownBody from './markdown-body.svelte';
-	import { REPO_URL, SITE_NAME } from '$lib/site';
+	import { SITE_NAME } from '$lib/site';
 	import { articleData } from '$lib/structured-data';
-	import { DOCS, docMarkdownPath, docPath, renderMarkdown, type DocPage } from '$lib/docs';
+	import { DOCS, docPath, navTitle, renderMarkdown, type DocPage } from '$lib/docs';
+	import { sitePageAt, sourceEditUrl } from '$lib/site-pages';
 
 	/** One docs page: its title, its sections ("On this page"), the text, and the next pages. */
 	let { doc }: { doc: DocPage } = $props();
@@ -11,7 +12,7 @@
 	const at = $derived(DOCS.indexOf(doc));
 	const prev = $derived(DOCS[at - 1]);
 	const next = $derived(DOCS[at + 1]);
-	const source = $derived(`${REPO_URL}/blob/main/src/lib/docs/pages/${doc.slug || 'index'}.md`);
+	const site = $derived(sitePageAt(docPath(doc)));
 </script>
 
 <SiteMeta
@@ -19,7 +20,7 @@
 	description={doc.description}
 	path={docPath(doc)}
 	ogType="article"
-	markdownPath={docMarkdownPath(doc)}
+	markdownPath={site.markdownPath}
 	structuredData={articleData({
 		type: 'TechArticle',
 		title: doc.title,
@@ -43,15 +44,15 @@
 		<footer>
 			<nav class="pager" aria-label="Next and previous page">
 				{#if prev}
-					<a href={docPath(prev)}><span>Previous</span>{prev.slug ? prev.title : 'Overview'}</a>
+					<a href={docPath(prev)}><span>Previous</span>{navTitle(prev)}</a>
 				{:else}<span></span>{/if}
 				{#if next}
 					<a class="next" href={docPath(next)}><span>Next</span>{next.title}</a>
 				{/if}
 			</nav>
 			<p class="meta">
-				<a href={docMarkdownPath(doc)}>This page as Markdown</a>
-				<a href={source} rel="noreferrer">Edit this page</a>
+				<a href={site.markdownPath}>This page as Markdown</a>
+				<a href={sourceEditUrl(site)} rel="noreferrer">Edit this page</a>
 			</p>
 		</footer>
 	</article>

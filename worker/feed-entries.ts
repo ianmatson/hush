@@ -17,6 +17,6 @@ export function itemFeedEntry(i: DashItem): FeedEntry {
 		title: `${i.turnReason}: ${i.title}`,
 		link: i.actionUrl,
 		author: i.author,
-		summary: `${i.repo}#${i.number}${i.lastCommentBy ? ` · last comment by @${i.lastCommentBy}` : ''}`
+		summary: `${i.repo}#${i.number}${i.lastHumanCommentBy ? ` · last comment by @${i.lastHumanCommentBy}` : ''}`
 	};
 }

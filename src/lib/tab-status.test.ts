@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	DEFAULT_PREFS,
+	DOT_COLORS,
+	countsAsUnread,
 	faviconSvg,
 	loadPrefs,
+	newAlertCount,
+	tabStatusOf,
 	titlePrefix,
 	total,
 	withPrefix,
 	type CountSource,
-	type Counts
+	type Counts,
+	type TabStatusPrefs
 } from './tab-status';
 
 const counts: Counts = { alerts: 0, unread: 7, prYou: 3, prTeam: 8, issueYou: 0 };
@@ -103,5 +108,54 @@ describe('tab icon', () => {
 				style: 'breakdown'
 			})
 		).toBe('(2 new · 5 unread · 1 PR)');
+	});
+});
+
+describe('tabStatusOf', () => {
+	const prefs: TabStatusPrefs = {
+		title: { enabled: true, sources: ['alerts', 'prYou'], style: 'total' },
+		favicon: { enabled: true, sources: ['prYou'], color: 'blue', style: 'count' },
+		appBadge: { enabled: true, sources: ['unread'] }
+	};
+
+	it('gives the title, the dot, and the badge from one set of counts', () => {
+		expect(tabStatusOf(counts, prefs)).toEqual({
+			titlePrefix: '(3)',
+			dot: DOT_COLORS.blue,
+			dotCount: 3,
+			badge: 7
+		});
+	});
+
+	it('shows no dot when its counts are zero, and no number for a plain dot', () => {
+		const quiet = { ...counts, prYou: 0 };
+		expect(tabStatusOf(quiet, prefs).dot).toBeNull();
+		const plainDot = { ...prefs, favicon: { ...prefs.favicon, style: 'dot' as const } };
+		expect(tabStatusOf(counts, plainDot).dotCount).toBeUndefined();
+	});
+
+	it('shows nothing where it is turned off', () => {
+		const off: TabStatusPrefs = {
+			title: { ...prefs.title, enabled: false },
+			favicon: { ...prefs.favicon, enabled: false },
+			appBadge: { ...prefs.appBadge, enabled: false }
+		};
+		expect(tabStatusOf(counts, off)).toMatchObject({ titlePrefix: '', dot: null, badge: 0 });
+	});
+});
+
+describe('what counts', () => {
+	it('counts an item as unread only while it is in the list', () => {
+		expect(countsAsUnread({ unread: true, dismissed: false })).toBe(true);
+		expect(countsAsUnread({ unread: false, dismissed: false })).toBe(false);
+		expect(countsAsUnread({ unread: true, dismissed: true })).toBe(false);
+		expect(countsAsUnread({ unread: true, dismissed: false, keptAfterClose: true })).toBe(false);
+	});
+
+	it('counts the alerts sent after you last opened the history', () => {
+		const alerts = [{ sentAt: 100 }, { sentAt: 200 }, { sentAt: 300 }];
+		expect(newAlertCount(alerts, 200)).toBe(1);
+		expect(newAlertCount(alerts, 0)).toBe(3);
+		expect(newAlertCount(undefined, 0)).toBe(0);
 	});
 });

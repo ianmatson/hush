@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ABOUT } from '$lib/about';
-import { DOCS, docPath, renderMarkdown } from '$lib/docs';
-import { LAST_CHECKED, comparePath } from '.';
+import { LAST_CHECKED } from '$lib/site';
+import { brokenLinksOf } from '$lib/site-links';
+import { pagesOf } from '$lib/site-pages';
+import { comparePath } from '.';
 import { COMPARE, COMPARE_INDEX } from './content';
 
 const sectionTitles = (markdown: string) =>
 	[...markdown.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
-
-const anchorsOf = (markdown: string) =>
-	new Set([...renderMarkdown(markdown).html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
 
 describe('compare pages', () => {
 	it('name GitHub notifications in their title or description', () => {
@@ -51,22 +49,6 @@ describe('compare pages', () => {
 	});
 
 	it('link only to pages and sections that exist', () => {
-		const pages = [
-			...DOCS.map((d) => ({ path: docPath(d), markdown: d.markdown })),
-			...ABOUT.map((p) => ({ path: `/${p.slug}`, markdown: p.markdown })),
-			...COMPARE.map((p) => ({ path: comparePath(p), markdown: p.markdown })),
-			{ path: COMPARE_INDEX.path, markdown: COMPARE_INDEX.markdown }
-		];
-		const anchors = new Map(pages.map((p) => [p.path, anchorsOf(p.markdown)]));
-		const comparisons = pages.filter((p) => p.path.startsWith(COMPARE_INDEX.path));
-		for (const page of comparisons)
-			for (const [, href] of renderMarkdown(page.markdown).html.matchAll(/ href="([^"]+)"/g)) {
-				if (/^https:\/\//.test(href)) continue;
-				const [path, hash] = href.split('#');
-				const target = path || page.path;
-				expect(anchors.has(target), `${page.path} links to ${href}`).toBe(true);
-				if (hash)
-					expect(anchors.get(target)!.has(hash), `${page.path} links to ${href}`).toBe(true);
-			}
+		for (const page of pagesOf('compare')) expect(brokenLinksOf(page), page.path).toEqual([]);
 	});
 });

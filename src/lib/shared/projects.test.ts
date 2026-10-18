@@ -5,7 +5,7 @@ import {
 	lacksProjectScope,
 	projectAccessOf,
 	statusColor,
-	statusName
+	statusOf
 } from './projects';
 import { searchIsUnscoped, sectionsFor } from './item-views';
 
@@ -78,9 +78,9 @@ describe('status', () => {
 	};
 
 	it('names the selected option', () => {
-		expect(statusName(status)).toBe('This week');
-		expect(statusName({ ...status, optionId: null })).toBeNull();
-		expect(statusName(null)).toBeNull();
+		expect(statusOf(status)?.name).toBe('This week');
+		expect(statusOf({ ...status, optionId: null })).toBeNull();
+		expect(statusOf(null)).toBeNull();
 	});
 
 	it('maps GitHub option colours to mark colours', () => {

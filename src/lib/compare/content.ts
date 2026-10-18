@@ -1,11 +1,12 @@
-import { readPage } from '$lib/docs';
+import { loadOrderedPages, type MarkdownPage } from '$lib/docs';
+import { LAST_CHECKED } from '$lib/site';
 import {
 	COMPARE_ORDER,
 	COMPARE_OVERVIEW,
+	COMPARE_PATH,
 	HUSH_OVERVIEW,
-	LAST_CHECKED,
-	type CompareOverview,
-	type ComparePage
+	comparePath,
+	type CompareOverview
 } from '.';
 
 const FILES = import.meta.glob('./pages/*.md', {
@@ -14,19 +15,7 @@ const FILES = import.meta.glob('./pages/*.md', {
 	eager: true
 }) as Record<string, string>;
 
-export const COMPARE: ComparePage[] = COMPARE_ORDER.map((slug) => {
-	const file = `./pages/${slug}.md`;
-	if (!(file in FILES))
-		throw new Error(`compare: COMPARE_OVERVIEW lists ${file}, which does not exist`);
-	return { slug, ...readPage(`compare: ${slug}.md`, FILES[file]) };
-});
-{
-	const listed = new Set(COMPARE_ORDER.map((s) => `./pages/${s}.md`));
-	const unlisted = Object.keys(FILES).filter((f) => !listed.has(f));
-	if (unlisted.length) throw new Error(`compare: not in COMPARE_OVERVIEW: ${unlisted.join(', ')}`);
-}
-
-export const compareBySlug = (s: string) => COMPARE.find((p) => p.slug === s);
+export const COMPARE: MarkdownPage[] = loadOrderedPages(FILES, COMPARE_ORDER, 'compare');
 
 const overviewRow = (o: CompareOverview, link: string) =>
 	`| ${link} | ${o.kind} | ${o.price} | ${o.openSource} | ${o.chooseItFor} |`;
@@ -38,9 +27,9 @@ const OTHER_TOOLS = `- **[DevHub](https://github.com/devhubapp/devhub)**: column
 - **[Axolo](https://axolo.co/pricing)** and **[PullFlow](https://pullflow.com/pricing)**: pull request conversations in Slack (and VS Code, for PullFlow), for teams.
 - **[Meteorite](https://github.com/nickzuber/meteorite)**: a web app that scores notifications by importance. Its last commit was in March 2023.`;
 
-export const COMPARE_INDEX: ComparePage & { path: string } = {
+export const COMPARE_INDEX: MarkdownPage & { path: string } = {
 	slug: '',
-	path: '/compare',
+	path: COMPARE_PATH,
 	title: 'GitHub notification and pull request tools compared',
 	description:
 		'Hush next to GitHub’s own notifications, Gitify, Octobox, Graphite, gh-dash, Neat, Notifier for GitHub, and gh-hush: what each does well, and who it suits.',
@@ -57,7 +46,7 @@ Each comparison below lists where the other tool is better, where Hush is better
 | Tool | What it is | Price | Open source | Choose it for |
 | --- | --- | --- | --- | --- |
 ${overviewRow(HUSH_OVERVIEW, '**Hush**')}
-${COMPARE_ORDER.map((slug) => overviewRow(COMPARE_OVERVIEW[slug], `[${COMPARE_OVERVIEW[slug].name}](/compare/${slug})`)).join('\n')}
+${COMPARE_ORDER.map((slug) => overviewRow(COMPARE_OVERVIEW[slug], `[${COMPARE_OVERVIEW[slug].name}](${comparePath({ slug })})`)).join('\n')}
 
 ## How to choose
 

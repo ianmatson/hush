@@ -14,20 +14,16 @@
 			<a href="mailto:{SUPPORT_EMAIL}">Support</a>
 			<a href="{APP_URL}/login">Sign in</a>
 		</nav>
-		{#if GUIDE_PAGES.length > 0}
-			<nav aria-label="Guides">
-				{#each GUIDE_PAGES as link (link.href)}
-					<a href={link.href}>{link.label}</a>
-				{/each}
-			</nav>
-		{/if}
-		{#if COMPARE_PAGES.length > 0}
-			<nav aria-label="Compare">
-				{#each COMPARE_PAGES as link (link.href)}
-					<a href={link.href}>{link.label}</a>
-				{/each}
-			</nav>
-		{/if}
+		<nav aria-label="Guides">
+			{#each GUIDE_PAGES as link (link.href)}
+				<a href={link.href}>{link.label}</a>
+			{/each}
+		</nav>
+		<nav aria-label="Compare">
+			{#each COMPARE_PAGES as link (link.href)}
+				<a href={link.href}>{link.label}</a>
+			{/each}
+		</nav>
 	</div>
 </footer>
 

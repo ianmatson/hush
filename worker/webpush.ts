@@ -1,5 +1,6 @@
 // Web Push with only WebCrypto: RFC 8291 (aes128gcm payload encryption) + RFC 8292 (VAPID).
-import { b64urlDecode, b64urlEncode } from './crypto';
+import { b64urlDecode, b64urlEncode } from '../src/lib/shared/bytes';
+import { sha256 } from './crypto';
 
 const enc = new TextEncoder();
 
@@ -161,8 +162,7 @@ export interface PushMessage {
 const TOPIC_MAX_LENGTH = 32;
 
 async function pushTopic(tag: string): Promise<string> {
-	const digest = await crypto.subtle.digest('SHA-256', enc.encode(tag));
-	return b64urlEncode(digest).slice(0, TOPIC_MAX_LENGTH);
+	return (await sha256(tag)).slice(0, TOPIC_MAX_LENGTH);
 }
 
 /** Send one push. Returns the push service's HTTP status (404/410 = subscription is gone). */

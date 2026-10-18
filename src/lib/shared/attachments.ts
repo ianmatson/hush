@@ -1,8 +1,10 @@
+import { hasWritePermission } from './actions';
+
 export type AttachmentKind = 'image' | 'video';
 
 const MB = 1024 * 1024;
 
-export const ATTACHMENT_TYPES = {
+const ATTACHMENT_TYPES = {
 	'image/png': 'image',
 	'image/jpeg': 'image',
 	'image/gif': 'image',
@@ -20,19 +22,17 @@ export const MAX_ATTACHMENT_BYTES: Record<AttachmentKind, number> = {
 	video: 100 * MB
 };
 
-export const MAX_ATTACHMENT_NAME = 255;
+const MAX_ATTACHMENT_NAME = 255;
 
 export const ATTACHMENT_ACCEPT = Object.keys(ATTACHMENT_TYPES).join(',');
 
 const ATTACHMENT_FORMATS = 'PNG, JPEG, GIF, WebP, SVG, MP4, MOV, and WebM';
 
-const WRITE_PERMISSIONS = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
-
 export const ATTACH_NEEDS_WRITE =
 	'GitHub lets you attach files only in repositories you can push to.';
 
 export function canAttach(permission: string | null): boolean {
-	return permission === null || WRITE_PERMISSIONS.has(permission);
+	return permission === null || hasWritePermission(permission);
 }
 
 export function attachmentKind(type: string): AttachmentKind | null {

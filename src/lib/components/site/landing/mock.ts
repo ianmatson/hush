@@ -4,7 +4,3 @@ export interface MockPerson {
 	hue: number;
 	avatar?: string;
 }
-
-export type Signal = 'review' | 'fail' | 'merge' | 'reply' | 'warn';
-
-export const signalColor = (signal: Signal) => `var(--signal-${signal})`;

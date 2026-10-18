@@ -22,7 +22,8 @@ describe('public dashboard payload', () => {
 			{
 				dashboard: async () => data,
 				account: async () => ({ login: 'reviewer' }),
-				all: () => [],
+				allIn: () => [],
+				itemMarks: () => new Map(),
 				sinceYouLooked: () => new Map()
 			}
 		);
@@ -31,5 +32,30 @@ describe('public dashboard payload', () => {
 		expect(result).not.toHaveProperty('projectErrors');
 		expect(result.errors).toEqual(['Project failed']);
 		expect(data.sourceItems).toEqual([]);
+	});
+});
+
+describe('item marks', () => {
+	const item = { id: 'o/r#1', updatedAt: '2026-10-17T00:00:00Z' };
+	type Data = InstanceType<typeof PollerData>;
+
+	it.each<[string, (poller: Data) => Promise<unknown>]>([
+		['snooze', (poller) => poller.snoozeItems([item], {})],
+		['unsnooze or unmute', (poller) => poller.unsnoozeItems([item.id])],
+		['mute', (poller) => poller.muteItems([item.id])],
+		['mark unread', (poller) => poller.markUnseen([item.id])]
+	])('tell the other open tabs to refetch after %s', async (_, write) => {
+		const broadcast = vi.fn();
+		const poller = Object.assign(Object.create(PollerData.prototype) as Data, {
+			broadcast,
+			run: () => 1,
+			runIn: () => 1,
+			transaction: (action: () => void) => action()
+		});
+		await write(poller);
+		expect(broadcast.mock.calls).toEqual([
+			[{ type: 'dash', kind: 'pr' }],
+			[{ type: 'dash', kind: 'issue' }]
+		]);
 	});
 });

@@ -1,11 +1,12 @@
 import { PRICING_NOTE } from '$lib/pricing';
+import { htmlToPlainText } from '$lib/shared/html';
 import { REPO_URL, SHORT_NAME, SITE_NAME, SITE_URL } from '$lib/site';
 
 export type JsonLd = Record<string, unknown>;
 
 const SCHEMA_CONTEXT = 'https://schema.org';
 
-export const SOFTWARE_DESCRIPTION =
+const SOFTWARE_DESCRIPTION =
 	'Hush for GitHub is an open-source web app for the pull requests and issues that you work on. Each view is a GitHub search that stays live, grouped by your role, status, a project board, or your own sections. Hush shows whose turn it is on each item and pushes only the facts that you choose.';
 
 export function websiteData(): JsonLd {
@@ -43,25 +44,6 @@ export function softwareData(): JsonLd {
 export interface FaqItem {
 	question: string;
 	answerHtml: string;
-}
-
-const HTML_TAG = /<[^>]*>/g;
-const HTML_ENTITY = /&(?:amp|lt|gt|quot|#39|nbsp);/g;
-const HTML_ENTITIES: Record<string, string> = {
-	'&amp;': '&',
-	'&lt;': '<',
-	'&gt;': '>',
-	'&quot;': '"',
-	'&#39;': "'",
-	'&nbsp;': ' '
-};
-
-export function htmlToPlainText(html: string): string {
-	return html
-		.replace(HTML_TAG, '')
-		.replace(HTML_ENTITY, (entity) => HTML_ENTITIES[entity])
-		.replace(/\s+/g, ' ')
-		.trim();
 }
 
 export function faqData(items: FaqItem[]): JsonLd {

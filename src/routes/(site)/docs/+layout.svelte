@@ -1,25 +1,21 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { DOCS, NAV, docPath } from '$lib/docs';
+	import { DOC_GROUPS, docPath, navTitle } from '$lib/docs';
 
 	// Plain HTML: the menu is a <details>, so it works with no JavaScript.
 	let { children } = $props();
-	const groups = NAV.map((g) => ({
-		group: g.group,
-		pages: g.pages.map((s) => DOCS.find((d) => d.slug === s)!)
-	}));
 	const here = $derived(page.url.pathname.replace(/\/$/, '') || '/docs');
 </script>
 
 {#snippet list()}
-	{#each groups as g (g.group)}
+	{#each DOC_GROUPS as g (g.group)}
 		<div class="group">
 			<p>{g.group}</p>
 			<ul>
 				{#each g.pages as d (d.slug)}
 					<li>
 						<a href={docPath(d)} aria-current={here === docPath(d) ? 'page' : undefined}
-							>{d.slug ? d.title : 'Overview'}</a
+							>{navTitle(d)}</a
 						>
 					</li>
 				{/each}

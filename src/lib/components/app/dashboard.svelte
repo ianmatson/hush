@@ -12,7 +12,7 @@
 		UNTIL_NEW_ACTIVITY,
 		copyLinks,
 		markItemsSeen,
-		patchDashItems,
+		pinItems,
 		setItemsRead,
 		snoozeItems,
 		toggleItemsRead,
@@ -26,7 +26,7 @@
 	import SnoozeSheet from './snooze-sheet.svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
-	import { commandFor, keysOf } from '$lib/keys.svelte';
+	import { commandFor, ignoreKey } from '$lib/keys.svelte';
 	import { itemPagePath } from '$lib/shared/item-page';
 	import { goto } from '$app/navigation';
 	import { flip } from 'svelte/animate';
@@ -35,7 +35,7 @@
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, queryClient, refetchUnlessLive, setSettings } from '$lib/queries';
+	import { dashQuery, keys, queryClient } from '$lib/queries';
 	import { applySettings } from '$lib/save-settings';
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
@@ -109,7 +109,6 @@
 	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import Pencil from '@lucide/svelte/icons/pencil';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
@@ -133,10 +132,10 @@
 		return options.find((k) => k === asked) ?? options[0] ?? 'pr';
 	}
 	let showing = $state<Showing>(readShowing(untrack(() => view)));
+	const showParam = $derived(page.url.searchParams.get('show'));
 	$effect(() => {
-		const v = view;
-		void page.url.searchParams.get('show');
-		untrack(() => (showing = readShowing(v)));
+		void showParam;
+		untrack(() => (showing = readShowing(view)));
 	});
 	function show(next: Showing) {
 		showing = next;
@@ -185,12 +184,6 @@
 	);
 	const loadError = $derived(shownQueries.find((q) => q.isError)?.error ?? null);
 	const pending = $derived(shownQueries.some((q) => q.isPending));
-	const dashKeys = (k: DashKind[] = viewKinds(view)) => k.map((x) => keys.dash(x));
-	const cancelDash = () =>
-		Promise.all(dashKeys().map((queryKey) => queryClient.cancelQueries({ queryKey })));
-	const invalidateDash = () =>
-		dashKeys().forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
-	const refetchDash = () => dashKeys().forEach((queryKey) => refetchUnlessLive(queryKey));
 	let refreshing = $state(false);
 	let categoryFilter = $state<CategoryFilter[]>([]);
 	let showSnoozed = $state(false);
@@ -320,7 +313,8 @@
 	);
 	const order = $derived(navigable.map((i) => i.id));
 	const selectedIndex = $derived(navigable.findIndex((i) => i.id === selectedId));
-	const byId = (id: string) => data?.items.find((i) => i.id === id);
+	const itemsById = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])));
+	const byId = (id: string) => itemsById.get(id);
 
 	// --- Peek: one panel for the app (lib/peek.svelte.ts); follows the cursor while this page
 	// owns it ------------------------------------------------------------------------------
@@ -351,13 +345,18 @@
 	});
 	$effect(() => {
 		void showing;
-		const v = view;
 		untrack(() => {
 			categoryFilter = [];
 			selectedId = null;
 			sel.clear();
 			groupMotion = false;
-			collapsedChoice = readCollapsed(v);
+		});
+	});
+	$effect(() => {
+		void groupBy;
+		untrack(() => {
+			groupMotion = false;
+			collapsedChoice = readCollapsed(view);
 		});
 	});
 	// Back on the page that owns the peek (after another tab): the cursor goes to the item it
@@ -520,8 +519,13 @@
 	// group) and peek it.
 	$effect(() => {
 		const r = palette.peekRequest;
-		if (!r || r.page !== 'view' || r.view !== view.id || !kinds.includes(r.kind) || !data) return;
-		const item = data.items.find((x) => x.id === r.id);
+		if (!r || r.page !== 'view' || r.view !== view.id) return;
+		if (!kinds.includes(r.kind)) {
+			if (viewKinds(view).includes(r.kind)) untrack(() => (showing = r.kind));
+			return;
+		}
+		if (!data) return;
+		const item = byId(r.id);
 		untrack(() => {
 			palette.peekRequest = null;
 			if (!item) return;
@@ -560,56 +564,16 @@
 		const settings = me.data?.settings;
 		if (!settings) return;
 		const views = settings.views.map((v) => (v.id === view.id ? { ...v, ...patch } : v));
-		setSettings({ ...settings, views });
 		try {
 			await applySettings({ views });
 		} catch (err) {
-			setSettings(settings);
 			toast.error((err as Error).message);
-		}
-	}
-
-	async function pin(
-		ids: string[],
-		categoryPin: CategoryPin,
-		patch: (x: DashItem) => DashItem,
-		message: string
-	) {
-		await cancelDash();
-		patchDashItems(new Set(ids), patch);
-		sel.clear();
-		try {
-			await api.pinItems(ids, categoryPin);
-			toast(message, {
-				description: ids.length === 1 ? byId(ids[0])?.title : `${ids.length} ${noun}`
-			});
-			refetchDash();
-		} catch (err) {
-			toast.error((err as Error).message);
-			invalidateDash();
 		}
 	}
 
 	function pinCategory(ids: string[], categoryPin: CategoryPin) {
-		const group = categoryGroups.find((g) => g.id === categoryPin.group);
-		const chosen = group?.categories.find((c) => c.id === categoryPin.category);
-		if (!group || !chosen)
-			return pin(ids, categoryPin, (x) => x, 'Hush chooses the category again');
-		const inGroup = new Set(group.categories.map((c) => c.id));
-		const replace = (list: string[] | undefined) => [
-			...(list ?? []).filter((c) => !inGroup.has(c)),
-			chosen.id
-		];
-		return pin(
-			ids,
-			categoryPin,
-			(x) => ({
-				...x,
-				categories: replace(x.categories),
-				pinnedCategories: replace(x.pinnedCategories)
-			}),
-			`${group.name}: ${chosen.name}`
-		);
+		sel.clear();
+		return pinItems(ids, categoryPin, categoryGroups);
 	}
 
 	function leaveRows(set: Set<string>) {
@@ -685,12 +649,7 @@
 	}
 
 	function onKey(e: KeyboardEvent) {
-		const target = e.target;
-		if (
-			target instanceof Element &&
-			target.closest('input, textarea, [contenteditable], [role="menu"], [role="dialog"]')
-		)
-			return;
+		if (ignoreKey(e)) return;
 		const cmd = commandFor(e, VIEW_KEY_SCOPES);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
@@ -1162,7 +1121,6 @@
 		bind:open={() => snoozeSheetIds !== null, (open) => !open && (snoozeSheetIds = null)}
 		subjects={ids.map((x) => byId(x)?.kind ?? 'other')}
 		disabled={one ? alreadyTrue(one) : []}
-		untilNewActivity
 		onpick={(choice) => snooze(ids, choice)}
 	/>
 {/if}

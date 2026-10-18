@@ -134,6 +134,32 @@ describe('push facts', () => {
 		expect(titles(before, { ...before, lastComment: comment('bob') })).toEqual([]);
 	});
 
+	it('does not push a review by a bot as a reply, an approval, or a change request', () => {
+		const mine = facts({ author: ME, ci: 'SUCCESS' });
+		const copilot = (state: string) => ({
+			author: 'copilot-pull-request-reviewer',
+			authorIsBot: true,
+			at: JUST_NOW,
+			state
+		});
+		for (const state of ['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED'])
+			expect(titles(mine, { ...mine, latestReview: copilot(state) })).toEqual([]);
+		const storedBeforeBotReviewsWereMarked = {
+			author: 'dependabot[bot]',
+			at: JUST_NOW,
+			state: 'COMMENTED'
+		};
+		expect(titles(mine, { ...mine, latestReview: storedBeforeBotReviewsWereMarked })).toEqual([]);
+	});
+
+	it('pushes a reply that a bot comment came after', () => {
+		const mine = facts({ author: ME, lastComment: comment(ME, LONG_AGO) });
+		const botComment = { ...comment('ci-bot'), authorIsBot: true };
+		expect(
+			titles(mine, { ...mine, previousComment: comment('bob'), lastComment: botComment })
+		).toEqual(['replied: bob replied']);
+	});
+
 	it('pushes when you are assigned', () => {
 		const issue = facts({ kind: 'issue' });
 		expect(titles(issue, { ...issue, assignees: ['ian'] })).toEqual(['assigned: Assigned to you']);
@@ -169,6 +195,13 @@ describe('item pushes', () => {
 		expect(push(mark({ updatedAt: MUTED_AT }))).toBeNull();
 		expect(push(mark({ snoozedUntil: NOW + 3600_000 }))).toBeNull();
 		expect(push(mark({ snoozedUntil: NOW - 1 }))).toEqual({
+			reason: 'ci-failed',
+			title: 'CI failed'
+		});
+	});
+
+	it('still pushes an item that sleeps until new activity', () => {
+		expect(push(mark({ updatedAt: mine.updatedAt }))).toEqual({
 			reason: 'ci-failed',
 			title: 'CI failed'
 		});

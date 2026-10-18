@@ -1,7 +1,7 @@
 import { keys, queryClient } from './queries';
 import { categoryQueryName, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/rules';
-import { compileExpr, exprMatches, parseExpr, type QueryExpr } from './shared/query';
+import { compileExpr, exprMatches, parseExpr, usesAbout } from './shared/query';
 import type { DashItem, DashProject, DashResponse, RuleMatch, Settings } from './shared/types';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { ValueSuggestion, ValueSuggestions } from './shared/rule-builder';
@@ -13,25 +13,21 @@ function withoutAbout(when: RuleMatch): RuleMatch {
 	return rest;
 }
 
-const usesAbout = (expr: QueryExpr): boolean =>
-	expr.kind === 'match'
-		? !!expr.when.about?.length
-		: expr.kind === 'not'
-			? usesAbout(expr.part)
-			: expr.parts.some(usesAbout);
+type DashAnswers = (DashResponse | undefined)[];
 
-export function cachedItems(): DashItem[] {
-	return (['pr', 'issue'] as const).flatMap(
-		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.items ?? []
-	);
-}
+export const itemsIn = (answers: DashAnswers): DashItem[] => answers.flatMap((d) => d?.items ?? []);
 
-export function cachedProjects(): DashProject[] {
-	const all = (['pr', 'issue'] as const).flatMap(
-		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.projects ?? []
-	);
+export function projectsIn(answers: DashAnswers): DashProject[] {
+	const all = answers.flatMap((d) => d?.projects ?? []);
 	return [...new Map(all.map((p) => [p.key, p])).values()];
 }
+
+const cachedItems = (): DashItem[] =>
+	itemsIn(
+		(['pr', 'issue'] as const).map((kind) =>
+			queryClient.getQueryData<DashResponse>(keys.dash(kind))
+		)
+	);
 
 export function previewItems(
 	query: string,
@@ -63,9 +59,9 @@ const plain = (values: string[]): ValueSuggestion[] =>
 	values.map((value) => ({ value, label: value }));
 
 export function ruleSuggestions(
-	settings: Pick<Settings, 'categoryGroups'> | undefined
+	settings: Pick<Settings, 'categoryGroups'> | undefined,
+	items: DashItem[] = cachedItems()
 ): ValueSuggestions {
-	const items = cachedItems();
 	const repos = uniq(items.map((i) => i.repo));
 	return {
 		repo: plain([...uniq(repos.map((r) => `${r.split('/')[0]}/*`)), ...repos]),

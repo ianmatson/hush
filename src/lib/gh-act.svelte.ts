@@ -11,11 +11,13 @@ import type { MergeMethod, PeekDTO, PeekEntry } from '$lib/shared/types';
  */
 export const acting = $state<{ id: GhActionId | null }>({ id: null });
 
+const STILL_MERGING = 'GitHub is still merging';
+
 export async function sendAction(
 	p: PeekDTO,
 	id: GhActionId,
 	opts: { body?: string; method?: MergeMethod } = {}
-): Promise<boolean> {
+): Promise<{ stillMerging: boolean } | null> {
 	acting.id = id;
 	if (GH_ACTIONS[id].endsItem) releasePeekHold();
 	else holdPeekOn(p.repo, p.number);
@@ -35,10 +37,10 @@ export async function sendAction(
 		if (!entryIsTheOnlyPeekChange)
 			queryClient.invalidateQueries({ queryKey: keys.peek(p.repo, p.number) });
 		refetchUnlessLive(keys.dashAll);
-		return true;
+		return { stillMerging: res.stillMerging };
 	} catch (err) {
 		toast.error(`${GH_ACTIONS[id].label}: ${(err as Error).message}`);
-		return false;
+		return null;
 	} finally {
 		acting.id = null;
 	}
@@ -60,10 +62,16 @@ export async function sendWithUndo(
 	id: GhActionId,
 	opts: { body?: string; method?: MergeMethod } = {}
 ): Promise<boolean> {
-	if (!(await sendAction(p, id, opts))) return false;
+	const sent = await sendAction(p, id, opts);
+	if (!sent) return false;
+	const description = `${p.repo}#${p.number}`;
+	if (sent.stillMerging) {
+		toast(STILL_MERGING, { description });
+		return true;
+	}
 	const undo = GH_ACTIONS[id].undo;
 	toast.success(GH_ACTIONS[id].done, {
-		description: `${p.repo}#${p.number}`,
+		description,
 		...(undo ? { action: { label: 'Undo', onClick: () => void sendWithUndo(p, undo, opts) } } : {})
 	});
 	return true;

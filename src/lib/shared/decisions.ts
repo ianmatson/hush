@@ -1,15 +1,17 @@
+import { replyFromOthers } from './activity';
+import { requestedByName, sameLogin } from './logins';
 import { aboutTexts } from './query';
 import type { SubjectFacts } from './subject';
 import type { LastComment } from './types';
 
 export const YES_AT = 0.8;
-export const NO_AT = 0.2;
-export const URGENT_SCORE = 1.5;
+const NO_AT = 0.2;
+const URGENT_SCORE = 1.5;
 export const BODY_EXCERPT_CHARS = 500;
 export const MAX_SMART_CONDITIONS = 30;
-export const CHARS_PER_TOKEN = 4;
+const CHARS_PER_TOKEN = 4;
 
-export const URGENCY_LEVELS = [
+const URGENCY_LEVELS = [
 	'Routine: no time pressure',
 	'Soon: someone waits on it, or it should be done this week',
 	'Blocking: it blocks a release, other work, or users, or it is about an incident or an outage'
@@ -114,17 +116,10 @@ export function bodyExcerpt(bodyText: string | null | undefined): string {
 const recentComments = (s: SubjectFacts): LastComment[] =>
 	[s.previousComment, s.lastComment].filter((c): c is LastComment => !!c);
 
-const isMe = (login: string, me: string) => login.toLowerCase() === me.toLowerCase();
-
 export function newCommentsForYou(s: SubjectFacts, me: string): LastComment[] {
 	const recent = recentComments(s);
-	const afterMine = recent.map((c) => isMe(c.author, me)).lastIndexOf(true) + 1;
+	const afterMine = recent.map((c) => sameLogin(c.author, me)).lastIndexOf(true) + 1;
 	return recent.slice(afterMine).filter((c) => !c.authorIsBot);
-}
-
-function newestCommentIsFromAnotherPerson(s: SubjectFacts, me: string): boolean {
-	const c = s.lastComment;
-	return !!c && !c.authorIsBot && !isMe(c.author, me);
 }
 
 export function contentHash(s: SubjectFacts): string {
@@ -144,13 +139,13 @@ export function identityHash(s: SubjectFacts): string {
 
 function rolesOf(s: SubjectFacts, me: string): string[] {
 	const roles: string[] = [];
-	if (isMe(s.author, me)) roles.push('author');
-	if (s.assignees.some((a) => isMe(a, me))) roles.push('assignee');
-	if (s.reviewRequests.some((r) => !r.team && isMe(r.name, me))) roles.push('requested reviewer');
+	if (sameLogin(s.author, me)) roles.push('author');
+	if (s.assignees.some((a) => sameLogin(a, me))) roles.push('assignee');
+	if (requestedByName(s.reviewRequests, me)) roles.push('requested reviewer');
 	return roles;
 }
 
-export function decisionState(s: SubjectFacts, me: string): DecisionState {
+function decisionState(s: SubjectFacts, me: string): DecisionState {
 	return {
 		title: s.title,
 		repo: s.repo,
@@ -221,8 +216,7 @@ export function planDecisions(
 	const content = stored?.contentHash === hash ? stored : null;
 	const identityKnown = stored?.identityHash === idHash;
 	const questions: Record<string, DecisionQuestion> = {};
-	if (content?.reply === undefined && newestCommentIsFromAnotherPerson(s, me))
-		questions[REPLY] = replyQuestion(me);
+	if (content?.reply === undefined && replyFromOthers(s, me)) questions[REPLY] = replyQuestion(me);
 	if (content?.urgency === undefined) questions[URGENCY] = URGENCY_QUESTION;
 	const identity = identityKnown ? stored : null;
 	const aboutIds: Record<string, string> = {};

@@ -1,7 +1,13 @@
 <script lang="ts">
-	import CompareArticle from '$lib/components/site/compare-article.svelte';
+	import CollectionArticle from '$lib/components/site/collection-article.svelte';
 
 	let { data } = $props();
 </script>
 
-<CompareArticle page={data.page} />
+<CollectionArticle
+	page={data.page}
+	section="Compare"
+	type="Article"
+	moreTitle="More comparisons"
+	othersLayout="pills"
+/>

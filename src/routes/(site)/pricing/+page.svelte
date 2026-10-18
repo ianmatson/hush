@@ -1,20 +1,21 @@
 <script lang="ts">
 	import '@fontsource-variable/newsreader/opsz-italic.css';
 	import SiteMeta from '$lib/components/site/site-meta.svelte';
-	import { aboutBySlug } from '$lib/about';
-	import { INCLUDED, PLANS, PRICING_NOTE } from '$lib/pricing';
-	import { APP_URL, REPO_URL, SITE_NAME } from '$lib/site';
+	import { renderInlineMarkdown } from '$lib/docs';
+	import { INCLUDED, PLANS, PRICING_FAQ, PRICING_NOTE } from '$lib/pricing';
+	import { APP_URL, SITE_NAME } from '$lib/site';
+	import { sitePageAt } from '$lib/site-pages';
 
 	// The plans are placeholders (lib/pricing.ts): nothing can be bought yet.
-	const about = aboutBySlug('pricing')!;
+	const about = sitePageAt('/pricing');
 	const monthly = PLANS.find((p) => p.per === 'month')!;
 </script>
 
 <SiteMeta
 	title="Pricing · {SITE_NAME}"
 	description={about.description}
-	path="/pricing"
-	markdownPath="/pricing.md"
+	path={about.path}
+	markdownPath={about.markdownPath}
 />
 
 <div class="page">
@@ -56,32 +57,12 @@
 		<section class="faq">
 			<h2>Questions</h2>
 			<dl>
-				<div>
-					<dt>Why does Hush cost money?</dt>
-					<dd>
-						Hush checks GitHub for you every few minutes, all day, and keeps your lists on its
-						servers. That costs a little for each person. Hush has no ads and does not sell data, so
-						the price is the only thing that pays for it.
-					</dd>
-				</div>
-				<div>
-					<dt>What is free now?</dt>
-					<dd>Everything. Hush is free while it is in beta, and paid plans are not open yet.</dd>
-				</div>
-				<div>
-					<dt>Can I run Hush myself?</dt>
-					<dd>
-						Yes. Hush is <a href={REPO_URL} rel="noreferrer">open source</a>, and it runs on a free
-						Cloudflare account. The README says how to set it up.
-					</dd>
-				</div>
-				<div>
-					<dt>What happens to my data if I stop?</dt>
-					<dd>
-						<b>Delete account</b> in Settings deletes all of it at once. See
-						<a href="/privacy">Privacy</a>.
-					</dd>
-				</div>
+				{#each PRICING_FAQ as item (item.question)}
+					<div>
+						<dt>{item.question}</dt>
+						<dd>{@html renderInlineMarkdown(item.answerMarkdown)}</dd>
+					</div>
+				{/each}
 			</dl>
 		</section>
 	</div>
@@ -259,12 +240,12 @@
 		line-height: 1.65;
 		color: var(--muted-foreground);
 	}
-	dd a {
+	dd :global(a) {
 		color: var(--foreground);
 		text-decoration: underline;
 		text-underline-offset: 3px;
 	}
-	dd b {
+	dd :global(strong) {
 		font-weight: 550;
 		color: var(--foreground);
 	}

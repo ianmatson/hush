@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -34,6 +36,8 @@ jobs:
       - run: pnpm check
 
       - run: pnpm test
+
+      - run: pnpm lint
 
       - run: pnpm run deploy
         env:

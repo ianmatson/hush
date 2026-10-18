@@ -1,11 +1,14 @@
+import { DAY_MS, HOUR_MS } from './durations';
+
 /**
  * Sign-in sessions (worker/index.ts and worker/routes/auth.ts). A session ends 30 days after
  * sign-in, or after 7 days with no use, whichever comes first.
  */
 export const SESSION_DAYS = 30;
 export const SESSION_IDLE_DAYS = 7;
+export const SESSION_IDLE_MS = SESSION_IDLE_DAYS * DAY_MS;
 /** Hush writes a session's last use at most this often (a write per request would cost too much). */
-export const SESSION_TOUCH_MS = 60 * 60_000;
+export const SESSION_TOUCH_MS = HOUR_MS;
 
 /** "Chrome on macOS", from a User-Agent: for push devices and sessions. */
 export function deviceLabel(ua: string): string {

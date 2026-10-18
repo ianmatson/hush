@@ -5,7 +5,13 @@ import {
 	sortItems,
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
-import type { DashItem, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
+import type {
+	DashItem,
+	DashKind,
+	DashResponse,
+	ItemView,
+	Settings
+} from '../../src/lib/shared/types';
 import { dashFactsOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
 import { keptAfterChange, searchFindsOnlyOpen, stillKept } from '../../src/lib/shared/closed-items';
 import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
@@ -21,12 +27,14 @@ import type { ExpandedQuery } from '../../src/lib/shared/dashboard';
 import { boardCount, boardShort, itemStatuses } from '../projects';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { itemQueryFacts } from '../../src/lib/shared/categories';
-import { DASH_TTL, type Who } from './shared';
+import { sameLogin } from '../../src/lib/shared/logins';
+import { MINUTE_MS } from '../../src/lib/shared/durations';
+import { DASH_TTL, viewSearchesKey, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 import { sourceItemOf, withProjectStatuses } from './project-status';
 
-const RETRY_AFTER = 60_000;
+const RETRY_AFTER = MINUTE_MS;
 const MAX_LEFT_READS = 50;
 const NEW_ITEM_REASON = 'new-item';
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
@@ -44,33 +52,42 @@ async function findItems(token: string, queries: ExpandedQuery[]) {
 	]);
 	return {
 		hits: [...searches.hits, ...boards.hits],
-		failedSections: new Set([...(searches.failedSections ?? []), ...(boards.failedSections ?? [])]),
-		failedQueries: [
-			...(searches.failedQueries ??
-				searched.filter((query) => searches.failedSections?.has(query.section))),
-			...(boards.failedQueries ??
-				onBoards.filter((query) => boards.failedSections?.has(query.section)))
-		],
+		failedSections: new Set([...searches.failedSections, ...boards.failedSections]),
+		failedQueries: [...searches.failedQueries, ...boards.failedQueries],
 		errors: [...new Set([...searches.errors, ...boards.errors])].slice(0, 3)
 	};
 }
-const marks = (n: number) => Array(n).fill('?').join(',');
+
+type CachedDash = { sig: string; data: DashResponse };
+type BuildNeed = { sig: string; full: boolean; startedNoEarlierThan: number };
+type DashBuild = { sig: string; full: boolean; startedAt: number; done: Promise<DashResponse> };
+
+const buildCovers = (build: DashBuild, need: BuildNeed) =>
+	build.sig === need.sig &&
+	(build.full || !need.full) &&
+	build.startedAt >= need.startedNoEarlierThan;
+
+function dashSignature(kind: DashKind, settings: Settings): string {
+	const { dash, views } = settings;
+	return JSON.stringify([
+		sectionsFor(kind, views),
+		dash.excludedTeams,
+		dash.staleDays,
+		dash.hideOthersDrafts,
+		dash.hideBots
+	]);
+}
 
 /** The PR and issue dashboards, from saved searches, cached for 15 minutes. */
 export abstract class PollerDashboard extends PollerSync {
-	private dashInflight = new Map<DashKind, Promise<DashResponse>>();
+	private dashBuilds = new Map<DashKind, DashBuild>();
 	private dashRefreshing = new Map<DashKind, Promise<unknown>>();
 	/** After a failed refresh, the next one waits until then (no loop of failing requests). */
 	private dashRetryAt = new Map<DashKind, number>();
 
 	/** Live PR or issue dashboard from saved searches, cached for 15 minutes. */
 	dashboard(kind: DashKind, force = false): Promise<DashResponse> {
-		let p = this.dashInflight.get(kind);
-		if (!p) {
-			p = this.buildDashboard(kind, force).finally(() => this.dashInflight.delete(kind));
-			this.dashInflight.set(kind, p);
-		}
-		return p;
+		return this.buildDashboard(kind, force);
 	}
 
 	/**
@@ -120,12 +137,13 @@ export abstract class PollerDashboard extends PollerSync {
 		return out;
 	}
 
-	protected async rebuildTracked(kind: DashKind): Promise<void> {
-		await this.buildDashboard(kind, true, false);
+	protected async rebuildTracked(kind: DashKind, startedNoEarlierThan = 0): Promise<void> {
+		await this.buildDashboard(kind, true, false, startedNoEarlierThan);
 		this.broadcast({ type: 'dash', kind });
 	}
 
 	async rebuildBoards(): Promise<void> {
+		const boardsChangedAt = Date.now();
 		const who = await this.who();
 		if (!who) return;
 		const groupsByProject = who.settings.views.some((v) => projectKeyOf(v.groupBy));
@@ -133,7 +151,7 @@ export abstract class PollerDashboard extends PollerSync {
 			(kind) =>
 				groupsByProject || sectionsFor(kind, who.settings.views).some((s) => readsBoard(s.query))
 		);
-		await Promise.all(kinds.map((kind) => this.rebuildTracked(kind)));
+		await Promise.all(kinds.map((kind) => this.rebuildTracked(kind, boardsChangedAt)));
 	}
 
 	/**
@@ -143,27 +161,52 @@ export abstract class PollerDashboard extends PollerSync {
 	protected async buildDashboard(
 		kind: DashKind,
 		force: boolean,
-		full = force
+		full = force,
+		startedNoEarlierThan = 0
 	): Promise<DashResponse> {
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
+		const sig = dashSignature(kind, who.settings);
+		if (!force) {
+			const cached = await this.ctx.storage.get<CachedDash>(`dash:${kind}`);
+			if (cached?.sig === sig && cached.data.sourceItems) {
+				if (Date.now() - cached.data.fetchedAt < DASH_TTL) return cached.data;
+				// Old: answer with it now, and refresh behind it. Open pages update when it is done.
+				return this.refreshDashboard(kind) ? { ...cached.data, refreshing: true } : cached.data;
+			}
+		}
+		return this.sharedBuild(kind, who, { sig, full, startedNoEarlierThan });
+	}
+
+	private async sharedBuild(kind: DashKind, who: Who, need: BuildNeed): Promise<DashResponse> {
+		const running = this.dashBuilds.get(kind);
+		if (running && buildCovers(running, need)) return running.done;
+		if (running) {
+			await running.done.catch(() => {});
+			return this.sharedBuild(kind, who, need);
+		}
+		const build: DashBuild = {
+			sig: need.sig,
+			full: need.full,
+			startedAt: Date.now(),
+			done: this.runBuild(kind, who, need.sig, need.full).finally(() =>
+				this.dashBuilds.delete(kind)
+			)
+		};
+		this.dashBuilds.set(kind, build);
+		return build.done;
+	}
+
+	private async runBuild(
+		kind: DashKind,
+		who: Who,
+		sig: string,
+		full: boolean
+	): Promise<DashResponse> {
 		const { dash, views } = who.settings;
 		const sections = sectionsFor(kind, views);
-		const sig = JSON.stringify([
-			sections,
-			dash.excludedTeams,
-			dash.staleDays,
-			dash.hideOthersDrafts,
-			dash.hideBots
-		]);
 		const key = `dash:${kind}`;
-		const cached = await this.ctx.storage.get<{ sig: string; data: DashResponse }>(key);
-		if (!force && cached?.sig === sig && cached.data.sourceItems) {
-			if (Date.now() - cached.data.fetchedAt < DASH_TTL) return cached.data;
-			// Old: answer with it now, and refresh behind it. Open pages update when it is done.
-			return this.refreshDashboard(kind) ? { ...cached.data, refreshing: true } : cached.data;
-		}
-
+		const cached = await this.ctx.storage.get<CachedDash>(key);
 		const { teams, error: teamError } = await this.teams();
 		const { queries, skipped } = expandSections(sections, dash, teams);
 		const {
@@ -209,7 +252,7 @@ export abstract class PollerDashboard extends PollerSync {
 			if (!previous || hit.updatedAt > previous.updatedAt) latest.set(hit.key, hit);
 		}
 		const keys = [...latest.keys()];
-		const stored = this.storedFacts(keys);
+		const stored = this.storedSubjectFacts(keys);
 		const readKey = `dash:read:${kind}`;
 		const readAt = (await this.ctx.storage.get<Record<string, number>>(readKey)) ?? {};
 		const now = Date.now();
@@ -388,7 +431,7 @@ export abstract class PollerDashboard extends PollerSync {
 			.map((i) => ({ ...i, sections: i.sections.filter((id) => viewIds.has(id)) }))
 			.filter((i) => i.sections.length);
 		if (!left.length) return { items: [], read: [] };
-		const stored = this.storedFacts(left.map((i) => i.id));
+		const stored = this.storedSubjectFacts(left.map((i) => i.id));
 		const stillOpenAsFarAsKnown = left
 			.flatMap((i) => {
 				const s = stored.get(i.id);
@@ -445,7 +488,7 @@ export abstract class PollerDashboard extends PollerSync {
 	private async pushNewItems(who: Who, kind: DashKind, items: DashItem[], complete: boolean) {
 		const now = Date.now();
 		const initialized = (await this.ctx.storage.get<boolean>('initialized')) ?? false;
-		const searchesKey = (viewId: string) => `viewItemsFor:${viewId}:${kind}`;
+		const searchesKey = (viewId: string) => viewSearchesKey(viewId, kind);
 		const remembered = await this.ctx.storage.get<string>(
 			who.settings.views.map((v) => searchesKey(v.id))
 		);
@@ -468,7 +511,7 @@ export abstract class PollerDashboard extends PollerSync {
 			if (complete && !sameSearches) nowRemembered[searchesKey(v.id)] = searches;
 			if (!v.pushNew || !sameSearches || !initialized) continue;
 			for (const i of fresh)
-				if (i.author.toLowerCase() !== who.me.toLowerCase())
+				if (!sameLogin(i.author, who.me))
 					candidates.push({
 						itemKey: i.id,
 						reason: NEW_ITEM_REASON,
@@ -488,19 +531,5 @@ export abstract class PollerDashboard extends PollerSync {
 			});
 		if (Object.keys(nowRemembered).length) await this.ctx.storage.put(nowRemembered);
 		await this.deliver(candidates);
-	}
-
-	/** The stored facts of these PRs and issues ("owner/repo#123"). */
-	private storedFacts(keys: string[]): Map<string, SubjectFacts> {
-		const out = new Map<string, SubjectFacts>();
-		for (let i = 0; i < keys.length; i += 50) {
-			const chunk = keys.slice(i, i + 50);
-			for (const r of this.all<{ key: string; facts: string }>(
-				`SELECT key, facts FROM subjects WHERE key IN (${marks(chunk.length)})`,
-				...chunk
-			))
-				out.set(r.key, JSON.parse(r.facts) as SubjectFacts);
-		}
-		return out;
 	}
 }

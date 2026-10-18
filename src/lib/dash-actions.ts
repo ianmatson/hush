@@ -11,7 +11,7 @@ import type { CategoryGroup, DashItem, DashProject, GroupBy, ViewSort } from '$l
 import { groupByOptions } from '$lib/shared/grouping';
 import { SORT_BY, SORT_BY_ORDER, dirLabel, reversedSort, sortWithBy } from '$lib/shared/sorting';
 import type { SnoozeChoice } from '$lib/shared/item-snooze';
-import { UNTIL_NEW_ACTIVITY } from '$lib/item-actions';
+import { UNTIL_NEW_ACTIVITY, willMute } from '$lib/item-actions';
 import { COMMAND, type KeyScope } from '$lib/shared/keymap';
 import { alreadyTrue } from '$lib/shared/snooze';
 import { snoozeOptions } from '$lib/time';
@@ -37,8 +37,12 @@ const key = (id: string) => keysOf(id)[0];
 
 export const VIEW_KEY_SCOPES: KeyScope[] = ['list', 'item', 'dash'];
 
-export const anyUnread = (ctx: ItemActionContext, ids: string[]) =>
-	ids.some((id) => ctx.byId(id)?.unread);
+const anyUnread = (ctx: ItemActionContext, ids: string[]) => ids.some((id) => ctx.byId(id)?.unread);
+
+const itemsOf = (ctx: ItemActionContext, ids: string[]) => ids.flatMap((id) => ctx.byId(id) ?? []);
+
+const muteLabel = (ctx: ItemActionContext, ids: string[]) =>
+	willMute(itemsOf(ctx, ids)) ? 'Mute' : 'Unmute';
 
 export interface ItemActionContext {
 	byId(id: string): DashItem | undefined;
@@ -174,7 +178,6 @@ export function itemCommands(
 		const scope = COMMAND.get(id)?.scope;
 		return scope && keyScopes.includes(scope) ? key(id) : undefined;
 	};
-	const one = ids.length === 1 ? ctx.byId(ids[0]) : undefined;
 	const read = anyUnread(ctx, ids);
 	const snoozeCommands: PaletteCommand[] = snoozed
 		? [
@@ -205,7 +208,7 @@ export function itemCommands(
 	const markCommands: PaletteCommand[] = [
 		{
 			id: 'act:mute',
-			label: one?.muted ? 'Unmute' : 'Mute',
+			label: muteLabel(ctx, ids),
 			icon: BellOff,
 			shortcut: shortcut('dash.mute'),
 			keywords: ['hide', 'forever', 'ignore'],
@@ -227,14 +230,15 @@ export function itemCommands(
 		shortcut: shortcut('list.copy'),
 		run: () => ctx.copyLinks(ids)
 	};
-	const itemsInViews = ids.some((id) => ctx.byId(id));
+	const itemsInViews = itemsOf(ctx, ids).length > 0;
 	const commands = itemsInViews ? [...markCommands, copyCommand] : [copyCommand];
 	return commands.map((c) => ({ ...c, detail }));
 }
 
 /** The menu for these items, in your saved ctx.order, with only the items that apply. */
 export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
-	const one = ids.length === 1 ? ctx.byId(ids[0]) : undefined;
+	const selected = ids.map((x) => ctx.byId(x));
+	const one = ids.length === 1 ? selected[0] : undefined;
 	const n = (label: string) => (ids.length > 1 ? `${label} (${ids.length})` : label);
 	const item = (
 		key: string,
@@ -245,9 +249,9 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 		disabled = false
 	): MenuEntry => ({ type: 'item', key, label, icon, run, shortcut, disabled });
 	const groupMenu = (g: CategoryGroup): MenuEntry => {
-		const has = (c: string) => ids.every((x) => ctx.byId(x)?.categories?.includes(c));
-		const pinned = ids.some((x) =>
-			g.categories.some((c) => ctx.byId(x)?.pinnedCategories?.includes(c.id))
+		const has = (c: string) => selected.every((i) => i?.categories?.includes(c));
+		const pinned = selected.some((i) =>
+			g.categories.some((c) => i?.pinnedCategories?.includes(c.id))
 		);
 		return {
 			type: 'sub',
@@ -320,8 +324,7 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 					key: id,
 					label: n('Snooze'),
 					icon: AlarmClock,
-					untilNewActivity: true,
-					subjects: ids.map((x) => ctx.byId(x)?.kind ?? 'other'),
+					subjects: selected.map((i) => i?.kind ?? 'other'),
 					disabled: ids.length === 1 && one ? alreadyTrue(one) : [],
 					onpick: (choice) => ctx.snooze(ids, choice),
 					sheet: () => ctx.snoozeSheet(ids)
@@ -339,7 +342,7 @@ export function dashMenu(ctx: DashActionContext, ids: string[]): MenuEntry[] {
 			case 'mute':
 				return item(
 					id,
-					n(one?.muted || (!one && ctx.showSnoozed) ? 'Unmute' : 'Mute'),
+					n(muteLabel(ctx, ids)),
 					BellOff,
 					() => ctx.toggleMute(ids),
 					key('dash.mute')

@@ -2,6 +2,7 @@
 	import { flip } from 'svelte/animate';
 	import { fade } from 'svelte/transition';
 	import { buttonClass, cx } from './demo-ui';
+	import { demoKey } from './demo-keys';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import CircleX from '@lucide/svelte/icons/circle-x';
@@ -192,7 +193,7 @@
 								type="button"
 								class={buttonClass('ghost', 'icon-sm')}
 								aria-label="Snooze until new activity"
-								title="Snooze until new activity (S)"
+								title="Snooze until new activity ({demoKey('dash.snooze')})"
 								tabindex={actionTab}
 								onclick={() => onsnooze(item)}><AlarmClock /></button
 							>
@@ -200,7 +201,7 @@
 								type="button"
 								class={buttonClass('ghost', 'icon-sm')}
 								aria-label="Mute"
-								title="Mute (M)"
+								title="Mute ({demoKey('dash.mute')})"
 								tabindex={actionTab}
 								onclick={() => onmute(item)}><BellOff /></button
 							>
@@ -208,7 +209,7 @@
 								type="button"
 								class={buttonClass('ghost', 'icon-sm')}
 								aria-label="Copy link"
-								title="Copy link (C)"
+								title="Copy link ({demoKey('list.copy')})"
 								tabindex={actionTab}
 								onclick={() => oncopy(item)}><Link /></button
 							>

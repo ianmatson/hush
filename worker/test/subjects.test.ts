@@ -12,6 +12,7 @@ vi.mock('../projects', () => ({ itemStatuses: vi.fn() }));
 
 const { PollerSubjects } = await import('../poller/subjects');
 const { itemStatuses } = await import('../projects');
+const { fetchSubjects } = await import('../github');
 
 const now = new Date().toISOString();
 const who: Who = {
@@ -86,6 +87,7 @@ function harness() {
 		errors: []
 	};
 	const cache = new Map([['dash:pr', { sig: 'test', data }]]);
+	const broadcast = vi.fn();
 	const poller = Object.assign(Object.create(TestSubjects.prototype) as TestSubjects, {
 		ctx: {
 			storage: {
@@ -98,15 +100,15 @@ function harness() {
 		teams: vi.fn(async () => ({ teams: [] })),
 		placeItems: vi.fn((_who: Who, items: DashResponse['items']) => items),
 		storeTracked: vi.fn(),
-		broadcast: vi.fn(),
+		broadcast,
 		who: vi.fn(async () => who),
-		all: vi.fn(() => [{ key: item.id, facts: JSON.stringify(subject) }]),
+		allIn: vi.fn(() => [{ key: item.id, facts: JSON.stringify(subject) }]),
 		run: vi.fn(),
 		transaction: vi.fn((action: () => void) => action()),
 		decideSubjects: vi.fn(async () => {}),
 		decisionsOf: vi.fn(() => new Map())
 	});
-	return { poller, cache };
+	return { poller, cache, broadcast };
 }
 
 describe('subject dashboard updates', () => {
@@ -162,10 +164,28 @@ describe('subject dashboard updates', () => {
 			statusOf: new Map([['PR_1', { 'PostHog/7': 'done' }]]),
 			errors: []
 		});
-		const { poller, cache } = harness();
-		expect(await poller.recordFetched(subject)).toEqual({ changed: true });
+		const { poller, cache, broadcast } = harness();
+		await poller.recordFetched(subject);
 		expect(cache.get('dash:pr')!.data.items[0].projectStatus).toEqual({ 'PostHog/7': 'done' });
 		expect(cache.get('dash:pr')!.data.projects?.[0].statuses[0].name).toBe('Done');
+		expect(broadcast).toHaveBeenCalledWith({ type: 'dash', kind: 'pr' });
+	});
+
+	it.each([
+		['GitHub did not answer', { githubDidNotAnswer: new Set(['PostHog/posthog.com#1']) }, false],
+		['the item is gone', { deletedOrNoAccess: new Set(['PostHog/posthog.com#1']) }, true]
+	])('reports a recheck as done only when it read the item: %s', async (_, outcome, ok) => {
+		const { poller } = harness();
+		vi.mocked(fetchSubjects).mockResolvedValueOnce({
+			subjects: new Map(),
+			deletedOrNoAccess: new Set(),
+			githubDidNotAnswer: new Set(),
+			errors: ['GitHub returned 502.'],
+			...outcome
+		});
+		expect(await poller.recheck('PostHog/posthog.com', 1)).toEqual(
+			ok ? { ok: true } : { error: 'GitHub returned 502.' }
+		);
 	});
 
 	it('keeps board-sourced bots when an approval clears their review request', async () => {

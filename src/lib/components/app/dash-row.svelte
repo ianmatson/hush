@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { rowMenus } from '$lib/row-menus.svelte';
+	import { ciBadge } from '$lib/ci-badge';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
 	import Tip from './tip.svelte';
@@ -11,9 +11,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleX from '@lucide/svelte/icons/circle-x';
-	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import AlarmClockOff from '@lucide/svelte/icons/alarm-clock-off';
@@ -68,16 +65,15 @@
 		oncopy: (i: DashItem) => void;
 		onrowclick: (e: MouseEvent) => void;
 		ontoggle: (e: MouseEvent) => void;
-		/** The "⋯" menu on phones (the same list as the right-click menu). None on the drag ghost. */
 		menu?: () => MenuEntry[];
 		stack?: { position: number; size: number };
 	} = $props();
 
 	// A click on any row closes this row's menus (see row-menus.svelte.ts).
-	let menuOpen = $state([false]);
+	let menuOpen = $state(false);
 	$effect(() => {
 		void rowMenus.epoch;
-		untrack(() => (menuOpen = menuOpen.map(() => false)));
+		menuOpen = false;
 	});
 
 	let row = $state<HTMLElement | null>(null);
@@ -103,15 +99,7 @@
 	const reasonTone = $derived(i.state === 'open' ? turnTone[i.turn] : closedTone[i.state]);
 	const shownTime = $derived(i.state === 'open' ? i.updatedAt : closedTimeOf(i));
 
-	const ci = $derived(
-		i.ci === 'SUCCESS'
-			? { icon: CircleCheck, tone: 'text-signal-merge', label: 'Checks pass' }
-			: i.ci === 'FAILURE' || i.ci === 'ERROR'
-				? { icon: CircleX, tone: 'text-signal-fail', label: 'Checks fail' }
-				: i.ci === 'PENDING' || i.ci === 'EXPECTED'
-					? { icon: CircleDashed, tone: 'text-signal-warn', label: 'Checks running' }
-					: null
-	);
+	const ci = $derived(ciBadge(i.ci));
 
 	/** Labels added since you last looked (the row marks them). */
 	const newLabels = $derived(i.changes?.flatMap((c) => c.labels ?? []) ?? []);
@@ -348,7 +336,7 @@
 	<!-- Small screens: every action in one menu. -->
 	{#if menu}
 		<div class="shrink-0 self-center sm:hidden">
-			<DropdownMenu.Root bind:open={menuOpen[0]}>
+			<DropdownMenu.Root bind:open={menuOpen}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button

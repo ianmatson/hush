@@ -64,7 +64,7 @@ status:failure OR (review:changes_requested -author:@me)
 - `@me` means you, wherever a login goes: `author:@me`, `assignee:@me`, `review-requested:@me`.
 - `*` matches anything, and `?` one character: `repo:acme/*`, `author:dependabot*`. Only Hush reads wildcards.
 - Quote a value that has spaces or commas: `label:"good first issue"`.
-- `author:bots` and `from:bots` mean any bot. `-author:bots` and `-from:bots` mean a person.
+- `author:bots` and `from:bots` mean any bot. `-author:bots` and `-from:bots` mean a person. `author:alice,bots` means Alice or any bot.
 - Free words: in a view's search, GitHub's text search. In a rule, every word must be in the title, the repository, or the author. They are not case-sensitive.
 
 When a part has an error (an unknown word, a value that does not exist, a word that does not work in that place), Hush says so and does not save the query. While you type, suggestions show the words that work there, and their values; ↑ and ↓ move, Enter or Tab picks one, and Esc closes the list.
@@ -89,7 +89,7 @@ For example, `from:github-actions` finds the items where the newest thing is a c
 
 ## `review:` and `status:`
 
-- `review:none` is a pull request with no review yet. `review:required`, `review:approved`, and `review:changes_requested` follow the pull request's review decision.
+- `review:none` is a pull request with no review yet. `review:required`, `review:approved`, and `review:changes_requested` follow the pull request's review decision. When the repository does not require reviews, Hush uses the newest approvals and change requests instead (see [Whose turn it is](/docs/pull-requests-and-issues#whose-turn-it-is)).
 - `status:` is the CI of a pull request: `success`, `failure`, or `pending`.
 - Issues never match these words.
 
@@ -122,6 +122,7 @@ It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision mo
 | `assignee:@me repo:acme/web`       | Items assigned to you in one repository.                           |
 | `from:bots`                        | Items where a bot did the newest thing.                            |
 | `label:"good first issue" is:open` | Open items with this label.                                        |
+| `label:area/*`                     | Items with a label that starts with area/.                         |
 | `login timeout`                    | Items with both words in the title, the repository, or the author. |
 | `label:bug OR label:crash`         | Items with either label.                                           |
 | `repo:acme/* -author:@me`          | Everything in the acme org that you did not open.                  |

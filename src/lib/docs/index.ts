@@ -1,6 +1,7 @@
-import { Marked, type Tokens } from 'marked';
+import { Marked, type RendererObject, type Tokens } from 'marked';
 import { SITE_URL } from '$lib/site';
-import { REFERENCES, keyMention, slug } from './reference';
+import { escapeHtml, htmlToPlainText } from '$lib/shared/html';
+import { REFERENCES, VALUES, keyMention, slug } from './reference';
 
 /**
  * The docs (hush-gh.com/docs): one Markdown file per page in ./pages, in the order of NAV. A page
@@ -17,14 +18,15 @@ import { REFERENCES, keyMention, slug } from './reference';
  * Every page is also served as Markdown (/docs/<page>.md) and in /llms.txt, for agents.
  */
 
-export interface DocPage {
-	/** The URL part after /docs/; "" is the docs home. */
+export interface MarkdownPage {
 	slug: string;
 	title: string;
 	description: string;
-	group: string;
-	/** The page's Markdown, with the {{ref:…}} lines filled in. */
 	markdown: string;
+}
+
+export interface DocPage extends MarkdownPage {
+	group: string;
 }
 
 export const NAV: { group: string; pages: string[] }[] = [
@@ -67,54 +69,79 @@ export function readPage(
 			if (!make) throw new Error(`${file} asks for an unknown table {{ref:${ref}}}`);
 			return make(args.trim().split(/\s+/).filter(Boolean));
 		})
-		.replace(/\{\{key:([\w.]+)\}\}/g, (_, id: string) => keyMention(id, file));
+		.replace(/\{\{key:([\w.]+)\}\}/g, (_, id: string) => keyMention(id, file))
+		.replace(/\{\{value:([a-z-]+)\}\}/g, (_, name: string) => {
+			const value = VALUES[name];
+			if (value === undefined)
+				throw new Error(`${file} asks for an unknown value {{value:${name}}}`);
+			return value;
+		});
 	if (/\{\{/.test(markdown)) throw new Error(`${file} has a {{…}} that Hush does not know`);
 	return { title: meta.title, description: meta.description, markdown: markdown.trim() + '\n' };
 }
 
-function parse(file: string, raw: string, group: string): DocPage {
-	const name = file.replace(/^\.\/pages\//, '').replace(/\.md$/, '');
-	return { slug: name === 'index' ? '' : name, group, ...readPage(`docs: ${file}`, raw) };
+const INDEX_FILE_NAME = 'index';
+const pageFile = (slug: string) => `./pages/${slug || INDEX_FILE_NAME}.md`;
+
+export function loadOrderedPages(
+	files: Record<string, string>,
+	order: readonly string[],
+	label: string
+): MarkdownPage[] {
+	const pages = order.map((slug) => {
+		const file = pageFile(slug);
+		if (!(file in files)) throw new Error(`${label}: the list names ${file}, which does not exist`);
+		return { slug, ...readPage(`${label}: ${file}`, files[file]) };
+	});
+	const listed = new Set(order.map(pageFile));
+	const unlisted = Object.keys(files).filter((f) => !listed.has(f));
+	if (unlisted.length) throw new Error(`${label}: not in the list: ${unlisted.join(', ')}`);
+	return pages;
 }
 
+const groupOf = new Map(NAV.flatMap(({ group, pages }) => pages.map((s) => [s, group])));
+
 /** Every page, in the order of the navigation. */
-export const DOCS: DocPage[] = NAV.flatMap(({ group, pages }) =>
-	pages.map((s) => {
-		const file = `./pages/${s || 'index'}.md`;
-		if (!(file in FILES)) throw new Error(`docs: NAV lists ${file}, which does not exist`);
-		return parse(file, FILES[file], group);
-	})
-);
-{
-	const listed = new Set(DOCS.map((d) => `./pages/${d.slug || 'index'}.md`));
-	const extra = Object.keys(FILES).filter((f) => !listed.has(f));
-	if (extra.length) throw new Error(`docs: not in NAV: ${extra.join(', ')}`);
-}
+export const DOCS: DocPage[] = loadOrderedPages(
+	FILES,
+	NAV.flatMap((g) => g.pages),
+	'docs'
+).map((page) => ({ ...page, group: groupOf.get(page.slug)! }));
+
+export const DOC_GROUPS: { group: string; pages: DocPage[] }[] = NAV.map(({ group }) => ({
+	group,
+	pages: DOCS.filter((d) => d.group === group)
+}));
 
 export const docBySlug = (s: string) => DOCS.find((d) => d.slug === s);
 export const docPath = (d: Pick<DocPage, 'slug'>) => (d.slug ? `/docs/${d.slug}` : '/docs');
 /** The Markdown copy of a page. */
-export const docMarkdownPath = (d: Pick<DocPage, 'slug'>) => `/docs/${d.slug || 'index'}.md`;
-
-const esc = (s: string) =>
-	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const ENTITIES: Record<string, string> = {
-	'&amp;': '&',
-	'&lt;': '<',
-	'&gt;': '>',
-	'&quot;': '"',
-	'&#39;': "'"
-};
-
-const plainText = (html: string) =>
-	html.replace(/<[^>]+>/g, '').replace(/&(?:amp|lt|gt|quot|#39);/g, (e) => ENTITIES[e]);
+export const docMarkdownPath = (d: Pick<DocPage, 'slug'>) =>
+	`/docs/${d.slug || INDEX_FILE_NAME}.md`;
+export const docSourceFile = (d: Pick<DocPage, 'slug'>) =>
+	`src/lib/docs/pages/${d.slug || INDEX_FILE_NAME}.md`;
+const HOME_NAV_TITLE = 'Overview';
+export const navTitle = (p: Pick<MarkdownPage, 'slug' | 'title'>) =>
+	p.slug ? p.title : HOME_NAV_TITLE;
 
 export interface Rendered {
 	html: string;
 	/** The page's sections (its ## headings), for "On this page". */
 	toc: { id: string; text: string }[];
 }
+
+const LINK_RENDERER: RendererObject = {
+	link({ href, title, tokens }: Tokens.Link) {
+		const inner = this.parser.parseInline(tokens);
+		const external = /^https?:/.test(href) && !href.startsWith(SITE_URL);
+		return `<a href="${escapeHtml(href)}"${title ? ` title="${escapeHtml(title)}"` : ''}${external ? ' rel="noreferrer"' : ''}>${inner}</a>`;
+	}
+};
+
+export const renderInlineMarkdown = (markdown: string) =>
+	new Marked({ gfm: true, renderer: LINK_RENDERER }).parseInline(markdown, {
+		async: false
+	}) as string;
 
 /** Markdown as HTML. Headings get ids (and a link to themselves); tables can scroll sideways. */
 export function renderMarkdown(markdown: string): Rendered {
@@ -129,19 +156,15 @@ export function renderMarkdown(markdown: string): Rendered {
 				const n = used.get(id) ?? 0;
 				used.set(id, n + 1);
 				if (n) id = `${id}-${n + 1}`;
-				if (depth === 2) toc.push({ id, text: plainText(inner) });
+				if (depth === 2) toc.push({ id, text: htmlToPlainText(inner) });
 				return `<h${depth} id="${id}"><a class="anchor" href="#${id}">${inner}</a></h${depth}>\n`;
 			},
 			code({ text, lang }: Tokens.Code) {
 				const language = (lang ?? '').split(/\s+/)[0];
-				const label = language ? ` data-lang="${esc(language)}"` : '';
-				return `<pre${label}><code>${esc(text)}</code></pre>\n`;
+				const label = language ? ` data-lang="${escapeHtml(language)}"` : '';
+				return `<pre${label}><code>${escapeHtml(text)}</code></pre>\n`;
 			},
-			link({ href, title, tokens }: Tokens.Link) {
-				const inner = this.parser.parseInline(tokens);
-				const external = /^https?:/.test(href) && !href.startsWith(SITE_URL);
-				return `<a href="${esc(href)}"${title ? ` title="${esc(title)}"` : ''}${external ? ' rel="noreferrer"' : ''}>${inner}</a>`;
-			}
+			...LINK_RENDERER
 		}
 	});
 	const html = (marked.parse(markdown, { async: false }) as string)
@@ -158,4 +181,3 @@ export function asMarkdown(
 	const body = p.markdown.replace(/\]\(\//g, `](${SITE_URL}/`);
 	return `# ${p.title}\n\n> ${p.description}\n\nSource: ${SITE_URL}${path}\n\n${body}`;
 }
-export const docAsMarkdown = (d: DocPage) => asMarkdown(d, docPath(d));

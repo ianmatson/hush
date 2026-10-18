@@ -1,8 +1,8 @@
 import type { RowMark } from './marks';
-import type { DashItem } from './shared/types';
+import { HOUR_MS } from './shared/durations';
+import type { DashItem, DashKind } from './shared/types';
 
-const HOUR = 3_600_000;
-const hoursAgo = (n: number) => new Date(Date.now() - n * HOUR).toISOString();
+const hoursAgo = (n: number) => new Date(Date.now() - n * HOUR_MS).toISOString();
 
 const PREVIEW_ITEM: DashItem = {
 	id: 'acme/web#128',
@@ -25,10 +25,11 @@ const PREVIEW_ITEM: DashItem = {
 		{ name: 'needs-docs', color: 'fbca04' }
 	],
 	comments: 6,
-	lastCommentBy: 'octocat',
-	lastCommentAt: hoursAgo(2),
-	lastCommentIsBot: false,
+	lastHumanCommentBy: 'octocat',
+	lastHumanCommentAt: hoursAgo(2),
+	activity: { by: 'octocat', bot: false, what: 'commented', at: hoursAgo(2) },
 	assignees: [],
+	reviewRequests: ['ian'],
 	ci: 'FAILURE',
 	reviewDecision: 'CHANGES_REQUESTED',
 	mergeable: 'CONFLICTING',
@@ -57,7 +58,7 @@ const PREVIEW_ITEM: DashItem = {
 	changes: [{ kind: 'commits', text: '2 new commits', tone: null }]
 };
 
-export function previewItem(kind: 'pr' | 'issue'): DashItem {
+export function previewItem(kind: DashKind): DashItem {
 	if (kind === 'pr') return PREVIEW_ITEM;
 	return {
 		...PREVIEW_ITEM,

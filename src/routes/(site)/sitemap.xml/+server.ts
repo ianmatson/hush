@@ -1,10 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { comparePath } from '$lib/compare';
-import { COMPARE } from '$lib/compare/content';
-import { DOCS, docPath } from '$lib/docs';
-import { guidePath, guideSourceFile } from '$lib/guides';
-import { GUIDES } from '$lib/guides/content';
 import { SITE_URL } from '$lib/site';
+import { SITE_PAGES } from '$lib/site-pages';
 
 // Written once at build time, like the pages it lists.
 export const prerender = true;
@@ -19,41 +15,27 @@ const routePath = (file: string) =>
 		.replace(/\/\([^)]+\)/g, '')
 		.replace(/\/\+page\.svelte$/, '') || '/';
 
-const CONTENT_SOURCES: Record<string, string[]> = {
-	'/privacy': ['src/lib/about/pages/privacy.md'],
-	'/security': ['src/lib/about/pages/security.md'],
-	'/pricing': ['src/lib/pricing.ts'],
-	'/compare': ['src/lib/compare/index.ts', 'src/lib/compare/content.ts'],
-	'/guides': ['src/lib/guides/index.ts', ...GUIDES.map(guideSourceFile)]
-};
-
 /**
  * Every public page, found from the files in (site): a new page is in the sitemap with no extra
  * step. Route groups ("(site)") are not in URLs; the 404 page is left out. Pages with a parameter
  * (the docs) come from their own lists.
  */
-const pages: SitemapPage[] = [
-	...ROUTE_FILES.map((file) => ({ file, path: routePath(file) }))
-		.filter(({ path }) => path !== '/404' && !path.includes('['))
-		.map(({ file, path }) => ({
-			path,
-			sources: [file.slice(1), ...(CONTENT_SOURCES[path] ?? [])]
-		})),
-	...DOCS.map((d) => ({
-		path: docPath(d),
-		sources: [`src/lib/docs/pages/${d.slug || 'index'}.md`]
-	})),
-	...COMPARE.map((c) => ({
-		path: comparePath(c),
-		sources: [`src/lib/compare/pages/${c.slug}.md`]
-	})),
-	...GUIDES.map((g) => ({
-		path: guidePath(g),
-		sources: [guideSourceFile(g)]
-	}))
-]
-	.filter((page, i, all) => all.findIndex((p) => p.path === page.path) === i)
-	.sort((a, b) => a.path.localeCompare(b.path));
+function sitemapPages(): SitemapPage[] {
+	const sources = new Map<string, Set<string>>();
+	const add = (path: string, files: string[]) => {
+		const known = sources.get(path) ?? new Set<string>();
+		for (const file of files) known.add(file);
+		sources.set(path, known);
+	};
+	for (const file of ROUTE_FILES) {
+		const path = routePath(file);
+		if (path !== '/404' && !path.includes('[')) add(path, [file.slice(1)]);
+	}
+	for (const page of SITE_PAGES) add(page.path, page.sources);
+	return [...sources]
+		.map(([path, files]) => ({ path, sources: [...files] }))
+		.sort((a, b) => a.path.localeCompare(b.path));
+}
 
 function lastCommitDate(files: string[]): string | null {
 	try {
@@ -67,7 +49,7 @@ function lastCommitDate(files: string[]): string | null {
 }
 
 export function GET() {
-	const urls = pages
+	const urls = sitemapPages()
 		.map(({ path, sources }) => {
 			const lastmod = lastCommitDate(sources);
 			const lastmodTag = lastmod ? `<lastmod>${lastmod}</lastmod>` : '';

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { takeSearchParams } from '$lib/search-params';
 	import { page } from '$app/state';
 	import { createQuery, useIsRestoring } from '@tanstack/svelte-query';
 	import { ApiError } from '$lib/api';
@@ -28,14 +29,11 @@
 	// Just signed in (?signed_in=1 from the callback): once the profile is here, show which orgs
 	// the sign-in can see (only when Hush uses it, not a custom token).
 	let justSignedIn = $state(false);
-	$effect(() => {
-		const url = page.url;
-		if (url.searchParams.get('signed_in') !== '1') return;
+	onMount(() => {
+		if (takeSearchParams('signed_in').signed_in !== '1') return;
 		justSignedIn = true;
 		// A new sign-in can mean a new token: what this browser cached may be out of date.
 		for (const queryKey of [keys.dashAll, keys.teams]) queryClient.invalidateQueries({ queryKey });
-		url.searchParams.delete('signed_in');
-		goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true });
 	});
 	$effect(() => {
 		if (!justSignedIn || !me.data) return;

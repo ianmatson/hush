@@ -2,9 +2,11 @@ import { queryMatches } from './rules';
 import { cyrb53, type DecisionChoice } from './decisions';
 import { CATEGORY_SEPARATOR, queryError } from './query';
 import { parseMarkIcon } from './mark-icons';
+import { ruleFactsOf } from './subject';
 import type {
 	CategoryGroup,
 	DashItem,
+	Enrichment,
 	ItemCategory,
 	MarkColor,
 	Settings,
@@ -15,7 +17,7 @@ export const MAX_CATEGORY_GROUPS = 10;
 export const MAX_CATEGORIES = 20;
 export const MAX_DESCRIPTION_CHARS = 200;
 export const MAX_MARK_NAME_CHARS = 40;
-export const MIN_JEV_OPTIONS = 2;
+const MIN_JEV_OPTIONS = 2;
 
 export const MARK_COLORS: MarkColor[] = [
 	'gray',
@@ -108,9 +110,6 @@ export const allCategories = (groups: CategoryGroup[]) => groups.flatMap((g) => 
 export const categoryQueryName = (group: CategoryGroup, category: ItemCategory) =>
 	`${group.name}${CATEGORY_SEPARATOR}${category.name}`;
 
-export const groupOf = (groups: CategoryGroup[], categoryId: string) =>
-	groups.find((g) => g.categories.some((c) => c.id === categoryId));
-
 export function groupChoice(g: CategoryGroup): DecisionChoice | null {
 	const described = g.categories.filter((c) => c.description.trim());
 	if (described.length < MIN_JEV_OPTIONS) return null;
@@ -123,7 +122,7 @@ export const groupChoices = (groups: CategoryGroup[]) =>
 
 const usableRules = new Map<string, boolean>();
 
-export function ruleUsable(rule: string): boolean {
+function ruleUsable(rule: string): boolean {
 	let ok = usableRules.get(rule);
 	if (ok === undefined) {
 		ok = !!rule.trim() && !queryError(rule);
@@ -203,48 +202,42 @@ export function matchesCategoryFilters(
 	);
 }
 
+export const itemCategoriesIn = (groups: CategoryGroup[], categoryIds: string[] | undefined) =>
+	groups.flatMap((group) =>
+		group.categories
+			.filter((category) => categoryIds?.includes(category.id))
+			.map((category) => ({ group, category }))
+	);
+
 export function itemQueryFacts(
 	i: DashItem,
 	me: string,
 	settings: Pick<Settings, 'categoryGroups'>,
 	now = Date.now()
 ): RuleFacts {
-	return {
-		repo: i.repo,
-		subjectType: i.kind === 'pr' ? 'PullRequest' : 'Issue',
-		title: i.title,
-		me,
-		enrichment: {
-			kind: i.kind,
-			author: i.author,
-			authorIsBot: i.authorIsBot,
-			labels: i.labels.map((l) => l.name),
-			draft: i.draft,
-			state: i.state,
-			assignees: i.assignees,
-			reviewRequests: [...(i.requestedMe ? [me] : []), ...i.requestedTeams],
-			additions: i.kind === 'pr' ? i.additions : undefined,
-			deletions: i.kind === 'pr' ? i.deletions : undefined,
-			reviewDecision: i.kind === 'pr' ? i.reviewDecision : undefined,
-			ci: i.kind === 'pr' ? i.ci : undefined,
-			reviewed: i.reviewed,
-			createdAt: i.createdAt,
-			updatedAt: i.updatedAt,
-			comments: i.comments
-		},
-		activity: i.lastCommentBy
-			? {
-					by: i.lastCommentBy,
-					bot: i.lastCommentIsBot,
-					what: 'commented',
-					at: i.lastCommentAt ?? i.updatedAt
-				}
-			: null,
-		categories: settings.categoryGroups.flatMap((g) =>
-			g.categories.filter((c) => i.categories?.includes(c.id)).map((c) => categoryQueryName(g, c))
-		),
-		now
+	const pr = i.kind === 'pr';
+	const enrichment: Enrichment = {
+		kind: i.kind,
+		author: i.author,
+		authorIsBot: i.authorIsBot,
+		labels: i.labels.map((l) => l.name),
+		draft: i.draft,
+		state: i.state,
+		assignees: i.assignees,
+		reviewRequests: i.reviewRequests,
+		additions: pr ? i.additions : undefined,
+		deletions: pr ? i.deletions : undefined,
+		reviewDecision: pr ? i.reviewDecision : undefined,
+		ci: pr ? i.ci : undefined,
+		reviewed: i.reviewed,
+		createdAt: i.createdAt,
+		updatedAt: i.updatedAt,
+		comments: i.comments
 	};
+	const categories = itemCategoriesIn(settings.categoryGroups, i.categories).map(
+		({ group, category }) => categoryQueryName(group, category)
+	);
+	return ruleFactsOf(i, enrichment, me, { activity: i.activity, categories, now });
 }
 
 export const markQueries = (settings: Pick<Settings, 'categoryGroups'>) =>

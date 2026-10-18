@@ -36,7 +36,7 @@ export function markState(
 		const since = mark.snoozedAt ?? 0;
 		const pastDeadline = now >= (mark.snoozedUntil ?? eventSnoozeDeadline(since));
 		const happened =
-			!!facts && snoozeOutcome(mark.snoozeEvent, enrichmentOf(facts, me), since, me).wake;
+			!!facts && snoozeOutcome(mark.snoozeEvent, enrichmentOf(facts), since, me).wake;
 		return pastDeadline || happened
 			? AWAKE
 			: { kind: 'snoozed', snooze: { event: mark.snoozeEvent } };

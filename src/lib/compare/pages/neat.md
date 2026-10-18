@@ -16,7 +16,7 @@ description: Neat puts GitHub notifications in the macOS menu bar, with local da
 | ----------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | What it is                          | A notification menu bar app                                     | Views of pull requests and issues, with pushes                                   |
 | Where it runs                       | macOS menu bar app                                              | Web app (installable), on Cloudflare                                             |
-| Price                               | Free                                                            | Free in beta; planned $3 a month or $30 a year                                   |
+| Price                               | Free                                                            | {{value:hush-price}}                                                             |
 | Open source                         | No                                                              | Yes (AGPL-3.0)                                                                   |
 | Where your data is                  | On your Mac ("100% locally stored")                             | On Hush's servers; token encrypted                                               |
 | Sources                             | GitHub and Linear                                               | GitHub                                                                           |
