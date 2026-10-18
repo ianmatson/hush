@@ -236,7 +236,7 @@
 	{/each}
 
 	<div
-		class="absolute top-1/2 right-2 hidden -translate-y-1/2 items-center bg-[linear-gradient(to_right,transparent,var(--row-bg)_1.5rem)] pl-6 md:group-hover:flex"
+		class="absolute top-1/2 right-2 hidden -translate-y-1/2 items-center bg-[linear-gradient(to_right,transparent,var(--row-bg)_1.5rem)] pl-6 md:group-focus-within:flex md:group-hover:flex"
 	>
 		{@render rowAction(
 			i.dismissed ? 'Wake up' : 'Snooze until new activity',
@@ -254,7 +254,7 @@
 	</div>
 
 	{#if menu}
-		<div class="shrink-0 sm:hidden">
+		<div class="shrink-0 md:hidden">
 			<DropdownMenu.Root bind:open={menuOpen}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}

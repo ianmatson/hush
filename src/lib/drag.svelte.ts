@@ -56,6 +56,8 @@ export class ListDrag {
 	#scrollFrame = 0;
 	#root: HTMLElement | null = null;
 	#ending = false;
+	#disposed = false;
+	#settleTimer: ReturnType<typeof setTimeout> | undefined;
 	#startY = 0;
 	/** Removes the window listeners of the current press. */
 	#release = () => {};
@@ -74,7 +76,8 @@ export class ListDrag {
 	pointerdown(e: PointerEvent, id: string, row: HTMLElement) {
 		const touchOffHandle =
 			e.pointerType === 'touch' && !(e.target as Element).closest('[data-drag-handle]');
-		if (this.active || e.button !== 0 || touchOffHandle || !this.#cfg.enabled()) return;
+		if (this.#disposed || this.active || e.button !== 0 || touchOffHandle || !this.#cfg.enabled())
+			return;
 		if ((e.target as Element).closest('[data-no-drag]')) return;
 		const start = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
 
@@ -214,6 +217,7 @@ export class ListDrag {
 			this.zone = this.#origin.zone;
 			this.index = this.#origin.index;
 			await tick();
+			if (this.#disposed) return;
 		}
 		const ids = this.ids;
 		const zone = this.zone!;
@@ -226,9 +230,11 @@ export class ListDrag {
 		const r = target?.getBoundingClientRect();
 		this.lift.target = 0;
 		if (r) await Promise.race([this.pos.set({ x: r.left, y: r.top }), wait(320)]);
+		if (this.#disposed) return;
 
 		const unchanged = cancel || (zone === this.#origin.zone && index === this.#origin.index);
 		if (!unchanged) await this.#cfg.drop(ids, zone, index);
+		if (this.#disposed) return;
 
 		// One update: the rows come back where the card is, with no transitions.
 		this.settling = true;
@@ -238,10 +244,26 @@ export class ListDrag {
 		document.documentElement.classList.remove('is-dragging');
 		await tick();
 		this.#ending = false;
-		setTimeout(() => {
+		if (this.#disposed) return;
+		this.#settleTimer = setTimeout(() => {
 			this.settling = false;
 			this.unfold = [];
 		}, 400);
+	}
+
+	dispose() {
+		if (this.#disposed) return;
+		this.#disposed = true;
+		this.#release();
+		cancelAnimationFrame(this.#hitFrame);
+		cancelAnimationFrame(this.#scrollFrame);
+		clearTimeout(this.#settleTimer);
+		window.removeEventListener('keydown', this.#onKey, true);
+		if (this.active) document.documentElement.classList.remove('is-dragging');
+		this.ids = [];
+		this.zone = null;
+		this.settling = false;
+		this.unfold = [];
 	}
 }
 

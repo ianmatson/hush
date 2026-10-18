@@ -56,6 +56,7 @@ export class GitHubError extends Error {
  * request with no answer at all (a broken connection) must not keep work open forever.
  */
 const GITHUB_WAIT_MS = 20_000;
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
 
 export async function gh(token: string, path: string, init: RequestInit = {}): Promise<Response> {
 	const headers = new Headers(init.headers);
@@ -71,7 +72,13 @@ export async function gh(token: string, path: string, init: RequestInit = {}): P
 		GITHUB_WAIT_MS
 	);
 	try {
-		return await fetch(url, { ...init, headers, signal: noAnswer.signal });
+		const res = await fetch(url, { ...init, headers, signal: noAnswer.signal });
+		const body = NULL_BODY_STATUSES.has(res.status) ? null : await res.arrayBuffer();
+		return new Response(body, {
+			status: res.status,
+			statusText: res.statusText,
+			headers: res.headers
+		});
 	} finally {
 		clearTimeout(waitForAnswer);
 	}
@@ -237,22 +244,26 @@ export async function listNotifications(
 	let url: string | null = '/notifications?per_page=50';
 	const items: GhNotification[] = [];
 	let first: Response | null = null;
+	let laterFailure: Response | null = null;
 	for (let page = 0; url && page < MAX_NOTIFICATION_PAGES; page++) {
 		const res = await gh(token, url, {
 			headers:
 				page === 0 && opts.ifModifiedSince ? { 'If-Modified-Since': opts.ifModifiedSince } : {}
 		});
 		first ??= res;
-		if (res.status !== 200) break;
+		if (res.status !== 200) {
+			if (page > 0) laterFailure = res;
+			break;
+		}
 		items.push(...((await res.json()) as GhNotification[]));
 		url = res.headers.get('Link')?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
 	}
-	const res = first!;
+	const res = laterFailure ?? first!;
 	return {
 		status: res.status,
-		items,
-		lastModified: res.headers.get('Last-Modified'),
-		pollInterval: Number(res.headers.get('X-Poll-Interval') ?? 60) || 60,
+		items: laterFailure ? [] : items,
+		lastModified: laterFailure ? null : res.headers.get('Last-Modified'),
+		pollInterval: Number(first!.headers.get('X-Poll-Interval') ?? 60) || 60,
 		retryAt: rateLimitRetryAt(res.headers)
 	};
 }
@@ -507,7 +518,7 @@ export async function fetchTeams(
 	teams.sort((a, b) => a.slug.localeCompare(b.slug));
 	return {
 		teams,
-		error: result.errors.length && !teams.length ? result.errors[0].message : undefined
+		error: hasGraphqlErrorAt(result.errors, ['viewer']) ? result.errors[0].message : undefined
 	};
 }
 

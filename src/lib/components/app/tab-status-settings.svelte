@@ -138,7 +138,9 @@
 			<div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-3 sm:flex">
 				<span class="text-xs text-muted-foreground">Format</span>
 				<Select.Root type="single" bind:value={prefs.title.style} disabled={!prefs.title.enabled}>
-					<Select.Trigger class="w-full sm:w-72">{styles[prefs.title.style]}</Select.Trigger>
+					<Select.Trigger class="w-full sm:w-72" aria-label="Title count format"
+						>{styles[prefs.title.style]}</Select.Trigger
+					>
 					<Select.Content>
 						{#each Object.entries(styles) as [value, label] (value)}
 							<Select.Item {value} {label} />
@@ -183,7 +185,9 @@
 					bind:value={prefs.favicon.style}
 					disabled={!prefs.favicon.enabled}
 				>
-					<Select.Trigger class="w-full sm:w-32">{dotStyles[prefs.favicon.style]}</Select.Trigger>
+					<Select.Trigger class="w-full sm:w-32" aria-label="What the dot shows"
+						>{dotStyles[prefs.favicon.style]}</Select.Trigger
+					>
 					<Select.Content>
 						{#each Object.entries(dotStyles) as [value, label] (value)}
 							<Select.Item {value} {label} />

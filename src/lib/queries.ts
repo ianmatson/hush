@@ -91,8 +91,8 @@ export const keys = {
 	reviewThreads: (repo: string, number: number) => ['review-threads', repo, number] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
 	alerts: ['alerts'] as const,
-	suggest: (repo: string, kind: 'user' | 'ref', query: string) =>
-		['suggest', repo, kind, query] as const,
+	suggest: (repo: string, kind: 'user' | 'ref', query: string, from: string) =>
+		['suggest', repo, kind, query, from] as const,
 	searchCount: (q: string) => ['search-count', q] as const
 };
 
@@ -168,7 +168,7 @@ export const teamsQuery = () =>
 
 export const suggestQuery = (repo: string, kind: 'user' | 'ref', query: string, from: string) =>
 	queryOptions({
-		queryKey: keys.suggest(repo, kind, query.toLowerCase()),
+		queryKey: keys.suggest(repo, kind, query.toLowerCase(), from),
 		queryFn: () => api.suggest(repo, kind, query, from).then((r) => r.items),
 		staleTime: TYPED_QUERY_FRESH_MS,
 		gcTime: TYPED_QUERY_GC_MS

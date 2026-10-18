@@ -54,15 +54,14 @@ export async function applySettings(patch: SettingsPatch, replace = false): Prom
 	if (patch.dash || replace) void queryClient.invalidateQueries({ queryKey: keys.dashAll });
 }
 
-/** Save a settings patch and report the result in a toast. */
 export async function saveSettings(
 	patch: SettingsPatch,
-	message = 'Saved',
+	successToast?: string,
 	replace = false
 ): Promise<boolean> {
 	try {
 		await applySettings(patch, replace);
-		toast.success(message);
+		if (successToast) toast.success(successToast);
 		return true;
 	} catch (err) {
 		toast.error((err as Error).message);

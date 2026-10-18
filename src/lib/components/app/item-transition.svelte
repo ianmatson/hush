@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { PEEK_PARAM } from '$lib/shared/peek-link';
+	import { subjectKey } from '$lib/shared/subject';
 
 	const ITEM_ROUTE_MARK = '[number=item_number]';
 	const RUNNING_CLASS = 'item-transition';
@@ -11,7 +12,7 @@
 	const EASE_OUT = 'cubic-bezier(0.33, 1, 0.68, 1)';
 	const EASE_IN_OUT = 'cubic-bezier(0.65, 0, 0.35, 1)';
 	const SETTLE_LIMIT_MS = 500;
-	const ITEM_READY_HEIGHT_PX = 200;
+	const READY_ATTR = 'data-item-ready';
 	const HANDOFF_OFFSET = 0.85;
 	const DOCK_HIDDEN = 'translateY(150%)';
 	const PANEL = "aside[aria-label='peek']";
@@ -80,19 +81,29 @@
 		style.textContent = css;
 	}
 
-	async function settle(toItem: boolean) {
-		const ready = toItem
-			? () =>
-					(document.querySelector(ITEM_PAGE)?.getBoundingClientRect().height ?? 0) >
-					ITEM_READY_HEIGHT_PX
+	function itemPageReadySelector(key: string) {
+		const ready = `[${READY_ATTR}="${CSS.escape(key)}"]`;
+		return `${ITEM_PAGE}${ready}, ${ITEM_PAGE} ${ready}`;
+	}
+
+	function finishSurfaceAnimations() {
+		for (const surface of document.querySelectorAll(`${PANEL}, ${ITEM_PAGE}`)) {
+			for (const animation of surface.getAnimations()) {
+				const end = animation.effect?.getComputedTiming().endTime;
+				if (typeof end === 'number' && Number.isFinite(end)) animation.finish();
+			}
+		}
+	}
+
+	async function settle(itemKey: string | null) {
+		const ready = itemKey
+			? () => !!document.querySelector(itemPageReadySelector(itemKey))
 			: () =>
-					!new URL(location.href).searchParams.has(PEEK_PARAM) || !!document.querySelector(PANEL);
+					!new URL(location.href).searchParams.has(PEEK_PARAM) ||
+					!!document.querySelector(`${PANEL} [${READY_ATTR}]`);
 		const start = performance.now();
 		while (!ready() && performance.now() - start < SETTLE_LIMIT_MS) await frame();
-		for (const animation of document.getAnimations()) {
-			const end = animation.effect?.getComputedTiming().endTime;
-			if (typeof end === 'number' && Number.isFinite(end)) animation.finish();
-		}
+		finishSurfaceAnimations();
 	}
 
 	function animatePseudo(
@@ -221,6 +232,9 @@
 		if (!document.startViewTransition) return;
 		const toItem = isItemRoute(navigation.to?.route.id);
 		if (isItemRoute(navigation.from?.route.id) === toItem) return;
+		const target = navigation.to?.params;
+		const itemKey =
+			toItem && target ? subjectKey(`${target.owner}/${target.repo}`, Number(target.number)) : null;
 		const root = document.documentElement;
 		const before = snapshot();
 		root.classList.add(RUNNING_CLASS);
@@ -229,7 +243,7 @@
 				resolve();
 				await navigation.complete;
 				await tick();
-				await settle(toItem);
+				await settle(itemKey);
 				writeSizes(`${sizeRules('old', before)}\n${sizeRules('new', snapshot())}`);
 			});
 			transition.ready

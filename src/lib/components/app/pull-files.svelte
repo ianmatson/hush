@@ -7,7 +7,7 @@
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
 	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
-	import { commandFor, ignoreKey } from '$lib/keys.svelte';
+	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import {
 		commitDiffQuery,
 		keys,
@@ -235,6 +235,7 @@
 	}
 
 	async function addComment(target: CommentTarget, body: string, single: boolean) {
+		const submitted = selection;
 		try {
 			await api.addLineComment(
 				{ repo, number, pullRequestId, commitOid: head },
@@ -242,7 +243,7 @@
 				body,
 				single
 			);
-			selection = null;
+			if (selection === submitted) selection = null;
 			await refreshThreads();
 			toast.success(single ? 'Comment posted' : 'Added to your pending review');
 			return true;
@@ -312,20 +313,28 @@
 	const isViewed = (file: PullFile) => viewed[file.filename] === 'VIEWED';
 	const viewedCount = $derived(shownFiles.filter(isViewed).length);
 
+	function setViewedEntry(filename: string, state: ViewedFiles[string] | undefined) {
+		queryClient.setQueryData<{ viewed: ViewedFiles }>(keys.pullViewed(repo, number), (old) => {
+			const next = { ...old?.viewed };
+			if (state === undefined) delete next[filename];
+			else next[filename] = state;
+			return { ...old, viewed: next };
+		});
+	}
+
 	async function toggleViewed(file: PullFile) {
-		const key = keys.pullViewed(repo, number);
-		const before = viewed;
+		const name = file.filename;
+		const viewedBefore = viewed[name];
+		const foldBefore = foldChoices.get(name);
 		const nowViewed = !isViewed(file);
-		const next = { ...before };
-		if (nowViewed) next[file.filename] = 'VIEWED';
-		else delete next[file.filename];
-		queryClient.setQueryData(key, { viewed: next });
-		foldChoices.set(file.filename, nowViewed);
+		setViewedEntry(name, nowViewed ? 'VIEWED' : undefined);
+		foldChoices.set(name, nowViewed);
 		try {
-			await api.setFileViewed(pullRequestId, file.filename, nowViewed);
+			await api.setFileViewed(pullRequestId, name, nowViewed);
 		} catch (err) {
-			queryClient.setQueryData(key, { viewed: before });
-			foldChoices.delete(file.filename);
+			setViewedEntry(name, viewedBefore);
+			if (foldBefore === undefined) foldChoices.delete(name);
+			else foldChoices.set(name, foldBefore);
 			toast.error((err as Error).message, { description: file.filename });
 		}
 	}
@@ -794,7 +803,16 @@
 								'w-full resize-y rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
 								DROP_TARGET_CLASS
 							)}
-							{@attach summaryUploads.textarea}></textarea>
+							{@attach summaryUploads.textarea}
+							{@attach (node) => {
+								node.focus();
+							}}
+							onkeydown={(e) => {
+								if (commandFor(e, ['editor']) === 'editor.send') {
+									e.preventDefault();
+									if (!e.repeat) void submitReview();
+								}
+							}}></textarea>
 						<div class="flex flex-wrap items-center gap-3">
 							{#each reviewChoices as choice (choice.event)}
 								<label class="flex items-center gap-1.5 text-sm">
@@ -807,9 +825,12 @@
 									{choice.label}
 								</label>
 							{/each}
+							<span class="ml-auto hidden text-xs text-muted-foreground sm:inline"
+								>{keysOf('editor.send')[0] ?? ''} to submit</span
+							>
 							<Button
 								size="sm"
-								class="ml-auto"
+								class="ml-auto sm:ml-0"
 								disabled={!!reviewBusy || !!summaryUploads.pending}
 								onclick={() => void submitReview()}
 							>

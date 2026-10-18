@@ -33,9 +33,13 @@ export async function nodeSubject(token: string, id: string): Promise<WrittenSub
 		: null;
 }
 
-export async function refreshWrittenSubject(c: Ctx, subject: WrittenSubject): Promise<void> {
-	const result = await poller(c.env, c.get('user').id)
-		.recheck(subject.repo, subject.number)
-		.catch((error) => ({ error: (error as Error).message }));
-	if ('error' in result) console.error('subject refresh after write failed', result.error);
+export function refreshWrittenSubject(c: Ctx, subject: WrittenSubject): void {
+	c.executionCtx.waitUntil(
+		poller(c.env, c.get('user').id)
+			.recheck(subject.repo, subject.number)
+			.catch((error) => ({ error: (error as Error).message }))
+			.then((result) => {
+				if ('error' in result) console.error('subject refresh after write failed', result.error);
+			})
+	);
 }

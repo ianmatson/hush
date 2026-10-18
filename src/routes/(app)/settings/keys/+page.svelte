@@ -47,7 +47,7 @@
 		const clean = Object.fromEntries(
 			Object.entries(next).filter(([id, keys]) => !same(keys, COMMAND.get(id)?.keys ?? []))
 		);
-		saveSettings({ keys: clean }, 'Shortcut saved');
+		saveSettings({ keys: clean });
 	}
 	const setKeys = (id: string, keys: string[]) => save({ ...changes, [id]: keys });
 

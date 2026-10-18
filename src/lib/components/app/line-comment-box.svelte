@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { clearDraft, loadDraft, saveDraft } from '$lib/drafts';
+	import { clearSentDraft, loadDraft, saveDraft } from '$lib/drafts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { suggestionBlock, suggestionIn } from '$lib/shared/diff';
 	import { Button } from '$lib/components/ui/button';
@@ -48,10 +48,11 @@
 
 	async function send(single: boolean) {
 		if (!body.trim() || sending || uploads.pending) return;
+		const sent = body;
 		sending = single ? 'single' : 'review';
-		const posted = await onsubmit(body.trim(), single);
+		const posted = await onsubmit(sent.trim(), single);
 		sending = null;
-		if (posted) clearDraft(draftKey);
+		if (posted) clearSentDraft(draftKey, sent);
 	}
 </script>
 

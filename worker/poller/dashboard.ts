@@ -29,7 +29,7 @@ import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { itemQueryFacts } from '../../src/lib/shared/categories';
 import { sameLogin } from '../../src/lib/shared/logins';
 import { MINUTE_MS } from '../../src/lib/shared/durations';
-import { DASH_TTL, viewSearchesKey, type Who } from './shared';
+import { DASH_TTL, olderThan, viewSearchesKey, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 import { sourceItemOf, withProjectStatuses } from './project-status';
@@ -86,8 +86,9 @@ export abstract class PollerDashboard extends PollerSync {
 	private dashRetryAt = new Map<DashKind, number>();
 
 	/** Live PR or issue dashboard from saved searches, cached for 15 minutes. */
-	dashboard(kind: DashKind, force = false): Promise<DashResponse> {
-		return this.buildDashboard(kind, force);
+	async dashboard(kind: DashKind, force = false): Promise<DashResponse> {
+		const cached = force ? null : await this.cachedDashboard(kind);
+		return cached ?? this.exclusive(() => this.buildDashboard(kind, true, force));
 	}
 
 	/**
@@ -97,7 +98,7 @@ export abstract class PollerDashboard extends PollerSync {
 	private refreshDashboard(kind: DashKind): boolean {
 		if (this.dashRefreshing.has(kind)) return true;
 		if (Date.now() < (this.dashRetryAt.get(kind) ?? 0)) return false;
-		const p = this.buildDashboard(kind, true, false)
+		const p = this.exclusive(() => this.buildDashboard(kind, true, false))
 			.then(() => this.broadcast({ type: 'dash', kind }))
 			.catch((err) => {
 				console.error('dashboard refresh', (err as Error).message);
@@ -142,8 +143,12 @@ export abstract class PollerDashboard extends PollerSync {
 		this.broadcast({ type: 'dash', kind });
 	}
 
-	async rebuildBoards(): Promise<void> {
+	rebuildBoards(): Promise<void> {
 		const boardsChangedAt = Date.now();
+		return this.exclusive(() => this.rebuildBoardsSince(boardsChangedAt));
+	}
+
+	private async rebuildBoardsSince(boardsChangedAt: number): Promise<void> {
 		const who = await this.who();
 		if (!who) return;
 		const groupsByProject = who.settings.views.some((v) => projectKeyOf(v.groupBy));
@@ -164,18 +169,22 @@ export abstract class PollerDashboard extends PollerSync {
 		full = force,
 		startedNoEarlierThan = 0
 	): Promise<DashResponse> {
+		const cached = force ? null : await this.cachedDashboard(kind);
+		if (cached) return cached;
 		const who = await this.who();
 		if (!who) throw new Error('Not signed in.');
 		const sig = dashSignature(kind, who.settings);
-		if (!force) {
-			const cached = await this.ctx.storage.get<CachedDash>(`dash:${kind}`);
-			if (cached?.sig === sig && cached.data.sourceItems) {
-				if (Date.now() - cached.data.fetchedAt < DASH_TTL) return cached.data;
-				// Old: answer with it now, and refresh behind it. Open pages update when it is done.
-				return this.refreshDashboard(kind) ? { ...cached.data, refreshing: true } : cached.data;
-			}
-		}
 		return this.sharedBuild(kind, who, { sig, full, startedNoEarlierThan });
+	}
+
+	private async cachedDashboard(kind: DashKind): Promise<DashResponse | null> {
+		const who = await this.who();
+		if (!who) throw new Error('Not signed in.');
+		const cached = await this.ctx.storage.get<CachedDash>(`dash:${kind}`);
+		if (cached?.sig !== dashSignature(kind, who.settings) || !cached.data.sourceItems) return null;
+		if (Date.now() - cached.data.fetchedAt < DASH_TTL) return cached.data;
+		// Old: answer with it now, and refresh behind it. Open pages update when it is done.
+		return this.refreshDashboard(kind) ? { ...cached.data, refreshing: true } : cached.data;
 	}
 
 	private async sharedBuild(kind: DashKind, who: Who, need: BuildNeed): Promise<DashResponse> {
@@ -266,11 +275,13 @@ export abstract class PollerDashboard extends PollerSync {
 		);
 		const facts = new Map<string, SubjectFacts>();
 		const nextRead: Record<string, number> = {};
+		const storedAfterRead = this.storedSubjectFacts(keys);
 		for (const k of keys) {
 			const f = fresh.get(latest.get(k)!.id);
 			if (f) nextRead[k] = now;
 			else if (readAt[k]) nextRead[k] = readAt[k];
-			const use = f ?? stored.get(k);
+			const known = storedAfterRead.get(k);
+			const use = f && !olderThan(f, known) ? f : (known ?? f);
 			if (use) facts.set(k, use);
 		}
 		await this.ctx.storage.put(readKey, nextRead);
@@ -442,7 +453,9 @@ export abstract class PollerDashboard extends PollerSync {
 			? [...(await fetchDetails(who.token, who.me, stillOpenAsFarAsKnown)).subjects.values()]
 			: [];
 		const latest = new Map(stored);
-		for (const s of read) latest.set(subjectKey(s.repo, s.number), s);
+		for (const s of read)
+			if (!olderThan(s, latest.get(subjectKey(s.repo, s.number))))
+				latest.set(subjectKey(s.repo, s.number), s);
 		const decided = this.decisionsOf(who, [...latest.values()]);
 		const now = Date.now();
 		const items = left.flatMap((i) => {

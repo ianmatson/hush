@@ -74,6 +74,7 @@ export class SettingsDraft<Saved, Draft = Saved> implements SettingsDraftControl
 	};
 
 	discard = () => {
+		if (this.saving) return;
 		const current = this.#saved();
 		if (current !== undefined) this.#load(current);
 	};

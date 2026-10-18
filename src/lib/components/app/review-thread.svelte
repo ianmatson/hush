@@ -7,6 +7,7 @@
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
+	import { clearSentDraft, loadDraft, saveDraft } from '$lib/drafts';
 	import { splitPath, threadElementId, type ReviewThread } from '$lib/shared/diff';
 	import { Button } from '$lib/components/ui/button';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -37,7 +38,9 @@
 	const commentCount = $derived(
 		`${thread.totalComments} ${thread.totalComments === 1 ? 'comment' : 'comments'}`
 	);
-	let reply = $state('');
+	const replyKey = $derived(`reply:${thread.id}`);
+	let reply = $state(untrack(() => loadDraft(replyKey)));
+	$effect(() => saveDraft(replyKey, reply));
 	let sending = $state<'reply' | 'resolve' | 'edit' | 'delete' | null>(null);
 	let editingId = $state<string | null>(null);
 	let editText = $state('');
@@ -69,7 +72,6 @@
 		try {
 			await action();
 			await onchanged();
-			if (kind === 'reply') reply = '';
 			return true;
 		} catch (err) {
 			toast.error((err as Error).message);
@@ -79,8 +81,21 @@
 		}
 	}
 
-	const sendReply = () =>
-		reply.trim() && run('reply', () => api.replyToThread(thread.id, reply.trim()));
+	async function sendReply() {
+		const sent = reply;
+		const sentKey = replyKey;
+		if (!sent.trim()) return;
+		if (!(await run('reply', () => api.replyToThread(thread.id, sent.trim())))) return;
+		clearSentDraft(sentKey, sent);
+		if (replyKey === sentKey && reply === sent) reply = '';
+	}
+
+	function cancelEditOnEscape(event: KeyboardEvent) {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (!sending && !uploads.pending) editingId = null;
+	}
 	const toggleResolved = () =>
 		run('resolve', () => api.setThreadResolved(thread.id, !thread.resolved));
 </script>
@@ -202,25 +217,35 @@
 							rows="3"
 							aria-label="Edit the comment"
 							class={cn(
-								'w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+								'w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none read-only:opacity-50 focus-visible:ring-2 focus-visible:ring-ring/50',
 								DROP_TARGET_CLASS
 							)}
+							readonly={sending === 'edit'}
 							{@attach uploads.textarea}
+							{@attach (node) => {
+								node.focus();
+							}}
 							onkeydown={(e) => {
+								cancelEditOnEscape(e);
 								if (commandFor(e, ['editor']) === 'editor.send') {
 									e.preventDefault();
+									e.stopPropagation();
 									void saveEdit(comment.id);
-								} else if (e.key === 'Escape') {
-									e.preventDefault();
-									editingId = null;
 								}
 							}}></textarea>
 						<span class="flex justify-end gap-2">
-							<Button size="sm" variant="ghost" onclick={() => (editingId = null)}>Cancel</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								disabled={!!sending || !!uploads.pending}
+								onclick={() => (editingId = null)}
+								onkeydown={cancelEditOnEscape}>Cancel</Button
+							>
 							<Button
 								size="sm"
 								disabled={!editText.trim() || !!sending || !!uploads.pending}
 								onclick={() => void saveEdit(comment.id)}
+								onkeydown={cancelEditOnEscape}
 							>
 								{#if sending === 'edit'}<LoaderCircle class="animate-spin" />{/if}
 								Save

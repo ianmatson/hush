@@ -3,6 +3,7 @@ import {
 	DETAILS_TTL,
 	failedWriteStatus,
 	fetchDetails,
+	fetchTeams,
 	fetchPeek,
 	fetchSubjects,
 	forTeams,
@@ -56,6 +57,31 @@ describe('gh', () => {
 		const answer = gh('t', '/user');
 		vi.runAllTimers();
 		await expect(answer).rejects.toMatchObject({ name: 'TimeoutError' });
+	});
+
+	it('gives up when the body stops arriving', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async (_url: string, init?: RequestInit) =>
+					new Response(
+						new ReadableStream({
+							start(controller) {
+								controller.enqueue(new TextEncoder().encode('{"data":'));
+								init?.signal?.addEventListener('abort', () =>
+									controller.error(init.signal!.reason)
+								);
+							}
+						})
+					)
+			)
+		);
+		const answer = graphql('t', 'query { viewer { login } }', {});
+		const settled = expect(answer).rejects.toMatchObject({ name: 'TimeoutError' });
+		await vi.runAllTimersAsync();
+		await settled;
+		expect(vi.getTimerCount()).toBe(0);
 	});
 });
 
@@ -216,6 +242,28 @@ describe('notification rate limits', () => {
 				now
 			)
 		).toBeUndefined();
+	});
+
+	it('fails the whole read and keeps the old checkpoint when a later page fails', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(
+					Response.json([], {
+						headers: {
+							'Last-Modified': 'new',
+							Link: '<https://api.github.com/notifications?page=2>; rel="next"'
+						}
+					})
+				)
+				.mockResolvedValueOnce(
+					new Response('{}', { status: 429, headers: { 'Retry-After': '120' } })
+				)
+		);
+		const page = await listNotifications('t', { ifModifiedSince: 'old' });
+		expect(page).toMatchObject({ status: 429, items: [], lastModified: null });
+		expect(page.retryAt).toBeGreaterThan(Date.now());
 	});
 
 	it('reports the Retry-After time with the notification page', async () => {
@@ -715,5 +763,29 @@ describe('GitHub failures', () => {
 		).toBe('Validation Failed: Line is outside the diff: x');
 		expect(await refusal(new Response('', { status: 500 }))).toBe('GitHub returned 500.');
 		expect(await restWriteFailure(null)).toEqual({ error: 'GitHub did not answer.', status: 502 });
+	});
+});
+
+describe('fetchTeams', () => {
+	it('reports a partial answer as a failure, so the complete cached teams stay', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					data: {
+						viewer: {
+							organizations: {
+								nodes: [
+									{ login: 'acme', teams: { nodes: [{ combinedSlug: 'acme/web', name: 'Web' }] } },
+									{ login: 'other', teams: null }
+								]
+							}
+						}
+					},
+					errors: [{ message: 'Timeout', path: ['viewer', 'organizations', 'nodes', 1, 'teams'] }]
+				})
+			)
+		);
+		expect((await fetchTeams('t', 'ian')).error).toBe('Timeout');
 	});
 });

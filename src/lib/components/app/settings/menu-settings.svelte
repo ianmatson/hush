@@ -204,7 +204,9 @@
 					<Button variant="ghost" size="sm" onclick={reset}>Reset to default</Button>
 					<div class="flex gap-2">
 						{#if editor.dirty}
-							<Button variant="ghost" size="sm" onclick={editor.discard}>Cancel</Button>
+							<Button variant="ghost" size="sm" onclick={editor.discard} disabled={editor.saving}
+								>Cancel</Button
+							>
 						{/if}
 						<Button size="sm" disabled={!editor.dirty || editor.saving} onclick={editor.save}
 							>Save</Button

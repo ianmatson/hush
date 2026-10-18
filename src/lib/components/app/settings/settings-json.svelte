@@ -116,7 +116,9 @@
 		<div class="flex flex-wrap gap-2">
 			<Button size="sm" disabled={!editor.dirty || editor.saving} onclick={editor.save}>Save</Button
 			>
-			<Button variant="ghost" size="sm" disabled={!editor.dirty} onclick={discard}>Cancel</Button>
+			<Button variant="ghost" size="sm" disabled={!editor.dirty || editor.saving} onclick={discard}
+				>Cancel</Button
+			>
 		</div>
 
 		<details class="group rounded-lg border">

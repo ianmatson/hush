@@ -11,7 +11,7 @@
 		value: T;
 		options: readonly { id: T; label: string }[];
 		onchange: (id: T) => void;
-		label?: string;
+		label: string;
 		class?: string;
 	} = $props();
 

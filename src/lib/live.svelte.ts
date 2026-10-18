@@ -82,7 +82,6 @@ export function connectLive(): () => void {
 	let ping: ReturnType<typeof setInterval> | undefined;
 	let backoff = 1000;
 	let stopped = false;
-	let opened = false;
 
 	const open = () => {
 		const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -92,11 +91,8 @@ export function connectLive(): () => void {
 			if (appInUse()) ws?.send(APP_FOCUS_MESSAGE);
 			backoff = 1000;
 			ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send('ping'), PING_EVERY);
-			// Back after a drop: catch up on what changed while the socket was down.
-			if (opened)
-				for (const queryKey of [keys.dashAll, keys.alerts, keys.me])
-					void queryClient.invalidateQueries({ queryKey });
-			opened = true;
+			for (const queryKey of [keys.dashAll, keys.alerts, keys.me])
+				void queryClient.invalidateQueries({ queryKey });
 		};
 		ws.onmessage = (e) => {
 			if (e.data === 'pong') return;

@@ -128,10 +128,18 @@
 		});
 	});
 
+	const isPageVisible = () => document.visibilityState === 'visible';
+	let pageVisible = $state(isPageVisible());
+	const itemLoaded = $derived(!!q.data);
+	let seenSettledFor: string | null = null;
 	let seenTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
 		const key = itemKey;
-		seenTimer = setTimeout(() => markItemsSeen([key]), SEEN_AFTER_MS);
+		if (!itemLoaded || !pageVisible || seenSettledFor === key) return;
+		seenTimer = setTimeout(() => {
+			seenSettledFor = key;
+			markItemsSeen([key]);
+		}, SEEN_AFTER_MS);
 		return () => clearTimeout(seenTimer);
 	});
 
@@ -141,6 +149,7 @@
 
 	function setReadHere(ids: string[], read: boolean) {
 		clearTimeout(seenTimer);
+		seenSettledFor = itemKey;
 		return setItemsRead(ids, read);
 	}
 
@@ -210,10 +219,12 @@
 
 <svelte:head><title>{title} · Hush</title></svelte:head>
 <svelte:window onkeydown={onKey} />
+<svelte:document onvisibilitychange={() => (pageVisible = isPageVisible())} />
 
 <div
 	data-item-page
 	data-wide-page={onFilesTab ? '' : undefined}
+	data-item-ready={onFilesTab && pr ? itemKey : undefined}
 	class="mx-auto min-h-dvh max-w-[100rem] bg-background pb-24"
 >
 	{#if onFilesTab && pr}

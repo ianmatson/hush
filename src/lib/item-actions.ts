@@ -41,6 +41,25 @@ function patchDashItems(ids: Set<string>, patch: (x: DashItem) => DashItem) {
 		);
 }
 
+const SNOOZE_FIELDS = ['dismissed', 'muted', 'snooze'] as const satisfies (keyof DashItem)[];
+const READ_FIELDS = ['unread', 'seenAt', 'changes'] as const satisfies (keyof DashItem)[];
+const PIN_FIELDS = ['categories', 'pinnedCategories'] as const satisfies (keyof DashItem)[];
+
+type ActionFields = readonly (keyof DashItem)[];
+
+const pickFields = (item: DashItem, fields: ActionFields): Partial<DashItem> =>
+	Object.fromEntries(fields.map((field) => [field, item[field]]));
+
+function patchWithRollback(
+	ids: Set<string>,
+	fields: ActionFields,
+	patch: (x: DashItem) => DashItem
+): () => void {
+	const before = new Map(dashItemsOf([...ids]).map((i) => [i.id, pickFields(i, fields)]));
+	patchDashItems(ids, patch);
+	return () => patchDashItems(new Set(before.keys()), (x) => ({ ...x, ...before.get(x.id) }));
+}
+
 const describe = (items: DashItem[]) =>
 	items.length === 1 ? items[0].title : `${items.length} items`;
 
@@ -57,7 +76,12 @@ export async function toggleMuteItems(ids: string[]) {
 	const mute = willMute(items);
 	const set = new Set(items.map((i) => i.id));
 	await cancelDash(items);
-	patchDashItems(set, (x) => ({ ...x, dismissed: mute, muted: mute, snooze: undefined }));
+	const rollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
+		...x,
+		dismissed: mute,
+		muted: mute,
+		snooze: undefined
+	}));
 	try {
 		if (mute) await api.muteItems([...set]);
 		else await api.unsnoozeItems([...set]);
@@ -66,6 +90,7 @@ export async function toggleMuteItems(ids: string[]) {
 			action: mute ? { label: 'Undo', onClick: () => void unsnoozeItems([...set]) } : undefined
 		});
 	} catch (err) {
+		rollback();
 		invalidateDash(items);
 		toast.error((err as Error).message);
 	}
@@ -76,7 +101,12 @@ export async function snoozeItems(ids: string[], choice: SnoozeChoice) {
 	if (!items.length) return;
 	const set = new Set(items.map((i) => i.id));
 	await cancelDash(items);
-	patchDashItems(set, (x) => ({ ...x, dismissed: true, muted: false, snooze: choice }));
+	const rollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
+		...x,
+		dismissed: true,
+		muted: false,
+		snooze: choice
+	}));
 	try {
 		await api.snoozeItems(
 			items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })),
@@ -87,8 +117,13 @@ export async function snoozeItems(ids: string[], choice: SnoozeChoice) {
 			action: {
 				label: 'Undo',
 				onClick: () => {
-					patchDashItems(set, (x) => ({ ...x, dismissed: false, snooze: undefined }));
+					const undoRollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
+						...x,
+						dismissed: false,
+						snooze: undefined
+					}));
 					api.unsnoozeItems([...set]).catch((e) => {
+						undoRollback();
 						toast.error(e.message);
 						invalidateDash(items);
 					});
@@ -96,6 +131,7 @@ export async function snoozeItems(ids: string[], choice: SnoozeChoice) {
 			}
 		});
 	} catch (err) {
+		rollback();
 		invalidateDash(items);
 		toast.error((err as Error).message);
 	}
@@ -106,11 +142,17 @@ export async function unsnoozeItems(ids: string[]) {
 	if (!items.length) return;
 	const set = new Set(items.map((i) => i.id));
 	await cancelDash(items);
-	patchDashItems(set, (x) => ({ ...x, dismissed: false, muted: false, snooze: undefined }));
+	const rollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
+		...x,
+		dismissed: false,
+		muted: false,
+		snooze: undefined
+	}));
 	try {
 		await api.unsnoozeItems([...set]);
 		toast('Back in the list', { description: describe(items) });
 	} catch (err) {
+		rollback();
 		invalidateDash(items);
 		toast.error((err as Error).message);
 	}
@@ -119,17 +161,24 @@ export async function unsnoozeItems(ids: string[]) {
 export async function markItemsSeen(ids: string[]) {
 	const items = dashItemsOf(ids);
 	const unread = items.filter((i) => i.unread);
+	let rollback = () => {};
 	if (unread.length) {
 		await cancelDash(unread);
-		patchDashItems(new Set(unread.map((i) => i.id)), (x) => ({ ...x, unread: false }));
+		rollback = patchWithRollback(new Set(unread.map((i) => i.id)), READ_FIELDS, (x) => ({
+			...x,
+			unread: false
+		}));
 	}
-	sendInBatches(ids, api.seen).catch(() => invalidateDash(items));
+	sendInBatches(ids, api.seen).catch(() => {
+		rollback();
+		invalidateDash(items);
+	});
 }
 
 export async function setItemsRead(ids: string[], read: boolean) {
 	const items = dashItemsOf(ids);
 	await cancelDash(items);
-	patchDashItems(new Set(ids), (x) => ({
+	const rollback = patchWithRollback(new Set(ids), READ_FIELDS, (x) => ({
 		...x,
 		unread: !read,
 		...(read ? { seenAt: Date.now(), changes: [] } : { seenAt: null })
@@ -137,6 +186,7 @@ export async function setItemsRead(ids: string[], read: boolean) {
 	try {
 		await sendInBatches(ids, read ? api.seen : api.unseen);
 	} catch (err) {
+		rollback();
 		invalidateDash(items);
 		toast.error((err as Error).message);
 	}
@@ -150,12 +200,13 @@ async function sendPin(
 ) {
 	const items = dashItemsOf(ids);
 	await cancelDash(items);
-	patchDashItems(new Set(ids), patch);
+	const rollback = patchWithRollback(new Set(ids), PIN_FIELDS, patch);
 	try {
 		await api.pinItems(ids, pin);
 		toast(message, { description: describe(items) });
 		refetchDash(items);
 	} catch (err) {
+		rollback();
 		toast.error((err as Error).message);
 		invalidateDash(items);
 	}

@@ -92,7 +92,8 @@ export function holdReason(
 
 export function heldAreDue(settings: DeliverySettings, now: number, state: DeliveryState): boolean {
 	if (inQuietHours(settings.quietHours, now)) return false;
-	if (settings.pushDigestMinutes !== null) return digestWindowIsOver(settings, now, state);
+	if (settings.pushDigestMinutes !== null && !digestWindowIsOver(settings, now, state))
+		return false;
 	return limitRoom(settings, now, state) > 0;
 }
 

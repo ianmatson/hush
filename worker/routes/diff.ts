@@ -326,7 +326,7 @@ async function gatedNodeWrite(
 	if (blocked) return c.json({ error: blocked }, 403);
 	const failure = graphqlWriteFailure(await graphql(token, query, variables).catch(() => null));
 	if (failure) return c.json({ error: failure.error }, failure.status);
-	if (subject) await refreshWrittenSubject(c, subject);
+	if (subject) refreshWrittenSubject(c, subject);
 	return c.json({ ok: true });
 }
 
@@ -445,7 +445,7 @@ const app = routes()
 		if (blocked) return c.json({ error: blocked }, 403);
 		const failure = await postSingleComment(await userToken(c.env, c.get('user')), b);
 		if (failure) return c.json({ error: failure.error }, failure.status);
-		await refreshWrittenSubject(c, b);
+		refreshWrittenSubject(c, b);
 		return c.json({ ok: true });
 	})
 	.post(

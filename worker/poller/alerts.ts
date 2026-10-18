@@ -81,14 +81,23 @@ export abstract class PollerAlerts extends PollerBase {
 		const room = urgent ? outgoing.length : limitRoom(settings, now, state);
 		const sendable = outgoing.slice(0, room);
 		const overLimit = outgoing.slice(room);
-		await this.recordSend(settings, now, state, sendable.length, false);
 		const delivered = await this.sendNow(sendable);
-		if (overLimit.length)
+		if (delivered) await this.recordSend(settings, now, state, sendable.length, false);
+		const retry = delivered ? overLimit : outgoing;
+		if (retry.length)
 			await this.hold(
-				{ count: overLimit.length, messages: overLimit, duringQuiet: false },
+				{ count: retry.length, messages: retry, duringQuiet: false },
 				{ startsDigestWindow: false }
 			);
-		if (delivered || overLimit.length) this.savePushMarks(due, now);
+		this.savePushMarks(due, now);
+	}
+
+	private queue: Promise<unknown> | undefined;
+
+	protected exclusive<T>(work: () => Promise<T>): Promise<T> {
+		const run = Promise.resolve(this.queue).then(work, work);
+		this.queue = run.catch(() => {});
+		return run;
 	}
 
 	protected async flushHeld(): Promise<void> {
@@ -107,8 +116,8 @@ export abstract class PollerAlerts extends PollerBase {
 			const message = onlyOne
 				? held.messages[0]
 				: digestOf(held.messages, held.count, held.duringQuiet, this.origin());
-			await this.recordSend(settings, now, state, 1, true);
 			delivered = await this.sendNow([message]);
+			if (delivered) await this.recordSend(settings, now, state, 1, true);
 		} finally {
 			if (!delivered) await this.hold(held, { startsDigestWindow: false });
 		}

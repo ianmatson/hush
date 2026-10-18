@@ -23,7 +23,7 @@
 		type UserSuggestion
 	} from '$lib/shared/suggest';
 	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
-	import { loadDraft, saveDraft } from '$lib/drafts';
+	import { clearSentDraft, loadDraft, saveDraft } from '$lib/drafts';
 	import { subjectKey } from '$lib/shared/subject';
 	import SuggestMenu from './suggest-menu.svelte';
 	import AttachButton from './attach-button.svelte';
@@ -69,13 +69,16 @@
 	});
 
 	async function submit(intent: ComposeIntent) {
-		const body = text.trim();
+		const sent = text;
+		const sentKey = draft;
+		const body = sent.trim();
 		if (uploads.pending || acting.id) return;
 		if (intent !== 'approve' && !body) return void box?.focus();
 		if (!(await sendAction(p, intent, { body: body || undefined }))) return;
 		toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
-		text = '';
+		clearSentDraft(sentKey, sent);
 		composer.intent = 'comment';
+		if (draft === sentKey && text === sent) text = '';
 	}
 
 	// --- "@" and "#" suggestions, as on GitHub (shared/suggest.ts) ---------------------------

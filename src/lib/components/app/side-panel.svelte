@@ -4,7 +4,7 @@
 </script>
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { MediaQuery } from 'svelte/reactivity';
@@ -25,7 +25,9 @@
 		start,
 		actions,
 		children,
-		footer
+		footer,
+		contentKey,
+		onclosecomplete
 	}: {
 		open: boolean;
 		onclose: () => void;
@@ -39,12 +41,15 @@
 		actions?: Snippet<[size: 'icon-sm' | 'icon']>;
 		children: Snippet;
 		footer?: Snippet;
+		contentKey?: string;
+		onclosecomplete?: () => void;
 	} = $props();
 
 	const wide = new MediaQuery('min-width: 1024px');
 
 	// Phones: swipe the sheet down by its top bar to close it (or tap the handle).
 	const CLOSE_AT = 80;
+	const SNAP_BACK = 'transform 200ms cubic-bezier(0.33, 1, 0.68, 1)';
 	let dragY = $state(0);
 	let dragging = $state(false);
 	let startY = 0;
@@ -59,12 +64,47 @@
 	function dragMove(e: PointerEvent) {
 		if (dragging) dragY = Math.max(0, e.clientY - startY);
 	}
-	function dragEnd() {
+	async function dragEnd() {
 		if (!dragging) return;
 		dragging = false;
-		if (dragY > CLOSE_AT) onclose();
-		dragY = 0;
+		if (dragY <= CLOSE_AT) {
+			dragY = 0;
+			return;
+		}
+		onclose();
+		await tick();
+		if (open) dragY = 0;
 	}
+	const sheetStyle = $derived(
+		`transform: translateY(${dragY}px); transition: ${dragging ? 'none' : SNAP_BACK}`
+	);
+
+	let sheetRetained = $state(false);
+	let wasOpen = false;
+	$effect.pre(() => {
+		if (open && !wasOpen) {
+			dragY = 0;
+			dragging = false;
+		}
+		if (open) sheetRetained = true;
+		wasOpen = open;
+	});
+	const sheetContentShown = $derived(open || sheetRetained);
+	function sheetOpenChangeComplete() {
+		if (open) return;
+		sheetRetained = false;
+		dragY = 0;
+		onclosecomplete?.();
+	}
+
+	let scroller = $state<HTMLElement | null>(null);
+	let scrolledKey: string | undefined;
+	$effect(() => {
+		const key = contentKey;
+		if (!scroller || key === undefined || key === scrolledKey) return;
+		scrolledKey = key;
+		scroller.scrollTop = 0;
+	});
 	const docked = $derived(open && wide.current);
 
 	function setDocked(on: boolean) {
@@ -84,6 +124,7 @@
 		class="fixed inset-y-0 right-0 z-30 flex w-(--peek-w) flex-col border-l bg-background"
 		aria-label={label}
 		transition:fly={{ x: '100%', opacity: 1, duration: 200, easing: cubicOut }}
+		onoutroend={() => onclosecomplete?.()}
 	>
 		<div class="flex h-[calc(3rem+1px)] shrink-0 items-center gap-1 border-b px-2">
 			{@render start?.(true)}
@@ -94,7 +135,10 @@
 				>
 			</span>
 		</div>
-		<div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+		<div
+			bind:this={scroller}
+			class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+		>
 			{@render children()}
 		</div>
 		{#if footer}
@@ -107,11 +151,12 @@
 		onOpenChange={(o) => {
 			if (!o) onclose();
 		}}
+		onOpenChangeComplete={sheetOpenChangeComplete}
 	>
 		<Dialog.Content
 			showCloseButton={false}
 			class="top-auto bottom-0 left-0 flex h-[88dvh] max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-t-2xl rounded-b-none p-0 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:max-w-none data-open:zoom-in-100 data-open:slide-in-from-bottom data-closed:zoom-out-100 data-closed:slide-out-to-bottom"
-			style={dragY ? `transform: translateY(${dragY}px); transition: none` : undefined}
+			style={sheetStyle}
 		>
 			<Dialog.Title class="sr-only">{title}</Dialog.Title>
 			<!-- The top bar is the handle: drag it down to close. -->
@@ -124,7 +169,7 @@
 				onpointercancel={dragEnd}
 			>
 				<div class="absolute left-2 flex items-center">
-					{#if open}{@render start?.(false)}{/if}
+					{#if sheetContentShown}{@render start?.(false)}{/if}
 				</div>
 				<button
 					type="button"
@@ -135,16 +180,19 @@
 					><span class="h-1 w-10 rounded-full bg-muted-foreground/30"></span></button
 				>
 				<div class="absolute right-2 flex items-center">
-					{#if open}{@render actions?.('icon')}{/if}
+					{#if sheetContentShown}{@render actions?.('icon')}{/if}
 					<Button variant="ghost" size="icon" aria-label="Close {label}" onclick={onclose}
 						><X /></Button
 					>
 				</div>
 			</div>
-			<div class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-				{#if open}{@render children()}{/if}
+			<div
+				bind:this={scroller}
+				class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+			>
+				{#if sheetContentShown}{@render children()}{/if}
 			</div>
-			{#if footer && open}
+			{#if footer && sheetContentShown}
 				<div class="flex shrink-0 flex-wrap items-center gap-1 border-t p-2">
 					{@render footer()}
 				</div>

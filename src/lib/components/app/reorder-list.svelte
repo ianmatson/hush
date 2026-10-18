@@ -52,6 +52,7 @@
 			onchange(left);
 		}
 	});
+	$effect(() => () => drag.dispose());
 
 	const shown = $derived.by(() => {
 		const list: { id: string; item: T | null }[] = items

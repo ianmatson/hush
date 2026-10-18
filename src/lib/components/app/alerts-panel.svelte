@@ -15,6 +15,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import BellOff from '@lucide/svelte/icons/bell-off';
+	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 
 	/**
 	 * The alert history: every push Hush sent in the last 30 days. A PR or issue opens in the same
@@ -100,6 +101,19 @@
 					<Skeleton class="h-3 w-1/2" />
 				</div>
 			{/each}
+		</div>
+	{:else if alerts.isError && !alerts.data}
+		<div class="flex flex-col items-center px-6 py-16 text-center text-sm">
+			<CircleAlert class="mb-3 size-7 text-muted-foreground" />
+			<p class="font-medium">Could not load alerts.</p>
+			<p class="mt-1 text-muted-foreground">{alerts.error.message}</p>
+			<Button
+				variant="outline"
+				size="sm"
+				class="mt-3"
+				disabled={alerts.isFetching}
+				onclick={() => alerts.refetch()}>{alerts.isFetching ? 'Retrying…' : 'Retry'}</Button
+			>
 		</div>
 	{:else if !alerts.data?.length}
 		<div class="flex flex-col items-center px-6 py-16 text-center text-sm">

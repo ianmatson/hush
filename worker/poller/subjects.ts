@@ -21,7 +21,7 @@ import { itemQueryFacts } from '../../src/lib/shared/categories';
 import { viewsPassingFilters } from '../../src/lib/shared/item-views';
 import type { PushCandidate } from './alerts';
 import { PollerDecisions } from './decisions';
-import { IN_KEYS, TRACKED_SEEN_REFRESH, type Who } from './shared';
+import { IN_KEYS, olderThan, TRACKED_SEEN_REFRESH, type Who } from './shared';
 
 const parse = (json: string | undefined) => (json ? (JSON.parse(json) as SubjectFacts) : null);
 const NEW_SUBJECT_WINDOW_MS = HOUR_MS;
@@ -51,14 +51,18 @@ export abstract class PollerSubjects extends PollerDecisions {
 		subjects: SubjectFacts[],
 		opts: { dash?: boolean; quiet?: boolean; mentions?: Map<string, FactEvent> } = {}
 	): Promise<void> {
-		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
-		const keys = [...fresh.keys()];
+		const keys = [...new Set(subjects.map((x) => subjectKey(x.repo, x.number)))];
 		const stored = new Map(
 			this.allIn<{ key: string; facts: string }>(
 				`SELECT key, facts FROM subjects WHERE key ${IN_KEYS}`,
 				keys
 			).map((r) => [r.key, r.facts])
 		);
+		subjects = subjects.filter(
+			(x) => !olderThan(x, parse(stored.get(subjectKey(x.repo, x.number))))
+		);
+		if (!subjects.length) return;
+		const fresh = new Map(subjects.map((x) => [subjectKey(x.repo, x.number), x]));
 		const changed = [...fresh].filter(([k, x]) => stored.get(k) !== JSON.stringify(x));
 		const now = Date.now();
 		this.transaction(() => {
@@ -382,7 +386,14 @@ export abstract class PollerSubjects extends PollerDecisions {
 	 * Check one PR or issue now: you just came back to Hush from it on GitHub. Stores its facts,
 	 * which updates its entry in the cached dashboards. About 1 point.
 	 */
-	async recheck(repo: string, number: number): Promise<{ ok: true } | { error: string }> {
+	recheck(repo: string, number: number): Promise<{ ok: true } | { error: string }> {
+		return this.exclusive(() => this.recheckNow(repo, number));
+	}
+
+	private async recheckNow(
+		repo: string,
+		number: number
+	): Promise<{ ok: true } | { error: string }> {
 		const who = await this.who();
 		if (!who) return { ok: true };
 		const [owner, name] = repo.split('/');
@@ -394,8 +405,10 @@ export abstract class PollerSubjects extends PollerDecisions {
 		return { error: reads.errors[0] ?? 'GitHub did not return this PR or issue.' };
 	}
 
-	async recordFetched(sub: SubjectFacts): Promise<void> {
-		const who = await this.who();
-		if (who) await this.record(who, [sub]);
+	recordFetched(sub: SubjectFacts): Promise<void> {
+		return this.exclusive(async () => {
+			const who = await this.who();
+			if (who) await this.record(who, [sub]);
+		});
 	}
 }

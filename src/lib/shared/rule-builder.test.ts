@@ -5,6 +5,9 @@ import {
 	describeBuilder,
 	emptyCondition,
 	queryToBuilder,
+	sizeDraftOf,
+	sizeValue,
+	withChips,
 	type BuilderState
 } from './rule-builder';
 
@@ -111,5 +114,25 @@ describe('rule builder', () => {
 		expect(describeBuilder(queryToBuilder('label:blocked OR about:"It waits"')!)).toBe(
 			'Label is blocked or about “It waits”.'
 		);
+	});
+
+	it.each(['<50', '<=50', '50', '>=50', '>50', '10..200'])(
+		'keeps the meaning of size:%s in the size editor',
+		(value) => {
+			expect(sizeValue(sizeDraftOf(value))).toBe(value);
+		}
+	);
+
+	it('keeps a range that has only one bound as a draft, with no value yet', () => {
+		expect(sizeDraftOf('')).toEqual({ op: '<', from: '', to: '' });
+		expect(sizeValue({ op: '..', from: '10', to: '' })).toBe('');
+		expect(sizeValue({ op: '..', from: '', to: '50' })).toBe('');
+		expect(sizeValue({ op: '>=', from: '', to: '' })).toBe('');
+	});
+
+	it('adds pasted chips once each, trimmed, in the order they came', () => {
+		expect(withChips([], 'bug,bug')).toEqual(['bug']);
+		expect(withChips(['docs'], ' bug \ncrash, docs,bug,')).toEqual(['docs', 'bug', 'crash']);
+		expect(withChips(['bug'], 'Bug')).toEqual(['bug', 'Bug']);
 	});
 });

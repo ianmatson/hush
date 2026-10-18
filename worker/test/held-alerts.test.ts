@@ -4,14 +4,28 @@ import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 vi.mock('../poller/base', () => ({ PollerBase: class {} }));
 vi.mock('../slack-store', () => ({ slackConnection: vi.fn() }));
 vi.mock('../webpush', () => ({ sendPush: vi.fn(), vapidFromEnv: vi.fn(() => ({})) }));
+vi.mock('../poller/data', async () => ({
+	PollerData: (await import('../poller/alerts')).PollerAlerts
+}));
 
 const { PollerAlerts } = await import('../poller/alerts');
+const { Poller } = await import('../poller');
+type PushCandidate = import('../poller/alerts').PushCandidate;
 const { slackConnection } = await import('../slack-store');
 const { sendPush } = await import('../webpush');
+
+class TestPoller extends Poller {
+	send(candidates: PushCandidate[]) {
+		return this.deliver(candidates);
+	}
+}
 
 class TestAlerts extends PollerAlerts {
 	flush() {
 		return this.flushHeld();
+	}
+	send(candidates: PushCandidate[]) {
+		return this.deliver(candidates);
 	}
 }
 
@@ -29,7 +43,9 @@ const held = {
 	duringQuiet: false
 };
 
-function harness() {
+const ONE_PER_FOUR_HOURS = { count: 1, minutes: 240 };
+
+function harness(pushLimit: typeof DEFAULT_SETTINGS.pushLimit = null) {
 	const values = new Map<string, unknown>([
 		['userId', 1],
 		['held', structuredClone(held)]
@@ -58,7 +74,7 @@ function harness() {
 				}
 			}
 		},
-		settings: async () => structuredClone(DEFAULT_SETTINGS),
+		settings: async () => ({ ...structuredClone(DEFAULT_SETTINGS), pushLimit }),
 		appInFocus: () => false,
 		one: () => ({ n: 1 }),
 		all: () => [{ endpoint: 'https://push.test/1', p256dh: 'key', auth: 'auth' }],
@@ -100,5 +116,73 @@ describe('held alerts', () => {
 			title: '2 alerts',
 			url: 'https://app.test/'
 		});
+	});
+
+	it('keeps an alert that no channel took, to send again on the next cycle', async () => {
+		const { poller, values } = harness();
+		Object.assign(poller, {
+			appSeenAt: async () => 0,
+			transaction: (action: () => void) => action(),
+			broadcast: () => {}
+		});
+		values.delete('held');
+		vi.mocked(slackConnection).mockResolvedValue(null);
+		vi.mocked(sendPush).mockResolvedValue(500);
+		await poller.send([
+			{ itemKey: 'o/r#1', reason: 'review_requested', message: held.messages[0] }
+		]);
+		expect(values.get('held')).toMatchObject({ count: 1, messages: [held.messages[0]] });
+		expect(values.get('recentSends')).toBeUndefined();
+		vi.mocked(sendPush).mockResolvedValue(201);
+		await poller.flush();
+		expect(values.has('held')).toBe(false);
+		expect(vi.mocked(sendPush).mock.lastCall?.[1]).toMatchObject({ title: 'Review requested' });
+	});
+
+	it('records held-send capacity only after a channel takes the alert', async () => {
+		const { poller, values } = harness(ONE_PER_FOUR_HOURS);
+		vi.mocked(slackConnection).mockResolvedValue(null);
+		vi.mocked(sendPush).mockResolvedValue(500);
+		await poller.flush();
+		expect(values.get('recentSends')).toBeUndefined();
+		vi.mocked(sendPush).mockResolvedValue(201);
+		await poller.flush();
+		expect(values.get('recentSends')).toHaveLength(1);
+	});
+});
+
+describe('a failed immediate alert in a poll cycle', () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	function cyclingPoller(pollDeliveries: PushCandidate[][]) {
+		const { values, poller: alerts } = harness(ONE_PER_FOUR_HOURS);
+		values.delete('held');
+		const poller = Object.assign(Object.create(TestPoller.prototype) as TestPoller, alerts, {
+			appSeenAt: async () => 0,
+			transaction: (action: () => void) => action(),
+			broadcast: () => {},
+			ctx: { ...alerts.ctx, getWebSockets: () => [] },
+			fillDecisions: async () => {},
+			schedule: async () => {},
+			poll: () => poller.send(pollDeliveries.shift() ?? [])
+		});
+		return { poller, values };
+	}
+
+	it('stays held for the next cycle and keeps the send limit free', async () => {
+		vi.mocked(slackConnection).mockResolvedValue(null);
+		vi.mocked(sendPush).mockResolvedValue(500);
+		const { poller, values } = cyclingPoller([
+			[{ itemKey: 'o/r#1', reason: 'review_requested', message: held.messages[0] }]
+		]);
+		await poller.alarm();
+		expect(sendPush).toHaveBeenCalledTimes(1);
+		expect(values.get('held')).toMatchObject({ count: 1 });
+		expect(values.get('recentSends')).toBeUndefined();
+		vi.mocked(sendPush).mockResolvedValue(201);
+		await poller.alarm();
+		expect(sendPush).toHaveBeenCalledTimes(2);
+		expect(values.has('held')).toBe(false);
+		expect(values.get('recentSends')).toHaveLength(1);
 	});
 });

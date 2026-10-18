@@ -19,7 +19,7 @@
 
 	function set(side: keyof SwipePair, id: string) {
 		if (!swipe || swipe[side] === id) return;
-		saveSettings({ swipe: { dash: { ...swipe, [side]: id } } }, 'Saved');
+		saveSettings({ swipe: { dash: { ...swipe, [side]: id } } });
 	}
 </script>
 

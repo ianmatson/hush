@@ -12,6 +12,7 @@
 	import { reviewThreadPath } from '$lib/shared/in-app-links';
 	import { externalContributor } from '$lib/shared/contributors';
 	import { rowShows } from '$lib/shared/row-parts';
+	import { subjectKey } from '$lib/shared/subject';
 	import { sanitize } from '$lib/html';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
@@ -144,7 +145,7 @@
 		<Skeleton class="h-16 w-full" />
 	</div>
 {:else if q.isError}
-	<div class="p-4 text-sm">
+	<div class="p-4 text-sm" data-item-ready={subjectKey(repo, number)}>
 		<p class="font-medium">Hush cannot show this item.</p>
 		<p class="mt-1 text-muted-foreground">{q.error.message}</p>
 	</div>
@@ -152,7 +153,7 @@
 	{@const p = q.data}
 	{@const st = STATE[stateOf(p)]}
 	{@const Icon = stateIcon(p)}
-	<article class="grid gap-5 p-4 pb-6">
+	<article class="grid gap-5 p-4 pb-6" data-item-ready={subjectKey(repo, number)}>
 		<header class="grid gap-2">
 			<div class="flex flex-wrap items-center gap-2 text-xs">
 				<span class={cn('flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', st.tone)}

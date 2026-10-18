@@ -93,7 +93,13 @@
 				</Button>
 			</SettingRow>
 			<SettingRow label="Start page" description="The tab Hush opens first.">
-				<SettingSelect class="w-40" value={start} options={starts} onchange={chooseStart} />
+				<SettingSelect
+					class="w-40"
+					label="Start page"
+					value={start}
+					options={starts}
+					onchange={chooseStart}
+				/>
 			</SettingRow>
 		</Card.Content>
 	</Card.Root>

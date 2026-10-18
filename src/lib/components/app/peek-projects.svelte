@@ -79,6 +79,17 @@
 	}
 </script>
 
+{#if q.isError && !q.data}
+	<button
+		type="button"
+		class="flex items-center gap-1.5 rounded-full border border-dashed px-2 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
+		disabled={q.isFetching}
+		onclick={() => q.refetch()}
+	>
+		<SquareKanban class="size-3" />
+		<span>{q.isFetching ? 'Loading projects…' : 'Projects failed · Retry'}</span>
+	</button>
+{/if}
 {#each q.data?.items ?? [] as item (item.id)}
 	{@const status = statusOf(item.status)}
 	<Popover.Root>

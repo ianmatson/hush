@@ -312,6 +312,45 @@ const NUMBER_COMPARISON_WORDS: Record<Comparison, string> = {
 	'>=': 'at least'
 };
 
+const CHIP_SEPARATOR = /[,\n]/;
+
+export function withChips(values: string[], raw: string): string[] {
+	const next = [...values];
+	for (const chip of raw.split(CHIP_SEPARATOR).map((v) => v.trim()))
+		if (chip && !next.includes(chip)) next.push(chip);
+	return next;
+}
+
+export type SizeComparison = Comparison | '=' | '..';
+
+export interface SizeDraft {
+	op: SizeComparison;
+	from: string;
+	to: string;
+}
+
+export const SIZE_COMPARISONS: { value: SizeComparison; label: string }[] = [
+	{ value: '<', label: NUMBER_COMPARISON_WORDS['<'] },
+	{ value: '<=', label: NUMBER_COMPARISON_WORDS['<='] },
+	{ value: '=', label: 'exactly' },
+	{ value: '>=', label: NUMBER_COMPARISON_WORDS['>='] },
+	{ value: '>', label: NUMBER_COMPARISON_WORDS['>'] },
+	{ value: '..', label: 'between' }
+];
+
+export function sizeDraftOf(value: string): SizeDraft {
+	const parsed = parseRangeOrBound(value);
+	if (!parsed) return { op: '<', from: '', to: '' };
+	if (parsed.kind === 'range') return { op: '..', from: parsed.from, to: parsed.to };
+	return { op: parsed.op ?? '=', from: parsed.value, to: '' };
+}
+
+export function sizeValue({ op, from, to }: SizeDraft): string {
+	if (op === '..') return from && to ? `${from}..${to}` : '';
+	if (!from) return '';
+	return op === '=' ? from : `${op}${from}`;
+}
+
 const DATE_COMPARISON_WORDS: Record<Comparison, string> = {
 	'<': 'before',
 	'<=': 'on or before',

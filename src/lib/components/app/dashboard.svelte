@@ -26,7 +26,7 @@
 	import SnoozeSheet from './snooze-sheet.svelte';
 	import ShortcutsDialog from '$lib/components/app/shortcuts-dialog.svelte';
 	import { LIST_MOUSE, shortcutsFor } from '$lib/shortcuts';
-	import { commandFor, ignoreKey } from '$lib/keys.svelte';
+	import { commandFor, ignoreKey, keyActivatesFocusedControl } from '$lib/keys.svelte';
 	import { itemPagePath } from '$lib/shared/item-page';
 	import { goto } from '$app/navigation';
 	import { flip } from 'svelte/animate';
@@ -116,6 +116,7 @@
 	import Mail from '@lucide/svelte/icons/mail';
 	import MailOpen from '@lucide/svelte/icons/mail-open';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import FunnelX from '@lucide/svelte/icons/funnel-x';
 	import Link from '@lucide/svelte/icons/link';
 	import Tip from './tip.svelte';
 
@@ -148,6 +149,8 @@
 	const FLIP = { duration: 260, easing: cubicOut };
 	const SECTION_SLIDE = { duration: 220, easing: cubicOut };
 	const LIST_SWAP = { duration: 160, easing: cubicOut };
+	const ROW_OUT = { duration: 200, easing: cubicOut };
+	const EMPTY_LIST_FALLBACK_MS = ROW_OUT.duration + 100;
 
 	const prQ = createQuery(() => ({
 		...dashQuery('pr'),
@@ -161,9 +164,8 @@
 	const shownQueries = $derived(kinds.map(queryOf));
 	const me = createQuery(meQuery);
 	const data = $derived.by(() => {
-		const answers = shownQueries.map((q) => q.data);
-		if (answers.some((d) => !d)) return null;
-		const ds = answers as DashResponse[];
+		const ds = shownQueries.flatMap((q): DashResponse[] => (q.data ? [q.data] : []));
+		if (!ds.length) return null;
 		return {
 			items: ds.flatMap((d) => d.items),
 			errors: [...new Set(ds.flatMap((d) => d.errors))],
@@ -182,8 +184,10 @@
 	const revalidatingAfterOpen = $derived(
 		fetching && shownQueries.some((q) => q.dataUpdatedAt < pageOpenedAt)
 	);
-	const loadError = $derived(shownQueries.find((q) => q.isError)?.error ?? null);
+	const failedKinds = $derived(kinds.filter((k) => queryOf(k).isError));
+	const kindNoun = (k: DashKind) => (k === 'pr' ? 'pull requests' : 'issues');
 	const pending = $derived(shownQueries.some((q) => q.isPending));
+	const everyKindAnswered = $derived(shownQueries.every((q) => !!q.data));
 	let refreshing = $state(false);
 	let categoryFilter = $state<CategoryFilter[]>([]);
 	let showSnoozed = $state(false);
@@ -218,8 +222,11 @@
 	const closedLabel = $derived(closedSectionLabel(kinds));
 	const inView = (i: DashItem) => i.sections.includes(view.id) && (keepClosed || !i.keptAfterClose);
 	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed && inView(i)));
+	const inShownPopulation = (i: DashItem) => i.dismissed === showSnoozed && inView(i);
+	const shownPopulation = $derived((data?.items ?? []).filter(inShownPopulation));
 	const categoryCount = (filter: CategoryFilter) =>
-		visibleItems.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups)).length;
+		shownPopulation.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups))
+			.length;
 	const hiddenPartsOf = (i: DashItem) => me.data?.settings.rows[i.kind] ?? [];
 	const tableLayout = $derived(me.data?.settings.rowLayout === 'table');
 	const tableColumns = $derived(me.data?.settings.tableColumns ?? []);
@@ -233,9 +240,7 @@
 	const filtered = $derived.by(() => {
 		const listed = (data?.items ?? []).filter(
 			(i) =>
-				i.dismissed === showSnoozed &&
-				inView(i) &&
-				matchesCategoryFilters(i.categories, categoryFilter, categoryGroups)
+				inShownPopulation(i) && matchesCategoryFilters(i.categories, categoryFilter, categoryGroups)
 		);
 		return keepHeldRow(
 			listed,
@@ -245,6 +250,37 @@
 	});
 	$effect.pre(() => {
 		filteredBefore = filtered;
+	});
+	let listKept = $state(false);
+	let shapeWithRows: string | null = null;
+	let outrosRunning = 0;
+	function dropEmptyList() {
+		if (!filtered.length) listKept = false;
+	}
+	function outroStarted() {
+		outrosRunning++;
+	}
+	function outroEnded() {
+		outrosRunning = Math.max(0, outrosRunning - 1);
+		if (!outrosRunning) dropEmptyList();
+	}
+	function dropEmptyListAfterMissedOutros() {
+		outrosRunning = 0;
+		dropEmptyList();
+	}
+	$effect(() => {
+		const shape = listShape;
+		if (filtered.length) {
+			shapeWithRows = shape;
+			listKept = true;
+			return;
+		}
+		if (shape !== shapeWithRows) {
+			listKept = false;
+			return;
+		}
+		const fallback = setTimeout(dropEmptyListAfterMissedOutros, EMPTY_LIST_FALLBACK_MS);
+		return () => clearTimeout(fallback);
 	});
 	const heldOutOfKeyboardOrder = (id: string | null) =>
 		id !== null && id === peek.heldId && owns && filtered.some((i) => i.id === id);
@@ -553,8 +589,7 @@
 	});
 
 	const countIn = (k: DashKind) =>
-		(queryOf(k).data?.items ?? []).filter((i) => !i.dismissed && !i.keptAfterClose && inView(i))
-			.length;
+		(queryOf(k).data?.items ?? []).filter((i) => !i.keptAfterClose && inShownPopulation(i)).length;
 
 	const setGroupBy = (by: GroupBy) => by !== view.groupBy && updateView({ groupBy: by });
 	const setSort = (sort: ViewSort) => updateView({ sort });
@@ -622,6 +657,7 @@
 	function onRowClick(e: MouseEvent, i: DashItem) {
 		contextOpen = false;
 		closeRowMenus();
+		if (e.currentTarget instanceof HTMLElement) e.currentTarget.focus({ preventScroll: true });
 		if (sel.click(e, i.id, order, selectedId)) return;
 		// A click on the card peeks it.
 		sel.clear();
@@ -649,7 +685,7 @@
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if (ignoreKey(e)) return;
+		if (ignoreKey(e) || keyActivatesFocusedControl(e)) return;
 		const cmd = commandFor(e, VIEW_KEY_SCOPES);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
@@ -717,6 +753,7 @@
 					label: i.dismissed ? 'Wake up' : 'Snooze',
 					icon: i.dismissed ? AlarmClockOff : AlarmClock,
 					tone: 'bg-signal-review text-white',
+					leaves: true,
 					run: () => (i.dismissed ? unsnooze([i.id]) : snooze([i.id], UNTIL_NEW_ACTIVITY))
 				};
 			case 'read':
@@ -724,6 +761,7 @@
 					label: i.unread ? 'Read' : 'Unread',
 					icon: i.unread ? MailOpen : Mail,
 					tone: 'bg-primary text-primary-foreground',
+					leaves: false,
 					run: () => setItemsRead([i.id], !!i.unread)
 				};
 			case 'mute':
@@ -731,6 +769,7 @@
 					label: i.muted ? 'Unmute' : 'Mute',
 					icon: BellOff,
 					tone: 'bg-muted-foreground text-background',
+					leaves: true,
 					run: () => toggleMute([i.id])
 				};
 		}
@@ -852,11 +891,24 @@
 		</div>
 	</div>
 
-	{#if loadError}
-		<Alert.Root variant="destructive" class="mb-3"
-			><Alert.Description>{loadError.message}</Alert.Description></Alert.Root
-		>
-	{/if}
+	{#each failedKinds as k (k)}
+		{@const error = queryOf(k).error}
+		<Alert.Root variant="destructive" class="mb-3">
+			<Alert.Title>Could not load {kindNoun(k)}</Alert.Title>
+			<Alert.Description>
+				{error?.message}
+				<span class="mt-1 flex">
+					<button
+						type="button"
+						class="underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+						disabled={queryOf(k).isFetching}
+						onclick={() => queryOf(k).refetch()}
+						>{queryOf(k).isFetching ? 'Retrying…' : 'Retry'}</button
+					>
+				</span>
+			</Alert.Description>
+		</Alert.Root>
+	{/each}
 	{#each data?.errors ?? [] as err (err)}
 		{@const help = tokenHelp(err)}
 		<!-- A known token limit is advice, not a failure: the other results are all here. You can
@@ -887,31 +939,58 @@
 	{/each}
 
 	{#if pending}
-		<div class="grid gap-2">
+		<div class="grid grid-cols-[minmax(0,1fr)] gap-0.5" aria-hidden="true">
 			{#each [0, 1, 2, 3, 4] as k (k)}
-				<div class="flex items-center gap-3 px-3 py-3">
-					<Skeleton class="size-8 rounded-full" />
-					<div class="grid flex-1 gap-2">
-						<Skeleton class="h-4 w-2/3" />
-						<Skeleton class="h-3 w-1/3" />
+				{#if tableLayout}
+					<div class="flex h-9 items-center gap-2 border-b border-border/50 px-2">
+						<Skeleton class="size-5 shrink-0 rounded-full" />
+						<Skeleton class="h-3 flex-1" />
+						<Skeleton class="h-3 w-8 shrink-0" />
 					</div>
-				</div>
+				{:else}
+					<div
+						class="flex items-start gap-2.5 rounded-xl border border-transparent px-2 py-2.5 sm:gap-3 sm:px-3 sm:py-3"
+					>
+						<Skeleton class="size-7 shrink-0 rounded-full sm:size-8" />
+						<div class="min-w-0 flex-1">
+							<div class="flex h-5 items-center"><Skeleton class="h-3.5 w-2/3" /></div>
+							<div class="mt-0.5 flex h-4 items-center"><Skeleton class="h-3 w-1/3" /></div>
+							<div class="mt-1 flex h-5 items-center sm:mt-1.5">
+								<Skeleton class="h-4 w-24 rounded-md" />
+							</div>
+						</div>
+					</div>
+				{/if}
 			{/each}
 		</div>
-	{:else if !filtered.length}
-		<div
-			class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
-		>
-			<CircleCheck class="mb-3 size-8 text-signal-merge" />
-			{#if showSnoozed}
-				<p class="font-medium">Nothing is snoozed or muted.</p>
-			{:else}
-				<p class="font-medium">No open {noun} in {view.name}.</p>
-				<p class="mt-1 text-sm text-muted-foreground">
-					<a class="underline" href="/settings/views#view-{view.id}">Edit its searches</a> to find more.
-				</p>
-			{/if}
-		</div>
+	{:else if !filtered.length && !listKept}
+		{#if categoryFilter.length && shownPopulation.length}
+			<div
+				class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
+				in:fade={LIST_SWAP}
+			>
+				<FunnelX class="mb-3 size-8 text-muted-foreground" />
+				<p class="font-medium">No items match these filters.</p>
+				<Button variant="outline" size="sm" class="mt-3" onclick={() => (categoryFilter = [])}
+					>Clear filters</Button
+				>
+			</div>
+		{:else if everyKindAnswered}
+			<div
+				class="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center"
+				in:fade={LIST_SWAP}
+			>
+				<CircleCheck class="mb-3 size-8 text-signal-merge" />
+				{#if showSnoozed}
+					<p class="font-medium">Nothing is snoozed or muted.</p>
+				{:else}
+					<p class="font-medium">No open {noun} in {view.name}.</p>
+					<p class="mt-1 text-sm text-muted-foreground">
+						<a class="underline" href="/settings/views#view-{view.id}">Edit its searches</a> to find more.
+					</p>
+				{/if}
+			</div>
+		{/if}
 	{:else}
 		<ContextMenu.Root bind:open={contextOpen}>
 			<ContextMenu.Trigger>
@@ -921,7 +1000,7 @@
 							<div class="grid gap-5" in:fade={LIST_SWAP}>
 								{#each listed as section (section.key)}
 									{@const closed = isCollapsed(section.key)}
-									<section>
+									<section out:slide={ROW_OUT} onoutrostart={outroStarted} onoutroend={outroEnded}>
 										{#if section.label}
 											<button
 												class="mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left"
@@ -968,7 +1047,9 @@
 													<li
 														animate:flip={FLIP}
 														in:fly={{ y: -8, duration: 200 }}
-														out:slide={{ duration: 200, easing: cubicOut }}
+														out:slide={ROW_OUT}
+														onoutrostart={outroStarted}
+														onoutroend={outroEnded}
 													>
 														{#if unit.stack}
 															{@render stackRow(unit.stack)}

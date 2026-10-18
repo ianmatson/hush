@@ -50,7 +50,7 @@
 	let widths = $state<number[]>([]);
 	let moreWidth = $state(0);
 	$effect(() => {
-		void links.map((l) => `${l.label}${l.badge}`).join();
+		void links.map((l) => l.label).join();
 		void navWidth;
 		tick().then(() => {
 			if (!measure) return;
@@ -58,8 +58,9 @@
 			moreWidth = measure.querySelector<HTMLElement>('[data-more]')?.offsetWidth ?? 0;
 		});
 	});
+	const measured = $derived(navWidth > 0 && widths.length === links.length);
 	const shown = $derived(
-		!navWidth || widths.length !== links.length
+		!measured
 			? links.map((_, k) => k)
 			: fitItems(widths, navWidth, {
 					gap: GAP,
@@ -71,17 +72,22 @@
 	const overflow = $derived(links.filter((_, k) => !shown.includes(k)));
 	const active = (href: string) =>
 		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
+	const MAX_BADGE = 99;
+	const badgeText = (n: number) => (n > MAX_BADGE ? `${MAX_BADGE}+` : String(n));
+	const linkName = (l: { label: string; badge: number }) =>
+		l.badge ? `${l.label}, ${l.badge} unread` : l.label;
 	const MORE_CLASS =
 		'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground hover:text-foreground';
 </script>
 
-{#snippet badge(n: number | null | undefined, extra = '')}
+{#snippet badge(n: number, extra = '')}
 	{#if n}
 		<span
+			aria-hidden="true"
 			class={cn(
 				'min-w-4.5 rounded-full bg-primary px-1 text-center text-[0.68rem] leading-4 text-primary-foreground tabular-nums',
 				extra
-			)}>{n}</span
+			)}>{badgeText(n)}</span
 		>
 	{/if}
 {/snippet}
@@ -92,21 +98,21 @@
 	<ChevronDown class="size-3.5" />
 {/snippet}
 
-{#snippet link(
-	l: { href: string; label: string; badge: number | null | undefined },
-	measured: boolean
-)}
+{#snippet link(l: { href: string; label: string; badge: number }, measured: boolean)}
 	<a
 		href={l.href}
 		data-link={measured ? '' : undefined}
 		tabindex={measured ? -1 : undefined}
+		aria-label={linkName(l)}
 		aria-current={!measured && active(l.href) ? 'page' : undefined}
 		class={cn(
 			'flex max-w-48 shrink-0 items-center gap-1.5 rounded-md px-2 py-1 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
 			active(l.href) && 'bg-muted text-foreground'
 		)}
 	>
-		<span class="truncate">{l.label}</span>{@render badge(l.badge)}
+		<span class="truncate">{l.label}</span><span class="flex w-7 shrink-0"
+			>{@render badge(l.badge)}</span
+		>
 	</a>
 {/snippet}
 
@@ -127,7 +133,10 @@
 					<span data-more class={MORE_CLASS}>{@render moreLabel(true)}</span>
 				</div>
 			</div>
-			<nav class="flex min-w-0 items-center gap-0.5 text-sm" aria-label="Views">
+			<nav
+				class={cn('flex min-w-0 items-center gap-0.5 text-sm', !measured && 'overflow-hidden')}
+				aria-label="Views"
+			>
 				{#each links as l, k (l.href)}
 					{#if shown.includes(k)}{@render link(l, false)}{/if}
 				{/each}
@@ -138,7 +147,11 @@
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start" class="min-w-48">
 							{#each overflow as l (l.href)}
-								<DropdownMenu.Item onclick={() => goto(l.href)} class="gap-2">
+								<DropdownMenu.Item
+									onclick={() => goto(l.href)}
+									class="gap-2"
+									aria-label={linkName(l)}
+								>
 									{l.label}{@render badge(l.badge, 'ml-auto')}
 								</DropdownMenu.Item>
 							{/each}

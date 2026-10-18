@@ -33,3 +33,28 @@ export function ignoreKey(e: KeyboardEvent): boolean {
 	const target = e.target;
 	return e.defaultPrevented || (target instanceof Element && !!target.closest(OWNS_ITS_KEYS));
 }
+
+const ACTIVATION_KEYS = new Set([' ', 'Enter']);
+const ACTIVATES_ON_ENTER_OR_SPACE = [
+	'a[href]',
+	'button',
+	'select',
+	'summary',
+	'[role="button"]',
+	'[role="link"]',
+	'[role="checkbox"]',
+	'[role="switch"]',
+	'[role="radio"]',
+	'[role="tab"]',
+	'[role="menuitem"]',
+	'[role="combobox"]'
+].join(', ');
+
+export function keyActivatesFocusedControl(e: KeyboardEvent): boolean {
+	const target = e.target;
+	return (
+		ACTIVATION_KEYS.has(e.key) &&
+		target instanceof Element &&
+		target.matches(ACTIVATES_ON_ENTER_OR_SPACE)
+	);
+}
