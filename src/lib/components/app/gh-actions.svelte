@@ -174,17 +174,14 @@
 					{#each others as s (s.id)}
 						{#if s.blocked}
 							{@render blockedItem(s.id, s.blocked)}
-						{:else if METHOD_ACTIONS.has(s.id) && methods.length > 1 && noRoomForSubmenu.current}
-							<DropdownMenu.Separator />
-							<DropdownMenu.Label class="text-xs text-muted-foreground"
-								>{GH_ACTIONS[s.id].label}</DropdownMenu.Label
-							>
-							{@render methodItems(s.id)}
-							<DropdownMenu.Separator />
 						{:else if METHOD_ACTIONS.has(s.id) && methods.length > 1}
 							<DropdownMenu.Sub>
 								<DropdownMenu.SubTrigger>{GH_ACTIONS[s.id].label}</DropdownMenu.SubTrigger>
-								<DropdownMenu.SubContent class="w-52">
+								<DropdownMenu.SubContent
+									class="w-52"
+									side={noRoomForSubmenu.current ? 'top' : 'right'}
+									align={noRoomForSubmenu.current ? 'end' : 'start'}
+								>
 									{@render methodItems(s.id)}
 								</DropdownMenu.SubContent>
 							</DropdownMenu.Sub>
