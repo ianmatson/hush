@@ -527,11 +527,11 @@ describe('toSubject stack links', () => {
 	});
 
 	it('has no links for a PR on the default branch', () => {
-		expect(toSubject(top(pr(2, 'b1'), 'main')).stackBelowNearestFirst).toEqual([]);
+		expect(toSubject(top(pr(2, 'b1'), 'main'), 'ian').stackBelowNearestFirst).toEqual([]);
 	});
 
 	it('stops at a loop', () => {
-		const s = toSubject(top(pr(2, 'b1', pr(3, 'b2'))));
+		const s = toSubject(top(pr(2, 'b1', pr(3, 'b2'))), 'ian');
 		expect(s.stackBelowNearestFirst?.map((l) => l.number)).toEqual([2]);
 	});
 });
@@ -546,7 +546,7 @@ describe('toSubject close facts', () => {
 		...over
 	});
 	const issue = (state: string, stateReason: string | null) =>
-		toSubject(node({ __typename: 'Issue', state, stateReason, closedAt: CLOSED_AT }));
+		toSubject(node({ __typename: 'Issue', state, stateReason, closedAt: CLOSED_AT }), 'ian');
 
 	it('reads when a pull request or an issue closed', () => {
 		const merged = node({
@@ -555,14 +555,14 @@ describe('toSubject close facts', () => {
 			merged: true,
 			closedAt: CLOSED_AT
 		});
-		expect(toSubject(merged)).toMatchObject({
+		expect(toSubject(merged, 'ian')).toMatchObject({
 			state: 'merged',
 			closedAt: CLOSED_AT,
 			closeReason: null
 		});
-		expect(toSubject(node({ __typename: 'Issue', state: 'OPEN', closedAt: null })).closedAt).toBe(
-			null
-		);
+		expect(
+			toSubject(node({ __typename: 'Issue', state: 'OPEN', closedAt: null }), 'ian').closedAt
+		).toBe(null);
 	});
 
 	it('reads why an issue closed', () => {
@@ -574,18 +574,77 @@ describe('toSubject close facts', () => {
 	});
 });
 
+describe('toSubject mentions', () => {
+	const EARLY = '2026-10-05T14:14:28Z';
+	const LATE = '2026-10-05T14:14:29Z';
+	const node = (over: Record<string, unknown>) =>
+		toSubject(
+			{
+				__typename: 'PullRequest',
+				number: 7,
+				url: 'https://github.com/o/r/pull/7',
+				state: 'OPEN',
+				repository: { nameWithOwner: 'o/r' },
+				author: { login: 'alice' },
+				createdAt: EARLY,
+				...over
+			},
+			'ian'
+		);
+	const mentioned = (login: string, createdAt: string) => ({ createdAt, actor: { login } });
+	const comment = (login: string, bodyText: string, createdAt: string) => ({
+		author: { login },
+		bodyText,
+		createdAt,
+		url: 'https://github.com/o/r/pull/7#c'
+	});
+
+	it('keeps when you were last mentioned, even when one comment mentions others after you', () => {
+		const s = node({
+			mentionEvents: {
+				nodes: [mentioned('Ian', EARLY), mentioned('smallbrownbike', LATE), mentioned('joe', LATE)]
+			}
+		});
+		expect(s.mentionedAt).toBe(EARLY);
+		expect(node({ mentionEvents: { nodes: [mentioned('joe', LATE)] } }).mentionedAt).toBeNull();
+	});
+
+	it('keeps the newest time each team was written by someone else', () => {
+		const s = node({
+			bodyText: 'cc @Acme/Web',
+			comments: {
+				nodes: [
+					comment('bob', '@acme/web and @acme/infra please look', LATE),
+					comment('ian', '@acme/docs fyi', LATE),
+					{
+						...comment('github-actions', '@acme/bots', LATE),
+						author: { login: 'github-actions', __typename: 'Bot' }
+					}
+				]
+			}
+		});
+		expect(s.teamMentions).toEqual([
+			{ team: 'acme/web', at: LATE },
+			{ team: 'acme/infra', at: LATE }
+		]);
+	});
+});
+
 describe('toSubject reviews', () => {
 	const AT = '2026-10-13T10:00:00Z';
 	const reviewBy = (author: Record<string, unknown>) =>
-		toSubject({
-			__typename: 'PullRequest',
-			number: 7,
-			url: 'https://github.com/o/r/pull/7',
-			state: 'OPEN',
-			repository: { nameWithOwner: 'o/r' },
-			author: { login: 'alice' },
-			latestReview: { nodes: [{ author, submittedAt: AT, state: 'COMMENTED' }] }
-		}).latestReview;
+		toSubject(
+			{
+				__typename: 'PullRequest',
+				number: 7,
+				url: 'https://github.com/o/r/pull/7',
+				state: 'OPEN',
+				repository: { nameWithOwner: 'o/r' },
+				author: { login: 'alice' },
+				latestReview: { nodes: [{ author, submittedAt: AT, state: 'COMMENTED' }] }
+			},
+			'ian'
+		).latestReview;
 
 	it('marks a review by a GitHub App as a bot review', () => {
 		expect(reviewBy({ login: 'copilot-pull-request-reviewer', __typename: 'Bot' })).toEqual({

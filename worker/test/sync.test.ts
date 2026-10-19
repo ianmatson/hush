@@ -113,13 +113,7 @@ describe('notification acknowledgement', () => {
 		expect(remembered.size).toBe(0);
 		vi.mocked(fetchSubjects).mockResolvedValueOnce(reads([['n1', subject]]));
 		await poller.sync([]);
-		expect(record).toHaveBeenLastCalledWith(
-			who,
-			[subject],
-			expect.objectContaining({
-				mentions: new Map([['o/r#1', { fact: 'mentioned', title: 'You were mentioned' }]])
-			})
-		);
+		expect(record).toHaveBeenLastCalledWith(who, [subject], { quiet: false });
 		expect(remembered.has('n1')).toBe(true);
 	});
 
@@ -185,10 +179,10 @@ describe('notification acknowledgement', () => {
 		await poller.sync([notification('n1', 1)], false);
 		vi.mocked(fetchSubjects).mockResolvedValueOnce(reads([['n1', subject]]));
 		await poller.sync([], true);
-		expect(record).toHaveBeenLastCalledWith(who, [subject], { quiet: true, mentions: new Map() });
+		expect(record).toHaveBeenLastCalledWith(who, [subject], { quiet: true });
 	});
 
-	it('keeps a notification pending while GitHub does not answer its read, and pushes its mention later', async () => {
+	it('keeps a notification pending while GitHub does not answer its read, and records it later', async () => {
 		const { poller, remembered, record } = harness();
 		vi.mocked(fetchSubjects).mockResolvedValue(reads([], { githubDidNotAnswer: new Set(['n1']) }));
 		await poller.sync([notification('n1', 1)]);
@@ -196,14 +190,7 @@ describe('notification acknowledgement', () => {
 		expect(remembered.has('n1')).toBe(false);
 		vi.mocked(fetchSubjects).mockResolvedValueOnce(reads([['n1', subject]]));
 		await poller.sync([]);
-		expect(record).toHaveBeenLastCalledWith(
-			who,
-			[subject],
-			expect.objectContaining({
-				quiet: false,
-				mentions: new Map([['o/r#1', { fact: 'mentioned', title: 'You were mentioned' }]])
-			})
-		);
+		expect(record).toHaveBeenLastCalledWith(who, [subject], { quiet: false });
 		expect(remembered.has('n1')).toBe(true);
 	});
 

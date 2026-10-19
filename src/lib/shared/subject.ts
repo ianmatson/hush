@@ -61,6 +61,8 @@ export interface SubjectFacts {
 	reviewRequests: ReviewRequest[];
 	/** The newest review-request events (for "waiting since"). */
 	requestEvents: { at: string; team: boolean; name: string }[];
+	mentionedAt?: string | null;
+	teamMentions?: TeamMention[];
 	myReview: { at: string; state: string } | null;
 	latestReview: LatestReview | null;
 	/** Each reviewer's latest approval or change request. */
@@ -68,6 +70,11 @@ export interface SubjectFacts {
 	/** Review threads nobody resolved (up to 50). */
 	openThreads: number;
 	stackBelowNearestFirst?: StackLink[];
+}
+
+export interface TeamMention {
+	team: string;
+	at: string;
 }
 
 /** "owner/repo#123": the store's key. */

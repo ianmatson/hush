@@ -52,6 +52,18 @@ export function factEvents(
 	if (team && (before ? !requestedTeam(before) : requestedSince(true)))
 		events.push({ fact: 'team-review-requested', title: `Review requested from ${team}` });
 
+	const mentionedSince = before?.mentionedAt !== undefined ? before.mentionedAt : since;
+	const myTeamsLowercase = new Set([...myTeams].map((t) => t.toLowerCase()));
+	const newestTeamMention = (s: SubjectFacts) =>
+		(s.teamMentions ?? [])
+			.filter((m) => myTeamsLowercase.has(m.team))
+			.reduce<string | null>((newest, m) => (isAfter(m.at, newest) ? m.at : newest), null);
+	const teamMentionedSince = before?.teamMentions !== undefined ? newestTeamMention(before) : since;
+	if (isAfter(after.mentionedAt, mentionedSince))
+		events.push({ fact: 'mentioned', title: 'You were mentioned' });
+	else if (isAfter(newestTeamMention(after), teamMentionedSince))
+		events.push({ fact: 'mentioned', title: 'Your team was mentioned' });
+
 	const assignedMe = (s: SubjectFacts) => s.assignees.some(isMe);
 	if (assignedMe(after) && (before ? !assignedMe(before) : isAfter(after.createdAt, since)))
 		events.push({ fact: 'assigned', title: 'Assigned to you' });
@@ -94,8 +106,7 @@ export function itemPush(
 	me: string,
 	myTeams: Set<string>,
 	since: number,
-	now: number,
-	extra: FactEvent[] = []
+	now: number
 ): ItemPush | null {
 	if (holdsPushes(markState(mark, after.updatedAt, after, me, now))) return null;
 	if (
@@ -110,9 +121,7 @@ export function itemPush(
 			title: outcome.wake ? `Snooze over: ${outcome.reason}` : 'Snooze over'
 		};
 	}
-	const events = [...factEvents(before, after, me, myTeams, since), ...extra].filter((e) =>
-		wanted.has(e.fact)
-	);
+	const events = factEvents(before, after, me, myTeams, since).filter((e) => wanted.has(e.fact));
 	if (!events.length) return null;
 	return { reason: events[0].fact, title: events.map((e) => e.title).join(' · ') };
 }
