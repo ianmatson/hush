@@ -40,3 +40,17 @@ export function followWhileGrowing(anchor: Element, durationMs = REVEAL_MS) {
 	};
 	requestAnimationFrame(step);
 }
+
+const COLLAPSE_SIDEWAYS_MS = 200;
+
+export function collapseSideways(node: Element): TransitionConfig {
+	const fullWidth = node.getBoundingClientRect().width;
+	const parent = node.parentElement;
+	const siblingGap = parent ? parseFloat(getComputedStyle(parent).columnGap) || 0 : 0;
+	return {
+		duration: COLLAPSE_SIDEWAYS_MS,
+		easing: cubicOut,
+		css: (t, u) =>
+			`overflow: hidden; white-space: nowrap; width: ${t * fullWidth}px; margin-inline-start: ${-u * siblingGap}px; opacity: ${t}`
+	};
+}

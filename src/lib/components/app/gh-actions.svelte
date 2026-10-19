@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { onDestroy, untrack } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
+	import { collapseSideways } from '$lib/reveal';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { peekQuery } from '$lib/queries';
 	import { palette } from '$lib/palette.svelte';
-	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
 	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
-	import { acting, focusComposer, sendWithUndo } from '$lib/gh-act.svelte';
+	import { acting, focusComposer, sendAction } from '$lib/gh-act.svelte';
+	import { preferMergeMethod, preferredMerge } from '$lib/merge-method.svelte';
 	import {
 		GH_ACTIONS,
 		MERGE_LABEL,
@@ -16,19 +17,21 @@
 	} from '$lib/shared/actions';
 	import { NO_STACK, stackMergeNotice, stackMergePlan } from '$lib/shared/stack-merge';
 	import type { ActionKind, MergeMethod } from '$lib/shared/types';
-	import { cn } from '$lib/utils';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import MergeDialog from './merge-dialog.svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
-	/**
-	 * Actions on GitHub in the peek's bottom bar: the main one for what the thread asks of you, and
-	 * the rest in "More" (shared/actions.ts). Comment is only the comment box at the end of the
-	 * conversation, and request changes goes there too. Merge asks once more; close and auto-merge
-	 * offer Undo. Keys: shared/keymap.ts.
-	 */
-	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
+	let {
+		repo,
+		number,
+		need,
+		moreAsIcon = false
+	}: { repo: string; number: number; need: ActionKind | null; moreAsIcon?: boolean } = $props();
+
+	const noRoomForSubmenu = new MediaQuery('max-width: 639px');
 
 	const q = createQuery(() => peekQuery(repo, number));
 	const p = $derived(q.data);
@@ -39,48 +42,43 @@
 	const main = $derived(mainAction(need, bar));
 	const others = $derived(bar.filter((s) => s.id !== main?.id));
 	const has = (id: GhActionId) => states.find((s) => s.id === id);
+	const canApproveWithComment = $derived(!!has('approve') && !has('approve')?.blocked);
+	const methods = $derived(p?.can.pr?.methods ?? []);
 
 	const stackPlan = $derived(p ? stackMergePlan(p.number, p.can.pr?.stack ?? NO_STACK) : null);
 	const stackNotice = $derived(stackPlan ? stackMergeNotice(stackPlan) : null);
 
-	let method = $state<MergeMethod>('SQUASH');
-	let mergeCommitPickedFor = '';
-	$effect(() => {
-		const m = p?.can.pr?.methods ?? [];
-		const keepsStackedCommits = stackPlan?.kind === 'leaves_behind' && m.includes('MERGE');
+	let pickedHere = $state<{ pr: string; method: MergeMethod } | null>(null);
+	const method = $derived.by((): MergeMethod => {
 		const pr = `${repo}#${number}`;
-		untrack(() => {
-			if (keepsStackedCommits && mergeCommitPickedFor !== pr) {
-				mergeCommitPickedFor = pr;
-				method = 'MERGE';
-			} else if (m.length && !m.includes(method)) method = m[0];
-		});
+		if (pickedHere?.pr === pr && methods.includes(pickedHere.method)) return pickedHere.method;
+		const keepsStackedCommits = stackPlan?.kind === 'leaves_behind' && methods.includes('MERGE');
+		if (keepsStackedCommits) return 'MERGE';
+		const preferred = preferredMerge.method;
+		return methods.length && !methods.includes(preferred) ? methods[0] : preferred;
 	});
+	function chooseMethod(m: MergeMethod) {
+		pickedHere = { pr: `${repo}#${number}`, method: m };
+		preferMergeMethod(m);
+	}
 	const label = (id: GhActionId) => (id === 'merge' ? MERGE_LABEL[method] : GH_ACTIONS[id].label);
 	const hint = (id: GhActionId) => {
 		const c = GH_ACTIONS[id].command;
 		return c ? keysOf(c)[0] : undefined;
 	};
 
-	const GH_ACTION_CONFIRM_MS = 10_000;
-	const armedConfirm = new ArmedConfirm(GH_ACTION_CONFIRM_MS);
-	onDestroy(() => armedConfirm.dispose());
-	const confirmKey = (id: GhActionId) => `${repo}#${number}:${id}`;
-	const confirming = (id: GhActionId) => armedConfirm.isArmed(confirmKey(id));
+	let mergeDialogOpen = $state(false);
 
-	/** Run an action from a button, the menu, a key, or the palette. */
-	function run(id: GhActionId) {
+	function run(id: GhActionId, when: 'ask' | 'now' = 'ask') {
 		const s = has(id);
 		if (!p || !s || acting.id) return;
 		if (s.blocked) return void toast.error(s.blocked);
 		if (id === 'comment' || id === 'request_changes') return focusComposer(id);
-		if (GH_ACTIONS[id].confirm && !confirming(id)) {
-			armedConfirm.arm(confirmKey(id));
-			if (id === 'merge' && stackNotice) toast.info(stackNotice, { duration: 8000 });
+		if (GH_ACTIONS[id].confirm && when === 'ask') {
+			mergeDialogOpen = true;
 			return;
 		}
-		armedConfirm.disarm();
-		void sendWithUndo(p, id, { method });
+		void sendAction(p, id, { method });
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -116,73 +114,97 @@
 		>{/if}
 {/snippet}
 
+{#snippet blockedItem(id: GhActionId, reason: string)}
+	<!-- Blocked: the reason in the item, not a tooltip (it works on touch too). -->
+	<DropdownMenu.Item disabled class="items-start">
+		<span class="grid gap-0.5">
+			<span>{label(id)}</span>
+			<span class="text-xs text-muted-foreground">{reason}</span>
+		</span>
+	</DropdownMenu.Item>
+{/snippet}
+
 {#if p && bar.length}
-	<div class="ml-auto flex items-center gap-1.5" role="group" aria-label="Actions on GitHub">
-		{#if others.length}
+	<div
+		class="flex items-center gap-1.5"
+		role="group"
+		aria-label="Actions on GitHub"
+		transition:collapseSideways
+	>
+		{#if main}
+			<Button size="sm" disabled={!!acting.id} onclick={() => run(main.id)}>
+				{#if acting.id === main.id}<LoaderCircle class="animate-spin" />{/if}
+				{label(main.id)}
+			</Button>
+		{/if}
+		{#if others.length || canApproveWithComment}
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
-						<Button {...props} size="sm" variant="outline" disabled={!!acting.id}
-							>More<ChevronDown class="opacity-60" /></Button
-						>
+						{#if moreAsIcon}
+							<Button
+								{...props}
+								size="icon-sm"
+								variant="ghost"
+								aria-label="More actions"
+								disabled={!!acting.id}><Ellipsis /></Button
+							>
+						{:else}
+							<Button {...props} size="sm" variant="outline" disabled={!!acting.id}
+								>More<ChevronDown class="opacity-60" /></Button
+							>
+						{/if}
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" side="top" class="w-64">
 					{#each others as s (s.id)}
 						{#if s.blocked}
-							<!-- Blocked: the reason in the item, not a tooltip (it works on touch too). -->
-							<DropdownMenu.Item disabled class="items-start">
-								<span class="grid gap-0.5">
-									<span>{label(s.id)}</span>
-									<span class="text-xs text-muted-foreground">{s.blocked}</span>
-								</span>
-							</DropdownMenu.Item>
+							{@render blockedItem(s.id, s.blocked)}
 						{:else}
 							<DropdownMenu.Item
-								class={cn(confirming(s.id) && 'text-destructive')}
-								onSelect={(e) => {
-									// The first press of an action that asks again only arms it: the menu stays
-									// open to show "Confirm: …". (Decide before run() changes `confirming`.)
-									if (GH_ACTIONS[s.id].confirm && !confirming(s.id)) e.preventDefault();
-									run(s.id);
-								}}
+								onSelect={() => run(s.id, s.id === 'merge' && stackNotice ? 'ask' : 'now')}
 							>
-								{confirming(s.id) ? `Confirm: ${label(s.id).toLowerCase()}` : label(s.id)}
+								{label(s.id)}
 								{@render keyHint(s.id)}
 							</DropdownMenu.Item>
 						{/if}
 					{/each}
-					{#if has('approve') && !has('approve')?.blocked}
+					{#if canApproveWithComment}
 						<DropdownMenu.Item onSelect={() => focusComposer('approve')}
 							>Approve with a comment…</DropdownMenu.Item
 						>
 					{/if}
-					{#if (p.can.pr?.methods.length ?? 0) > 1 && (has('merge') || has('auto_merge'))}
+					{#if methods.length > 1 && (has('merge') || has('auto_merge'))}
 						<DropdownMenu.Separator />
-						<DropdownMenu.Label class="text-xs text-muted-foreground"
-							>Merge method</DropdownMenu.Label
-						>
-						<DropdownMenu.RadioGroup bind:value={method}>
-							{#each p.can.pr?.methods ?? [] as m (m)}
-								<DropdownMenu.RadioItem value={m} closeOnSelect={false}
-									>{MERGE_LABEL[m]}</DropdownMenu.RadioItem
-								>
-							{/each}
-						</DropdownMenu.RadioGroup>
+						<DropdownMenu.Sub>
+							<DropdownMenu.SubTrigger>Merge method</DropdownMenu.SubTrigger>
+							<DropdownMenu.SubContent
+								class="w-52"
+								side={noRoomForSubmenu.current ? 'top' : 'right'}
+								align={noRoomForSubmenu.current ? 'end' : 'start'}
+							>
+								<DropdownMenu.RadioGroup bind:value={() => method, chooseMethod}>
+									{#each methods as m (m)}
+										<DropdownMenu.RadioItem value={m} closeOnSelect={false}
+											>{MERGE_LABEL[m]}</DropdownMenu.RadioItem
+										>
+									{/each}
+								</DropdownMenu.RadioGroup>
+							</DropdownMenu.SubContent>
+						</DropdownMenu.Sub>
 					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		{/if}
-		{#if main}
-			<Button
-				size="sm"
-				variant={confirming(main.id) ? 'destructive' : 'default'}
-				disabled={!!acting.id}
-				onclick={() => run(main.id)}
-			>
-				{#if acting.id === main.id}<LoaderCircle class="animate-spin" />{/if}
-				{confirming(main.id) ? `Confirm: ${label(main.id).toLowerCase()}` : label(main.id)}
-			</Button>
-		{/if}
 	</div>
+{/if}
+
+{#if p}
+	<MergeDialog
+		bind:open={mergeDialogOpen}
+		bind:method={() => method, chooseMethod}
+		{p}
+		notice={stackNotice}
+		onconfirm={() => run('merge', 'now')}
+	/>
 {/if}

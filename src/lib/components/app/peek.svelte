@@ -20,6 +20,7 @@
 	import PeekContent from './peek-content.svelte';
 	import GhActions from './gh-actions.svelte';
 	import { noteOpened } from '$lib/recheck';
+	import { smoothHeight } from '$lib/smooth-height';
 	import { itemPagePathFromGitHubUrl } from '$lib/shared/item-page';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Maximize2 from '@lucide/svelte/icons/maximize-2';
@@ -64,7 +65,9 @@
 {#snippet bar()}
 	{@render footer?.()}
 	{#if shown?.number}
-		<GhActions repo={shown.repo} number={shown.number} need={shown.need ?? null} />
+		<div class="ml-auto">
+			<GhActions repo={shown.repo} number={shown.number} need={shown.need ?? null} />
+		</div>
 	{/if}
 {/snippet}
 
@@ -121,7 +124,11 @@
 		{/if}
 	{/snippet}
 	{#if shown}
-		{@render header?.()}
+		{#if header}
+			<div class="overflow-hidden" {@attach smoothHeight}>
+				<div>{@render header()}</div>
+			</div>
+		{/if}
 		<PeekContent repo={shown.repo} number={shown.number} title={shown.title} />
 	{/if}
 </SidePanel>

@@ -82,9 +82,9 @@ describe('actions on GitHub', () => {
 		expect(mainAction('review', ghActions(pr({ can: editable })))?.id).toBe('approve');
 	});
 
-	it('closes issues as done or not planned, and reopens closed ones', () => {
+	it('closes issues and reopens closed ones', () => {
 		const issue = pr({ kind: 'issue', can: { ...pr().can, pr: undefined } });
-		expect(ids(issue)).toEqual(['comment', 'close', 'close_not_planned']);
+		expect(ids(issue)).toEqual(['comment', 'close']);
 		const closed = pr({
 			kind: 'issue',
 			state: 'closed',

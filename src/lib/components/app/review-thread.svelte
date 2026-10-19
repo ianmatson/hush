@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	import { progressToast } from '$lib/progress-toast';
 	import { api } from '$lib/api';
 	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
@@ -63,18 +63,35 @@
 		deleteConfirm.disarm();
 	}
 
-	async function run(
-		kind: 'reply' | 'resolve' | 'edit' | 'delete',
-		action: () => Promise<unknown>
-	): Promise<boolean> {
+	type ThreadAction = 'reply' | 'resolve' | 'edit' | 'delete';
+
+	function progressLabels(kind: ThreadAction): { pending: string; done: string } {
+		switch (kind) {
+			case 'reply':
+				return { pending: 'Posting reply…', done: 'Reply posted' };
+			case 'resolve':
+				return thread.resolved
+					? { pending: 'Unresolving…', done: 'Conversation unresolved' }
+					: { pending: 'Resolving…', done: 'Conversation resolved' };
+			case 'edit':
+				return { pending: 'Saving comment…', done: 'Comment saved' };
+			case 'delete':
+				return { pending: 'Deleting comment…', done: 'Comment deleted' };
+		}
+	}
+
+	async function run(kind: ThreadAction, action: () => Promise<unknown>): Promise<boolean> {
 		if (sending || uploads.pending) return false;
 		sending = kind;
+		const labels = progressLabels(kind);
+		const progress = progressToast(labels.pending);
 		try {
 			await action();
 			await onchanged();
+			progress.success(labels.done);
 			return true;
 		} catch (err) {
-			toast.error((err as Error).message);
+			progress.error((err as Error).message);
 			return false;
 		} finally {
 			sending = null;
