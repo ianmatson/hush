@@ -296,20 +296,19 @@
 						>{/if}</a
 				>
 			</nav>
+			<span class="mx-1 h-5 w-px bg-border"></span>
 		{/if}
-		<span class="mx-1 h-5 w-px bg-border"></span>
 		{#if dashItem}
 			{@const i = dashItem}
 			<SnoozeButton
 				snoozed={!!i.dismissed}
 				subjects={[i.kind]}
 				disabled={alreadyTrue(i)}
-				labelClass="hidden sm:inline"
+				iconOnly
 				onpick={(choice) => itemActions.snooze([i.id], choice)}
 				onwake={() => itemActions.unsnooze([i.id])}
 			/>
 		{/if}
-		<GhActions {repo} {number} need={null} />
 		<Button
 			variant="ghost"
 			size="icon-sm"
@@ -319,6 +318,7 @@
 			rel="noreferrer"
 			aria-label="Open on GitHub"><ExternalLink /></Button
 		>
+		<GhActions {repo} {number} need={null} />
 	</div>
 </div>
 

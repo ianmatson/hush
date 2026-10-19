@@ -228,12 +228,6 @@
 
 	const putAside = $derived((data?.items ?? []).filter((i) => i.dismissed && inView(i)));
 	const snoozedCount = $derived(putAside.length);
-	const putAsideLabel = $derived.by(() => {
-		const muted = putAside.some((i) => i.muted);
-		const snoozed = putAside.some((i) => !i.muted);
-		if (muted && snoozed) return 'Snoozed and muted';
-		return muted ? 'Muted' : 'Snoozed';
-	});
 	const unreadCount = $derived(visibleItems.filter((i) => i.unread).length);
 
 	const peekOwner = $derived(`view:${view.id}:${showing}`);
@@ -861,11 +855,10 @@
 				<Button
 					variant={showSnoozed ? 'secondary' : 'ghost'}
 					size="sm"
+					aria-pressed={showSnoozed}
 					onclick={() => (showSnoozed = !showSnoozed)}
 				>
-					<AlarmClock /><span class="hidden sm:inline"
-						>{showSnoozed ? `Showing ${putAsideLabel.toLowerCase()}` : putAsideLabel}</span
-					>
+					<AlarmClock /><span class="hidden sm:inline">Hidden</span>
 					{#if snoozedCount}<span class="tabular-nums opacity-70">{snoozedCount}</span>{/if}
 				</Button>
 			{/if}
@@ -1180,7 +1173,7 @@
 			snoozed={!!i.dismissed}
 			subjects={[i.kind]}
 			disabled={alreadyTrue(i)}
-			labelClass="max-sm:sr-only"
+			iconOnly
 			onpick={(choice) => snooze([i.id], choice)}
 			onwake={() => unsnooze([i.id])}
 		/>

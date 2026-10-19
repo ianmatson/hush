@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
+	import { progressToast } from '$lib/progress-toast';
 	import { api } from '$lib/api';
 	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
 	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
@@ -236,6 +237,7 @@
 
 	async function addComment(target: CommentTarget, body: string, single: boolean) {
 		const submitted = selection;
+		const progress = progressToast(single ? 'Posting comment…' : 'Adding to your pending review…');
 		try {
 			await api.addLineComment(
 				{ repo, number, pullRequestId, commitOid: head },
@@ -245,10 +247,10 @@
 			);
 			if (selection === submitted) selection = null;
 			await refreshThreads();
-			toast.success(single ? 'Comment posted' : 'Added to your pending review');
+			progress.success(single ? 'Comment posted' : 'Added to your pending review');
 			return true;
 		} catch (err) {
-			toast.error((err as Error).message);
+			progress.error((err as Error).message);
 			return false;
 		}
 	}
@@ -275,6 +277,7 @@
 		if (reviewEvent === 'REQUEST_CHANGES' && !reviewSummary.trim())
 			return void toast.error('Say what to change in the summary.');
 		reviewBusy = 'submit';
+		const progress = progressToast('Submitting review…');
 		try {
 			await api.submitReview(pendingReview.id, reviewEvent, reviewSummary);
 			submitting = false;
@@ -283,9 +286,9 @@
 				refreshThreads(),
 				queryClient.refetchQueries({ queryKey: keys.peek(repo, number) })
 			]);
-			toast.success('Review submitted');
+			progress.success('Review submitted');
 		} catch (err) {
-			toast.error((err as Error).message);
+			progress.error((err as Error).message);
 		} finally {
 			reviewBusy = null;
 		}
@@ -295,14 +298,15 @@
 		if (!pendingReview || reviewBusy) return;
 		if (!confirmingDiscard) return discardConfirm.arm(pendingReview.id);
 		reviewBusy = 'discard';
+		const progress = progressToast('Discarding pending review…');
 		try {
 			await api.discardReview(pendingReview.id);
 			discardConfirm.disarm();
 			submitting = false;
 			await refreshThreads();
-			toast.success('Pending review discarded');
+			progress.success('Pending review discarded');
 		} catch (err) {
-			toast.error((err as Error).message);
+			progress.error((err as Error).message);
 		} finally {
 			reviewBusy = null;
 		}

@@ -520,7 +520,7 @@ function actionsReference(): string {
 			a.command ? keysOf(a.command).map(code).join(', ') : 'none (in “More”)',
 			a.body === 'required' ? 'required' : a.body === 'optional' ? 'optional' : '',
 			a.confirm
-				? 'Asks again: press twice'
+				? 'Asks in a dialog'
 				: a.undo
 					? `Undo: ${GH_ACTIONS[a.undo].label.toLowerCase()}`
 					: ''

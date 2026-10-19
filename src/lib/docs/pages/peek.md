@@ -113,8 +113,8 @@ When the peek opens an item, Hush marks it as read. This stays in Hush: it does 
 
 The bar at the bottom of the peek has two parts:
 
-1. The buttons of the view: **Snooze** and **Copy link**.
-2. The **actions on GitHub**: a main button, and **More** for the rest.
+1. The buttons of the view: **Snooze** (the clock) and **Copy link**.
+2. The **actions on GitHub**: a main button, and **More** (**…**, at the right end) for the rest.
 
 The main button is the action that fits what the item asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).
 
@@ -126,7 +126,8 @@ Hush shows only the actions that you can do now. An action that GitHub would ref
 
 - **Approve** sends at once. **Approve with a comment…** (in More) opens the comment box.
 - **Request changes** and **Comment** ({{key:peek.comment}}, or the palette with {{key:palette}}) need text: the comment box opens. On the Files tab of the full page, Hush goes to the Conversation tab first. {{key:editor.send}} sends it.
-- **Merge** asks once more: the button becomes “Confirm: merge”. Press it (or the key) again. The merge uses the method chosen under **Merge method** in More, when the repository allows more than one. Hush merges only the commit that you saw: if someone pushed since, GitHub refuses, and you can look again.
+- **Merge** from the main button, the key, or the palette opens a dialog. Choose the method there (when the repository allows more than one), then choose the merge button or press Enter. In More, **Merge** opens a list of the methods: choose one to merge at once. Hush merges only the commit that you saw: if someone pushed since, GitHub refuses, and you can look again.
+- While an action runs, a message says so (for example “Merging…”). When the action is done, the message tells the result.
 - **Enable auto-merge** shows when the repository allows it and the PR cannot merge yet: GitHub merges it when the checks and reviews pass.
 - **Ready for review** shows on a draft PR, and **Convert to draft** on an open PR, when you can edit the PR ({{key:peek.draftReady}}). On a draft with nothing else to do, **Ready for review** is the main button.
 - **Close**, **Reopen**, **Enable auto-merge**, **Ready for review**, and **Convert to draft** can be undone from the message.

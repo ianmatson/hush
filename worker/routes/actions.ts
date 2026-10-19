@@ -185,11 +185,9 @@ const app = routes()
 				break;
 			}
 			case 'close':
-			case 'close_not_planned':
 			case 'reopen': {
 				const res = await call(`/repos/${repo}/issues/${number}`, 'PATCH', {
-					state: action === 'reopen' ? 'open' : 'closed',
-					...(action === 'close_not_planned' ? { state_reason: 'not_planned' } : {})
+					state: action === 'reopen' ? 'open' : 'closed'
 				});
 				if (!res?.ok) failure = await restWriteFailure(res);
 				break;

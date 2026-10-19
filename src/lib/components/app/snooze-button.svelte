@@ -11,29 +11,31 @@
 		snoozed,
 		subjects,
 		disabled = [],
-		labelClass,
+		labelClass = '',
+		iconOnly = false,
 		onpick,
 		onwake
 	}: {
 		snoozed: boolean;
 		subjects: ('pr' | 'issue' | 'other')[];
 		disabled?: SnoozeEvent[];
-		labelClass: string;
+		labelClass?: string;
+		iconOnly?: boolean;
 		onpick: (choice: SnoozeChoice) => void;
 		onwake: () => void;
 	} = $props();
 </script>
 
 {#if snoozed}
-	<Button variant="ghost" size="sm" aria-label="Wake up" onclick={onwake}>
-		<AlarmClockOff /><span class={labelClass}>Wake up</span>
+	<Button variant="ghost" size={iconOnly ? 'icon-sm' : 'sm'} aria-label="Wake up" onclick={onwake}>
+		<AlarmClockOff />{#if !iconOnly}<span class={labelClass}>Wake up</span>{/if}
 	</Button>
 {:else}
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="sm" aria-label="Snooze">
-					<AlarmClock /><span class={labelClass}>Snooze</span>
+				<Button {...props} variant="ghost" size={iconOnly ? 'icon-sm' : 'sm'} aria-label="Snooze">
+					<AlarmClock />{#if !iconOnly}<span class={labelClass}>Snooze</span>{/if}
 				</Button>
 			{/snippet}
 		</DropdownMenu.Trigger>

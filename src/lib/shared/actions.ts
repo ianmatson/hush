@@ -15,18 +15,17 @@ export type GhActionId =
 	| 'ready'
 	| 'draft'
 	| 'close'
-	| 'close_not_planned'
 	| 'reopen';
 
 export interface GhActionInfo {
 	label: string;
+	pending: string;
 	/** The toast when it worked. */
 	done: string;
 	/** Its keyboard shortcut: a command in shared/keymap.ts (keys are set there). */
 	command?: string;
 	/** Needs text: the comment box opens (optional for approve). */
 	body?: 'required' | 'optional';
-	/** Cannot be undone: the button (or key) asks once more ("Confirm merge"). */
 	confirm?: boolean;
 	/** The action that takes it back from the toast. */
 	undo?: GhActionId;
@@ -36,57 +35,80 @@ export interface GhActionInfo {
 export const GH_ACTIONS: Record<GhActionId, GhActionInfo> = {
 	approve: {
 		label: 'Approve',
+		pending: 'Approving…',
 		done: 'Approved',
 		command: 'peek.approve',
 		body: 'optional'
 	},
 	request_changes: {
 		label: 'Request changes',
+		pending: 'Requesting changes…',
 		done: 'Changes requested',
 		command: 'peek.requestChanges',
 		body: 'required'
 	},
-	comment: { label: 'Comment', done: 'Comment posted', command: 'peek.comment', body: 'required' },
+	comment: {
+		label: 'Comment',
+		pending: 'Posting comment…',
+		done: 'Comment posted',
+		command: 'peek.comment',
+		body: 'required'
+	},
 	rerun: {
 		label: 'Re-run failed jobs',
+		pending: 'Re-running failed jobs…',
 		done: 'Failed jobs are running again',
 		command: 'peek.rerun'
 	},
 	merge: {
 		label: 'Merge',
+		pending: 'Merging…',
 		done: 'Merged',
 		command: 'peek.merge',
 		confirm: true,
 		endsItem: true
 	},
-	auto_merge: { label: 'Enable auto-merge', done: 'Auto-merge is on', undo: 'auto_merge_off' },
-	auto_merge_off: { label: 'Turn off auto-merge', done: 'Auto-merge is off', undo: 'auto_merge' },
+	auto_merge: {
+		label: 'Enable auto-merge',
+		pending: 'Turning on auto-merge…',
+		done: 'Auto-merge is on',
+		undo: 'auto_merge_off'
+	},
+	auto_merge_off: {
+		label: 'Turn off auto-merge',
+		pending: 'Turning off auto-merge…',
+		done: 'Auto-merge is off',
+		undo: 'auto_merge'
+	},
 	ready: {
 		label: 'Ready for review',
+		pending: 'Marking ready for review…',
 		done: 'Ready for review',
 		command: 'peek.draftReady',
 		undo: 'draft'
 	},
 	draft: {
 		label: 'Convert to draft',
+		pending: 'Converting to draft…',
 		done: 'Converted to draft',
 		command: 'peek.draftReady',
 		undo: 'ready'
 	},
 	close: {
 		label: 'Close',
+		pending: 'Closing…',
 		done: 'Closed',
 		command: 'peek.closeReopen',
 		undo: 'reopen',
 		endsItem: true
 	},
-	close_not_planned: {
-		label: 'Close as not planned',
-		done: 'Closed as not planned',
-		undo: 'reopen',
-		endsItem: true
-	},
-	reopen: { label: 'Reopen', done: 'Reopened', command: 'peek.closeReopen', undo: 'close' }
+	reopen: {
+		label: 'Reopen',
+		pending: 'Reopening…',
+		done: 'Reopened',
+		command: 'peek.closeReopen',
+		undo: 'close'
+	}
 };
 
 export const MERGE_LABEL: Record<MergeMethod, string> = {
@@ -148,10 +170,7 @@ export function ghActions(p: PeekDTO): GhActionState[] {
 		if (p.can.update) out.push({ id: p.draft ? 'ready' : 'draft' });
 	}
 	if (p.can.comment) out.push({ id: 'comment' });
-	if (open && p.can.close) {
-		out.push({ id: 'close' });
-		if (p.kind === 'issue') out.push({ id: 'close_not_planned' });
-	}
+	if (open && p.can.close) out.push({ id: 'close' });
 	if (!open && p.state !== 'merged' && p.can.reopen) out.push({ id: 'reopen' });
 	return out;
 }

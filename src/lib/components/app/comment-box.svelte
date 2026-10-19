@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { toast } from 'svelte-sonner';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { acting, composer, sendAction, type ComposeIntent } from '$lib/gh-act.svelte';
-	import { GH_ACTIONS, ghActions } from '$lib/shared/actions';
+	import { ghActions } from '$lib/shared/actions';
 	import type { PeekDTO } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -75,7 +74,6 @@
 		if (uploads.pending || acting.id) return;
 		if (intent !== 'approve' && !body) return void box?.focus();
 		if (!(await sendAction(p, intent, { body: body || undefined }))) return;
-		toast.success(GH_ACTIONS[intent].done, { description: `${p.repo}#${p.number}` });
 		clearSentDraft(sentKey, sent);
 		composer.intent = 'comment';
 		if (draft === sentKey && text === sent) text = '';
