@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import { collapseSideways } from '$lib/reveal';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -25,6 +26,7 @@
 	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
 
 	const METHOD_ACTIONS = new Set<GhActionId>(['merge', 'auto_merge']);
+	const noRoomForSubmenu = new MediaQuery('max-width: 639px');
 
 	const q = createQuery(() => peekQuery(repo, number));
 	const p = $derived(q.data);
@@ -160,6 +162,13 @@
 					{#each others as s (s.id)}
 						{#if s.blocked}
 							{@render blockedItem(s.id, s.blocked)}
+						{:else if METHOD_ACTIONS.has(s.id) && methods.length > 1 && noRoomForSubmenu.current}
+							<DropdownMenu.Separator />
+							<DropdownMenu.Label class="text-xs text-muted-foreground"
+								>{GH_ACTIONS[s.id].label}</DropdownMenu.Label
+							>
+							{@render methodItems(s.id)}
+							<DropdownMenu.Separator />
 						{:else if METHOD_ACTIONS.has(s.id) && methods.length > 1}
 							<DropdownMenu.Sub>
 								<DropdownMenu.SubTrigger>{GH_ACTIONS[s.id].label}</DropdownMenu.SubTrigger>
