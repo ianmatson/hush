@@ -87,6 +87,40 @@ describe('push facts', () => {
 		expect(titles(null, requested(LONG_AGO))).toEqual([]);
 	});
 
+	it('pushes a mention only when a newer one comes, not on other activity', () => {
+		const mentioned = facts({ mentionedAt: LONG_AGO, teamMentions: [] });
+		expect(titles(mentioned, { ...mentioned, mentionedAt: JUST_NOW })).toEqual([
+			'mentioned: You were mentioned'
+		]);
+		expect(titles(facts({ mentionedAt: null }), mentioned)).toEqual([
+			'mentioned: You were mentioned'
+		]);
+		expect(titles(mentioned, { ...mentioned, commits: 3, updatedAt: JUST_NOW })).toEqual([]);
+	});
+
+	it('pushes a mention on an item it reads for the first time, or with older facts, only when it is new', () => {
+		expect(titles(null, facts({ mentionedAt: JUST_NOW }))).toEqual([
+			'mentioned: You were mentioned'
+		]);
+		expect(titles(null, facts({ mentionedAt: LONG_AGO }))).toEqual([]);
+		expect(titles(facts(), facts({ mentionedAt: LONG_AGO, teamMentions: [] }))).toEqual([]);
+	});
+
+	it('pushes a newer mention of your team, in any case, and not of other teams', () => {
+		const before = facts({ teamMentions: [{ team: 'acme/web', at: LONG_AGO }] });
+		const teamMention = (team: string) => facts({ teamMentions: [{ team, at: JUST_NOW }] });
+		const titlesFor = (teams: Set<string>, after: SubjectFacts) =>
+			factEvents(before, after, ME, teams, SINCE).map((e) => e.title);
+		expect(titlesFor(new Set(['Acme/Web']), teamMention('acme/web'))).toEqual([
+			'Your team was mentioned'
+		]);
+		expect(titlesFor(TEAMS, teamMention('acme/infra'))).toEqual([]);
+		expect(titlesFor(TEAMS, before)).toEqual([]);
+		expect(titlesFor(TEAMS, { ...teamMention('acme/web'), mentionedAt: JUST_NOW })).toEqual([
+			'You were mentioned'
+		]);
+	});
+
 	it('pushes reviews, CI, and replies on your pull request', () => {
 		const mine = facts({ author: ME, ci: 'SUCCESS' });
 		const review = (state: string) => ({ author: 'bob', at: JUST_NOW, state });

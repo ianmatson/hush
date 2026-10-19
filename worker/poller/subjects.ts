@@ -11,7 +11,7 @@ import {
 } from '../../src/lib/shared/subject';
 import type { SubjectDecisions } from '../../src/lib/shared/decisions';
 import type { ItemMark } from '../../src/lib/shared/item-snooze';
-import { itemPush, type FactEvent } from '../../src/lib/shared/push-facts';
+import { itemPush } from '../../src/lib/shared/push-facts';
 import type { SnoozeEvent } from '../../src/lib/shared/snooze';
 import { fetchSubjects } from '../github';
 import { itemStatuses } from '../projects';
@@ -49,7 +49,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 	protected async record(
 		who: Who,
 		subjects: SubjectFacts[],
-		opts: { dash?: boolean; quiet?: boolean; mentions?: Map<string, FactEvent> } = {}
+		opts: { dash?: boolean; quiet?: boolean } = {}
 	): Promise<void> {
 		const keys = [...new Set(subjects.map((x) => subjectKey(x.repo, x.number)))];
 		const stored = new Map(
@@ -77,13 +77,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		});
 		await this.decideSubjects(who, subjects);
 		const decided = this.decisionsOf(who, subjects);
-		if (!opts.quiet) {
-			const mentions = opts.mentions ?? new Map<string, FactEvent>();
-			const pushable = [...fresh].filter(
-				([k]) => mentions.has(k) || changed.some(([c]) => c === k)
-			);
-			await this.pushFactsOf(who, pushable, stored, decided, mentions);
-		}
+		if (!opts.quiet) await this.pushFactsOf(who, changed, stored, decided);
 		if (opts.dash !== false) await this.patchDashCaches(who, subjects, decided);
 	}
 
@@ -91,8 +85,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 		who: Who,
 		changed: [string, SubjectFacts][],
 		stored: Map<string, string>,
-		decided: Map<string, SubjectDecisions>,
-		mentions: Map<string, FactEvent>
+		decided: Map<string, SubjectDecisions>
 	) {
 		const wanted = new Set(who.settings.pushFacts);
 		if (!wanted.size || !changed.length) return;
@@ -109,8 +102,7 @@ export abstract class PollerSubjects extends PollerDecisions {
 				who.me,
 				myTeams,
 				now - NEW_SUBJECT_WINDOW_MS,
-				now,
-				mentions.has(key) ? [mentions.get(key)!] : []
+				now
 			);
 			if (!push) return [];
 			return [

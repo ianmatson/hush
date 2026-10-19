@@ -16,7 +16,7 @@ import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { requestedByName, sameLogin } from '../src/lib/shared/logins';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
-import type { SubjectFacts } from '../src/lib/shared/subject';
+import type { SubjectFacts, TeamMention } from '../src/lib/shared/subject';
 import { NO_STACK } from '../src/lib/shared/stack-merge';
 import { hasWritePermission } from '../src/lib/shared/actions';
 import { HOUR_MS, SECOND_MS } from '../src/lib/shared/durations';
@@ -281,6 +281,10 @@ const stackBelowFields = (depth: number): string =>
 		: `baseRef { associatedPullRequests(first: 1, states: OPEN) { nodes { number title url isDraft baseRefName author { login } ${stackBelowFields(depth - 1)} } } }`;
 
 const SUBMITTED_REVIEW_STATES = '[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]';
+const MENTION_EVENTS_READ = 20;
+const MENTION_EVENTS = `mentionEvents: timelineItems(itemTypes: [MENTIONED_EVENT], last: ${MENTION_EVENTS_READ}) {
+    nodes { ... on MentionedEvent { createdAt actor { login } } }
+  }`;
 
 /** Fragments P (pull request) and I (issue). Queries that use them declare `$me: String!`. */
 export const SUBJECT_FIELDS = `
@@ -292,6 +296,7 @@ fragment P on PullRequest {
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
   comments(last: 2) { totalCount nodes { author { login __typename } bodyText url createdAt } }
+  ${MENTION_EVENTS}
   commits(last: 1) { totalCount nodes { commit { committedDate statusCheckRollup { state } } } }
   reviewRequests(first: 20) { nodes { requestedReviewer { __typename ... on User { login } ... on Team { combinedSlug } } } }
   requestEvents: timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 3) {
@@ -309,6 +314,7 @@ fragment I on Issue {
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
   comments(last: 2) { totalCount nodes { author { login __typename } bodyText url createdAt } }
+  ${MENTION_EVENTS}
 }`;
 
 export interface SubjectRef {
@@ -368,8 +374,31 @@ function openPrsBelowInStack(n: Node): StackLink[] {
 	return links;
 }
 
+const TEAM_MENTION = /@([a-z0-9-]+\/[a-z0-9._-]+)/gi;
+
+const teamsWrittenIn = (text: unknown): string[] =>
+	[...String(text ?? '').matchAll(TEAM_MENTION)].map((m) => m[1].toLowerCase());
+
+function newestMentionOf(n: Node, me: string): string | null {
+	const mine = (n.mentionEvents?.nodes ?? []).filter(
+		(e: Node) => e?.createdAt && sameLogin(e.actor?.login, me)
+	);
+	return mine.at(-1)?.createdAt ?? null;
+}
+
+function teamMentionsOf(n: Node, recentComments: Node[], me: string): TeamMention[] {
+	const writings = [
+		{ author: n.author, text: n.bodyText, at: n.createdAt },
+		...recentComments.map((c) => ({ author: c.author, text: c.bodyText, at: c.createdAt }))
+	].filter((w) => w.at && !isBotAuthor(w.author) && !sameLogin(w.author?.login, me));
+	const newestPerTeam = new Map<string, string>();
+	for (const w of writings)
+		for (const team of teamsWrittenIn(w.text)) newestPerTeam.set(team, w.at);
+	return [...newestPerTeam].map(([team, at]) => ({ team, at }));
+}
+
 /** A PR or issue node (fragments P and I) as SubjectFacts. */
-export function toSubject(n: Node): SubjectFacts {
+export function toSubject(n: Node, me: string): SubjectFacts {
 	const pr = n.__typename === 'PullRequest';
 	const recentComments: Node[] = (n.comments?.nodes ?? []).filter(Boolean);
 	const c = recentComments.at(-1);
@@ -413,6 +442,8 @@ export function toSubject(n: Node): SubjectFacts {
 		requestEvents: (n.requestEvents?.nodes ?? [])
 			.filter((e: Node) => e?.createdAt && e.requestedReviewer)
 			.map((e: Node) => ({ at: e.createdAt, ...reviewer(e.requestedReviewer) })),
+		mentionedAt: newestMentionOf(n, me),
+		teamMentions: teamMentionsOf(n, recentComments, me),
 		myReview: mine?.submittedAt ? { at: mine.submittedAt, state: mine.state } : null,
 		latestReview: latest
 			? {
@@ -485,7 +516,7 @@ export async function fetchSubjects(
 				const errorsHere = graphqlErrors.filter((error) => hasGraphqlErrorAt([error], path));
 				if (isDeletedOrNoAccess(node, errorsHere)) deletedOrNoAccess.add(r.key);
 				if (node?.id && !hasGraphqlErrorAt(graphqlErrors, path))
-					subjects.set(r.key, toSubject(node));
+					subjects.set(r.key, toSubject(node, me));
 			}),
 		errors,
 		(chunk) => chunk.forEach((r) => githubDidNotAnswer.add(r.key))
@@ -678,7 +709,8 @@ export async function fetchDetails(
 		}),
 		(_, data, errors) => {
 			((data?.nodes as unknown as Node[] | undefined) ?? []).forEach((n, index) => {
-				if (n?.id && !hasGraphqlErrorAt(errors, ['nodes', index])) subjects.set(n.id, toSubject(n));
+				if (n?.id && !hasGraphqlErrorAt(errors, ['nodes', index]))
+					subjects.set(n.id, toSubject(n, me));
 			});
 		},
 		errors
@@ -859,7 +891,7 @@ export async function fetchPeek(
 		return null;
 	}
 	const pr = n.__typename === 'PullRequest';
-	const parsedSubject = toSubject(n);
+	const parsedSubject = toSubject(n, me);
 	const subject = hasGraphqlErrorAt(result.errors, ['repository', 'issueOrPullRequest'])
 		? null
 		: parsedSubject;

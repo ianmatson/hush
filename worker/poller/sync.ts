@@ -1,6 +1,5 @@
 import type { DashKind } from '../../src/lib/shared/types';
 import { subjectKey } from '../../src/lib/shared/subject';
-import type { FactEvent } from '../../src/lib/shared/push-facts';
 import { MUTED_AT } from '../../src/lib/shared/item-snooze';
 import { DAY_MS } from '../../src/lib/shared/durations';
 import {
@@ -22,15 +21,13 @@ import {
 } from './shared';
 import { PollerSubjects } from './subjects';
 
-const TEAM_MENTION = 'team_mention';
-const MENTION_REASONS = new Set(['mention', TEAM_MENTION]);
 const PENDING_NOTIFICATIONS_KEY = 'pendingNotifications';
 const NOTIFICATION_READ_ATTEMPTS = 3;
 const UNANSWERED_READ_ATTEMPTS = 36;
 const DASH_KINDS: DashKind[] = ['pr', 'issue'];
 const STORAGE_DELETE_MAX_KEYS = 128;
 
-type NotificationRef = Pick<GhNotification, 'id' | 'unread' | 'reason' | 'updated_at'> & {
+type NotificationRef = Pick<GhNotification, 'id' | 'updated_at'> & {
 	subject: Pick<GhNotification['subject'], 'type' | 'url'>;
 	repository: Pick<GhNotification['repository'], 'full_name' | 'name'> & {
 		owner: { login: string };
@@ -38,11 +35,9 @@ type NotificationRef = Pick<GhNotification, 'id' | 'unread' | 'reason' | 'update
 };
 
 function notificationRef(notification: GhNotification): NotificationRef {
-	const { id, unread, reason, updated_at, subject, repository } = notification;
+	const { id, updated_at, subject, repository } = notification;
 	return {
 		id,
-		unread,
-		reason,
 		updated_at,
 		subject: { type: subject.type, url: subject.url },
 		repository: {
@@ -203,18 +198,10 @@ export abstract class PollerSync extends PollerSubjects {
 				(n) => fetched.has(n.id) && pending.get(n.id)!.quiet === quiet
 			);
 			if (!notifications.length) continue;
-			const mentions = new Map<string, FactEvent>();
-			if (!quiet)
-				for (const n of notifications)
-					if (n.unread && MENTION_REASONS.has(n.reason))
-						mentions.set(itemKeyOf(n)!, {
-							fact: 'mentioned',
-							title: n.reason === TEAM_MENTION ? 'Your team was mentioned' : 'You were mentioned'
-						});
 			await this.record(
 				who,
 				notifications.map((n) => fetched.get(n.id)!),
-				{ quiet, mentions }
+				{ quiet }
 			);
 		}
 		const handled = [...pending.values()]
