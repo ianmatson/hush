@@ -76,10 +76,18 @@
 	<div class="box" aria-label="A search: {TOKENS.map((t) => t.text).join(' ')}">
 		<span class="label">Search</span>
 		<span class="tokens" aria-hidden="true">
-			{#each TOKENS.slice(0, shown) as token (token.text)}
-				<span class="token {token.runs}">{token.text}</span>
-			{/each}
-			<span class="caret" class:done={results}></span>
+			<span class="line full">
+				{#each TOKENS as token (token.text)}
+					<span class="token {token.runs}">{token.text}</span>
+				{/each}
+				<span class="caret"></span>
+			</span>
+			<span class="line">
+				{#each TOKENS.slice(0, shown) as token (token.text)}
+					<span class="token {token.runs}">{token.text}</span>
+				{/each}
+				<span class="caret" class:done={results}></span>
+			</span>
 		</span>
 	</div>
 
@@ -138,13 +146,21 @@
 		color: var(--muted-foreground);
 	}
 	.tokens {
+		display: grid;
+		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+		font-size: 0.75rem;
+	}
+	.line {
+		grid-area: 1 / 1;
 		display: flex;
 		flex-wrap: wrap;
+		align-content: start;
 		align-items: center;
 		gap: 0.35rem;
 		min-height: 1.6rem;
-		font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-		font-size: 0.75rem;
+	}
+	.full {
+		visibility: hidden;
 	}
 	.token {
 		padding: 0.15rem 0.45rem;

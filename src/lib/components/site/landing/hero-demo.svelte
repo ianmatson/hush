@@ -406,9 +406,14 @@
 							onclick={() => (groupMenuOpen = !groupMenuOpen)}
 						>
 							<Rows3 class="size-3.5" />
-							{#key groupLabel}
-								<span class="label-swap">{groupLabel}</span>
-							{/key}
+							<span class="label-stack">
+								{#each GROUP_BY_CHOICES as choice (choice.id)}
+									<span class="label-room" aria-hidden="true">{choice.label}</span>
+								{/each}
+								{#key groupLabel}
+									<span class="label-swap">{groupLabel}</span>
+								{/key}
+							</span>
 						</button>
 						{#if groupMenuOpen}
 							<div
@@ -564,6 +569,16 @@
 	.group-by.touring {
 		background: color-mix(in oklab, var(--signal-review) 12%, transparent);
 		color: var(--signal-review);
+	}
+	.label-stack {
+		display: inline-grid;
+		text-align: left;
+	}
+	.label-stack > * {
+		grid-area: 1 / 1;
+	}
+	.label-room {
+		visibility: hidden;
 	}
 	.label-swap {
 		display: inline-block;
