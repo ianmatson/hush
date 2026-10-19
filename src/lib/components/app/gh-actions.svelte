@@ -20,10 +20,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import MergeDialog from './merge-dialog.svelte';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 
-	let { repo, number, need }: { repo: string; number: number; need: ActionKind | null } = $props();
+	let {
+		repo,
+		number,
+		need,
+		moreAsIcon = false
+	}: { repo: string; number: number; need: ActionKind | null; moreAsIcon?: boolean } = $props();
 
 	const METHOD_ACTIONS = new Set<GhActionId>(['merge', 'auto_merge']);
 	const noRoomForSubmenu = new MediaQuery('max-width: 639px');
@@ -149,13 +155,19 @@
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
-						<Button
-							{...props}
-							size="icon-sm"
-							variant="ghost"
-							aria-label="More actions"
-							disabled={!!acting.id}><Ellipsis /></Button
-						>
+						{#if moreAsIcon}
+							<Button
+								{...props}
+								size="icon-sm"
+								variant="ghost"
+								aria-label="More actions"
+								disabled={!!acting.id}><Ellipsis /></Button
+							>
+						{:else}
+							<Button {...props} size="sm" variant="outline" disabled={!!acting.id}
+								>More<ChevronDown class="opacity-60" /></Button
+							>
+						{/if}
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" side="top" class="w-64">

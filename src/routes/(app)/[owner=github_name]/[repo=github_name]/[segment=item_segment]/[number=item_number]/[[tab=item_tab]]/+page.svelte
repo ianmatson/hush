@@ -318,7 +318,7 @@
 			rel="noreferrer"
 			aria-label="Open on GitHub"><ExternalLink /></Button
 		>
-		<GhActions {repo} {number} need={null} />
+		<GhActions {repo} {number} need={null} moreAsIcon />
 	</div>
 </div>
 

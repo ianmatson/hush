@@ -1173,7 +1173,7 @@
 			snoozed={!!i.dismissed}
 			subjects={[i.kind]}
 			disabled={alreadyTrue(i)}
-			iconOnly
+			labelClass="max-sm:sr-only"
 			onpick={(choice) => snooze([i.id], choice)}
 			onwake={() => unsnooze([i.id])}
 		/>

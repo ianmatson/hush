@@ -113,8 +113,8 @@ When the peek opens an item, Hush marks it as read. This stays in Hush: it does 
 
 The bar at the bottom of the peek has two parts:
 
-1. The buttons of the view: **Snooze** (the clock) and **Copy link**.
-2. The **actions on GitHub**: a main button, and **More** (**…**, at the right end) for the rest.
+1. The buttons of the view: **Snooze** and **Copy link**.
+2. The **actions on GitHub**: a main button, and **More** for the rest. On the full page, More is the **…** button at the right end of the bar.
 
 The main button is the action that fits what the item asks of you: **Approve** for a review, **Re-run failed jobs** when CI fails on your PR, and **Merge** when it is ready. To reply, use the comment box at the end of the conversation (there is no Comment button in the bar).
 
