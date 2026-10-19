@@ -1,6 +1,8 @@
 <script lang="ts" module>
 	// Panels docked now (the peek and the alert history can overlap while one slides out).
 	let dockedCount = 0;
+
+	export const DOCKED_PANEL_QUERY = 'min-width: 1024px';
 </script>
 
 <script lang="ts">
@@ -45,7 +47,7 @@
 		onclosecomplete?: () => void;
 	} = $props();
 
-	const wide = new MediaQuery('min-width: 1024px');
+	const wide = new MediaQuery(DOCKED_PANEL_QUERY);
 
 	// Phones: swipe the sheet down by its top bar to close it (or tap the handle).
 	const CLOSE_AT = 80;
