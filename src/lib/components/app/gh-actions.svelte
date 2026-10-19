@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import { collapseSideways } from '$lib/reveal';
@@ -8,6 +7,7 @@
 	import { palette } from '$lib/palette.svelte';
 	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import { acting, focusComposer, sendAction } from '$lib/gh-act.svelte';
+	import { preferMergeMethod, preferredMerge } from '$lib/merge-method.svelte';
 	import {
 		GH_ACTIONS,
 		MERGE_LABEL,
@@ -31,7 +31,6 @@
 		moreAsIcon = false
 	}: { repo: string; number: number; need: ActionKind | null; moreAsIcon?: boolean } = $props();
 
-	const METHOD_ACTIONS = new Set<GhActionId>(['merge', 'auto_merge']);
 	const noRoomForSubmenu = new MediaQuery('max-width: 639px');
 
 	const q = createQuery(() => peekQuery(repo, number));
@@ -49,19 +48,19 @@
 	const stackPlan = $derived(p ? stackMergePlan(p.number, p.can.pr?.stack ?? NO_STACK) : null);
 	const stackNotice = $derived(stackPlan ? stackMergeNotice(stackPlan) : null);
 
-	let method = $state<MergeMethod>('SQUASH');
-	let mergeCommitPickedFor = '';
-	$effect(() => {
-		const m = methods;
-		const keepsStackedCommits = stackPlan?.kind === 'leaves_behind' && m.includes('MERGE');
+	let pickedHere = $state<{ pr: string; method: MergeMethod } | null>(null);
+	const method = $derived.by((): MergeMethod => {
 		const pr = `${repo}#${number}`;
-		untrack(() => {
-			if (keepsStackedCommits && mergeCommitPickedFor !== pr) {
-				mergeCommitPickedFor = pr;
-				method = 'MERGE';
-			} else if (m.length && !m.includes(method)) method = m[0];
-		});
+		if (pickedHere?.pr === pr && methods.includes(pickedHere.method)) return pickedHere.method;
+		const keepsStackedCommits = stackPlan?.kind === 'leaves_behind' && methods.includes('MERGE');
+		if (keepsStackedCommits) return 'MERGE';
+		const preferred = preferredMerge.method;
+		return methods.length && !methods.includes(preferred) ? methods[0] : preferred;
 	});
+	function chooseMethod(m: MergeMethod) {
+		pickedHere = { pr: `${repo}#${number}`, method: m };
+		preferMergeMethod(m);
+	}
 	const label = (id: GhActionId) => (id === 'merge' ? MERGE_LABEL[method] : GH_ACTIONS[id].label);
 	const hint = (id: GhActionId) => {
 		const c = GH_ACTIONS[id].command;
@@ -70,16 +69,15 @@
 
 	let mergeDialogOpen = $state(false);
 
-	function run(id: GhActionId, chosen: MergeMethod | 'ask' = 'ask') {
+	function run(id: GhActionId, when: 'ask' | 'now' = 'ask') {
 		const s = has(id);
 		if (!p || !s || acting.id) return;
 		if (s.blocked) return void toast.error(s.blocked);
 		if (id === 'comment' || id === 'request_changes') return focusComposer(id);
-		if (GH_ACTIONS[id].confirm && chosen === 'ask') {
+		if (GH_ACTIONS[id].confirm && when === 'ask') {
 			mergeDialogOpen = true;
 			return;
 		}
-		if (chosen !== 'ask') method = chosen;
 		void sendAction(p, id, { method });
 	}
 
@@ -120,22 +118,10 @@
 	<!-- Blocked: the reason in the item, not a tooltip (it works on touch too). -->
 	<DropdownMenu.Item disabled class="items-start">
 		<span class="grid gap-0.5">
-			<span>{GH_ACTIONS[id].label}</span>
+			<span>{label(id)}</span>
 			<span class="text-xs text-muted-foreground">{reason}</span>
 		</span>
 	</DropdownMenu.Item>
-{/snippet}
-
-{#snippet methodItems(id: GhActionId)}
-	{#if id === 'merge' && stackNotice}
-		<DropdownMenu.Label class="max-w-64 text-xs font-normal text-muted-foreground"
-			>{stackNotice}</DropdownMenu.Label
-		>
-		<DropdownMenu.Separator />
-	{/if}
-	{#each methods as m (m)}
-		<DropdownMenu.Item onSelect={() => run(id, m)}>{MERGE_LABEL[m]}</DropdownMenu.Item>
-	{/each}
 {/snippet}
 
 {#if p && bar.length}
@@ -174,19 +160,10 @@
 					{#each others as s (s.id)}
 						{#if s.blocked}
 							{@render blockedItem(s.id, s.blocked)}
-						{:else if METHOD_ACTIONS.has(s.id) && methods.length > 1}
-							<DropdownMenu.Sub>
-								<DropdownMenu.SubTrigger>{GH_ACTIONS[s.id].label}</DropdownMenu.SubTrigger>
-								<DropdownMenu.SubContent
-									class="w-52"
-									side={noRoomForSubmenu.current ? 'top' : 'right'}
-									align={noRoomForSubmenu.current ? 'end' : 'start'}
-								>
-									{@render methodItems(s.id)}
-								</DropdownMenu.SubContent>
-							</DropdownMenu.Sub>
 						{:else}
-							<DropdownMenu.Item onSelect={() => run(s.id, method)}>
+							<DropdownMenu.Item
+								onSelect={() => run(s.id, s.id === 'merge' && stackNotice ? 'ask' : 'now')}
+							>
 								{label(s.id)}
 								{@render keyHint(s.id)}
 							</DropdownMenu.Item>
@@ -197,6 +174,25 @@
 							>Approve with a comment…</DropdownMenu.Item
 						>
 					{/if}
+					{#if methods.length > 1 && (has('merge') || has('auto_merge'))}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Sub>
+							<DropdownMenu.SubTrigger>Merge method</DropdownMenu.SubTrigger>
+							<DropdownMenu.SubContent
+								class="w-52"
+								side={noRoomForSubmenu.current ? 'top' : 'right'}
+								align={noRoomForSubmenu.current ? 'end' : 'start'}
+							>
+								<DropdownMenu.RadioGroup bind:value={() => method, chooseMethod}>
+									{#each methods as m (m)}
+										<DropdownMenu.RadioItem value={m} closeOnSelect={false}
+											>{MERGE_LABEL[m]}</DropdownMenu.RadioItem
+										>
+									{/each}
+								</DropdownMenu.RadioGroup>
+							</DropdownMenu.SubContent>
+						</DropdownMenu.Sub>
+					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		{/if}
@@ -206,9 +202,9 @@
 {#if p}
 	<MergeDialog
 		bind:open={mergeDialogOpen}
-		bind:method
+		bind:method={() => method, chooseMethod}
 		{p}
 		notice={stackNotice}
-		onconfirm={() => run('merge', method)}
+		onconfirm={() => run('merge', 'now')}
 	/>
 {/if}
