@@ -20,6 +20,7 @@
 		unsnoozeItems
 	} from '$lib/item-actions';
 	import { palette } from '$lib/palette.svelte';
+	import { START_PAGE_KEY, startPath } from '$lib/start-page';
 	import { ui } from '$lib/ui.svelte';
 	import { shortcutsFor, shortcutsOf, type Shortcut } from '$lib/shortcuts';
 	import type { KeyScope } from '$lib/shared/keymap';
@@ -97,11 +98,16 @@
 		listHistoryIndex = from && here !== null ? here - 1 : null;
 	});
 
+	function startListPath() {
+		const views = me.data?.settings.views;
+		return views?.length ? startPath(views, localStorage.getItem(START_PAGE_KEY)) : '/v';
+	}
+
 	function back() {
 		const here = historyIndex();
 		if (listHistoryIndex !== null && here !== null && here > listHistoryIndex)
 			history.go(listHistoryIndex - here);
-		else goto(`/v?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
+		else goto(`${startListPath()}?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
 	}
 
 	$effect(() => {

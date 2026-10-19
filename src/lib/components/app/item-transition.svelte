@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { onNavigate } from '$app/navigation';
 	import { PEEK_PARAM } from '$lib/shared/peek-link';
 	import { subjectKey } from '$lib/shared/subject';
+	import { DOCKED_PANEL_QUERY } from './side-panel.svelte';
 
 	const ITEM_ROUTE_MARK = '[number=item_number]';
 	const RUNNING_CLASS = 'item-transition';
@@ -34,6 +36,8 @@
 		dock: Box | null;
 		pageScroll: number;
 	};
+
+	const panelDocks = new MediaQuery(DOCKED_PANEL_QUERY);
 
 	const isItemRoute = (id: string | null | undefined) => !!id?.includes(ITEM_ROUTE_MARK);
 	const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -229,7 +233,7 @@
 	}
 
 	onNavigate((navigation) => {
-		if (!document.startViewTransition) return;
+		if (!document.startViewTransition || !panelDocks.current) return;
 		const toItem = isItemRoute(navigation.to?.route.id);
 		if (isItemRoute(navigation.from?.route.id) === toItem) return;
 		const target = navigation.to?.params;
