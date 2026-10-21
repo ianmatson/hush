@@ -357,7 +357,7 @@ try {
 					.click();
 				assert.equal(
 					await page
-						.getByRole('button', { name: 'Confirm revocation', exact: true })
+						.getByRole('button', { name: 'Cancel', exact: true })
 						.evaluate((element) => element === document.activeElement),
 					true
 				);

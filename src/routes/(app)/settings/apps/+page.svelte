@@ -1,22 +1,26 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import { mcpApi } from '$lib/mcp-api';
-	import type { McpGrantsDTO } from '$lib/shared/mcp';
+	import type { McpGrant, McpGrantsDTO } from '$lib/shared/mcp';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Plug from '@lucide/svelte/icons/plug';
 
 	let data = $state<McpGrantsDTO | null>(null);
 	let loading = $state(true);
 	let error = $state('');
-	let confirming = $state<string | null>(null);
+	let confirming = $state<McpGrant | null>(null);
+	let revokeOpen = $state(false);
 	let revoking = $state<string | null>(null);
 	let revokeError = $state('');
 	let notice = $state('');
-	let confirmButton = $state<HTMLButtonElement | null>(null);
+	let cancelButton = $state<HTMLButtonElement | null>(null);
+	let revokeTrigger = $state<HTMLElement | null>(null);
+	let heading = $state<HTMLHeadingElement | null>(null);
 	const date = (value: number) => new Date(value).toLocaleString();
 
 	async function load() {
@@ -31,22 +35,23 @@
 		}
 	}
 
-	async function confirmRevoke(id: string) {
-		confirming = id;
+	function confirmRevoke(grant: McpGrant, trigger: HTMLElement) {
+		confirming = grant;
+		revokeTrigger = trigger;
 		revokeError = '';
-		await tick();
-		confirmButton?.focus();
+		revokeOpen = true;
 	}
 
-	async function revoke(id: string, name: string) {
-		if (!data || revoking) return;
+	async function revoke() {
+		if (!data || !confirming || revoking) return;
+		const { id, clientName } = confirming;
 		revoking = id;
 		revokeError = '';
 		try {
 			await mcpApi.revoke(id, data.csrfToken);
 			data = { ...data, grants: data.grants.filter((grant) => grant.id !== id) };
-			confirming = null;
-			notice = `Access revoked for ${name}.`;
+			revokeOpen = false;
+			notice = `Access revoked for ${clientName}.`;
 		} catch (err) {
 			revokeError = (err as Error).message;
 		} finally {
@@ -61,7 +66,9 @@
 
 <div class="grid gap-6">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">Authorized apps</h1>
+		<h1 bind:this={heading} tabindex="-1" class="text-lg font-semibold tracking-tight outline-none">
+			Authorized apps
+		</h1>
 		<p class="mt-1 text-sm text-muted-foreground">
 			Manage the apps that can read your saved views through MCP.
 		</p>
@@ -163,46 +170,15 @@
 										<dd class="inline">{date(grant.expiresAt)}</dd>
 									</div>
 								</dl>
-								{#if confirming === grant.id}
-									<div class="grid gap-3 rounded-lg border p-3">
-										<p class="text-sm">
-											Revoke access for {grant.clientName}? The app must connect again to read your
-											views.
-										</p>
-										{#if revokeError}<p role="alert" class="text-sm text-destructive">
-												{revokeError}
-											</p>{/if}
-										<div class="flex flex-wrap gap-2">
-											<Button
-												bind:ref={confirmButton}
-												variant="destructive"
-												class="min-h-11"
-												disabled={revoking !== null}
-												onclick={() => revoke(grant.id, grant.clientName)}
-												>{revoking === grant.id ? 'Revoking…' : 'Confirm revocation'}</Button
-											>
-											<Button
-												variant="outline"
-												class="min-h-11"
-												disabled={revoking !== null}
-												onclick={() => {
-													confirming = null;
-													revokeError = '';
-												}}>Cancel</Button
-											>
-										</div>
-									</div>
-								{:else}
-									<div>
-										<Button
-											variant="outline"
-											class="min-h-11"
-											disabled={revoking !== null}
-											onclick={() => confirmRevoke(grant.id)}
-											aria-label={`Revoke access for ${grant.clientName}`}>Revoke access</Button
-										>
-									</div>
-								{/if}
+								<div>
+									<Button
+										variant="outline"
+										class="min-h-11"
+										disabled={revoking !== null}
+										onclick={(event) => confirmRevoke(grant, event.currentTarget)}
+										aria-label={`Revoke access for ${grant.clientName}`}>Revoke access</Button
+									>
+								</div>
 							</Card.Content>
 						</Card.Root>
 					</li>
@@ -211,3 +187,41 @@
 		{/if}
 	{/if}
 </div>
+
+<Dialog.Root bind:open={revokeOpen}>
+	<Dialog.Content
+		class="max-h-[calc(100dvh-2rem)] overflow-y-auto motion-reduce:data-open:animate-none motion-reduce:data-closed:animate-none"
+		showCloseButton={false}
+		escapeKeydownBehavior={revoking ? 'ignore' : 'close'}
+		interactOutsideBehavior={revoking ? 'ignore' : 'close'}
+		onOpenAutoFocus={(event) => {
+			event.preventDefault();
+			cancelButton?.focus();
+		}}
+		onCloseAutoFocus={(event) => {
+			event.preventDefault();
+			(revokeTrigger?.isConnected ? revokeTrigger : heading)?.focus();
+		}}
+	>
+		<Dialog.Header>
+			<Dialog.Title>Revoke app access?</Dialog.Title>
+			<Dialog.Description class="break-words">
+				{confirming?.clientName} will lose access to your saved views. The app must connect again to read
+				them.
+			</Dialog.Description>
+		</Dialog.Header>
+		{#if revokeError}<p role="alert" class="text-sm text-destructive">{revokeError}</p>{/if}
+		<div class="flex flex-wrap justify-end gap-2">
+			<Button
+				bind:ref={cancelButton}
+				variant="outline"
+				class="min-h-11"
+				disabled={revoking !== null}
+				onclick={() => (revokeOpen = false)}>Cancel</Button
+			>
+			<Button variant="destructive" class="min-h-11" disabled={revoking !== null} onclick={revoke}
+				>{revoking ? 'Revoking…' : 'Confirm revocation'}</Button
+			>
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
