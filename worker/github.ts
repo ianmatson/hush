@@ -907,7 +907,7 @@ export async function fetchPeek(
 						url: t.url,
 						html: t.bodyHTML ?? '',
 						body: t.body ?? '',
-						canEdit: !!t.viewerDidAuthor && !!t.viewerCanUpdate,
+						canEdit: !!t.viewerDidAuthor && !!t.viewerCanUpdate && !!t.body?.trim(),
 						state: t.state,
 						inline: t.comments?.totalCount ?? 0,
 						reactions: reactionsOf(t)
