@@ -1,5 +1,8 @@
 import type { CategoryGroup, DashItem, ItemView } from '../../src/lib/shared/types';
+import { fingerprintView, legacyFingerprintView } from '../../src/lib/shared/view-authorization';
 import { SnapshotUnavailable, type SavedViewsSnapshot } from './snapshot';
+
+export { fingerprintView };
 
 export interface SavedViewGrant {
 	id: string;
@@ -7,24 +10,17 @@ export interface SavedViewGrant {
 	views: { id: string; fingerprint: string }[];
 }
 
-function canonical(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(canonical);
-	if (value !== null && typeof value === 'object')
-		return Object.fromEntries(
-			Object.entries(value)
-				.filter(([, entry]) => entry !== undefined)
-				.sort(([a], [b]) => a.localeCompare(b))
-				.map(([key, entry]) => [key, canonical(entry)])
-		);
-	return value;
-}
-
-export async function fingerprintView(view: ItemView): Promise<string> {
-	const hash = await crypto.subtle.digest(
-		'SHA-256',
-		new TextEncoder().encode(JSON.stringify(canonical(view)))
+export async function matchesViewFingerprint(
+	snapshot: SavedViewsSnapshot,
+	view: ItemView,
+	fingerprint: string
+): Promise<boolean> {
+	if (fingerprint.startsWith('v2:')) return fingerprint === (await fingerprintView(view));
+	const legacy = snapshot.legacyViewFingerprints;
+	return (
+		fingerprint === (await legacyFingerprintView(view)) ||
+		(legacy?.accessVersion === snapshot.accessVersion && legacy.views[view.id] === fingerprint)
 	);
-	return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export async function grantedSnapshot(
@@ -35,7 +31,11 @@ export async function grantedSnapshot(
 	const permitted = new Map(grant.views.map((view) => [view.id, view.fingerprint]));
 	const views = [];
 	for (const view of snapshot.views)
-		if (permitted.get(view.id) === (await fingerprintView(view))) views.push(view);
+		if (
+			permitted.has(view.id) &&
+			(await matchesViewFingerprint(snapshot, view, permitted.get(view.id)!))
+		)
+			views.push(view);
 	return { ...snapshot, views };
 }
 

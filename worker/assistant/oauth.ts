@@ -14,7 +14,12 @@ import {
 } from '../../src/lib/shared/mcp';
 import { randomToken } from '../crypto';
 import type { Env } from '../db';
-import { fingerprintView, type SavedViewGrant } from './grant';
+import {
+	fingerprintView,
+	grantedSnapshot,
+	matchesViewFingerprint,
+	type SavedViewGrant
+} from './grant';
 import type { SavedViewsSnapshot, SnapshotPrincipal } from './snapshot';
 import { oauthStorage, type OAuthRecord } from './oauth-storage';
 
@@ -116,10 +121,11 @@ export class McpAuthorization extends DurableObject<Env> {
 			const user = await this.env.DB.prepare('SELECT id, login FROM users WHERE id = ?')
 				.bind(grant.userId)
 				.first<{ id: number; login: string }>();
+			const snapshot = user && (await this.#snapshot({ userId: user.id, login: user.login }));
 			if (
-				!user ||
-				(await this.#snapshot({ userId: user.id, login: user.login })).accessVersion !==
-					grant.accessVersion
+				!snapshot ||
+				snapshot.accessVersion !== grant.accessVersion ||
+				(await grantedSnapshot(snapshot, grant)).views.length !== grant.views.length
 			)
 				throw new OAuthError('invalid_grant', { description: 'Access is no longer authorized' });
 		});
@@ -327,7 +333,7 @@ export class McpAuthorization extends DurableObject<Env> {
 			const views = record.views.filter((view) => decision.viewIds.includes(view.id));
 			for (const view of views) {
 				const current = snapshot.views.find((entry) => entry.id === view.id);
-				if (!current || (await fingerprintView(current)) !== view.fingerprint)
+				if (!current || !(await matchesViewFingerprint(snapshot, current, view.fingerprint)))
 					throw new AuthorizationError('invalid_request', { description: 'View changed' });
 			}
 			const approved = await api.approveConsent(request, decision.requestId, {
