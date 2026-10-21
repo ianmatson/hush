@@ -409,6 +409,47 @@ describe('subject reads with partial GraphQL responses', () => {
 });
 
 describe('peek comment editing permissions', () => {
+	it.each(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])(
+		'does not permit editing %s reviews without body text',
+		async (state) => {
+			const bodies = [undefined, null, '', ' \n\t ', 'Looks good.'];
+			const entries = bodies.map((body, i) => ({
+				__typename: 'PullRequestReview',
+				id: `review_${i}`,
+				state,
+				body,
+				viewerDidAuthor: true,
+				viewerCanUpdate: true,
+				comments: { totalCount: 2 }
+			}));
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () =>
+					Response.json({
+						data: {
+							repository: {
+								issueOrPullRequest: {
+									id: 'subject_1',
+									__typename: 'PullRequest',
+									timelineItems: { nodes: entries, totalCount: entries.length }
+								}
+							}
+						}
+					})
+				)
+			);
+			const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+			expect(result?.peek.timeline.items.map((entry) => entry.canEdit)).toEqual([
+				false,
+				false,
+				false,
+				false,
+				true
+			]);
+			expect(result?.peek.timeline.items.map((entry) => entry.inline)).toEqual([2, 2, 2, 2, 2]);
+		}
+	);
+
 	it.each(['Issue', 'PullRequest'])(
 		'keeps Markdown and only permits owned editable entries on a %s',
 		async (type) => {

@@ -356,7 +356,8 @@
 			{#each p.timeline.items as e (e.url)}
 				{@const tone = e.type === 'review' ? (REVIEW[e.state ?? '']?.tone ?? '') : ''}
 				{@const reviewThreads = e.type === 'review' ? (threadsOfReview.get(e.id) ?? []) : []}
-				{@const canEdit = e.canEdit && typeof e.body === 'string'}
+				{@const canEdit =
+					e.canEdit && typeof e.body === 'string' && (e.type !== 'review' || !!e.body.trim())}
 				{@const showReactions = e.reactions && (e.html.trim() || e.reactions.groups.length)}
 				<div class="grid gap-1.5 pb-3" in:revealEntry>
 					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
