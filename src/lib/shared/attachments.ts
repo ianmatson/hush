@@ -63,13 +63,6 @@ export function attachmentMarkdown(name: string, url: string, kind: AttachmentKi
 	return kind === 'video' ? url : `![${escapeAlt(name)}](${url})`;
 }
 
-export function uploadingPlaceholder(text: string, name: string): string {
-	const placeholder = (label: string) => `![Uploading ${escapeAlt(label)}…]()`;
-	let candidate = placeholder(name);
-	for (let n = 2; text.includes(candidate); n++) candidate = placeholder(`${name} (${n})`);
-	return candidate;
-}
-
 export type TextEdit = { text: string; caret: number };
 
 export function insertBlock(text: string, start: number, end: number, block: string): TextEdit {
@@ -79,21 +72,4 @@ export function insertBlock(text: string, start: number, end: number, block: str
 	const trail = after.startsWith('\n') ? '' : '\n';
 	const inserted = `${lead}${block}${trail}`;
 	return { text: before + inserted + after, caret: before.length + inserted.length };
-}
-
-export function replaceBlock(
-	text: string,
-	caret: number,
-	block: string,
-	replacement: string
-): TextEdit | null {
-	const at = text.indexOf(block);
-	if (at < 0) return null;
-	const end = at + block.length;
-	const removesLine = !replacement && text[end] === '\n';
-	const removed = removesLine ? block.length + 1 : block.length;
-	const next = text.slice(0, at) + replacement + text.slice(at + removed);
-	const shift = replacement.length - removed;
-	const moved = caret >= at + removed ? caret + shift : Math.min(caret, at + replacement.length);
-	return { text: next, caret: moved };
 }

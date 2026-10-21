@@ -4,9 +4,7 @@ import {
 	attachmentName,
 	attachmentProblem,
 	canAttach,
-	insertBlock,
-	replaceBlock,
-	uploadingPlaceholder
+	insertBlock
 } from './attachments';
 
 const MB = 1024 * 1024;
@@ -59,14 +57,6 @@ describe('attachmentMarkdown', () => {
 	});
 });
 
-describe('uploadingPlaceholder', () => {
-	it('numbers a placeholder that is already in the text', () => {
-		const first = uploadingPlaceholder('', 'image.png');
-		expect(first).toBe('![Uploading image.png…]()');
-		expect(uploadingPlaceholder(first, 'image.png')).toBe('![Uploading image.png (2)…]()');
-	});
-});
-
 describe('insertBlock', () => {
 	it('puts the block on its own line', () => {
 		expect(insertBlock('ab', 1, 1, 'X')).toEqual({ text: 'a\nX\nb', caret: 4 });
@@ -75,20 +65,5 @@ describe('insertBlock', () => {
 	});
 	it('replaces the selection', () => {
 		expect(insertBlock('a sel b', 2, 5, 'X')).toEqual({ text: 'a \nX\n b', caret: 5 });
-	});
-});
-
-describe('replaceBlock', () => {
-	it('swaps the placeholder and keeps a caret after it in place', () => {
-		expect(replaceBlock('P\nhi', 4, 'P', 'URL')).toEqual({ text: 'URL\nhi', caret: 6 });
-	});
-	it('keeps a caret before it', () => {
-		expect(replaceBlock('hi\nP\n', 1, 'P', 'URL')).toEqual({ text: 'hi\nURL\n', caret: 1 });
-	});
-	it('removes the placeholder and its line break', () => {
-		expect(replaceBlock('a\nP\nb', 5, 'P', '')).toEqual({ text: 'a\nb', caret: 3 });
-	});
-	it('does nothing when the placeholder is gone', () => {
-		expect(replaceBlock('edited', 0, 'P', 'URL')).toBeNull();
 	});
 });

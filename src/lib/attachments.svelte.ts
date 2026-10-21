@@ -7,11 +7,9 @@ import {
 	attachmentMarkdown,
 	attachmentName,
 	attachmentProblem,
-	insertBlock,
-	replaceBlock,
-	uploadingPlaceholder,
-	type TextEdit
+	insertBlock
 } from '$lib/shared/attachments';
+import { applyTextareaEdit, trackTextareaSelection } from '$lib/textarea-edit';
 
 export type AttachTarget = { repo: string; allowed: boolean };
 
@@ -21,12 +19,6 @@ const DROPPING = 'dropping';
 
 export const DROP_TARGET_CLASS =
 	'data-dropping:border-ring data-dropping:ring-3 data-dropping:ring-ring/50';
-
-function apply(box: HTMLTextAreaElement, edit: TextEdit) {
-	box.value = edit.text;
-	box.setSelectionRange(edit.caret, edit.caret);
-	box.dispatchEvent(new Event('input', { bubbles: true }));
-}
 
 const hasFiles = (data: DataTransfer | null) => !!data?.types.includes('Files');
 
@@ -79,28 +71,41 @@ export class Uploads {
 		if (!files.length) return;
 		if (!this.allowed)
 			return void toast.error('Cannot attach files', { description: ATTACH_NEEDS_WRITE });
-		for (const file of files) void this.#upload(box, file);
+		void this.#insert(box, files);
 	}
 
-	async #upload(box: HTMLTextAreaElement, file: File) {
+	async #insert(box: HTMLTextAreaElement, files: File[]) {
+		const selection = trackTextareaSelection(box);
+		const progress = toast.loading(
+			files.length === 1 ? 'Uploading attachment…' : `Uploading ${files.length} attachments…`
+		);
+		this.pending += files.length;
+		try {
+			const blocks = await Promise.all(files.map((file) => this.#upload(file)));
+			const markdown = blocks.filter((block) => block !== null).join('\n');
+			if (!markdown || !box.isConnected) return;
+			const { start, end } = selection.range;
+			applyTextareaEdit(box, insertBlock(box.value, start, end, markdown));
+		} finally {
+			selection.destroy();
+			toast.dismiss(progress);
+			this.pending -= files.length;
+		}
+	}
+
+	async #upload(file: File): Promise<string | null> {
 		const name = attachmentName(file.name);
 		const problem = attachmentProblem(file);
-		if (problem) return void toast.error(`Cannot attach ${name}`, { description: problem });
-		const placeholder = uploadingPlaceholder(box.value, name);
-		apply(box, insertBlock(box.value, box.selectionStart, box.selectionEnd, placeholder));
-		const swap = (replacement: string) => {
-			const edit = replaceBlock(box.value, box.selectionStart, placeholder, replacement);
-			if (edit) apply(box, edit);
-		};
-		this.pending++;
+		if (problem) {
+			toast.error(`Cannot attach ${name}`, { description: problem });
+			return null;
+		}
 		try {
 			const { url, kind } = await api.attach(this.#target().repo, file, name);
-			swap(attachmentMarkdown(name, url, kind));
+			return attachmentMarkdown(name, url, kind);
 		} catch (err) {
-			swap('');
 			toast.error(`Cannot attach ${name}`, { description: (err as Error).message });
-		} finally {
-			this.pending--;
+			return null;
 		}
 	}
 }

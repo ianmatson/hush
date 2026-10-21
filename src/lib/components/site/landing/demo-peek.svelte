@@ -4,6 +4,7 @@
 
 <script lang="ts">
 	import { buttonClass, cx } from './demo-ui';
+	import { markdownEditor } from '$lib/textarea-edit';
 	import { demoKey } from './demo-keys';
 	import AlarmClock from '@lucide/svelte/icons/alarm-clock';
 	import BellOff from '@lucide/svelte/icons/bell-off';
@@ -406,6 +407,7 @@
 			<div class="grid gap-1.5">
 				<textarea
 					bind:this={box}
+					{@attach markdownEditor}
 					bind:value={() => draft, setDraft}
 					onkeydown={onBoxKey}
 					oninput={() => {
