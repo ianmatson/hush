@@ -404,7 +404,7 @@
 										<button
 											{...props}
 											type="button"
-											class="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+											class="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
 											disabled={editingId !== null}
 											aria-label="Edit comment"
 											aria-expanded={editingId === e.id}
