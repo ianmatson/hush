@@ -41,6 +41,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
+	import Pencil from '@lucide/svelte/icons/pencil';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Tip from './tip.svelte';
 
@@ -355,6 +356,8 @@
 			{#each p.timeline.items as e (e.url)}
 				{@const tone = e.type === 'review' ? (REVIEW[e.state ?? '']?.tone ?? '') : ''}
 				{@const reviewThreads = e.type === 'review' ? (threadsOfReview.get(e.id) ?? []) : []}
+				{@const canEdit = e.canEdit && typeof e.body === 'string'}
+				{@const showReactions = e.reactions && (e.html.trim() || e.reactions.groups.length)}
 				<div class="grid gap-1.5 pb-3" in:revealEntry>
 					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
 						<GhLink
@@ -382,18 +385,6 @@
 							class="ml-auto shrink-0 text-muted-foreground tabular-nums hover:text-foreground"
 							>{ago(e.at)}</a
 						>
-						{#if e.canEdit && typeof e.body === 'string'}
-							<button
-								type="button"
-								class="shrink-0 rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-								disabled={editingId !== null}
-								aria-expanded={editingId === e.id}
-								onclick={(event) => {
-									editTrigger = event.currentTarget;
-									editingId = e.id;
-								}}>Edit</button
-							>
-						{/if}
 					</div>
 					{#if editingId === e.id}
 						<CommentEditor entry={e} repo={p.repo} number={p.number} onclose={closeEditor} />
@@ -402,8 +393,32 @@
 							{@html sanitize(e.html)}
 						</div>
 					{/if}
-					{#if e.reactions && (e.html.trim() || e.reactions.groups.length)}
-						<ReactionBar r={e.reactions} class="ml-7" />
+					{#if showReactions || canEdit}
+						<div class="ml-7 flex flex-wrap items-center gap-1">
+							{#if showReactions && e.reactions}
+								<ReactionBar r={e.reactions} />
+							{/if}
+							{#if canEdit}
+								<Tip text="Edit comment">
+									{#snippet children(props)}
+										<button
+											{...props}
+											type="button"
+											class="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+											disabled={editingId !== null}
+											aria-label="Edit comment"
+											aria-expanded={editingId === e.id}
+											onclick={(event) => {
+												editTrigger = event.currentTarget;
+												editingId = e.id;
+											}}
+										>
+											<Pencil class="size-3.5" />
+										</button>
+									{/snippet}
+								</Tip>
+							{/if}
+						</div>
 					{/if}
 					{#if e.type === 'review' && e.inline}
 						{#if threadsQ.isPending}

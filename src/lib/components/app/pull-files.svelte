@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
+	import { markdownEditor } from '$lib/textarea-edit';
 	import { MediaQuery, SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
@@ -808,6 +809,7 @@
 								DROP_TARGET_CLASS
 							)}
 							{@attach summaryUploads.textarea}
+							{@attach markdownEditor}
 							{@attach (node) => {
 								node.focus();
 							}}

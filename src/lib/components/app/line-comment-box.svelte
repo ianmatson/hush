@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { markdownEditor } from '$lib/textarea-edit';
 	import { clearSentDraft, loadDraft, saveDraft } from '$lib/drafts';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { suggestionBlock, suggestionIn } from '$lib/shared/diff';
@@ -71,6 +72,7 @@
 			DROP_TARGET_CLASS
 		)}
 		{@attach uploads.textarea}
+		{@attach markdownEditor}
 		onkeydown={(e) => {
 			if (commandFor(e, ['editor']) === 'editor.send') {
 				e.preventDefault();

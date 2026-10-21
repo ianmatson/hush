@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { markdownEditor } from '$lib/textarea-edit';
 	import { api } from '$lib/api';
 	import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
@@ -84,6 +85,7 @@
 			DROP_TARGET_CLASS
 		)}
 		{@attach uploads.textarea}
+		{@attach markdownEditor}
 		{@attach (node) => {
 			node.focus();
 		}}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { markdownEditor } from '$lib/textarea-edit';
 	import { commandFor, keysOf } from '$lib/keys.svelte';
 	import { acting, composer, sendAction, type ComposeIntent } from '$lib/gh-act.svelte';
 	import { ghActions } from '$lib/shared/actions';
@@ -258,6 +259,7 @@
 				bind:value={text}
 				class={cn('min-h-20 text-sm', DROP_TARGET_CLASS)}
 				{@attach uploads.textarea}
+				{@attach markdownEditor}
 				{placeholder}
 				aria-label="Comment"
 				aria-autocomplete="list"

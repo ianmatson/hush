@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import { markdownEditor } from '$lib/textarea-edit';
 	import { progressToast } from '$lib/progress-toast';
 	import { api } from '$lib/api';
 	import { ArmedConfirm } from '$lib/armed-confirm.svelte';
@@ -239,6 +240,7 @@
 							)}
 							readonly={sending === 'edit'}
 							{@attach uploads.textarea}
+							{@attach markdownEditor}
 							{@attach (node) => {
 								node.focus();
 							}}
@@ -297,6 +299,7 @@
 							DROP_TARGET_CLASS
 						)}
 						{@attach uploads.textarea}
+						{@attach markdownEditor}
 						onkeydown={(e) => {
 							if (commandFor(e, ['editor']) === 'editor.send') {
 								e.preventDefault();
