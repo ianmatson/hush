@@ -4,6 +4,7 @@ import type { DashKind, ItemView } from '../../src/lib/shared/types';
 import { keepsClosed } from '../../src/lib/shared/closed-items';
 import { sortOfView } from '../../src/lib/shared/sorting';
 import type { SavedViewsSnapshot } from './snapshot';
+import { categoriesOfView, grantedSnapshot, itemInView, type SavedViewGrant } from './grant';
 
 export const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 50;
@@ -37,12 +38,12 @@ class ToolFailure extends Error {
 const viewInfo = (view: ItemView) => ({
 	id: view.id,
 	name: view.name,
-	searches: view.searches,
+	searches: [...view.searches],
 	kinds: viewKinds(view),
 	groupBy: view.groupBy,
 	sort: sortOfView(view),
 	keepClosed: keepsClosed(view),
-	sections: view.sections
+	sections: view.sections?.map(({ name }) => ({ name }))
 });
 
 async function revisionOf(value: unknown): Promise<string> {
@@ -98,14 +99,22 @@ async function resultOf<T>(read: () => Promise<T>): Promise<ToolResult<T>> {
 	}
 }
 
-export function createSavedViewTools(readSnapshot: () => Promise<SavedViewsSnapshot>) {
+export function createSavedViewTools(
+	readSnapshot: () => Promise<SavedViewsSnapshot>,
+	grant?: SavedViewGrant
+) {
+	const read = async () => {
+		const snapshot = await readSnapshot();
+		return grant ? grantedSnapshot(snapshot, grant) : snapshot;
+	};
+	const grantScope = () => (grant ? [grant.id, grant.userId, grant.views] : null);
 	return {
 		list_views: (input: PageInput = {}) =>
 			resultOf(async () => {
 				const limit = pageLimit(input);
-				const snapshot = await readSnapshot();
+				const snapshot = await read();
 				const views = snapshot.views.map(viewInfo);
-				const revision = await revisionOf([snapshot.principal, views]);
+				const revision = await revisionOf([snapshot.principal, grantScope(), views]);
 				const offset = offsetOf(input.cursor, revision, views.length);
 				return {
 					views: views.slice(offset, offset + limit),
@@ -121,7 +130,7 @@ export function createSavedViewTools(readSnapshot: () => Promise<SavedViewsSnaps
 					throw new ToolFailure('invalid_arguments');
 				if (input.kind !== undefined && !['both', 'pr', 'issue'].includes(input.kind))
 					throw new ToolFailure('invalid_arguments');
-				const snapshot = await readSnapshot();
+				const snapshot = await read();
 				const view = snapshot.views.find((v) => v.id === input.view_id);
 				if (!view) throw new ToolFailure('view_not_found');
 				const kinds = viewKinds(view).filter(
@@ -130,23 +139,30 @@ export function createSavedViewTools(readSnapshot: () => Promise<SavedViewsSnaps
 				if (!kinds.length) throw new ToolFailure('invalid_arguments');
 				const dashboards = kinds.map((kind) => snapshot.dashboards.find((d) => d.kind === kind)!);
 				const data = dashboards.flatMap((d) => (d.data ? [d.data] : []));
+				const categoryGroups = grant
+					? categoriesOfView(view, snapshot.categoryGroups)
+					: snapshot.categoryGroups;
 				const freshness = dashboards.map((d) => ({
 					kind: d.kind,
 					state: d.state,
 					fetchedAt: d.fetchedAt,
-					errors: d.data?.errors ?? [],
-					skipped: d.data?.sections.find((s) => s.id === view.id)?.skipped ?? null
+					errors: grant ? [] : (d.data?.errors ?? []),
+					skipped: grant
+						? d.data?.sections.some((s) => s.id === view.id && s.skipped)
+							? 'source_unavailable'
+							: null
+						: (d.data?.sections.find((s) => s.id === view.id)?.skipped ?? null)
 				}));
-				const population = viewPopulation(
+				const members = viewPopulation(
 					data.flatMap((d) => d.items),
 					view,
-					snapshot.categoryGroups
+					categoryGroups
 				);
 				const projects = [
 					...new Map(data.flatMap((d) => d.projects ?? []).map((p) => [p.key, p])).values()
-				];
+				].filter((project) => !grant || view.groupBy === `project:${project.key}`);
 				const sections = savedViewSections(
-					population,
+					members,
 					view,
 					{
 						me: snapshot.principal.login,
@@ -154,15 +170,32 @@ export function createSavedViewTools(readSnapshot: () => Promise<SavedViewsSnaps
 						projects
 					},
 					kinds
-				);
+				).map(({ key, label, color, items }) => ({
+					key,
+					label,
+					color,
+					items: grant
+						? items.map((item) => itemInView(item, view, categoryGroups, members))
+						: items
+				}));
 				const rows = sections.flatMap((section, index) =>
 					section.items.map((item) => ({ index, item }))
 				);
 				const revision = await revisionOf([
 					snapshot.principal,
+					grantScope(),
 					viewInfo(view),
 					kinds,
-					snapshot.categoryGroups,
+					categoryGroups.map((group) => ({
+						id: group.id,
+						name: group.name,
+						categories: group.categories.map(({ id, name, color, icon }) => ({
+							id,
+							name,
+							color,
+							icon
+						}))
+					})),
 					sections,
 					freshness
 				]);
@@ -170,7 +203,7 @@ export function createSavedViewTools(readSnapshot: () => Promise<SavedViewsSnaps
 				const page = rows.slice(offset, offset + limit);
 				return {
 					view: viewInfo(view),
-					categoryGroups: snapshot.categoryGroups.map((group) => ({
+					categoryGroups: categoryGroups.map((group) => ({
 						id: group.id,
 						name: group.name,
 						categories: group.categories.map(({ id, name, color, icon }) => ({
@@ -181,13 +214,15 @@ export function createSavedViewTools(readSnapshot: () => Promise<SavedViewsSnaps
 						}))
 					})),
 					freshness,
-					complete: dashboards.every(
-						(d) =>
-							!!d.data &&
-							!d.data.errors.length &&
-							!d.data.sections.some((s) => s.id === view.id && s.skipped)
-					),
-					totalItems: population.length,
+					complete:
+						!grant &&
+						dashboards.every(
+							(d) =>
+								!!d.data &&
+								!d.data.errors.length &&
+								!d.data.sections.some((s) => s.id === view.id && s.skipped)
+						),
+					totalItems: members.length,
 					totalRows: rows.length,
 					groups: sections.flatMap(({ items, ...section }, index) => {
 						const shown = page.filter((row) => row.index === index).map((row) => row.item);

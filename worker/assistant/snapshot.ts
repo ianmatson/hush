@@ -28,6 +28,7 @@ export interface SnapshotDashboard {
 
 export interface SavedViewsSnapshot {
 	principal: SnapshotPrincipal;
+	accessVersion: string;
 	views: ItemView[];
 	categoryGroups: CategoryGroup[];
 	dashboards: SnapshotDashboard[];
@@ -42,7 +43,14 @@ export class SnapshotUnavailable extends Error {
 export function createSnapshotReader(storage: SnapshotStorage, principal: SnapshotPrincipal) {
 	const scope = { ...principal };
 	return async (now = Date.now()): Promise<SavedViewsSnapshot> => {
-		const values = await storage.get(['userId', 'schema', 'settings', 'dash:pr', 'dash:issue']);
+		const values = await storage.get([
+			'userId',
+			'schema',
+			'settings',
+			'dash:pr',
+			'dash:issue',
+			'mcpAccessVersion'
+		]);
 		if (values.get('userId') !== scope.userId) throw new SnapshotUnavailable('scope_mismatch');
 		if (values.get('schema') !== SCHEMA_VERSION) throw new SnapshotUnavailable('schema_not_ready');
 		const settings = parseSettings(values.get('settings') as string | undefined);
@@ -90,6 +98,7 @@ export function createSnapshotReader(storage: SnapshotStorage, principal: Snapsh
 		);
 		return {
 			principal: { ...scope },
+			accessVersion: (values.get('mcpAccessVersion') as string | undefined) ?? 'initial',
 			views: settings.views,
 			categoryGroups: settings.categoryGroups,
 			dashboards: dashboards.map((d) =>

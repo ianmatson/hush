@@ -1,113 +1,172 @@
-# Passive assistant access to saved views
+# Authenticated remote access to saved views
 
-This is an internal foundation, not a live MCP server. No route, remote transport,
-credential, grant, session, deployment, or poll schedule is added.
+Hush serves a remote MCP endpoint at `${APP_URL}/mcp`. Registering an OAuth
+client grants no data. A signed-in user must approve specific saved views.
 
-## Usable now
+## Connect and manage access
 
-- `worker/assistant/snapshot.ts` reads existing Durable Object KV caches and SQLite
-  records through a storage capability with only `get` and SQL `exec`. Every SQL
-  statement is a fixed `SELECT` with bound item keys. It does not instantiate a
-  Poller, migrate a schema, decrypt a token, fetch GitHub data, or start work.
-- The caller supplies the trusted principal and the corresponding user's storage.
-  The reader checks the stored user ID and exact current schema before SQL reads.
-  A mismatch fails closed. Tool arguments cannot select a user or storage object.
-- `worker/assistant/tools.ts` provides typed `list_views` and `get_view` functions.
-  `worker/assistant/adapter.ts` supplies MCP-shaped tool definitions, read-only
-  annotations, argument validation, and text/structured results without an MCP SDK
-  or network server. An in-process caller can compose these three modules now.
-- The UI and tools share membership/population, category filters, sorting, grouping,
-  closed-item handling, snooze/mute evaluation, unread state, and changes-since-seen
-  helpers. The existing dashboard API also uses the shared presentation function.
-  This refactor has no intended visual or interaction change.
+1. Sign in to Hush first.
+2. Add the server address from Settings → Authorized apps to the MCP client.
+3. Start the connection from that client. Check its name and return address.
+   App names are self-asserted. For a loopback return address, continue only if
+   you just started the connection from an app on your computer.
+4. Select the views to share. None are selected by default.
+5. Inspect permissions, views, expiry, and revoke access in Authorized apps.
+   To change allowed views, revoke access and connect again.
 
-The snapshot uses the already-materialized `dash:pr` and `dash:issue` caches. Source
-search membership, Hush search filters, category rules/manual pins, turn, reason,
-priority, waiting time, stale-item flags, and project statuses come from those
-caches. The reader does not rerun searches or decisions. It checks the same cache
-signature as the dashboard, including date-expanded searches and dashboard filters.
-An incompatible cache yields no items for that kind. Snooze expiry, closed-item
-expiry, unread state, and changes since seen are evaluated from local records.
+Clients need public-client authorization code flow, S256 PKCE, Dynamic Client
+Registration (DCR), and `saved-views:read`. Authorization and token requests must
+name the exact resource `${APP_URL}/mcp`. Access tokens last 15 minutes.
+Rotating refresh tokens and application grants last at most 30 days. Consent
+lasts 10 minutes and works once. New views are never included automatically.
 
-## Tool contract
+Every successful saved-settings write changes an access version in the same
+storage put. Existing grants and pending consent then fail, including after
+deleting and recreating identical view IDs. This deliberately also invalidates
+grants for settings changes outside Views. Account deletion revokes all grants.
+Sign-in after storage reset receives a new version.
 
-`list_views({ limit?, cursor? })` lists view definitions in saved tab order. It
-includes the effective default sort and closed-item preference. It does not return
-account details, credentials, notification settings, or other settings.
+## Standards and library choices
 
-`get_view({ view_id, kind?: 'both' | 'pr' | 'issue', limit?, cursor? })` defaults to
-all kinds supported by the view's searches. It returns category display metadata
-and grouped items with their Hush facts, including category/pin IDs, turn/reason,
-priority, waiting/stale state, unread/seen state, and changes. It hides snoozed and
-muted items. No option exposes dismissed items or requests a refresh.
+Pinned dependencies: `@cloudflare/workers-oauth-provider` 1.2.3,
+`@modelcontextprotocol/server` 2.3.1, and Zod 4.3.6. Official sources checked
+on 2026-10-21:
 
-The result represents the saved view's underlying item list. Browser-local kind
-selection, category chips, collapsed groups, transient held rows, and stack-card
-rotation are not saved view configuration. The tools do not reproduce those states
-or fetch outside stack members. Shared projection tests compare the prior UI
-pipeline for all grouping and sorting combinations.
+- [MCP authorization, released 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
+- [Cloudflare authorization](https://developers.cloudflare.com/agents/model-context-protocol/protocol/authorization/)
+- [Cloudflare SDK v2 migration](https://developers.cloudflare.com/agents/model-context-protocol/guides/migrate-to-mcp-sdk-v2/)
+- [OAuth provider source and documentation](https://github.com/cloudflare/workers-oauth-provider).
+  The installed package includes its authorization, resource, and consent references.
 
-Each requested kind reports its cache state and `fetchedAt`:
+The SDK's `createMcpHandler` serves the current per-request protocol and stateless
+Streamable HTTP for 2025 clients. Only `list_views` and `get_view` are exposed.
+There are no persistent MCP sessions, proxy tools, arbitrary SQL or caller-selected
+storage. Bearer authentication is required on every call. Browser cookies never
+authenticate MCP. GitHub tokens stay server-side and never become MCP credentials.
 
-| State              | Meaning                                                                |
-| ------------------ | ---------------------------------------------------------------------- |
-| `fresh`            | Compatible cache younger than the existing dashboard TTL (15 minutes). |
-| `stale`            | Compatible cache at least 15 minutes old; returned without a refresh.  |
-| `missing`          | No saved cache.                                                        |
-| `settings_changed` | Cache signature differs, or the required source index is absent.       |
+DCR supports existing clients, although the current specification prefers Client
+ID Metadata Documents (CIMD). CIMD, arbitrary metadata fetches, external tokens,
+token exchange, confidential clients, and private-use redirects are disabled.
+The library validates registered HTTPS/loopback redirects, rejects credentials
+and fragments, and enforces S256 PKCE. Registration alone conveys no authority.
 
-Cached errors and skipped-source reasons accompany each kind. `complete` describes
-source coverage: every requested kind has a compatible cache, with no cached errors
-or skipped sources for this view. It does not mean fresh or exhaustive GitHub data.
-Hush's normal search result limits still apply. Partial results are explicit; a
-missing cache is different from a complete empty view. Cache time is the last
-dashboard build, not a guarantee that every item's facts were read at that time.
-Later notification updates can patch cached items without changing that time.
+| Endpoint                                    | Purpose                                     |
+| ------------------------------------------- | ------------------------------------------- |
+| `/.well-known/oauth-protected-resource/mcp` | Resource metadata                           |
+| `/.well-known/oauth-authorization-server`   | Issuer metadata                             |
+| `/oauth/authorize`                          | Browser authentication and consent start    |
+| `/oauth/token`                              | Code exchange, refresh, RFC 7009 revocation |
+| `/oauth/register`                           | Public client registration                  |
+| `/api/mcp/consent`                          | Session-bound consent data and decision     |
+| `/api/mcp/grants`                           | Current user's authorized apps              |
+| `/api/mcp/grants/:id/revoke`                | Current user's revocation                   |
 
-Pages default to 50, with an integer range of 1–100. For `get_view`, pagination runs
-after grouping and sorting, over grouped rows. A group can span pages; each page
-includes only represented groups and their full group counts. `totalItems` counts
-the population; `totalRows` counts group occurrences. `nextCursor: null` ends the
-list. A complete empty view has zero totals and no groups or next cursor.
+The application enforces the narrow scope, exact resource/audience, expiry,
+live application grant, live provider grant, current user, and saved-view scope.
+It rejects missing stored audiences rather than using the library's compatibility
+fallback. A browser session lookup checks absolute and idle expiry without
+touching or refreshing the session. Consent binds to user, session, browser
+cookie, and CSRF token. Management writes require exact same-origin Origin and
+session-derived CSRF. Consent HTML forbids framing and uses no-referrer.
+Expected consent errors become response data inside the DO, without relying
+on exception prototypes surviving RPC.
 
-Cursors carry an offset and a SHA-256 content revision, bound to the principal and
-projection. They are not credentials. Changes to visible facts, marks, seen state,
-view settings, relevant categories, or freshness invalidate a view cursor. The
-client must restart on `snapshot_changed`; no pages or sessions are persisted.
-The cursor does not pin historical data or provide a transaction across calls.
-Invalid arguments/cursors and missing views return bounded typed errors. Storage,
-schema, and scope failures return `snapshot_unavailable` without internal details.
+Cross-origin browser JavaScript MCP clients are not enabled. Supported native
+and server-side clients omit Origin, or use Hush's own origin.
 
-## Required next PR: authentication and remote transport
+## Storage, replay, revocation, and capacity
 
-1. Add explicit user consent for a narrow saved-view read scope. Bind each request
-   to a verified principal and that principal's storage. Do not accept a user ID,
-   cookie, generic route, or arbitrary SQL from tool arguments. If consent limits
-   access to selected views, filter both definitions and item metadata accordingly.
-2. Add machine authentication, token audience/resource checks, expiration,
-   revocation, and account-deletion behavior. Resolve the current account identity
-   through a read-only lookup. This reader trusts its caller's principal; it is
-   not an authentication mechanism and does not implement grant enforcement.
-3. Add a passive Durable Object integration before a remote endpoint. The current
-   `PollerBase` constructor calls `migrate()`, which can write or reset storage for
-   a schema mismatch. Do not wrap this reader in the existing Poller lifecycle and
-   claim the entire request is passive. A passive entry point must refuse an
-   unavailable schema without running migrations, scheduling alarms, or touching
-   activity. Preserve the existing schema check in the reader.
-4. Wire only the two allowlisted tools to an authenticated MCP transport. Add
-   transport-level tests for cross-account denial, consent scope, expired/revoked
-   credentials, malformed requests, and cold-start schema mismatch. Check the
-   complete request for no writes, alerts, polling, seen marks, or GitHub calls.
+`McpAuthorization` is a separate SQLite-backed Durable Object. A KV-shaped adapter
+stores library records in strongly consistent DO storage, not Workers KV.
+One private queue serializes all protocol operations. Concurrent exchanges
+cannot read the same unconsumed code. The library removes the code's wrapped
+key before token issuance. A crash can require a new connection, but does not
+make a consumed code reusable.
 
-The current browser APIs are unsuitable shortcuts: `/api/me` records visits and
-can resume polling, dashboard reads can refresh and emit alerts, and peek reads
-can persist facts. Neither those APIs nor browser cookies are used here.
+The application obtains the library grant ID through supported grant metadata
+and listing helpers. It does not parse authorization codes to obtain authority.
+Explicit revocation first stores retry metadata and removes the application
+grant, then calls `revokeGrant` to delete the provider family. Failure preserves
+immediate data denial and retry metadata. Later explicit writes retry cleanup.
+Refresh checks the live application grant and access version before minting.
 
-## Verification
+Grants also carry SHA-256 fingerprints of complete canonical view definitions:
+searches, custom rules, grouping, sort, and closed-item preferences. Consent
+compares both the version and definitions again before issuance. Reads compare
+the version on every snapshot. These checks establish ordering at the acquired
+snapshot; they do not cancel a read that already acquired an earlier snapshot.
+Revocation affects subsequent calls.
 
-Tests use isolated in-memory SQLite databases with the real schema. The passive
-read test enables SQLite `query_only`, checks `total_changes()`, compares all KV
-values, installs write/alarm traps, and rejects network calls. Other tests cover
-scope/schema denial, cache states/errors, empty and partial results, cursor
-invalidation, and adapter argument allowlisting. No live account or credentials
-are needed.
+The global authorization object is a deliberate small-service serialization
+point. Limits are 1,000 stored clients, 100 pending consents globally, and 20
+application grants per user. Client registrations last 30 days and the library
+can renew active registrations during token exchange. Capacity failures deny
+new access. Explicit OAuth writes scan at most 100 records per operation with
+a persisted cleanup cursor. Expired records are unreadable immediately.
+Physical deletion can lag when there are no writes. No cleanup alarm exists.
+
+Authorization, registration, token exchange, and consent writes use AUTH_LIMIT
+(10/minute/IP). MCP calls, metadata, consent HTML, and management reads use
+API_LIMIT (300/minute/IP). The 64 KiB body cap and these middleware apply only
+to MCP/OAuth paths. Normal Hush budgets and body sizes do not change.
+
+## Passive reads and output boundaries
+
+The exported `Poller` has a private lazy active engine. Its constructor does
+not migrate. `savedViewsSnapshot` directly uses the storage reader and never
+initializes that engine. Existing UI RPCs, alarms, and socket events initialize
+the active engine before their existing behavior. Passive reads require the
+stored user ID and exact supported schema. Missing, old, unknown, or newer
+schemas fail without migration, reset, alarm, or writes.
+
+The reader uses KV caches and fixed SELECTs for subjects, snoozes and seen
+snapshots. It never decrypts GitHub tokens, fetches GitHub, marks read, touches
+activity, resumes polling, refreshes sessions/caches, or writes facts, decisions,
+alerts, or last-used telemetry. Inspection of the pinned library confirms that
+`unwrapToken` and `validateToken` only read/decrypt token records. Validation uses
+an adapter whose mutation methods throw. Issuance, refresh, consent, revocation,
+and their bounded cleanup are explicit write flows, not passive reads.
+
+Both tools filter definitions to the grant. Each item uses an explicit output
+allowlist. Other view membership/kept sections, source queries and filters,
+unrelated categories, category rules/settings, project fields, outside stack
+members, global errors, and outside counts are removed. Grouping uses full
+internal facts before filtering output.
+
+The snapshot reads materialized `dash:pr` and `dash:issue` caches. Shared dashboard
+helpers supply membership, grouping, sorting, closed-item retention, local
+snooze/mute, unread, and changes-since-seen behavior. Stale compatible data stays
+stale; incompatible caches return no items. Browser-local kind selection,
+category chips, collapsed groups, held rows, and stack rotation are not saved
+configuration and are not reproduced.
+
+`list_views({ limit?, cursor? })` returns granted definitions in saved order.
+`get_view({ view_id, kind?: 'both' | 'pr' | 'issue', limit?, cursor? })` returns
+visible cached items in saved groups. Pages contain 1–100 rows, default 50.
+Cursors bind to account, grant ID, effective scope, requested view/kinds, and
+content revision. `snapshot_changed` requires restarting pagination. Missing
+and ungranted views share `view_not_found`. Cache states are `fresh`, `stale`,
+`missing`, or `settings_changed`, with `fetchedAt`. Remote results conservatively
+report `complete: false` because global source errors are hidden. GitHub text
+is untrusted content, never assistant instructions.
+
+## Verification and deployment boundary
+
+Run `pnpm check`, `pnpm test`, and `pnpm lint`.
+`node tests/mcp-workerd.mjs` uses Wrangler's installed Miniflare/esbuild for
+real workerd/DO RPC tests, synthetic local D1/DO data, ephemeral storage, and
+blocked external fetches. It reads no .dev.vars, existing Wrangler state, or
+browser profiles. `tests/mcp-ui.mjs` uses isolated headless fixtures with a
+configured existing dev service; environment options are at the file's top.
+
+The package adds MCP_AUTH and the v2-mcp-authorization DO class migration to
+Wrangler configuration. No D1 schema migration, new live secret, or provider
+credential is needed. Deployment is separate: review capacity limits, check
+canonical HTTPS APP_URL, deploy the DO binding/class and Worker/assets together,
+then run a separately approved live connection test. Changing APP_URL's origin
+invalidates the resource binding. Do not deploy only the UI or only the endpoint.
+
+No deployment, remote migration, live credential, real grant, real third-party
+consent, or production/browser-account test is part of this validation.
+Screenshots and GIFs stay outside the repository. Public permanent uploads
+require approval of the exact files first.

@@ -13,6 +13,11 @@ Your GitHub pull requests and issues, with whose turn it is on each one. **[hush
 
 A SvelteKit app (shadcn-svelte) on Cloudflare Workers: one Durable Object per user that owns that user's data (its own SQLite), D1 for accounts and sessions only, Web Push, and Atom feeds.
 
+A separate `McpAuthorization` Durable Object stores OAuth clients and per-user
+saved-view grants. The remote MCP endpoint reads existing user data without
+activating polling. See [assistant access](docs/assistant-access.md) for the
+authorization, storage, and deployment boundaries.
+
 ## How it works
 
 ```
@@ -46,9 +51,11 @@ The user docs are at [hush-gh.com/docs](https://hush-gh.com/docs): one Markdown 
 
 ## Local development
 
-The internal [passive assistant access foundation](docs/assistant-access.md) provides
-cached saved-view reads and transport-free tool adapters. Authentication and a
-remote MCP endpoint are separate work; no live assistant access is enabled.
+The [authenticated remote MCP server](docs/assistant-access.md) provides passive
+cached reads of explicitly approved saved views at `${APP_URL}/mcp`. Connect and
+revoke apps in Settings → Authorized apps. The code includes OAuth discovery,
+S256 PKCE consent, expiry, and per-user/per-view grants. Deployment and live
+authorization require a separate approved operation.
 
 ```sh
 pnpm install

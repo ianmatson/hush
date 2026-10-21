@@ -8,6 +8,7 @@ import { refreshSlackMentionsAccess } from '../slack-mentions';
 import { routes, SESSION_COOKIE, poller, json, type AppEnv } from '../app';
 import { SESSION_DAYS, SESSION_IDLE_MS, deviceLabel } from '../../src/lib/shared/session';
 import { DAY_MS } from '../../src/lib/shared/durations';
+import { authorization } from '../assistant/remote';
 import type { SessionDTO } from '../../src/lib/shared/types';
 
 // --- Auth: Sign in with GitHub (an OAuth app), and your own token as an option ------------
@@ -266,6 +267,7 @@ const app = routes()
 	})
 	.delete('/api/account', async (c) => {
 		const u = c.get('user');
+		await authorization(c.env)?.revokeAll(u.id);
 		await poller(c.env, u.id).stop();
 		await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id).run();
 		deleteCookie(c, SESSION_COOKIE, { path: '/' });

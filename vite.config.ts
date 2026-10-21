@@ -35,7 +35,15 @@ export default defineConfig({
 		port: DEV_SERVER_PORT,
 		strictPort: true,
 		// `pnpm dev` runs the Worker on :8787 (wrangler dev) next to Vite.
-		proxy: { '/api': toWorker, '/feeds': toWorker }
+		proxy: {
+			'/api': toWorker,
+			'/feeds': toWorker,
+			'/mcp': toWorker,
+			'/oauth/authorize': toWorker,
+			'/oauth/token': toWorker,
+			'/oauth/register': toWorker,
+			'/.well-known': toWorker
+		}
 	},
 	test: {
 		expect: { requireAssertions: true },
@@ -44,6 +52,7 @@ export default defineConfig({
 				extends: './vite.config.ts',
 				test: {
 					name: 'server',
+					server: { deps: { inline: ['@cloudflare/workers-oauth-provider'] } },
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}', 'worker/**/*.{test,spec}.ts'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']

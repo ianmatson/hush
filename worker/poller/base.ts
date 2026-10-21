@@ -26,13 +26,23 @@ type SocketFocus = { focusedAt: number };
  */
 export abstract class PollerBase extends DurableObject<Env> {
 	private teamsFailure: { at: number; error: string } | null = null;
+	private initialization: Promise<void> | null = null;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
-		// The tables exist before any request or alarm runs.
-		void ctx.blockConcurrencyWhile(() => this.migrate());
-		// Keep-alive pings get their answer without waking this object (see the live socket).
-		ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+	}
+
+	protected initializeActive(): Promise<void> {
+		this.initialization ??= this.ctx
+			.blockConcurrencyWhile(async () => {
+				await this.migrate();
+				this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+			})
+			.catch((error: unknown) => {
+				this.initialization = null;
+				throw error;
+			});
+		return this.initialization;
 	}
 
 	// --- The live socket ------------------------------------------------------------------
@@ -169,7 +179,10 @@ export abstract class PollerBase extends DurableObject<Env> {
 
 	/** Stores only what differs from the defaults (see settingsOverrides). */
 	protected async saveSettings(settings: Settings): Promise<void> {
-		await this.ctx.storage.put('settings', JSON.stringify(settingsOverrides(settings)));
+		await this.ctx.storage.put({
+			settings: JSON.stringify(settingsOverrides(settings)),
+			mcpAccessVersion: crypto.randomUUID()
+		});
 		this.broadcast({ type: 'settings' });
 	}
 
@@ -223,5 +236,6 @@ export abstract class PollerBase extends DurableObject<Env> {
 	async stop(): Promise<void> {
 		await this.ctx.storage.deleteAlarm();
 		await this.ctx.storage.deleteAll();
+		this.initialization = null;
 	}
 }

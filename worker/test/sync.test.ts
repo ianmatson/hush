@@ -18,7 +18,7 @@ vi.mock('../github', async (importOriginal) => ({
 const { PollerSync } = await import('../poller/sync');
 const { fetchSubjects } = await import('../github');
 const { listNotifications } = await import('../github');
-const { Poller } = await import('../poller');
+const { ActivePoller: Poller } = await import('../poller');
 const { PollerAlerts } = await import('../poller/alerts');
 const who: Who = {
 	userId: 1,

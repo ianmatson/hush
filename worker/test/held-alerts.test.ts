@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 
+vi.mock('cloudflare:workers', () => ({ DurableObject: class {} }));
 vi.mock('../poller/base', () => ({ PollerBase: class {} }));
 vi.mock('../slack-store', () => ({ slackConnection: vi.fn() }));
 vi.mock('../webpush', () => ({ sendPush: vi.fn(), vapidFromEnv: vi.fn(() => ({})) }));
@@ -9,12 +10,12 @@ vi.mock('../poller/data', async () => ({
 }));
 
 const { PollerAlerts } = await import('../poller/alerts');
-const { Poller } = await import('../poller');
+const { ActivePoller } = await import('../poller');
 type PushCandidate = import('../poller/alerts').PushCandidate;
 const { slackConnection } = await import('../slack-store');
 const { sendPush } = await import('../webpush');
 
-class TestPoller extends Poller {
+class TestPoller extends ActivePoller {
 	send(candidates: PushCandidate[]) {
 		return this.deliver(candidates);
 	}
