@@ -2,13 +2,7 @@ import { MENUS_VERSION } from '../../src/lib/shared/menus';
 import { changesSince, snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import { stillKept } from '../../src/lib/shared/closed-items';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
-import {
-	eventSnoozeDeadline,
-	isUnread,
-	markState,
-	MUTED_AT,
-	type SnoozeChoice
-} from '../../src/lib/shared/item-snooze';
+import { eventSnoozeDeadline, MUTED_AT, type SnoozeChoice } from '../../src/lib/shared/item-snooze';
 import { parseCategoryFeed, parseViewFeed } from '../../src/lib/shared/views';
 import { itemFeedEntry, type FeedEntry } from '../feed-entries';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
@@ -28,6 +22,7 @@ import { MINUTE_MS } from '../../src/lib/shared/durations';
 import { MAX_PUSH_DEVICES } from '../../src/lib/shared/push-policy';
 import { DECISION_FILL_KEY } from './decisions';
 import { allCategories, pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
+import { presentDashboard, type SeenItem } from '../../src/lib/shared/dashboard-presentation';
 
 const DECISION_FILL_DELAY_MS = 2_000;
 const PLACEMENT_KEYS = ['categoryGroups', 'views'] as const;
@@ -392,34 +387,20 @@ export abstract class PollerData extends PollerDashboard {
 	async dashboardView(kind: DashKind, force: boolean): Promise<DashResponse> {
 		const data = await this.dashboard(kind, force);
 		const me = await this.login();
-		const marks = this.itemMarks(data.items.map((i) => i.id));
-		const now = Date.now();
-		const items = data.items
-			.filter((i) => !i.keptAfterClose || stillKept(i, now))
-			.map(({ sourceFilters: _filters, sourceQueries: _queries, ...item }) => item);
+		const keys = data.items.map((i) => i.id);
+		const marks = this.itemMarks(keys);
 		const subjects = this.allIn<{ key: string; facts: string }>(
 			`SELECT key, facts FROM subjects WHERE key ${IN_KEYS}`,
-			items.map((i) => i.id)
+			keys
 		);
 		const factsOf = new Map(subjects.map((s) => [s.key, JSON.parse(s.facts) as SubjectFacts]));
-		const since = this.sinceYouLooked(subjects, me);
-		for (const i of items) {
-			const state = markState(marks.get(i.id), i.updatedAt, factsOf.get(i.id), me, now);
-			i.dismissed = state.kind !== 'none';
-			i.muted = state.kind === 'muted';
-			i.snooze = state.kind === 'snoozed' ? state.snooze : undefined;
-			const s = since.get(i.id);
-			i.changes = s?.changes ?? [];
-			i.seenAt = s?.seenAt ?? null;
-			i.unread = isUnread(i.seenAt, i.changes);
-		}
-		const {
-			sourceItems: _sourceItems,
-			projectErrors: _projectErrors,
-			sourceFailures: _sourceFailures,
-			...visible
-		} = data;
-		return { ...visible, items };
+		const seen = new Map<string, SeenItem>(
+			this.allIn<{ key: string; at: number; snapshot: string }>(
+				`SELECT key, at, snapshot FROM seen WHERE key ${IN_KEYS}`,
+				keys
+			).map((row) => [row.key, { at: row.at, snapshot: JSON.parse(row.snapshot) as Snapshot }])
+		);
+		return presentDashboard(data, me, factsOf, marks, seen, Date.now());
 	}
 
 	async snoozeItems(items: ItemRef[], choice: SnoozeChoice): Promise<{ ok: true }> {

@@ -5,13 +5,7 @@ import {
 	sortItems,
 	type DashFacts
 } from '../../src/lib/shared/dashboard';
-import type {
-	DashItem,
-	DashKind,
-	DashResponse,
-	ItemView,
-	Settings
-} from '../../src/lib/shared/types';
+import type { DashItem, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
 import { dashFactsOf, subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
 import { keptAfterChange, searchFindsOnlyOpen, stillKept } from '../../src/lib/shared/closed-items';
 import { fetchDetails, forTeams, needsDetails, searchCounts, searchShort } from '../github';
@@ -33,6 +27,7 @@ import { DASH_TTL, olderThan, viewSearchesKey, type Who } from './shared';
 import type { PushCandidate } from './alerts';
 import { PollerSync } from './sync';
 import { sourceItemOf, withProjectStatuses } from './project-status';
+import { dashSignature, type CachedDash } from './dashboard-cache';
 
 const RETRY_AFTER = MINUTE_MS;
 const MAX_LEFT_READS = 50;
@@ -58,7 +53,6 @@ async function findItems(token: string, queries: ExpandedQuery[]) {
 	};
 }
 
-type CachedDash = { sig: string; data: DashResponse };
 type BuildNeed = { sig: string; full: boolean; startedNoEarlierThan: number };
 type DashBuild = { sig: string; full: boolean; startedAt: number; done: Promise<DashResponse> };
 
@@ -66,17 +60,6 @@ const buildCovers = (build: DashBuild, need: BuildNeed) =>
 	build.sig === need.sig &&
 	(build.full || !need.full) &&
 	build.startedAt >= need.startedNoEarlierThan;
-
-function dashSignature(kind: DashKind, settings: Settings): string {
-	const { dash, views } = settings;
-	return JSON.stringify([
-		sectionsFor(kind, views),
-		dash.excludedTeams,
-		dash.staleDays,
-		dash.hideOthersDrafts,
-		dash.hideBots
-	]);
-}
 
 /** The PR and issue dashboards, from saved searches, cached for 15 minutes. */
 export abstract class PollerDashboard extends PollerSync {

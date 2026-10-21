@@ -40,13 +40,18 @@
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
 	import { tokenHelp } from '$lib/token-help';
-	import { sortItemsBy, sortOfView } from '$lib/shared/sorting';
+	import { sortOfView } from '$lib/shared/sorting';
+	import {
+		inSavedView,
+		inViewPopulation,
+		viewPopulation,
+		savedViewSections
+	} from '$lib/shared/view-projection';
 	import DisplayMenu from './display-menu.svelte';
 	import {
 		CLOSED_SECTION,
 		groupByLabel,
 		groupByOptions,
-		groupWithClosed,
 		projectsHolding
 	} from '$lib/shared/grouping';
 	import { closedSectionLabel, keepsClosed } from '$lib/shared/closed-items';
@@ -77,7 +82,6 @@
 	import { cn } from '$lib/utils';
 	import {
 		matchesCategoryFilter,
-		matchesCategoryFilters,
 		type CategoryFilter,
 		type CategoryPin
 	} from '$lib/shared/categories';
@@ -215,9 +219,9 @@
 
 	const keepClosed = $derived(keepsClosed(view));
 	const closedLabel = $derived(closedSectionLabel(kinds));
-	const inView = (i: DashItem) => i.sections.includes(view.id) && (keepClosed || !i.keptAfterClose);
+	const inView = (i: DashItem) => inSavedView(i, view);
 	const visibleItems = $derived((data?.items ?? []).filter((i) => !i.dismissed && inView(i)));
-	const inShownPopulation = (i: DashItem) => i.dismissed === showSnoozed && inView(i);
+	const inShownPopulation = (i: DashItem) => inViewPopulation(i, view, showSnoozed);
 	const shownPopulation = $derived((data?.items ?? []).filter(inShownPopulation));
 	const categoryCount = (filter: CategoryFilter) =>
 		shownPopulation.filter((i) => matchesCategoryFilter(i.categories, filter, categoryGroups))
@@ -234,9 +238,12 @@
 	const owns = $derived(peek.owner === peekOwner);
 	let filteredBefore: DashItem[] = [];
 	const filtered = $derived.by(() => {
-		const listed = (data?.items ?? []).filter(
-			(i) =>
-				inShownPopulation(i) && matchesCategoryFilters(i.categories, categoryFilter, categoryGroups)
+		const listed = viewPopulation(
+			data?.items ?? [],
+			view,
+			categoryGroups,
+			categoryFilter,
+			showSnoozed
 		);
 		return keepHeldRow(
 			listed,
@@ -295,16 +302,16 @@
 	const editSectionsPath = $derived(`/settings/views#view-${view.id}`);
 	const groupByName = $derived(groupByLabel(groupBy, categoryGroups, data?.projects ?? []));
 	const sections = $derived(
-		groupWithClosed(
-			sortItemsBy(filtered, viewSort),
-			groupBy,
+		savedViewSections(
+			filtered,
+			view,
 			{
 				me: me.data?.login ?? '',
 				categoryGroups,
 				projects: data?.projects,
 				sections: view.sections
 			},
-			closedLabel
+			kinds
 		)
 	);
 

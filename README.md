@@ -46,6 +46,10 @@ The user docs are at [hush-gh.com/docs](https://hush-gh.com/docs): one Markdown 
 
 ## Local development
 
+The internal [passive assistant access foundation](docs/assistant-access.md) provides
+cached saved-view reads and transport-free tool adapters. Authentication and a
+remote MCP endpoint are separate work; no live assistant access is enabled.
+
 ```sh
 pnpm install
 pnpm keys > .dev.vars
