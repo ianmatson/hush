@@ -113,9 +113,8 @@
 			active(l.href) && 'bg-muted text-foreground'
 		)}
 	>
-		<span class="truncate">{l.label}</span><span class="flex w-7 shrink-0"
-			>{@render badge(l.badge)}</span
-		>
+		<span class="truncate">{l.label}</span>
+		{@render badge(l.badge, 'shrink-0')}
 	</a>
 {/snippet}
 
