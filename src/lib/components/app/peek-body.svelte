@@ -395,7 +395,7 @@
 						</div>
 					{/if}
 					{#if showReactions || canEdit}
-						<div class="ml-7 flex flex-wrap items-center gap-1">
+						<div hidden={editingId === e.id} class="ml-7 flex flex-wrap items-center gap-1">
 							{#if showReactions && e.reactions}
 								<ReactionBar r={e.reactions} />
 							{/if}
