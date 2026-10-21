@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('cloudflare:workers', () => ({ DurableObject: class {} }));
+vi.mock('cloudflare:workers', () => ({ DurableObject: class {}, WorkerEntrypoint: class {} }));
 
 const { default: app } = await import('../index');
 

@@ -4,6 +4,7 @@ import LayoutList from '@lucide/svelte/icons/layout-list';
 import Settings2 from '@lucide/svelte/icons/settings-2';
 import Keyboard from '@lucide/svelte/icons/keyboard';
 import Shapes from '@lucide/svelte/icons/shapes';
+import Plug from '@lucide/svelte/icons/plug';
 import type { SettingsPage } from '$lib/shared/settings-schema';
 
 export const SETTINGS_ICONS: Record<SettingsPage, Component> = {
@@ -11,5 +12,6 @@ export const SETTINGS_ICONS: Record<SettingsPage, Component> = {
 	views: LayoutList,
 	categories: Shapes,
 	notifications: Bell,
+	apps: Plug,
 	keys: Keyboard
 };

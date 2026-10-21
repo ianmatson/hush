@@ -1,4 +1,7 @@
+import { DurableObject } from 'cloudflare:workers';
 import { MINUTE_MS } from '../src/lib/shared/durations';
+import type { Env } from './db';
+import { createSnapshotReader, type SnapshotPrincipal } from './assistant/snapshot';
 import { githubStatusMessage, listNotifications } from './github';
 import {
 	ACTIVE_WINDOW,
@@ -17,12 +20,260 @@ const REBUILT_AT_SIGN_IN_KEYS = ['pollGap', 'dash:pr', 'dash:issue', 'teams'];
 
 const logFailure = (step: string) => (err: unknown) =>
 	console.error(`${step} failed`, (err as Error).message);
+export class Poller extends DurableObject<Env> {
+	#engine: ActivePoller | null = null;
 
-export class Poller extends PollerData {
+	async #active(): Promise<ActivePoller> {
+		this.#engine ??= new ActivePoller(this.ctx, this.env);
+		await this.#engine.activate();
+		return this.#engine;
+	}
+
+	savedViewsSnapshot(principal: SnapshotPrincipal) {
+		return createSnapshotReader(this.ctx.storage, principal)();
+	}
+
+	async start(
+		...args: Parameters<ActivePoller['start']>
+	): Promise<Awaited<ReturnType<ActivePoller['start']>>> {
+		const active = await this.#active();
+		return active.start(...args);
+	}
+
+	async touch(
+		...args: Parameters<ActivePoller['touch']>
+	): Promise<Awaited<ReturnType<ActivePoller['touch']>>> {
+		const active = await this.#active();
+		return active.touch(...args);
+	}
+
+	async pollNow(
+		...args: Parameters<ActivePoller['pollNow']>
+	): Promise<Awaited<ReturnType<ActivePoller['pollNow']>>> {
+		const active = await this.#active();
+		return active.pollNow(...args);
+	}
+
+	async status(
+		...args: Parameters<ActivePoller['status']>
+	): Promise<Awaited<ReturnType<ActivePoller['status']>>> {
+		const active = await this.#active();
+		return active.status(...args);
+	}
+
+	async alarm(
+		...args: Parameters<ActivePoller['alarm']>
+	): Promise<Awaited<ReturnType<ActivePoller['alarm']>>> {
+		const active = await this.#active();
+		return active.alarm(...args);
+	}
+
+	async fetch(
+		...args: Parameters<ActivePoller['fetch']>
+	): Promise<Awaited<ReturnType<ActivePoller['fetch']>>> {
+		const active = await this.#active();
+		return active.fetch(...args);
+	}
+
+	async webSocketMessage(
+		...args: Parameters<ActivePoller['webSocketMessage']>
+	): Promise<Awaited<ReturnType<ActivePoller['webSocketMessage']>>> {
+		const active = await this.#active();
+		return active.webSocketMessage(...args);
+	}
+
+	async webSocketError(
+		...args: Parameters<ActivePoller['webSocketError']>
+	): Promise<Awaited<ReturnType<ActivePoller['webSocketError']>>> {
+		const active = await this.#active();
+		return active.webSocketError(...args);
+	}
+
+	async webSocketClose(
+		...args: Parameters<ActivePoller['webSocketClose']>
+	): Promise<Awaited<ReturnType<ActivePoller['webSocketClose']>>> {
+		const active = await this.#active();
+		return active.webSocketClose(...args);
+	}
+
+	async teams(
+		...args: Parameters<ActivePoller['teams']>
+	): Promise<Awaited<ReturnType<ActivePoller['teams']>>> {
+		const active = await this.#active();
+		return active.teams(...args);
+	}
+
+	async stop(
+		...args: Parameters<ActivePoller['stop']>
+	): Promise<Awaited<ReturnType<ActivePoller['stop']>>> {
+		const active = await this.#active();
+		return active.stop(...args);
+	}
+
+	async alertChannelsChanged(
+		...args: Parameters<ActivePoller['alertChannelsChanged']>
+	): Promise<Awaited<ReturnType<ActivePoller['alertChannelsChanged']>>> {
+		const active = await this.#active();
+		return active.alertChannelsChanged(...args);
+	}
+
+	async me(
+		...args: Parameters<ActivePoller['me']>
+	): Promise<Awaited<ReturnType<ActivePoller['me']>>> {
+		const active = await this.#active();
+		return active.me(...args);
+	}
+
+	async markUnseen(
+		...args: Parameters<ActivePoller['markUnseen']>
+	): Promise<Awaited<ReturnType<ActivePoller['markUnseen']>>> {
+		const active = await this.#active();
+		return active.markUnseen(...args);
+	}
+
+	async markSeen(
+		...args: Parameters<ActivePoller['markSeen']>
+	): Promise<Awaited<ReturnType<ActivePoller['markSeen']>>> {
+		const active = await this.#active();
+		return active.markSeen(...args);
+	}
+
+	async feedEntries(
+		...args: Parameters<ActivePoller['feedEntries']>
+	): Promise<Awaited<ReturnType<ActivePoller['feedEntries']>>> {
+		const active = await this.#active();
+		return active.feedEntries(...args);
+	}
+
+	async updateSettings(
+		...args: Parameters<ActivePoller['updateSettings']>
+	): Promise<Awaited<ReturnType<ActivePoller['updateSettings']>>> {
+		const active = await this.#active();
+		return active.updateSettings(...args);
+	}
+
+	async pinItems(
+		...args: Parameters<ActivePoller['pinItems']>
+	): Promise<Awaited<ReturnType<ActivePoller['pinItems']>>> {
+		const active = await this.#active();
+		return active.pinItems(...args);
+	}
+
+	async reevaluateItems(
+		...args: Parameters<ActivePoller['reevaluateItems']>
+	): Promise<Awaited<ReturnType<ActivePoller['reevaluateItems']>>> {
+		const active = await this.#active();
+		return active.reevaluateItems(...args);
+	}
+
+	async pushDevices(
+		...args: Parameters<ActivePoller['pushDevices']>
+	): Promise<Awaited<ReturnType<ActivePoller['pushDevices']>>> {
+		const active = await this.#active();
+		return active.pushDevices(...args);
+	}
+
+	async subscribe(
+		...args: Parameters<ActivePoller['subscribe']>
+	): Promise<Awaited<ReturnType<ActivePoller['subscribe']>>> {
+		const active = await this.#active();
+		return active.subscribe(...args);
+	}
+
+	async unsubscribe(
+		...args: Parameters<ActivePoller['unsubscribe']>
+	): Promise<Awaited<ReturnType<ActivePoller['unsubscribe']>>> {
+		const active = await this.#active();
+		return active.unsubscribe(...args);
+	}
+
+	async testPush(
+		...args: Parameters<ActivePoller['testPush']>
+	): Promise<Awaited<ReturnType<ActivePoller['testPush']>>> {
+		const active = await this.#active();
+		return active.testPush(...args);
+	}
+
+	async alerts(
+		...args: Parameters<ActivePoller['alerts']>
+	): Promise<Awaited<ReturnType<ActivePoller['alerts']>>> {
+		const active = await this.#active();
+		return active.alerts(...args);
+	}
+
+	async dashboardView(
+		...args: Parameters<ActivePoller['dashboardView']>
+	): Promise<Awaited<ReturnType<ActivePoller['dashboardView']>>> {
+		const active = await this.#active();
+		return active.dashboardView(...args);
+	}
+
+	async snoozeItems(
+		...args: Parameters<ActivePoller['snoozeItems']>
+	): Promise<Awaited<ReturnType<ActivePoller['snoozeItems']>>> {
+		const active = await this.#active();
+		return active.snoozeItems(...args);
+	}
+
+	async unsnoozeItems(
+		...args: Parameters<ActivePoller['unsnoozeItems']>
+	): Promise<Awaited<ReturnType<ActivePoller['unsnoozeItems']>>> {
+		const active = await this.#active();
+		return active.unsnoozeItems(...args);
+	}
+
+	async muteItems(
+		...args: Parameters<ActivePoller['muteItems']>
+	): Promise<Awaited<ReturnType<ActivePoller['muteItems']>>> {
+		const active = await this.#active();
+		return active.muteItems(...args);
+	}
+
+	async dashboard(
+		...args: Parameters<ActivePoller['dashboard']>
+	): Promise<Awaited<ReturnType<ActivePoller['dashboard']>>> {
+		const active = await this.#active();
+		return active.dashboard(...args);
+	}
+
+	async countSource(
+		...args: Parameters<ActivePoller['countSource']>
+	): Promise<Awaited<ReturnType<ActivePoller['countSource']>>> {
+		const active = await this.#active();
+		return active.countSource(...args);
+	}
+
+	async rebuildBoards(
+		...args: Parameters<ActivePoller['rebuildBoards']>
+	): Promise<Awaited<ReturnType<ActivePoller['rebuildBoards']>>> {
+		const active = await this.#active();
+		return active.rebuildBoards(...args);
+	}
+
+	async recheck(
+		...args: Parameters<ActivePoller['recheck']>
+	): Promise<Awaited<ReturnType<ActivePoller['recheck']>>> {
+		const active = await this.#active();
+		return active.recheck(...args);
+	}
+
+	async recordFetched(
+		...args: Parameters<ActivePoller['recordFetched']>
+	): Promise<Awaited<ReturnType<ActivePoller['recordFetched']>>> {
+		const active = await this.#active();
+		return active.recordFetched(...args);
+	}
+}
+
+export class ActivePoller extends PollerData {
 	private running: Promise<void> | null = null;
 	private cycling: Promise<void> | null = null;
 	/** Time of the last good poll by this instance. Covers the moment between alarms (no alarm set). */
 	private lastGoodPoll = 0;
+
+	activate(): Promise<void> {
+		return this.initializeActive();
+	}
 
 	async start(userId: number, tokenUnchanged = false): Promise<void> {
 		const state = await this.ctx.storage.get(['userId', 'stopped', 'paused']);
@@ -40,6 +291,8 @@ export class Poller extends PollerData {
 		this.broadcast({ type: 'dash', kind: 'issue' });
 		await this.ctx.storage.put({
 			userId,
+			mcpAccessVersion:
+				(await this.ctx.storage.get<string>('mcpAccessVersion')) ?? crypto.randomUUID(),
 			lastActive: Date.now(),
 			errorCount: 0,
 			lastError: null,

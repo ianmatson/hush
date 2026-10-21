@@ -1,4 +1,5 @@
 import type { Poller } from './poller';
+import type { McpAuthorization } from './assistant/oauth';
 import type { DecisionModel } from './decide';
 export { parseSettings } from '../src/lib/shared/settings';
 import { decryptSecret } from './crypto';
@@ -8,6 +9,7 @@ export interface Env {
 	 *  data is in their Durable Object's SQLite (worker/poller/schema.ts). */
 	DB: D1Database;
 	POLLER: DurableObjectNamespace<Poller>;
+	MCP_AUTH?: DurableObjectNamespace<McpAuthorization>;
 	ASSETS: Fetcher;
 	TOKEN_ENC_KEY: string;
 	/** Sign in with GitHub: the OAuth app (the secret is a Worker secret). */

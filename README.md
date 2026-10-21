@@ -13,6 +13,11 @@ Your GitHub pull requests and issues, with whose turn it is on each one. **[hush
 
 A SvelteKit app (shadcn-svelte) on Cloudflare Workers: one Durable Object per user that owns that user's data (its own SQLite), D1 for accounts and sessions only, Web Push, and Atom feeds.
 
+A separate `McpAuthorization` Durable Object stores OAuth clients and per-user
+saved-view grants. The remote MCP endpoint reads existing user data without
+activating polling. See [assistant access](docs/assistant-access.md) for the
+authorization, storage, and deployment boundaries.
+
 ## How it works
 
 ```
@@ -45,6 +50,12 @@ Static assets  → the SPA (build/)
 The user docs are at [hush-gh.com/docs](https://hush-gh.com/docs): one Markdown file per page in `src/lib/docs/pages/`, in the order of `NAV` in `src/lib/docs/index.ts`. A line `{{ref:settings}}` inserts a table made from the app's own tables (settings, keybinds, query words, menus, actions, limits: `src/lib/docs/reference.ts`), `{{key:dash.snooze}}` a command's default keys, and `{{value:max-views}}` one value from the code, such as a limit or Hush's price (`VALUES` in `reference.ts`), so the docs follow the code. Every page of the site (docs, guides, comparisons, and the pricing, privacy, and security pages) is in `SITE_PAGES` (`src/lib/site-pages.ts`): each one is also Markdown (`/docs/<page>.md`; the home page of a section is `/docs/index.md`), listed in `/llms.txt`, all in `/llms-full.txt`, and in `/sitemap.xml`. `src/lib/docs/docs.test.ts` checks that every setting is documented, that every example in the docs is valid, and that every link works.
 
 ## Local development
+
+The [authenticated remote MCP server](docs/assistant-access.md) provides passive
+cached reads of explicitly approved saved views at `${APP_URL}/mcp`. Connect and
+revoke apps in Settings → Authorized apps. The code includes OAuth discovery,
+S256 PKCE consent, expiry, and per-user/per-view grants. Deployment and live
+authorization require a separate approved operation.
 
 ```sh
 pnpm install

@@ -29,7 +29,7 @@ import type { Settings } from './types';
  * Every setting, for the settings.json editor and the docs: one entry per key (and per key of
  * the `dash` and `menus` groups). `page` is where the UI shows it; null means JSON only.
  */
-export type SettingsPage = 'views' | 'categories' | 'notifications' | 'general' | 'keys';
+export type SettingsPage = 'views' | 'categories' | 'notifications' | 'general' | 'keys' | 'apps';
 
 export interface SettingsSection {
 	label: string;
@@ -68,6 +68,11 @@ export const SETTINGS_SECTIONS: Record<SettingsPage, SettingsSection> = {
 		label: 'Notifications',
 		href: '/settings/notifications',
 		keywords: ['push', 'quiet']
+	},
+	apps: {
+		label: 'Authorized apps',
+		href: '/settings/apps',
+		keywords: ['apps', 'mcp', 'assistant', 'consent', 'access', 'revoke']
 	},
 	keys: {
 		label: 'Keybinds',

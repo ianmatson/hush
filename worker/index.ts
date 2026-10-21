@@ -20,10 +20,13 @@ import projects from './routes/projects';
 import diff from './routes/diff';
 import suggest from './routes/suggest';
 import seen from './routes/seen';
+import mcp from './routes/mcp';
 
 export { Poller } from './poller';
+export { McpAuthorization } from './assistant/oauth';
 
 const app = new Hono<AppEnv>();
+app.route('/', mcp);
 
 app.use('/api/auth/*', async (c, next) => {
 	if (await overLimit(c.env.AUTH_LIMIT, `login:${clientIp(c)}`)) return tooMany(c);

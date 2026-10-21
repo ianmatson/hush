@@ -8,7 +8,16 @@
 		"directory": "./dist/app",
 		"binding": "ASSETS",
 		"not_found_handling": "single-page-application",
-		"run_worker_first": ["/api/*", "/feeds/*"]
+		"run_worker_first": [
+			"/api/*",
+			"/feeds/*",
+			"/mcp",
+			"/oauth/authorize",
+			"/oauth/token",
+			"/oauth/register",
+			"/.well-known/*",
+			"/oauth/consent"
+		]
 	},
 	"d1_databases": [
 		{
@@ -24,6 +33,10 @@
 			{
 				"name": "POLLER",
 				"class_name": "Poller"
+			},
+			{
+				"name": "MCP_AUTH",
+				"class_name": "McpAuthorization"
 			}
 		]
 	},
@@ -31,6 +44,10 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["Poller"]
+		},
+		{
+			"tag": "v2-mcp-authorization",
+			"new_sqlite_classes": ["McpAuthorization"]
 		}
 	],
 	// The app and its API; the public site (hush-gh.com) is wrangler.site.jsonc.
