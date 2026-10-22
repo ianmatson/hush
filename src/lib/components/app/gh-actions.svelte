@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { MediaQuery } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import { collapseSideways } from '$lib/reveal';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -30,8 +29,6 @@
 		need,
 		moreAsIcon = false
 	}: { repo: string; number: number; need: ActionKind | null; moreAsIcon?: boolean } = $props();
-
-	const noRoomForSubmenu = new MediaQuery('max-width: 639px');
 
 	const q = createQuery(() => peekQuery(repo, number));
 	const p = $derived(q.data);
@@ -165,9 +162,7 @@
 						{#if s.blocked}
 							{@render blockedItem(s.id, s.blocked)}
 						{:else}
-							<DropdownMenu.Item
-								onSelect={() => run(s.id, s.id === 'merge' && stackNotice ? 'ask' : 'now')}
-							>
+							<DropdownMenu.Item onSelect={() => run(s.id)}>
 								{label(s.id)}
 								{@render keyHint(s.id)}
 							</DropdownMenu.Item>
@@ -177,25 +172,6 @@
 						<DropdownMenu.Item onSelect={() => focusComposer('approve')}
 							>Approve with a comment…</DropdownMenu.Item
 						>
-					{/if}
-					{#if methods.length > 1 && (has('merge') || has('auto_merge'))}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Sub>
-							<DropdownMenu.SubTrigger>Merge method</DropdownMenu.SubTrigger>
-							<DropdownMenu.SubContent
-								class="w-52"
-								side={noRoomForSubmenu.current ? 'top' : 'right'}
-								align={noRoomForSubmenu.current ? 'end' : 'start'}
-							>
-								<DropdownMenu.RadioGroup bind:value={() => method, chooseMethod}>
-									{#each methods as m (m)}
-										<DropdownMenu.RadioItem value={m} closeOnSelect={false}
-											>{MERGE_LABEL[m]}</DropdownMenu.RadioItem
-										>
-									{/each}
-								</DropdownMenu.RadioGroup>
-							</DropdownMenu.SubContent>
-						</DropdownMenu.Sub>
 					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
