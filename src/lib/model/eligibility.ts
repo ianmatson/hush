@@ -108,9 +108,10 @@ function placeGroup(
 function fallbackOutcomes(group: CategoryGroup, knowledge: Knowledge): (string | null)[] {
 	const choice = knowledge.smartOn ? groupChoice(group) : null;
 	if (!choice) return [null];
-	if (!knowledge.choices.has(choice.key)) return [...group.categories.map((c) => c.id), null];
-	const chosen = knowledge.choices.get(choice.key);
-	return [group.categories.some((category) => category.id === chosen) ? chosen! : null];
+	const selectable = Object.keys(choice.options);
+	if (!knowledge.choices.has(choice.key)) return [...selectable, null];
+	const chosen = knowledge.choices.get(choice.key)!;
+	return [selectable.includes(chosen) ? chosen : null];
 }
 
 export const placeGroups = (

@@ -294,6 +294,51 @@ describe('uncertain and ordered answers', () => {
 	});
 });
 
+describe('Jev choices', () => {
+	it('only waits on categories Jev can choose', () => {
+		const mixed: CategoryGroup = {
+			id: 'size',
+			name: 'Size',
+			categories: [
+				{
+					id: 'low',
+					name: 'Low',
+					color: 'green',
+					icon: 'lucide:dot',
+					rule: 'size:<50',
+					description: ''
+				},
+				{
+					id: 'high',
+					name: 'High',
+					color: 'amber',
+					icon: 'lucide:circle',
+					rule: '',
+					description: 'big'
+				},
+				{
+					id: 'huge',
+					name: 'Huge',
+					color: 'red',
+					icon: 'lucide:circle',
+					rule: '',
+					description: 'very big'
+				}
+			]
+		};
+		const big = facts(29, { additions: 500, deletions: 500 });
+		const w = world({
+			views: [view('v', ['is:pr is:open category:size/low'])],
+			items: [item(big)],
+			results: { 0: [big.id] },
+			compile: { categoryGroups: [mixed] }
+		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.size).toBe(0);
+		expect(found.unsettled.size).toBe(0);
+	});
+});
+
 describe('analysis inputs', () => {
 	it('gives category questions only identity fields, so roles cannot make their answers stale', () => {
 		const requested = facts(28, { reviewRequests: [{ name: ME, team: false }] });
