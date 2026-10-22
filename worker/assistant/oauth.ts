@@ -333,7 +333,7 @@ export class McpAuthorization extends DurableObject<Env> {
 			const views = record.views.filter((view) => decision.viewIds.includes(view.id));
 			for (const view of views) {
 				const current = snapshot.views.find((entry) => entry.id === view.id);
-				if (!current || !(await matchesViewFingerprint(snapshot, current, view.fingerprint)))
+				if (!current || !(await matchesViewFingerprint(current, view.fingerprint)))
 					throw new AuthorizationError('invalid_request', { description: 'View changed' });
 			}
 			const approved = await api.approveConsent(request, decision.requestId, {

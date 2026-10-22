@@ -25,7 +25,6 @@ import { ANALYSIS_VERSION } from './worker/workspace/object.ts';
 import { WorkspaceStore } from './worker/workspace/store.ts';
 import { compileViews, viewScope } from './src/lib/model/compile.ts';
 import { DEFAULT_SETTINGS } from './src/lib/shared/settings.ts';
-import { legacyFingerprintView } from './src/lib/shared/view-authorization.ts';
 import { subjectFixture } from './worker/test/subject-fixtures.ts';
 let clock = Date.now();
 Date.now = () => clock;
@@ -80,13 +79,6 @@ export class FixtureWorkspace extends Workspace {
 }
 export class FixtureAuthorization extends McpAuthorization {
   async inspect() { return {entries: [...await this.ctx.storage.list()], alarm: await this.ctx.storage.getAlarm()}; }
-  async legacy() {
-    const grants = await this.ctx.storage.list({prefix: 'access:'});
-    for (const [key, grant] of grants) {
-      grant.views[0].fingerprint = await legacyFingerprintView(DEFAULT_SETTINGS.views[0]);
-      await this.ctx.storage.put(key, grant);
-    }
-  }
 }
 async function saveSettings(workspace, patches, fail) {
   try {
@@ -108,7 +100,6 @@ export default { async fetch(request, env, ctx) {
   if (path === '/__fixture/active') return Response.json(await workspace.markSeen([]));
   if (path === '/__fixture/settings') { const body = await request.json(); return Response.json(await saveSettings(workspace, body.patches, body.fail)); }
   if (path === '/__fixture/reset') return Response.json(await workspace.reset());
-  if (path === '/__fixture/legacy') { await auth.legacy(); return Response.json({ok:true}); }
   if (path === '/__fixture/time') { clock = (await request.json()).now; return Response.json({ok:true}); }
   return app.fetch(request, env, ctx);
 }};
@@ -242,7 +233,6 @@ try {
 	const exchanged = await exchange();
 	assert.equal(exchanged.status, 200);
 	let tokens = await exchanged.json();
-	await request('/__fixture/legacy');
 	const before = await (await request('/__fixture/inspect')).text();
 	const call = (name = 'list_views') =>
 		request('/mcp', {
@@ -306,10 +296,6 @@ try {
 		savedValues.get('mcpAccessVersion'),
 		new Map(baseline.workspace.entries).get('mcpAccessVersion')
 	);
-	assert.equal(
-		savedValues.get('mcpLegacyViewFingerprints').accessVersion,
-		savedValues.get('mcpAccessVersion')
-	);
 	const data = await (await call('get_view')).json();
 	assert.equal(data.result.structuredContent.ok, true);
 	assert.equal(data.result.structuredContent.data.totalItems, 1);
@@ -362,7 +348,7 @@ try {
 	assert.notEqual(reset.second, 'initial');
 	assert.notEqual(reset.first, reset.second);
 	console.log(
-		'workerd: legacy grants survive concurrent harmless saves, silent rotating refresh, and real cached reads; failed writes change nothing; reset epochs are unique; passive reads preserve storage; an unready workspace and replay fail closed.'
+		'workerd: grants survive concurrent harmless saves, silent rotating refresh, and real cached reads; failed writes change nothing; reset epochs are unique; passive reads preserve storage; an unready workspace and replay fail closed.'
 	);
 } finally {
 	await mf?.dispose();

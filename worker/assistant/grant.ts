@@ -1,5 +1,5 @@
 import type { CategoryGroup, DashItem, ItemView } from '../../src/lib/shared/types';
-import { fingerprintView, legacyFingerprintView } from '../../src/lib/shared/view-authorization';
+import { fingerprintView } from '../../src/lib/shared/view-authorization';
 import { SnapshotUnavailable, type SavedViewsSnapshot } from './snapshot';
 
 export { fingerprintView };
@@ -10,18 +10,8 @@ export interface SavedViewGrant {
 	views: { id: string; fingerprint: string }[];
 }
 
-export async function matchesViewFingerprint(
-	snapshot: SavedViewsSnapshot,
-	view: ItemView,
-	fingerprint: string
-): Promise<boolean> {
-	if (fingerprint.startsWith('v2:')) return fingerprint === (await fingerprintView(view));
-	const legacy = snapshot.legacyViewFingerprints;
-	return (
-		fingerprint === (await legacyFingerprintView(view)) ||
-		(legacy?.accessVersion === snapshot.accessVersion && legacy.views[view.id] === fingerprint)
-	);
-}
+export const matchesViewFingerprint = async (view: ItemView, fingerprint: string) =>
+	fingerprint === (await fingerprintView(view));
 
 export async function grantedSnapshot(
 	snapshot: SavedViewsSnapshot,
@@ -31,10 +21,7 @@ export async function grantedSnapshot(
 	const permitted = new Map(grant.views.map((view) => [view.id, view.fingerprint]));
 	const views = [];
 	for (const view of snapshot.views)
-		if (
-			permitted.has(view.id) &&
-			(await matchesViewFingerprint(snapshot, view, permitted.get(view.id)!))
-		)
+		if (permitted.has(view.id) && (await matchesViewFingerprint(view, permitted.get(view.id)!)))
 			views.push(view);
 	return { ...snapshot, views };
 }

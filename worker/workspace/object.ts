@@ -29,12 +29,7 @@ import type {
 	Settings,
 	TeamDTO
 } from '../../src/lib/shared/types';
-import {
-	authorizationJson,
-	legacyFingerprintView,
-	settingsAuthorization,
-	type LegacyViewFingerprints
-} from '../../src/lib/shared/view-authorization';
+import { authorizationJson, settingsAuthorization } from '../../src/lib/shared/view-authorization';
 import { compileViews } from '../../src/lib/model/compile';
 import { createEvaluator } from '../../src/lib/model/evaluate';
 import { presentItems, type ItemsResponse, type ViewRow } from '../../src/lib/model/present';
@@ -71,7 +66,6 @@ export const ANALYSIS_VERSION = 'questions-v1';
 const ACCOUNT_KEY = 'account';
 const DEVICES_KEY = 'pushDevices';
 const ACCESS_VERSION_KEY = 'mcpAccessVersion';
-const LEGACY_FINGERPRINTS_KEY = 'mcpLegacyViewFingerprints';
 const ALERT_HISTORY_SHOWN = 100;
 const MAX_MARKS = 50;
 const FEED_ENTRIES = 50;
@@ -562,31 +556,11 @@ export class Workspace extends DurableObject<Env> {
 	}
 
 	private async versionAccess(old: Settings, next: Settings) {
-		const values = await this.ctx.storage.get([ACCESS_VERSION_KEY, LEGACY_FINGERPRINTS_KEY]);
 		const changed =
 			authorizationJson(settingsAuthorization(old)) !==
 			authorizationJson(settingsAuthorization(next));
-		const accessVersion =
-			changed || !values.get(ACCESS_VERSION_KEY)
-				? crypto.randomUUID()
-				: (values.get(ACCESS_VERSION_KEY) as string);
-		const legacy = values.get(LEGACY_FINGERPRINTS_KEY) as LegacyViewFingerprints | undefined;
-		const fingerprints: LegacyViewFingerprints = {
-			accessVersion,
-			views: changed
-				? {}
-				: legacy?.accessVersion === accessVersion
-					? legacy.views
-					: Object.fromEntries(
-							await Promise.all(
-								old.views.map(async (view) => [view.id, await legacyFingerprintView(view)])
-							)
-						)
-		};
-		await this.ctx.storage.put({
-			[ACCESS_VERSION_KEY]: accessVersion,
-			[LEGACY_FINGERPRINTS_KEY]: fingerprints
-		});
+		if (changed || !(await this.ctx.storage.get(ACCESS_VERSION_KEY)))
+			await this.ctx.storage.put(ACCESS_VERSION_KEY, crypto.randomUUID());
 	}
 
 	async savedViewsSnapshot(principal: SnapshotPrincipal): Promise<SavedViewsSnapshot> {
@@ -600,12 +574,9 @@ export class Workspace extends DurableObject<Env> {
 		}
 		if (!data) throw new SnapshotUnavailable('schema_not_ready');
 		const sync = this.store.readState<Sync>(SYNC_KEY);
-		const values = await this.ctx.storage.get([ACCESS_VERSION_KEY, LEGACY_FINGERPRINTS_KEY]);
 		return {
 			principal: { ...principal },
-			accessVersion: (values.get(ACCESS_VERSION_KEY) as string | undefined) ?? 'initial',
-			legacyViewFingerprints: values.get(LEGACY_FINGERPRINTS_KEY) as
-				LegacyViewFingerprints | undefined,
+			accessVersion: (await this.ctx.storage.get<string>(ACCESS_VERSION_KEY)) ?? 'initial',
 			views: data.config.settings.views,
 			categoryGroups: data.config.settings.categoryGroups,
 			items: this.present(data, Date.now()),

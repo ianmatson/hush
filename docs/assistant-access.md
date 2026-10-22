@@ -49,14 +49,10 @@ an identical view ID cannot restore a grant. Account deletion revokes all grants
 Missing access versions always receive a random version on save. Sign-in after
 storage reset also receives a random version.
 
-Existing grants with a current stored random access version remain valid. New
-fingerprints use a `v2:` semantic projection. On the first harmless save, the
-transaction preserves one original full-definition fingerprint per view for that
-same access version. This bounded compatibility record lets old grants and
-pending consent survive presentation edits without changing OAuth records on
-reads. Exact old fingerprints also work before the first save. A legacy grant
-issued with the fallback `initial` value when no version was stored requires
-reconnection after the first save or sign-in. Already-invalid versions are never
+Existing grants with a current stored random access version remain valid. View
+fingerprints use a `v2:` semantic projection, so presentation edits do not
+change them. Grants with older fingerprints, and grants issued with the fallback
+`initial` version, need a new connection. Already-invalid versions are never
 restored. No database migration or passive-read write is required.
 
 ## Standards and library choices
@@ -152,8 +148,8 @@ open the engine first. Passive reads require the stored account to match the
 principal and the Workspace tables to exist; otherwise they fail without
 migration, reset, alarm, or writes.
 
-The reader loads the Workspace tables with SELECTs and two KV values (the access
-version and legacy fingerprints). It never decrypts GitHub tokens, fetches GitHub, marks read, touches
+The reader loads the Workspace tables with SELECTs and one KV value (the access
+version). It never decrypts GitHub tokens, fetches GitHub, marks read, touches
 activity, resumes polling, refreshes sessions/caches, or writes facts, decisions,
 alerts, or last-used telemetry. Inspection of the pinned library confirms that
 `unwrapToken` and `validateToken` only read/decrypt token records. Validation uses

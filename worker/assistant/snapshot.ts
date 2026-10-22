@@ -1,5 +1,4 @@
 import type { CategoryGroup, ItemView } from '../../src/lib/shared/types';
-import type { LegacyViewFingerprints } from '../../src/lib/shared/view-authorization';
 import type { ItemsResponse } from '../../src/lib/model/present';
 import type { Lifecycle } from '../workspace/work';
 
@@ -16,7 +15,6 @@ export interface SnapshotStatus {
 export interface SavedViewsSnapshot {
 	principal: SnapshotPrincipal;
 	accessVersion: string;
-	legacyViewFingerprints?: LegacyViewFingerprints;
 	views: ItemView[];
 	categoryGroups: CategoryGroup[];
 	items: ItemsResponse;
