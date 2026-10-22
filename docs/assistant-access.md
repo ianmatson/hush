@@ -20,11 +20,44 @@ name the exact resource `${APP_URL}/mcp`. Access tokens last 15 minutes.
 Rotating refresh tokens and application grants last at most 30 days. Consent
 lasts 10 minutes and works once. New views are never included automatically.
 
-Every successful saved-settings write changes an access version in the same
-storage put. Existing grants and pending consent then fail, including after
-deleting and recreating identical view IDs. This deliberately also invalidates
-grants for settings changes outside Views. Account deletion revokes all grants.
-Sign-in after storage reset receives a new version.
+Settings saves compare a shared semantic authorization projection. No-op saves,
+notification/input/row preferences, view names/order, sort order, new-item push choices,
+and changes between basic grouping modes preserve existing grants and pending
+consent. Basic grouping uses only item fields already returned: none, role,
+status, repository, author, label, and assignee. Custom section names can change
+without changing their rules. Presentation changes can change pagination revisions.
+
+The projection retains view IDs, searches (including Hush filters), effective
+closed-item retention, custom rules, category/project/custom grouping, all source
+settings in `dash`, and smart-decision enablement. Category definitions, including
+names, descriptions, rules, order, and IDs, are included when a source or section
+uses categories or a view groups by category. Direct `about:` conditions are
+not allowed in source searches or custom sections; they enter through category
+rules, whose AI inputs and descriptions are retained.
+All category groups are retained in these cases because rules and smart-decision
+inputs can depend on other groups. Unused categories do not affect authority.
+Only known presentation fields are removed; unknown fields remain in the
+comparison, including unknown sort and section fields.
+
+An authorization change creates a random access version and clears compatibility
+fingerprints. Settings, version, and compatibility fingerprints commit in one
+Durable Object storage transaction. Concurrent saves compare against the previous
+committed settings. A failed transaction preserves all three. The version is
+global per account: a sensitive change to any saved view invalidates all grants
+and pending consent, even when that view was not granted. Deleting and recreating
+an identical view ID cannot restore a grant. Account deletion revokes all grants.
+Missing access versions always receive a random version on save. Sign-in after
+storage reset also receives a random version.
+
+Existing grants with a current stored random access version remain valid. New
+fingerprints use a `v2:` semantic projection. On the first harmless save, the
+transaction preserves one original full-definition fingerprint per view for that
+same access version. This bounded compatibility record lets old grants and
+pending consent survive presentation edits without changing OAuth records on
+reads. Exact old fingerprints also work before the first save. A legacy grant
+issued with the fallback `initial` value when no version was stored requires
+reconnection after the first save or sign-in. Already-invalid versions are never
+restored. No database migration or passive-read write is required.
 
 ## Standards and library choices
 
@@ -88,12 +121,13 @@ and listing helpers. It does not parse authorization codes to obtain authority.
 Explicit revocation first stores retry metadata and removes the application
 grant, then calls `revokeGrant` to delete the provider family. Failure preserves
 immediate data denial and retry metadata. Later explicit writes retry cleanup.
-Refresh checks the live application grant and access version before minting.
+Refresh checks the live application grant, access version, and approved view
+fingerprints before minting.
 
-Grants also carry SHA-256 fingerprints of complete canonical view definitions:
-searches, custom rules, grouping, sort, and closed-item preferences. Consent
-compares both the version and definitions again before issuance. Reads compare
-the version on every snapshot. These checks establish ordering at the acquired
+Grants also carry SHA-256 fingerprints of canonical semantic view definitions.
+Consent compares both the version and approved fingerprints again before
+issuance. Reads compare the version and view fingerprints on every snapshot.
+These checks establish ordering at the acquired
 snapshot; they do not cancel a read that already acquired an earlier snapshot.
 Revocation affects subsequent calls.
 
@@ -136,7 +170,12 @@ internal facts before filtering output.
 The snapshot reads materialized `dash:pr` and `dash:issue` caches. Shared dashboard
 helpers supply membership, grouping, sorting, closed-item retention, local
 snooze/mute, unread, and changes-since-seen behavior. Stale compatible data stays
-stale; incompatible caches return no items. Browser-local kind selection,
+stale; incompatible caches return no items. A cached source signature that only
+differs in view display names or source order remains compatible, including
+signatures that still contain display names. The reader does not rewrite that
+cache. When more than 40 source queries exist, a reordered cache can still
+reflect the previously selected queries until the poller rebuilds it; those
+queries stay within approved views. Browser-local kind selection,
 category chips, collapsed groups, held rows, and stack rotation are not saved
 configuration and are not reproduced.
 

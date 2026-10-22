@@ -3,7 +3,8 @@ import type { ItemMark } from '../../src/lib/shared/item-snooze';
 import { parseSettings } from '../../src/lib/shared/settings';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
 import type { CategoryGroup, DashKind, DashResponse, ItemView } from '../../src/lib/shared/types';
-import { dashSignature, type CachedDash } from '../poller/dashboard-cache';
+import type { LegacyViewFingerprints } from '../../src/lib/shared/view-authorization';
+import { matchesDashSignature, type CachedDash } from '../poller/dashboard-cache';
 import { SCHEMA_VERSION } from '../poller/schema';
 import { DASH_TTL, IN_KEYS } from '../poller/shared';
 
@@ -29,6 +30,7 @@ export interface SnapshotDashboard {
 export interface SavedViewsSnapshot {
 	principal: SnapshotPrincipal;
 	accessVersion: string;
+	legacyViewFingerprints?: LegacyViewFingerprints;
 	views: ItemView[];
 	categoryGroups: CategoryGroup[];
 	dashboards: SnapshotDashboard[];
@@ -49,7 +51,8 @@ export function createSnapshotReader(storage: SnapshotStorage, principal: Snapsh
 			'settings',
 			'dash:pr',
 			'dash:issue',
-			'mcpAccessVersion'
+			'mcpAccessVersion',
+			'mcpLegacyViewFingerprints'
 		]);
 		if (values.get('userId') !== scope.userId) throw new SnapshotUnavailable('scope_mismatch');
 		if (values.get('schema') !== SCHEMA_VERSION) throw new SnapshotUnavailable('schema_not_ready');
@@ -57,7 +60,7 @@ export function createSnapshotReader(storage: SnapshotStorage, principal: Snapsh
 		const dashboards: SnapshotDashboard[] = (['pr', 'issue'] as const).map((kind) => {
 			const cached = values.get(`dash:${kind}`) as CachedDash | undefined;
 			if (!cached) return { kind, state: 'missing', fetchedAt: null };
-			if (cached.sig !== dashSignature(kind, settings) || !cached.data.sourceItems)
+			if (!matchesDashSignature(cached.sig, kind, settings) || !cached.data.sourceItems)
 				return { kind, state: 'settings_changed', fetchedAt: cached.data.fetchedAt };
 			return {
 				kind,
@@ -99,6 +102,8 @@ export function createSnapshotReader(storage: SnapshotStorage, principal: Snapsh
 		return {
 			principal: { ...scope },
 			accessVersion: (values.get('mcpAccessVersion') as string | undefined) ?? 'initial',
+			legacyViewFingerprints: values.get('mcpLegacyViewFingerprints') as
+				LegacyViewFingerprints | undefined,
 			views: settings.views,
 			categoryGroups: settings.categoryGroups,
 			dashboards: dashboards.map((d) =>

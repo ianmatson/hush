@@ -13,3 +13,24 @@ export function dashSignature(kind: DashKind, settings: Settings): string {
 		dash.hideBots
 	]);
 }
+
+export function matchesDashSignature(
+	signature: string,
+	kind: DashKind,
+	settings: Settings
+): boolean {
+	const sourceScope = (value: string) => {
+		const [sections, ...scope] = JSON.parse(value);
+		return JSON.stringify([
+			sections
+				.map(({ name: _name, ...section }: { name: string }) => section)
+				.sort((a: object, b: object) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+			...scope
+		]);
+	};
+	try {
+		return sourceScope(signature) === sourceScope(dashSignature(kind, settings));
+	} catch {
+		return false;
+	}
+}

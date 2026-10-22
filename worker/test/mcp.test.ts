@@ -2,6 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '../db';
 import { mcpFixture, ORIGIN, REDIRECT, RESOURCE, VERIFIER } from './mcp-fixtures';
 import { NOW } from './assistant-fixtures';
+import {
+	legacyFingerprintView,
+	type LegacyViewFingerprints
+} from '../../src/lib/shared/view-authorization';
+import { DEFAULT_SETTINGS, parseSettings } from '../../src/lib/shared/settings';
+import type { Settings } from '../../src/lib/shared/types';
+import type { AccessGrant } from '../assistant/oauth';
 
 vi.mock('cloudflare:workers', () => ({
 	WorkerEntrypoint: class {},
@@ -26,6 +33,275 @@ afterEach(() => {
 });
 
 describe('MCP OAuth and passive transport', () => {
+	const refresh = (f: Awaited<ReturnType<typeof mcpFixture>>, clientId: string, token: string) =>
+		f.auth.protocol(
+			new Request(`${ORIGIN}/oauth/token`, {
+				method: 'POST',
+				body: new URLSearchParams({
+					grant_type: 'refresh_token',
+					refresh_token: token,
+					client_id: clientId,
+					resource: RESOURCE
+				})
+			})
+		);
+
+	async function tool(f: Awaited<ReturnType<typeof mcpFixture>>, token: string, name: string) {
+		const response = await app.request(
+			RESOURCE,
+			{
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`,
+					'Content-Type': 'application/json',
+					Accept: 'application/json, text/event-stream',
+					'Mcp-Protocol-Version': '2026-07-28',
+					'Mcp-Method': 'tools/call',
+					'Mcp-Name': name
+				},
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'tools/call',
+					params: {
+						name,
+						arguments: name === 'get_view' ? { view_id: 'mine' } : {},
+						_meta: {
+							'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+							'io.modelcontextprotocol/clientInfo': { name: 'synthetic', version: '1' },
+							'io.modelcontextprotocol/clientCapabilities': {}
+						}
+					}
+				})
+			},
+			f.env
+		);
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as {
+			result: { structuredContent: { ok: boolean; data: { total?: number; totalItems?: number } } };
+		};
+		expect(body.result.structuredContent.ok).toBe(true);
+		return body.result.structuredContent.data;
+	}
+
+	it.each(['current', 'legacy'] as const)(
+		'keeps %s grants usable after harmless saves and silent rotating refresh at 16 minutes and 24 hours',
+		async (format) => {
+			const f = await mcpFixture(McpAuthorization);
+			const { client, tokens } = await f.connect();
+			if (format === 'legacy') {
+				const key = [...f.store.values.keys()].find((key) => key.startsWith('access:'))!;
+				const grant = f.store.values.get(key) as AccessGrant;
+				grant.views[0].fingerprint = await legacyFingerprintView(f.settings.views[0]);
+			}
+			const epoch = f.values.get('mcpAccessVersion');
+			for (const patch of [
+				{},
+				{ pushWhileOpen: true },
+				{
+					views: [
+						{
+							...f.settings.views[0],
+							name: 'Renamed',
+							groupBy: 'repo',
+							sort: { by: 'title', dir: 'asc', turnFirst: false },
+							pushNew: true
+						}
+					]
+				}
+			] satisfies Partial<Settings>[]) {
+				expect(await f.writer.updateSettings(patch)).toHaveProperty('settings');
+				expect(f.values.get('mcpAccessVersion')).toBe(epoch);
+				expect((await tool(f, tokens.access_token, 'list_views')).total).toBe(1);
+				expect((await tool(f, tokens.access_token, 'get_view')).totalItems).toBe(3);
+			}
+			const before = JSON.stringify([...f.values]);
+			const oauthWrites = f.store.writes.mock.calls.length;
+			await tool(f, tokens.access_token, 'get_view');
+			expect(JSON.stringify([...f.values])).toBe(before);
+			expect(f.store.writes).toHaveBeenCalledTimes(oauthWrites);
+			vi.setSystemTime(NOW + 16 * 60_000);
+			expect(await f.auth.validate(tokens.access_token)).toBeNull();
+			const first = await refresh(f, client.client_id, tokens.refresh_token);
+			expect(first.status).toBe(200);
+			const rotated = (await first.json()) as typeof tokens;
+			expect(rotated.refresh_token).not.toBe(tokens.refresh_token);
+			expect(rotated.expires_in).toBe(900);
+			await tool(f, rotated.access_token, 'list_views');
+			expect((await tool(f, rotated.access_token, 'get_view')).totalItems).toBe(3);
+			vi.setSystemTime(NOW + 24 * 3600_000);
+			const second = await refresh(f, client.client_id, rotated.refresh_token);
+			expect(second.status).toBe(200);
+			const daily = (await second.json()) as typeof tokens;
+			expect(daily.refresh_token).not.toBe(rotated.refresh_token);
+			await tool(f, daily.access_token, 'list_views');
+			expect((await tool(f, daily.access_token, 'get_view')).totalItems).toBe(3);
+			expect((await refresh(f, client.client_id, tokens.refresh_token)).status).toBe(400);
+			vi.setSystemTime(NOW + 16 * 24 * 3600_000);
+			const renewed = await refresh(f, client.client_id, daily.refresh_token);
+			expect(renewed.status).toBe(200);
+			const later = (await renewed.json()) as typeof tokens;
+			vi.setSystemTime(NOW + 30 * 24 * 3600_000);
+			expect((await refresh(f, client.client_id, later.refresh_token)).status).toBe(400);
+			expect(await f.auth.validate(daily.access_token)).toBeNull();
+		}
+	);
+
+	it.each([
+		'search',
+		'closed',
+		'custom',
+		'project',
+		'category',
+		'bots',
+		'drafts',
+		'teams',
+		'category-name',
+		'category-description',
+		'category-rule'
+	])('denies refresh and data after authorization-sensitive %s changes', async (change) => {
+		const f = await mcpFixture(McpAuthorization);
+		if (change.startsWith('category-')) {
+			f.settings.views[0].groupBy = 'category:effort';
+			f.saveSettings();
+		}
+		const { client, tokens } = await f.connect();
+		const settings = structuredClone(f.settings);
+		const view = settings.views[0];
+		if (change === 'search') view.searches = ['repo:sandbox/other'];
+		if (change === 'closed') view.keepClosed = false;
+		if (change === 'custom')
+			Object.assign(view, {
+				groupBy: 'custom',
+				sections: [{ name: 'Private fact', rule: 'author:@me' }]
+			});
+		if (change === 'project') view.groupBy = 'project:secret/7';
+		if (change === 'category') view.groupBy = 'category:effort';
+		if (change === 'bots') settings.dash.hideBots = false;
+		if (change === 'drafts') settings.dash.hideOthersDrafts = false;
+		if (change === 'teams') settings.dash.excludedTeams = ['org/team'];
+		if (change.startsWith('category-'))
+			Object.assign(settings.categoryGroups[0].categories[0], {
+				[change.slice('category-'.length)]: change === 'category-rule' ? 'author:@me' : 'Changed'
+			});
+		expect(await f.writer.updateSettings(settings)).toHaveProperty('settings');
+		expect(f.values.get('mcpAccessVersion')).not.toBe('existing-random-epoch');
+		const denied = await refresh(f, client.client_id, tokens.refresh_token);
+		expect(denied.status).toBe(400);
+		expect(await denied.json()).toHaveProperty('error', 'invalid_grant');
+		expect(
+			(
+				await app.request(
+					RESOURCE,
+					{ method: 'POST', headers: { Authorization: `Bearer ${tokens.access_token}` } },
+					f.env
+				)
+			).status
+		).toBe(401);
+	});
+
+	it('keeps legacy pending consent valid through a harmless edit', async () => {
+		const f = await mcpFixture(McpAuthorization);
+		const { client } = await f.register();
+		const pending = await f.begin(client.client_id);
+		const record = f.store.values.get(`consent:${pending.id}`) as {
+			views: { fingerprint: string }[];
+		};
+		record.views[0].fingerprint = await legacyFingerprintView(f.settings.views[0]);
+		await f.writer.updateSettings({ views: [{ ...f.settings.views[0], name: 'Renamed' }] });
+		expect((await f.decide(pending)).status).toBe(200);
+	});
+
+	it('keeps the epoch account-wide when a sensitive change affects an ungranted view', async () => {
+		const f = await mcpFixture(McpAuthorization);
+		f.settings.views.push({ ...f.settings.views[0], id: 'ungranted' });
+		f.saveSettings();
+		const { client, tokens } = await f.connect();
+		await f.writer.updateSettings({
+			views: [f.settings.views[0], { ...f.settings.views[1], searches: ['repo:sandbox/other'] }]
+		});
+		expect((await refresh(f, client.client_id, tokens.refresh_token)).status).toBe(400);
+	});
+
+	it('preserves cached granted data when saved views only change order', async () => {
+		const f = await mcpFixture(McpAuthorization);
+		f.settings.views.push({ ...f.settings.views[0], id: 'ungranted' });
+		f.saveSettings();
+		const { client, tokens } = await f.connect();
+		await f.writer.updateSettings({ views: [...f.settings.views].reverse() });
+		expect((await tool(f, tokens.access_token, 'list_views')).total).toBe(1);
+		expect((await tool(f, tokens.access_token, 'get_view')).totalItems).toBe(3);
+		expect((await refresh(f, client.client_id, tokens.refresh_token)).status).toBe(200);
+	});
+
+	it('does not resurrect grants after deletion and identical view-ID recreation', async () => {
+		const f = await mcpFixture(McpAuthorization);
+		f.settings.views.push({ ...f.settings.views[0], id: 'other' });
+		f.saveSettings();
+		const { client, tokens } = await f.connect();
+		const key = [...f.store.values.keys()].find((key) => key.startsWith('access:'))!;
+		const grant = f.store.values.get(key) as AccessGrant;
+		grant.views[0].fingerprint = await legacyFingerprintView(f.settings.views[0]);
+		await f.writer.updateSettings({});
+		await f.writer.updateSettings({ views: [f.settings.views[1]] });
+		await f.writer.updateSettings({ views: f.settings.views });
+		expect((await refresh(f, client.client_id, tokens.refresh_token)).status).toBe(400);
+		expect((f.values.get('mcpLegacyViewFingerprints') as LegacyViewFingerprints).views).toEqual({});
+	});
+
+	it('keeps the compatibility baseline coherent across concurrent edits and failed writes', async () => {
+		const f = await mcpFixture(McpAuthorization);
+		const original = await legacyFingerprintView(f.settings.views[0]);
+		await Promise.all(
+			['First', 'Second'].map((name) =>
+				f.writer.updateSettings({ views: [{ ...f.settings.views[0], name }] })
+			)
+		);
+		const legacy = f.values.get('mcpLegacyViewFingerprints') as LegacyViewFingerprints;
+		expect(legacy).toEqual({ accessVersion: 'existing-random-epoch', views: { mine: original } });
+		const before = JSON.stringify([...f.values]);
+		f.settingsWrites.mockImplementationOnce(() => {
+			throw new Error('Synthetic write failure');
+		});
+		await expect(
+			f.writer.updateSettings({
+				views: [{ ...f.settings.views[0], searches: ['repo:sandbox/other'] }]
+			})
+		).rejects.toThrow('Synthetic write failure');
+		expect(JSON.stringify([...f.values])).toBe(before);
+		await Promise.all([
+			f.writer.updateSettings({
+				views: [{ ...f.settings.views[0], searches: ['repo:sandbox/other'] }]
+			}),
+			f.writer.updateSettings({ views: [{ ...f.settings.views[0], name: 'Third' }] })
+		]);
+		const final = f.values.get('mcpLegacyViewFingerprints') as LegacyViewFingerprints;
+		expect(final.accessVersion).toBe(f.values.get('mcpAccessVersion'));
+		expect(final.accessVersion).not.toBe(legacy.accessVersion);
+		expect(final.views).toEqual({});
+		expect(parseSettings(f.values.get('settings') as string).views[0].name).toBe('Third');
+	});
+
+	it('replaces a missing legacy-initial epoch on a default save and never reuses it after reset', async () => {
+		const f = await mcpFixture(McpAuthorization);
+		Object.assign(f.settings, structuredClone(DEFAULT_SETTINGS));
+		f.saveSettings();
+		f.values.delete('mcpAccessVersion');
+		const { client, tokens } = await f.connect();
+		const key = [...f.store.values.keys()].find((key) => key.startsWith('access:'))!;
+		const grant = f.store.values.get(key) as AccessGrant;
+		grant.views[0].fingerprint = await legacyFingerprintView(f.settings.views[0]);
+		expect(grant.accessVersion).toBe('initial');
+		await f.writer.updateSettings({});
+		const first = f.values.get('mcpAccessVersion');
+		expect(first).not.toBe('initial');
+		expect((await refresh(f, client.client_id, tokens.refresh_token)).status).toBe(400);
+		f.values.clear();
+		await f.writer.updateSettings({});
+		expect(f.values.get('mcpAccessVersion')).not.toBe('initial');
+		expect(f.values.get('mcpAccessVersion')).not.toBe(first);
+	});
+
 	it('publishes discovery and registration grants no data or browser authority', async () => {
 		const f = await mcpFixture(McpAuthorization);
 		const metadata = await app.request(

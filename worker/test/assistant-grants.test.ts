@@ -39,17 +39,16 @@ describe('saved view grants', () => {
 		expect(JSON.stringify(page)).not.toContain('secret/repo');
 	});
 
-	it.each(['searches', 'name', 'groupBy', 'sections', 'keepClosed'] as const)(
+	it.each(['searches', 'groupBy', 'sections', 'keepClosed'] as const)(
 		'fails closed after %s changes',
 		async (field) => {
 			const f = await fixture();
 			Object.assign(f.settings.views[0], {
 				[field]: {
 					searches: ['repo:another/repo'],
-					name: 'Changed',
-					groupBy: 'none',
+					groupBy: 'project:secret/7',
 					sections: [{ name: 'New section', rule: 'is:pr' }],
-					keepClosed: true
+					keepClosed: false
 				}[field]
 			});
 			f.saveSettings();

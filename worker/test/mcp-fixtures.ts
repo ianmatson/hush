@@ -49,6 +49,7 @@ export function memoryStorage() {
 
 export async function mcpFixture(Authorization: typeof McpAuthorization) {
 	const f = assistantFixture();
+	f.values.set('mcpAccessVersion', 'existing-random-epoch');
 	const store = memoryStorage();
 	const user = { id: 1, login: 'reviewer' };
 	const sid = 'synthetic-browser-session';
@@ -87,6 +88,46 @@ export async function mcpFixture(Authorization: typeof McpAuthorization) {
 		env
 	);
 	env.MCP_AUTH = { idFromName: () => 'auth', get: () => auth } as unknown as Env['MCP_AUTH'];
+	const { ActivePoller } = await import('../poller');
+	class SettingsWriter extends ActivePoller {
+		protected async who() {
+			return null;
+		}
+	}
+	let tail = Promise.resolve();
+	const settingsWrites = vi.fn();
+	const settingsStorage = {
+		...f.storage,
+		get: async (key: string | string[]) =>
+			Array.isArray(key)
+				? new Map(key.map((key) => [key, structuredClone(f.values.get(key))]))
+				: structuredClone(f.values.get(key)),
+		put: async (values: Record<string, unknown>) => {
+			settingsWrites(values);
+			for (const [key, value] of Object.entries(values)) f.values.set(key, structuredClone(value));
+		},
+		transaction: <T>(run: (storage: typeof settingsStorage) => Promise<T>): Promise<T> => {
+			const next = tail.then(async () => {
+				const before = structuredClone(f.values);
+				try {
+					return await run(settingsStorage);
+				} catch (error) {
+					f.values.clear();
+					for (const [key, value] of before) f.values.set(key, value);
+					throw error;
+				}
+			});
+			tail = next.then(
+				() => undefined,
+				() => undefined
+			);
+			return next;
+		}
+	};
+	const writer = new SettingsWriter(
+		{ storage: settingsStorage, getWebSockets: () => [] } as unknown as DurableObjectState,
+		env
+	);
 	const principal = { userId: 1, login: 'reviewer', session };
 	const register = async (overrides = {}) => {
 		const response = await auth.protocol(
@@ -189,6 +230,8 @@ export async function mcpFixture(Authorization: typeof McpAuthorization) {
 		begin,
 		decide,
 		exchange,
-		connect
+		connect,
+		writer,
+		settingsWrites
 	};
 }

@@ -21,16 +21,60 @@ const hash = async (value) =>
 	);
 const script = `
 import app, { Poller, McpAuthorization } from './worker/index.ts';
+import { ActivePoller } from './worker/poller.ts';
 import { DEFAULT_SETTINGS } from './src/lib/shared/settings.ts';
-import { SCHEMA_VERSION } from './worker/poller/schema.ts';
+import { mergeSettings } from './src/lib/shared/settings-schema.ts';
+import { legacyFingerprintView } from './src/lib/shared/view-authorization.ts';
+import { finishItem } from './src/lib/shared/dashboard.ts';
+import { dashFactsOf } from './src/lib/shared/subject.ts';
+import { dashSignature } from './worker/poller/dashboard-cache.ts';
+import { subjectFixture } from './worker/test/subject-fixtures.ts';
+import { SCHEMA, SCHEMA_VERSION } from './worker/poller/schema.ts';
+let clock = Date.now();
+Date.now = () => clock;
+class SettingsWriter extends ActivePoller {
+  async persist(patch) { await this.saveSettings(mergeSettings(await this.settings(), patch)); }
+}
 export class FixturePoller extends Poller {
   async seed(schema = SCHEMA_VERSION) {
-    await this.ctx.storage.put({userId: 1, schema, settings: JSON.stringify(DEFAULT_SETTINGS)});
+    if (!await this.ctx.storage.get('schema')) this.ctx.storage.sql.exec(SCHEMA);
+    const subject = subjectFixture({author: 'synthetic-user'});
+    const item = finishItem(dashFactsOf(subject, 'synthetic-user', new Set()), ['mine'], ['Mine'], 'synthetic-user', 3, clock);
+    const data = {kind: 'pr', items: [item], sourceItems: [], sections: [{id: 'mine', name: 'Mine', count: 1}], teams: [], fetchedAt: clock, errors: []};
+    await this.ctx.storage.put({userId: 1, schema, settings: JSON.stringify(DEFAULT_SETTINGS), mcpAccessVersion: crypto.randomUUID(), 'dash:pr': {sig: dashSignature('pr', DEFAULT_SETTINGS), data}});
+  }
+  async settings(patches, fail = false) {
+    const storage = this.ctx.storage;
+    const transaction = storage.transaction.bind(storage);
+    if (fail) storage.transaction = (run) => transaction(async (tx) => {
+      await run(tx);
+      throw new Error('Synthetic transaction failure');
+    });
+    const writer = new SettingsWriter(this.ctx, this.env);
+    try { await Promise.all(patches.map((patch) => writer.persist(patch))); return {ok: true}; }
+    catch (error) { return {error: error.message}; }
+    finally { storage.transaction = transaction; }
+  }
+  async reset() {
+    await this.ctx.storage.deleteAll();
+    await this.settings([{}]);
+    const first = await this.ctx.storage.get('mcpAccessVersion');
+    await this.ctx.storage.deleteAll();
+    await this.settings([{}]);
+    const second = await this.ctx.storage.get('mcpAccessVersion');
+    return {first, second};
   }
   async inspect() { return {entries: [...await this.ctx.storage.list()], alarm: await this.ctx.storage.getAlarm()}; }
 }
 export class FixtureAuthorization extends McpAuthorization {
   async inspect() { return {entries: [...await this.ctx.storage.list()], alarm: await this.ctx.storage.getAlarm()}; }
+  async legacy() {
+    const grants = await this.ctx.storage.list({prefix: 'access:'});
+    for (const [key, grant] of grants) {
+      grant.views[0].fingerprint = await legacyFingerprintView(DEFAULT_SETTINGS.views[0]);
+      await this.ctx.storage.put(key, grant);
+    }
+  }
 }
 export default { async fetch(request, env, ctx) {
   const path = new URL(request.url).pathname;
@@ -40,6 +84,10 @@ export default { async fetch(request, env, ctx) {
   if (path === '/__fixture/inspect') return Response.json({poller: await poller.inspect(), oauth: await auth.inspect()});
   if (path === '/__fixture/bad-schema') { await poller.seed(2); return Response.json({ok:true}); }
   if (path === '/__fixture/active') return Response.json(await poller.markSeen([]));
+  if (path === '/__fixture/settings') { const body = await request.json(); return Response.json(await poller.settings(body.patches, body.fail)); }
+  if (path === '/__fixture/reset') return Response.json(await poller.reset());
+  if (path === '/__fixture/legacy') { await auth.legacy(); return Response.json({ok:true}); }
+  if (path === '/__fixture/time') { clock = (await request.json()).now; return Response.json({ok:true}); }
   return app.fetch(request, env, ctx);
 }};
 `;
@@ -100,6 +148,7 @@ try {
 		.bind(await hash(session), now, now + 3600_000, now)
 		.run();
 	const request = (path, init) => mf.dispatchFetch(`${origin}${path}`, init);
+	await request('/__fixture/time', { method: 'POST', body: JSON.stringify({ now }) });
 	assert.equal((await request('/__fixture/seed')).status, 200);
 	const registered = await request('/oauth/register', {
 		method: 'POST',
@@ -169,9 +218,10 @@ try {
 		});
 	const exchanged = await exchange();
 	assert.equal(exchanged.status, 200);
-	const tokens = await exchanged.json();
+	let tokens = await exchanged.json();
+	await request('/__fixture/legacy');
 	const before = await (await request('/__fixture/inspect')).text();
-	const call = () =>
+	const call = (name = 'list_views') =>
 		request('/mcp', {
 			method: 'POST',
 			headers: {
@@ -180,15 +230,15 @@ try {
 				Accept: 'application/json, text/event-stream',
 				'Mcp-Protocol-Version': '2026-07-28',
 				'Mcp-Method': 'tools/call',
-				'Mcp-Name': 'list_views'
+				'Mcp-Name': name
 			},
 			body: JSON.stringify({
 				jsonrpc: '2.0',
 				id: 1,
 				method: 'tools/call',
 				params: {
-					name: 'list_views',
-					arguments: {},
+					name,
+					arguments: name === 'get_view' ? { view_id: 'mine' } : {},
 					_meta: {
 						'io.modelcontextprotocol/protocolVersion': '2026-07-28',
 						'io.modelcontextprotocol/clientInfo': { name: 'synthetic', version: '1' },
@@ -201,14 +251,94 @@ try {
 	assert.equal(result.status, 200, await result.clone().text());
 	assert.equal((await result.json()).result.structuredContent.ok, true);
 	assert.equal(await (await request('/__fixture/inspect')).text(), before);
+	const save = (patches, fail = false) =>
+		request('/__fixture/settings', { method: 'POST', body: JSON.stringify({ patches, fail }) });
+	const baseline = await (await request('/__fixture/inspect')).json();
+	const settings = JSON.parse(new Map(baseline.poller.entries).get('settings'));
+	assert.equal(
+		(
+			await (
+				await save([
+					{},
+					{ pushWhileOpen: true },
+					{
+						views: [
+							{
+								...settings.views[0],
+								name: 'Renamed',
+								groupBy: 'repo',
+								sort: { by: 'title', dir: 'asc', turnFirst: false }
+							}
+						]
+					}
+				])
+			).json()
+		).ok,
+		true
+	);
+	const saved = await (await request('/__fixture/inspect')).json();
+	const savedValues = new Map(saved.poller.entries);
+	assert.equal(
+		savedValues.get('mcpAccessVersion'),
+		new Map(baseline.poller.entries).get('mcpAccessVersion')
+	);
+	assert.equal(
+		savedValues.get('mcpLegacyViewFingerprints').accessVersion,
+		savedValues.get('mcpAccessVersion')
+	);
+	const data = await (await call('get_view')).json();
+	assert.equal(data.result.structuredContent.ok, true);
+	assert.equal(data.result.structuredContent.data.totalItems, 1);
+	const stable = await (await request('/__fixture/inspect')).text();
+	assert.match(
+		(
+			await (
+				await save([{ views: [{ ...settings.views[0], searches: ['repo:sandbox/other'] }] }], true)
+			).json()
+		).error,
+		/Synthetic transaction failure/
+	);
+	assert.equal(await (await request('/__fixture/inspect')).text(), stable);
+	const refresh = () =>
+		request('/oauth/token', {
+			method: 'POST',
+			body: new URLSearchParams({
+				client_id: client.client_id,
+				grant_type: 'refresh_token',
+				refresh_token: tokens.refresh_token,
+				resource
+			})
+		});
+	for (const offset of [16 * 60_000, 24 * 3600_000]) {
+		await request('/__fixture/time', {
+			method: 'POST',
+			body: JSON.stringify({ now: now + offset })
+		});
+		assert.equal((await call()).status, 401);
+		const response = await refresh();
+		assert.equal(response.status, 200, await response.clone().text());
+		const rotated = await response.json();
+		assert.notEqual(rotated.refresh_token, tokens.refresh_token);
+		tokens = rotated;
+		assert.equal((await call()).status, 200);
+		assert.equal(
+			(await (await call('get_view')).json()).result.structuredContent.data.totalItems,
+			1
+		);
+	}
+	await request('/__fixture/time', { method: 'POST', body: JSON.stringify({ now }) });
 	await request('/__fixture/bad-schema');
 	const coldBefore = await (await request('/__fixture/inspect')).text();
 	assert.equal((await call()).status, 401);
 	assert.equal(await (await request('/__fixture/inspect')).text(), coldBefore);
 	assert.equal((await exchange()).status, 400);
 	assert.equal((await request('/__fixture/active')).status, 200);
+	const reset = await (await request('/__fixture/reset')).json();
+	assert.notEqual(reset.first, 'initial');
+	assert.notEqual(reset.second, 'initial');
+	assert.notEqual(reset.first, reset.second);
 	console.log(
-		'workerd: OAuth consent errors survive RPC; real token exchange and modern MCP succeed; reads preserve OAuth and Poller storage; unknown schema fails without migration; replay fails.'
+		'workerd: legacy grants survive concurrent harmless saves, silent rotating refresh, and real cached reads; failed transactions roll back; reset epochs are unique; passive reads preserve storage; unknown schema and replay fail closed.'
 	);
 } finally {
 	await mf?.dispose();

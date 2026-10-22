@@ -1,6 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { LiveMessage, Settings, TeamDTO } from '../../src/lib/shared/types';
 import { settingsOverrides } from '../../src/lib/shared/settings-schema';
+import {
+	authorizationJson,
+	legacyFingerprintView,
+	settingsAuthorization,
+	type LegacyViewFingerprints
+} from '../../src/lib/shared/view-authorization';
 import { getUser, parseSettings, scopesOf, userToken, type Env, type UserRow } from '../db';
 import { fetchTeams } from '../github';
 import { projectAccessOf } from '../../src/lib/shared/projects';
@@ -179,9 +185,38 @@ export abstract class PollerBase extends DurableObject<Env> {
 
 	/** Stores only what differs from the defaults (see settingsOverrides). */
 	protected async saveSettings(settings: Settings): Promise<void> {
-		await this.ctx.storage.put({
-			settings: JSON.stringify(settingsOverrides(settings)),
-			mcpAccessVersion: crypto.randomUUID()
+		await this.ctx.storage.transaction(async (storage) => {
+			const values = await storage.get([
+				'settings',
+				'mcpAccessVersion',
+				'mcpLegacyViewFingerprints'
+			]);
+			const old = parseSettings(values.get('settings') as string | undefined);
+			const changed =
+				authorizationJson(settingsAuthorization(old)) !==
+				authorizationJson(settingsAuthorization(settings));
+			const accessVersion =
+				changed || !values.get('mcpAccessVersion')
+					? crypto.randomUUID()
+					: (values.get('mcpAccessVersion') as string);
+			const legacy = values.get('mcpLegacyViewFingerprints') as LegacyViewFingerprints | undefined;
+			const fingerprints: LegacyViewFingerprints = {
+				accessVersion,
+				views: changed
+					? {}
+					: legacy?.accessVersion === accessVersion
+						? legacy.views
+						: Object.fromEntries(
+								await Promise.all(
+									old.views.map(async (view) => [view.id, await legacyFingerprintView(view)])
+								)
+							)
+			};
+			await storage.put({
+				settings: JSON.stringify(settingsOverrides(settings)),
+				mcpAccessVersion: accessVersion,
+				mcpLegacyViewFingerprints: fingerprints
+			});
 		});
 		this.broadcast({ type: 'settings' });
 	}

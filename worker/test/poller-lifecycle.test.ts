@@ -111,8 +111,26 @@ function activeHarness() {
 		if (typeof key === 'string') values.set(key, value);
 		else for (const [entry, value] of Object.entries(key)) values.set(entry, value);
 	});
+	let tail = Promise.resolve();
 	const state = {
 		storage: {
+			transaction: <T>(run: (storage: typeof state.storage) => Promise<T>): Promise<T> => {
+				const next = tail.then(async () => {
+					const before = structuredClone(values);
+					try {
+						return await run(state.storage);
+					} catch (error) {
+						values.clear();
+						for (const [key, value] of before) values.set(key, value);
+						throw error;
+					}
+				});
+				tail = next.then(
+					() => undefined,
+					() => undefined
+				);
+				return next;
+			},
 			get: async (key: string | string[]) =>
 				Array.isArray(key) ? new Map(key.map((key) => [key, values.get(key)])) : values.get(key),
 			put,
@@ -153,7 +171,7 @@ function activeHarness() {
 }
 
 describe('active poller lifecycle', () => {
-	it('stores settings and access-version invalidation in one write, including delete and recreation', async () => {
+	it('creates unique epochs for identical default saves after reset and preserves them at sign-in', async () => {
 		class SettingsWriter extends ActivePoller {
 			persist(settings: Settings) {
 				return this.saveSettings(settings);
@@ -162,23 +180,48 @@ describe('active poller lifecycle', () => {
 		const f = activeHarness();
 		const writer = new SettingsWriter(f.state as unknown as DurableObjectState, {} as Env);
 		await writer.persist(structuredClone(DEFAULT_SETTINGS));
-		const initial = f.values.get('mcpAccessVersion');
-		await writer.persist({ ...structuredClone(DEFAULT_SETTINGS), views: [] });
-		const deleted = f.values.get('mcpAccessVersion');
+		const first = f.values.get('mcpAccessVersion');
+		expect(first).not.toBe('initial');
+		await f.poller.start(1);
+		expect(f.values.get('mcpAccessVersion')).toBe(first);
+		await f.poller.stop();
 		await writer.persist(structuredClone(DEFAULT_SETTINGS));
+		const second = f.values.get('mcpAccessVersion');
+		expect(second).not.toBe('initial');
+		expect(second).not.toBe(first);
+		await f.poller.start(1);
+		expect(f.values.get('mcpAccessVersion')).toBe(second);
+	});
+
+	it('stores settings and access-version invalidation in one write, including delete and recreation', async () => {
+		class SettingsWriter extends ActivePoller {
+			persist(settings: Settings) {
+				return this.saveSettings(settings);
+			}
+		}
+		const f = activeHarness();
+		const writer = new SettingsWriter(f.state as unknown as DurableObjectState, {} as Env);
+		const settings = structuredClone(DEFAULT_SETTINGS);
+		settings.views.push({ ...settings.views[0], id: 'other' });
+		await writer.persist(settings);
+		const initial = f.values.get('mcpAccessVersion');
+		await writer.persist({ ...settings, views: [settings.views[1]] });
+		const deleted = f.values.get('mcpAccessVersion');
+		await writer.persist(settings);
 		const recreated = f.values.get('mcpAccessVersion');
 		expect(new Set([initial, deleted, recreated]).size).toBe(3);
 		expect(f.put).toHaveBeenCalledTimes(3);
 		for (const call of f.put.mock.calls)
-			expect(call[0]).toEqual({
+			expect(call[0]).toMatchObject({
 				settings: expect.any(String),
-				mcpAccessVersion: expect.any(String)
+				mcpAccessVersion: expect.any(String),
+				mcpLegacyViewFingerprints: { accessVersion: expect.any(String), views: expect.any(Object) }
 			});
 		const before = JSON.stringify([...f.values]);
 		f.put.mockRejectedValueOnce(new Error('Synthetic write failure'));
-		await expect(
-			writer.persist({ ...structuredClone(DEFAULT_SETTINGS), views: [] })
-		).rejects.toThrow('Synthetic write failure');
+		await expect(writer.persist({ ...settings, views: [settings.views[1]] })).rejects.toThrow(
+			'Synthetic write failure'
+		);
 		expect(JSON.stringify([...f.values])).toBe(before);
 	});
 
