@@ -185,6 +185,35 @@ describe('commit: alerts', () => {
 		});
 	});
 
+	it('marks items of the quiet first fill as read, and leaves later arrivals unread', () => {
+		const start = run(empty(settingsWith(views)), { kind: 'time' });
+		const searched = run(start.data, {
+			kind: 'source',
+			sourceId: sourceIdOf(start.data),
+			read: { outcome: 'ok', window: windowOf(['PR_1']) }
+		});
+		const filled = run(searched.data, {
+			kind: 'items',
+			read: [facts(1)],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(filled.data.items.get('PR_1')?.attention.seen).toEqual({
+			at: NOW,
+			revision: 1,
+			snapshot: snapshotOf(facts(1), ME)
+		});
+		const later = run(filled.data, [
+			{
+				kind: 'source',
+				sourceId: sourceIdOf(filled.data),
+				read: { outcome: 'ok', window: windowOf(['PR_1', 'PR_2']) }
+			},
+			{ kind: 'items', read: [facts(2)], inaccessible: [], quiet: false }
+		]);
+		expect(later.data.items.get('PR_2')?.attention.seen).toBeNull();
+	});
+
 	it('does not announce your own new items', () => {
 		const base = seeded(views, ['PR_1']);
 		const mine = facts(3, { author: ME });

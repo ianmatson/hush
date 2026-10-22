@@ -43,6 +43,7 @@ describe('Workspace', () => {
 		await h.workspace.run(h.clock);
 		expect(h.readers.itemCalls).toEqual([['PR_1']]);
 		expect(h.workspace.snapshot.views.get('v')?.members).toEqual(['PR_1']);
+		expect(h.workspace.snapshot.items.get('PR_1')?.attention.seen).not.toBeNull();
 		expect(h.announced.at(-1)?.viewIds).toEqual(['v']);
 		expect(h.alarms.at(-1)).toBeGreaterThan(h.clock());
 	});

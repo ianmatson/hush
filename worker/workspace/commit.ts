@@ -1,5 +1,5 @@
 import { pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
-import type { Snapshot } from '../../src/lib/shared/changes';
+import { snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import { HOUR_MS } from '../../src/lib/shared/durations';
 import { sameLogin } from '../../src/lib/shared/logins';
 import type { ProjectAccess } from '../../src/lib/shared/projects';
@@ -417,6 +417,16 @@ function alertCauses(
 	});
 }
 
+function startRead(draft: Draft, quiet: Set<ItemId>, alertable: Set<ItemId>, now: number) {
+	const quietArrivals = [...draft.factsChanged]
+		.filter(([id, before]) => before === null && quiet.has(id) && !alertable.has(id))
+		.map(([id]) => id);
+	draft.updateAttention(quietArrivals, (attention, item) => ({
+		...attention,
+		seen: { at: now, revision: item.revision, snapshot: snapshotOf(item.facts, draft.config.me) }
+	}));
+}
+
 export function commit(before: WorkspaceData, input: Input | Input[], now: number): CommitResult {
 	const inputs = Array.isArray(input) ? input : [input];
 	const draft = new Draft(before);
@@ -436,6 +446,7 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		: 'observation';
 	const nextViews = new Map<string, ViewState>();
 	const alertable = new Set<ItemId>();
+	const quiet = new Set<ItemId>();
 	const admissions: Admission[] = [];
 	const interest = new Set<ItemId>();
 	const changedViews: string[] = [];
@@ -462,6 +473,7 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		nextViews.set(view.view.id, transition.state);
 		if (!sameJson(kept, transition.state)) draft.changes.views.add(view.view.id);
 		for (const id of transition.alertable) if (!transition.quiet.has(id)) alertable.add(id);
+		for (const id of transition.quiet) quiet.add(id);
 		for (const id of [...found.candidates, ...transition.state.retained]) interest.add(id);
 		if (view.view.pushNew)
 			for (const itemId of transition.admitted)
@@ -486,6 +498,7 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		if (boundary !== null && (nextBoundary === null || boundary < nextBoundary))
 			nextBoundary = boundary;
 	}
+	startRead(draft, quiet, alertable, now);
 	for (const id of before.views.keys())
 		if (!nextViews.has(id)) {
 			draft.changes.removedViews.add(id);
