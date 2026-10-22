@@ -2,7 +2,7 @@ import { isGitHubName, parseRepoFullName } from '../../src/lib/shared/item-page'
 import type { PeekDTO } from '../../src/lib/shared/types';
 import { userToken } from '../db';
 import { fetchPeek, GitHubError } from '../github';
-import { routes, poller, json } from '../app';
+import { routes, workspace, json } from '../app';
 
 // --- Quick check -----------------------------------------------------------
 
@@ -15,7 +15,7 @@ const app = routes()
 		const number = Number(body.number);
 		if (!target || !Number.isInteger(number) || number < 1)
 			return c.json({ error: 'Not a PR or issue.' }, 400);
-		const result = await poller(c.env, u.id).recheck(`${target.owner}/${target.name}`, number);
+		const result = await workspace(c.env, u.id).recheck(`${target.owner}/${target.name}`, number);
 		if ('error' in result) return c.json({ error: result.error }, 502);
 		return c.json(result);
 	})
@@ -34,12 +34,11 @@ const app = routes()
 					{ error: 'GitHub did not find this PR or issue. Maybe you have no access.' },
 					404
 				);
-			// The peek is a fresh read too: store it, so the dashboards agree with it.
 			if (found.subject)
 				c.executionCtx.waitUntil(
-					poller(c.env, u.id)
-						.recordFetched(found.subject)
-						.catch((err) => console.error('peek record failed', (err as Error).message))
+					workspace(c.env, u.id)
+						.recheck(`${owner}/${repo}`, number, found.subject.id)
+						.catch((error: Error) => console.error('peek recheck failed', error.message))
 				);
 			return c.json(found.peek satisfies PeekDTO, 200, {
 				'Cache-Control': 'private, no-store'

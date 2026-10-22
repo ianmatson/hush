@@ -1,8 +1,8 @@
-import type { DashProject, TeamDTO } from '../shared/types';
+import type { DashItem, DashProject, TeamDTO } from '../shared/types';
 import type { createEvaluator } from './evaluate';
 import type { CompiledView, ItemId, Row, SourceHealth, ViewState } from './types';
 
-export type ViewRow = Row & { views: string[]; retainedIn: string[] };
+export type ViewRow = DashItem;
 
 export interface ViewSummary {
 	id: string;

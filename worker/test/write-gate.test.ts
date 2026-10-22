@@ -20,7 +20,7 @@ const SANDBOX_ONLY = { GITHUB_WRITES: 'off', GITHUB_WRITES_ALLOW: 'sandbox/web' 
 function harness() {
 	const recheck = vi.fn(async () => ({ ok: true }));
 	const env = {
-		POLLER: { idFromName: () => 'test', get: () => ({ recheck }) },
+		WORKSPACE: { idFromName: () => 'test', get: () => ({ recheck }) },
 		...SANDBOX_ONLY
 	} as unknown as Env;
 	const app = new Hono<AppEnv>();

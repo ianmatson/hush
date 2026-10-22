@@ -116,5 +116,6 @@ export interface Membership {
 	members: Set<ItemId>;
 	unsettled: Set<ItemId>;
 	validBindings: Set<string>;
+	acceptedBy: Map<string, Set<ItemId>>;
 	health: SourceHealth[];
 }

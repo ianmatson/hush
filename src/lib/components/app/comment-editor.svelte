@@ -62,7 +62,7 @@
 						}
 					: old
 			);
-			refetchUnlessLive(keys.dashAll);
+			refetchUnlessLive(keys.items);
 			onclose();
 		} catch (err) {
 			error = (err as Error).message;

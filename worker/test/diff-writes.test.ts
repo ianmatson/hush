@@ -16,7 +16,9 @@ const executionCtx = {
 
 function harness() {
 	const recheck = vi.fn(async () => ({ ok: true }));
-	const env = { POLLER: { idFromName: () => 'test', get: () => ({ recheck }) } } as unknown as Env;
+	const env = {
+		WORKSPACE: { idFromName: () => 'test', get: () => ({ recheck }) }
+	} as unknown as Env;
 	const app = new Hono<AppEnv>();
 	app.use('*', async (c, next) => {
 		c.set('user', { id: 1 } as UserRow);

@@ -52,18 +52,17 @@ import { DEFAULT_PUSH_FACTS, PUSH_FACTS } from '$lib/shared/push-facts';
 import { DEFAULT_ROWS, ROW_PARTS } from '$lib/shared/row-parts';
 import { DEFAULT_TABLE_COLUMNS, ROW_LAYOUTS, TABLE_COLUMNS } from '$lib/shared/row-layout';
 import {
-	ALERT_LOG_KEEP,
-	DASH_TTL,
-	FILL_MAX,
+	ALERT_HISTORY_MS,
+	DISCOVERY_GAP_MS,
 	MAX_INDIVIDUAL_PUSHES,
-	PAUSE_AFTER_NO_PUSH,
-	PAUSE_AFTER_WITH_PUSH,
-	POLL_ACTIVE,
-	POLL_IDLE,
-	TEAMS_TTL,
-	TRACKED_KEEP,
-	TRACKED_REBUILD_GAP
-} from '../../../worker/poller/shared';
+	MAX_ANALYSIS_QUEUE,
+	NOTIFICATIONS_ACTIVE_MS,
+	NOTIFICATIONS_IDLE_MS,
+	PAUSE_AFTER_NO_PUSH_MS,
+	PAUSE_AFTER_WITH_PUSH_MS,
+	SOURCE_EVERY_MS,
+	TEAMS_EVERY_MS
+} from '../../../worker/workspace/work';
 import {
 	APP_FOCUS_LASTS_MS,
 	DIGEST_MINUTES,
@@ -141,7 +140,7 @@ A snooze that ends always pushes.
 	},
 	pushDigestMinutes: {
 		type: 'number or null',
-		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${POLL_ACTIVE / MINUTE_MS} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
+		body: `Send pushes together: what comes in waits, and one push lists it every this many minutes (${DIGEST_MINUTES.min} to ${DIGEST_MINUTES.max}). Hush checks GitHub every ${NOTIFICATIONS_ACTIVE_MS / MINUTE_MS} minutes, so a digest can come a few minutes late. \`null\` (default): each push goes at once.
 
 \`\`\`json settings
 { "pushDigestMinutes": 60 }
@@ -190,7 +189,7 @@ iPhone and iPad can ignore this: Safari on iOS does not always remove a notifica
 - **\`about:\` conditions** in category rules: Jev checks whether each PR or issue is about what you wrote. See [the query language](/docs/query-language).
 - **Order:** in your views, items whose text says they block something or are about an incident come first inside their section.
 
-When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${FILL_MAX}). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
+When you turn it on, or add an \`about:\` condition, Hush checks the PRs and issues of your views again (up to ${MAX_ANALYSIS_QUEUE} at a time). Each account can use up to ${DEFAULT_DAILY_TOKENS.toLocaleString('en-US')} tokens a day; after that, smart decisions pause until 00:00 UTC, and everything else works as before. Turn it off in **Settings → Categories → Smart decisions**: Hush then deletes Jev's answers, and sends Jev nothing more.`
 	},
 	pushUrgentNow: {
 		type: 'boolean',
@@ -210,7 +209,7 @@ When you turn it on, or add an \`about:\` condition, Hush checks the PRs and iss
 - \`sections\` (optional): up to ${MAX_VIEW_SECTIONS} custom sections, each \`{ "name", "rule" }\`: a unique name of up to ${MAX_SECTION_NAME_CHARS} characters, and a rule in the [query language](/docs/query-language). An item goes into the first section whose rule matches, then **Everything else**. \`"groupBy": "custom"\` needs at least one. See [Custom sections](/docs/pull-requests-and-issues#custom-sections).
 A view needs at least one search, and you keep at least one view.
 
-Hush runs the searches about every ${DASH_TTL / MINUTE_MS} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${TRACKED_REBUILD_GAP / MINUTE_MS} minutes. An item that the searches stop finding stays tracked for ${TRACKED_KEEP / DAY_MS} days. When you change \`views\`, the items that no view finds now stop at once.
+Hush runs each search about every ${SOURCE_EVERY_MS / MINUTE_MS} minutes while it checks GitHub. A notification about a PR or issue that Hush does not track yet runs them again, at most every ${DISCOVERY_GAP_MS / MINUTE_MS} minutes. An item that no search finds any more leaves the view, and Hush stops watching it. When you change \`views\`, the items that no view finds now stop at once.
 
 A change to \`views\` replaces the whole list. To add a view, write the defaults below and your new one.
 
@@ -298,7 +297,7 @@ ${table(
 	},
 	'dash.excludedTeams': {
 		type: 'array of strings',
-		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_TTL / HOUR_MS} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first ${MAX_TEAMS_PER_SECTION} teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
+		body: `Teams that \`@team\` searches skip, as \`"org/team"\` slugs. Hush finds your teams on GitHub (again every ${TEAMS_EVERY_MS / HOUR_MS} hours); turn off big ones, such as “everyone”, to cut noise. A search runs for the first ${MAX_TEAMS_PER_SECTION} teams at most, and all views together run up to ${MAX_QUERIES} searches for each type.
 
 \`\`\`json settings
 { "dash": { "excludedTeams": ["acme/everyone", "acme/contractors"] } }
@@ -538,25 +537,30 @@ function limitsReference(): string {
 	return table(
 		['What', 'Limit'],
 		[
-			['Poll for new notifications, when Hush is open or push is on', `every ${dur(POLL_ACTIVE)}`],
-			['Poll when idle (no open tab for 15 minutes, no push devices)', `every ${dur(POLL_IDLE)}`],
+			[
+				'Poll for new notifications, when Hush is open or push is on',
+				`every ${dur(NOTIFICATIONS_ACTIVE_MS)}`
+			],
+			[
+				'Poll when idle (no open tab for 15 minutes, no push devices)',
+				`every ${dur(NOTIFICATIONS_IDLE_MS)}`
+			],
 			[
 				'The searches of your views',
-				`run every ${dur(DASH_TTL)} while Hush polls; refresh any time`
+				`run every ${dur(SOURCE_EVERY_MS)} while Hush polls; refresh any time`
 			],
 			[
 				'Searches run again for a notification about an untracked PR or issue',
-				`at most every ${dur(TRACKED_REBUILD_GAP)}`
+				`at most every ${dur(DISCOVERY_GAP_MS)}`
 			],
-			['An item that no view finds any more stays tracked for', dur(TRACKED_KEEP)],
-			['Your teams', `looked up again every ${dur(TEAMS_TTL)}`],
+			['Your teams', `looked up again every ${dur(TEAMS_EVERY_MS)}`],
 			[
 				'Polling stops with no visit for',
-				`${dur(PAUSE_AFTER_NO_PUSH)} (${dur(PAUSE_AFTER_WITH_PUSH)} with push devices); opening Hush starts it again`
+				`${dur(PAUSE_AFTER_NO_PUSH_MS)} (${dur(PAUSE_AFTER_WITH_PUSH_MS)} with push devices); opening Hush starts it again`
 			],
 			['A snooze “until something happens” also ends after', dur(SNOOZE_EVENT_MAX_MS)],
-			['Pushes per poll before they become one push (“5 alerts”)', String(MAX_INDIVIDUAL_PUSHES)],
-			['Alert history (the bell)', dur(ALERT_LOG_KEEP)],
+			['Pushes at once before they become one push (“5 alerts”)', String(MAX_INDIVIDUAL_PUSHES)],
+			['Alert history (the bell)', dur(ALERT_HISTORY_MS)],
 			['Views', String(MAX_VIEWS)],
 			['Searches in a view', String(MAX_VIEW_SEARCHES)],
 			['GitHub searches for pull requests, and for issues', String(MAX_QUERIES)],
@@ -573,7 +577,7 @@ function limitsReference(): string {
 			],
 			[
 				'Items checked again when you turn on smart decisions or add an about: condition',
-				String(FILL_MAX)
+				String(MAX_ANALYSIS_QUEUE)
 			],
 			[
 				'Session',

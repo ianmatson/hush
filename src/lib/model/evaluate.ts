@@ -174,6 +174,12 @@ export function createEvaluator(ctx: EvaluationContext) {
 		const settledMembers = new Set<ItemId>();
 		const waiting = new Set<ItemId>();
 		const validBindings = new Set<string>();
+		const acceptedBy = new Map<string, Set<ItemId>>();
+		const accept = (binding: string, id: ItemId) => {
+			const accepted = acceptedBy.get(binding) ?? new Set<ItemId>();
+			accepted.add(id);
+			acceptedBy.set(binding, accepted);
+		};
 		for (const clause of view.clauses) {
 			const window = usableWindow(ctx.sources.get(clause.sourceId), ctx.now);
 			if (!window) continue;
@@ -189,9 +195,13 @@ export function createEvaluator(ctx: EvaluationContext) {
 				if (strict === true) {
 					members.add(id);
 					settledMembers.add(id);
+					accept(clause.binding, id);
 				} else if (strict === null) {
 					waiting.add(id);
-					if (clauseTri(clause, item, 'lenient') === true) members.add(id);
+					if (clauseTri(clause, item, 'lenient') === true) {
+						members.add(id);
+						accept(clause.binding, id);
+					}
 				}
 			}
 		}
@@ -199,7 +209,7 @@ export function createEvaluator(ctx: EvaluationContext) {
 		const health = [...new Set(view.clauses.map((clause) => clause.sourceId))].map((id) =>
 			sourceHealth(ctx.sources.get(id), id, ctx.now)
 		);
-		return { candidates, members, unsettled, validBindings, health };
+		return { candidates, members, unsettled, validBindings, acceptedBy, health };
 	}
 
 	const retainedIn = (view: CompiledView, state: ViewState | null, members: Set<ItemId>) =>
@@ -217,8 +227,7 @@ export function createEvaluator(ctx: EvaluationContext) {
 
 	function rowOf(item: Item, retained: boolean): Row {
 		const derived = derive(item);
-		const finished = finishItem(derived.facts, [], [], ctx.me, ctx.dash.staleDays, ctx.now);
-		const { sections: _sections, ...turned } = finished;
+		const turned = finishItem(derived.facts, ctx.me, ctx.dash.staleDays, ctx.now);
 		const state = attentionState(item.attention, item.facts, ctx.me, ctx.now);
 		const seen = item.attention.seen;
 		const changes = seen ? changesSince(seen.snapshot, item.facts, ctx.me) : [];

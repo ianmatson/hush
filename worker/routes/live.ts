@@ -1,4 +1,4 @@
-import { routes, poller } from '../app';
+import { routes, workspace } from '../app';
 
 // --- Live updates ------------------------------------------------------------------------
 
@@ -14,7 +14,7 @@ const app = routes().get('/api/live', (c) => {
 	const origin = c.req.header('Origin');
 	if (origin && origin !== new URL(c.req.url).origin)
 		return c.json({ error: 'Cross-origin request' }, 403);
-	return poller(c.env, c.get('user').id).fetch(c.req.raw);
+	return workspace(c.env, c.get('user').id).fetch(c.req.raw);
 });
 
 export default app;

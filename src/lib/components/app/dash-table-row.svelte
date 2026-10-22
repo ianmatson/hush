@@ -139,7 +139,7 @@
 	style:--table-min-width={minWidth}
 	class={cn(
 		'row group relative flex h-9 items-center gap-2 border-b border-border/50 bg-(--row-bg) px-2 text-[0.8rem] select-none md:grid md:min-w-(--table-min-width) md:grid-cols-(--table-cols)',
-		(i.dismissed || i.keptAfterClose) && 'opacity-60'
+		(i.dismissed || i.retained) && 'opacity-60'
 	)}
 	{@attach (node) => on(node, 'click', onrowclick)}
 	role="option"

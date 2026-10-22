@@ -14,6 +14,7 @@ import { pullFilePageCount } from '$lib/shared/diff';
 import { api, ApiError } from '$lib/api';
 import { withUnsavedSettings } from '$lib/unsaved-settings';
 import type { DashKind, MeDTO, Settings } from '$lib/shared/types';
+import type { ItemsResponse } from '$lib/model/present';
 
 export const queryClient = new QueryClient({
 	// Any "not signed in" answer ends the session in this tab, once.
@@ -65,13 +66,12 @@ export const persistOptions = {
 			q.state.status === 'success' && !MEMORY_ONLY_KEYS.has(String(q.queryKey[0]))
 	},
 	// Change this when a cached shape changes, to drop old caches.
-	buster: 'v5'
+	buster: 'v6'
 };
 
 export const keys = {
 	me: ['me'] as const,
-	dashAll: ['dash'] as const,
-	dash: (kind: DashKind) => ['dash', kind] as const,
+	items: ['items'] as const,
 	feeds: ['feeds'] as const,
 	sessions: ['sessions'] as const,
 	pushDevices: ['push-devices'] as const,
@@ -135,16 +135,16 @@ export const alertsQuery = () =>
 		refetchInterval: afterNextPoll(10_000)
 	});
 
-// The server caches dashboards for 15 minutes, so asking more often gains nothing.
-export const dashQuery = (kind: DashKind) =>
+export const itemsQuery = () =>
 	queryOptions({
-		queryKey: keys.dash(kind),
-		queryFn: () => api.dashboard(kind),
-		staleTime: 15 * MINUTE_MS,
-		// A saved list with a refresh on its way: the live socket says when it is ready; without
-		// the socket, ask again soon.
-		refetchInterval: (q) => (q.state.data?.refreshing && !live.connected ? 10_000 : 15 * MINUTE_MS)
+		queryKey: keys.items,
+		queryFn: api.items,
+		staleTime: MINUTE_MS,
+		refetchInterval: afterNextPoll(5_000)
 	});
+
+export const rowsOfKind = (data: ItemsResponse | undefined, kind: DashKind) =>
+	(data?.rows ?? []).filter((row) => row.kind === kind);
 
 export const feedsQuery = () =>
 	queryOptions({ queryKey: keys.feeds, queryFn: api.feeds, staleTime: 5 * MINUTE_MS });

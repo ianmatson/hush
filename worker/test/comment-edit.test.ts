@@ -25,7 +25,7 @@ const ownComment = {
 function harness(gate: Partial<Env> = {}) {
 	const recheck = vi.fn(async () => ({ ok: true }));
 	const env = {
-		POLLER: { idFromName: () => 'test', get: () => ({ recheck }) },
+		WORKSPACE: { idFromName: () => 'test', get: () => ({ recheck }) },
 		...gate
 	} as unknown as Env;
 	const app = new Hono<AppEnv>();

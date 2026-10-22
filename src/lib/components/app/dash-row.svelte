@@ -155,7 +155,7 @@
 		'row group relative flex items-start gap-2.5 rounded-xl border border-transparent bg-background px-2 py-2.5 transition-colors select-none sm:gap-3 sm:px-3 sm:py-3',
 		'hover:bg-muted/50 data-selected:border-border data-selected:bg-muted/60',
 		'data-checked:border-primary/15 data-checked:bg-primary/[0.06] dark:data-checked:bg-primary/[0.09]',
-		(i.dismissed || i.keptAfterClose) && 'opacity-60'
+		(i.dismissed || i.retained) && 'opacity-60'
 	)}
 	onclick={onrowclick}
 	role="option"

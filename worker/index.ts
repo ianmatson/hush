@@ -22,7 +22,8 @@ import suggest from './routes/suggest';
 import seen from './routes/seen';
 import mcp from './routes/mcp';
 
-export { Poller } from './poller';
+export { Poller } from './legacy-poller';
+export { Workspace } from './workspace/object';
 export { McpAuthorization } from './assistant/oauth';
 
 const app = new Hono<AppEnv>();

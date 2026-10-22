@@ -70,8 +70,8 @@ export function savePrefs(p: TabStatusPrefs) {
 export const total = (counts: Counts, sources: CountSource[]) =>
 	sources.reduce((n, s) => n + (counts[s] ?? 0), 0);
 
-export const countsAsUnread = (i: Pick<DashItem, 'unread' | 'dismissed' | 'keptAfterClose'>) =>
-	!!i.unread && !i.dismissed && !i.keptAfterClose;
+export const countsAsUnread = (i: Pick<DashItem, 'unread' | 'dismissed' | 'views'>) =>
+	!!i.unread && !i.dismissed && i.views.length > 0;
 
 export const newAlertCount = (alerts: Pick<AlertDTO, 'sentAt'>[] | undefined, seenAt: number) =>
 	alerts?.filter((a) => a.sentAt > seenAt).length ?? 0;

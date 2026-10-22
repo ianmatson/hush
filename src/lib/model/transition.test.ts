@@ -353,3 +353,29 @@ describe('waiting for a fresh search', () => {
 		expect(readLater.state.members).toEqual([a.id]);
 	});
 });
+
+describe('waiting bindings and filters', () => {
+	it('keeps quiet an item that only a waiting binding accepts, even when an established binding finds and rejects it', () => {
+		const high = facts(1, { additions: 900, deletions: 900 });
+		const two = [
+			view('v', ['is:pr is:open repo:PostHog/posthog', 'is:pr is:open org:PostHog size:<50'])
+		];
+		const first = step(
+			{ views: two, items: [item(high)], results: { 0: [high.id], 1: [high.id] } },
+			null
+		);
+		const [established, rejecting] = first.built.compiled.views[0].clauses.map((c) => c.binding);
+		const awaiting = {
+			...first.state,
+			seededBindings: [rejecting],
+			baseline: [],
+			awaitingRefresh: [established]
+		};
+		const later = step(
+			{ views: two, items: [item(high)], results: { 0: [high.id], 1: [high.id] } },
+			awaiting
+		);
+		expect(later.quiet.has(high.id)).toBe(true);
+		expect(later.admitted).toEqual([]);
+	});
+});

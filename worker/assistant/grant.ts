@@ -58,6 +58,13 @@ export function itemInView(
 	const allowedLinks = new Map(population.map((member) => [member.url, member]));
 	return {
 		id: item.id,
+		itemId: item.itemId,
+		revision: item.revision,
+		baseline: item.baseline,
+		analysisStale: item.analysisStale,
+		retained: item.retained,
+		views: item.views.filter((id) => id === view.id),
+		retainedIn: item.retainedIn.filter((id) => id === view.id),
 		kind: item.kind,
 		number: item.number,
 		title: item.title,
@@ -119,7 +126,6 @@ export function itemInView(
 		urgent: item.urgent,
 		categories: item.categories?.filter((id) => categories.has(id)),
 		pinnedCategories: item.pinnedCategories?.filter((id) => categories.has(id)),
-		sections: [view.id],
 		turn: item.turn,
 		turnReason: item.turnReason,
 		waitingSince: item.waitingSince,
@@ -128,8 +134,6 @@ export function itemInView(
 		actionUrl: item.actionUrl,
 		priority: item.priority,
 		dismissed: item.dismissed,
-		keptAfterClose: item.keptAfterClose,
-		keptSections: item.keptSections?.filter((id) => id === view.id),
 		muted: item.muted,
 		changes: item.changes?.map(({ kind, text, tone, labels }) => ({
 			kind,

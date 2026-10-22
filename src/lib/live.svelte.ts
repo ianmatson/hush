@@ -19,8 +19,8 @@ function apply(m: LiveMessage) {
 	switch (m.type) {
 		case 'alerts':
 			return queryClient.invalidateQueries({ queryKey: keys.alerts });
-		case 'dash':
-			return queryClient.invalidateQueries({ queryKey: keys.dash(m.kind) });
+		case 'items':
+			return queryClient.invalidateQueries({ queryKey: keys.items });
 		case 'settings':
 			return queryClient.invalidateQueries({ queryKey: keys.me });
 		case 'syncing':
@@ -91,7 +91,7 @@ export function connectLive(): () => void {
 			if (appInUse()) ws?.send(APP_FOCUS_MESSAGE);
 			backoff = 1000;
 			ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send('ping'), PING_EVERY);
-			for (const queryKey of [keys.dashAll, keys.alerts, keys.me])
+			for (const queryKey of [keys.items, keys.alerts, keys.me])
 				void queryClient.invalidateQueries({ queryKey });
 		};
 		ws.onmessage = (e) => {

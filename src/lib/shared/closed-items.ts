@@ -25,11 +25,6 @@ export const closedTimeOf = (i: ClosedTimes) => i.closedAt ?? i.updatedAt;
 export const stillKept = (i: ClosedTimes, now: number) =>
 	now - Date.parse(closedTimeOf(i)) < KEEP_CLOSED_MS;
 
-export const keptAfterChange = (
-	before: Pick<DashItem, 'state' | 'keptAfterClose'>,
-	after: Pick<DashItem, 'state'>
-) => after.state !== 'open' && (before.state === 'open' || !!before.keptAfterClose);
-
 export const newestCloseFirst = (a: ClosedTimes, b: ClosedTimes) =>
 	Date.parse(closedTimeOf(b)) - Date.parse(closedTimeOf(a));
 

@@ -2,7 +2,7 @@ import { projectAccessOf, type ProjectEdit } from '../../src/lib/shared/projects
 import { isGitHubName, isNodeId } from '../../src/lib/shared/item-page';
 import { scopesOf, userToken } from '../db';
 import { editProject, projectsOf } from '../projects';
-import { routes, poller, json } from '../app';
+import { routes, workspace, json } from '../app';
 import { writeBlockForProjects } from '../write-gate';
 
 function validEdit(b: Partial<ProjectEdit> & Record<string, unknown>): ProjectEdit | null {
@@ -51,7 +51,7 @@ const app = routes()
 		const error = await editProject(await userToken(c.env, u), edit);
 		if (error) return c.json({ error }, 422);
 		c.executionCtx.waitUntil(
-			poller(c.env, u.id)
+			workspace(c.env, u.id)
 				.rebuildBoards()
 				.catch((err) => console.error('board rebuild failed', (err as Error).message))
 		);

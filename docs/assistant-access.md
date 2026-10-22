@@ -146,15 +146,14 @@ to MCP/OAuth paths. Normal Hush budgets and body sizes do not change.
 
 ## Passive reads and output boundaries
 
-The exported `Poller` has a private lazy active engine. Its constructor does
-not migrate. `savedViewsSnapshot` directly uses the storage reader and never
-initializes that engine. Existing UI RPCs, alarms, and socket events initialize
-the active engine before their existing behavior. Passive reads require the
-stored user ID and exact supported schema. Missing, old, unknown, or newer
-schemas fail without migration, reset, alarm, or writes.
+The exported `Workspace` opens its engine lazily. `savedViewsSnapshot` reads
+storage directly and never opens the engine. UI RPCs, alarms, and socket events
+open the engine first. Passive reads require the stored account to match the
+principal and the Workspace tables to exist; otherwise they fail without
+migration, reset, alarm, or writes.
 
-The reader uses KV caches and fixed SELECTs for subjects, snoozes and seen
-snapshots. It never decrypts GitHub tokens, fetches GitHub, marks read, touches
+The reader loads the Workspace tables with SELECTs and two KV values (the access
+version and legacy fingerprints). It never decrypts GitHub tokens, fetches GitHub, marks read, touches
 activity, resumes polling, refreshes sessions/caches, or writes facts, decisions,
 alerts, or last-used telemetry. Inspection of the pinned library confirms that
 `unwrapToken` and `validateToken` only read/decrypt token records. Validation uses
@@ -167,17 +166,14 @@ unrelated categories, category rules/settings, project fields, outside stack
 members, global errors, and outside counts are removed. Grouping uses full
 internal facts before filtering output.
 
-The snapshot reads materialized `dash:pr` and `dash:issue` caches. Shared dashboard
-helpers supply membership, grouping, sorting, closed-item retention, local
-snooze/mute, unread, and changes-since-seen behavior. Stale compatible data stays
-stale; incompatible caches return no items. A cached source signature that only
-differs in view display names or source order remains compatible, including
-signatures that still contain display names. The reader does not rewrite that
-cache. When more than 40 source queries exist, a reordered cache can still
-reflect the previously selected queries until the poller rebuilds it; those
-queries stay within approved views. Browser-local kind selection,
-category chips, collapsed groups, held rows, and stack rotation are not saved
-configuration and are not reproduced.
+The snapshot evaluates the stored items, search results, and view state with the
+same pure evaluator as the app (`src/lib/model`), so membership, grouping,
+sorting, closed-item retention, snooze/mute, unread, and changes-since-seen match
+the app for the same stored revision and time. Stale data stays stale: `get_view`
+reports it in `freshness` (stale, unknown, or truncated searches, and skipped
+team searches). Browser-local kind selection, category chips, collapsed groups,
+held rows, and stack rotation are not saved configuration and are not
+reproduced.
 
 `list_views({ limit?, cursor? })` returns granted definitions in saved order.
 `get_view({ view_id, kind?: 'both' | 'pr' | 'issue', limit?, cursor? })` returns

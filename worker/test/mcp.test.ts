@@ -6,7 +6,7 @@ import {
 	legacyFingerprintView,
 	type LegacyViewFingerprints
 } from '../../src/lib/shared/view-authorization';
-import { DEFAULT_SETTINGS, parseSettings } from '../../src/lib/shared/settings';
+import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import type { Settings } from '../../src/lib/shared/types';
 import type { AccessGrant } from '../assistant/oauth';
 
@@ -260,6 +260,7 @@ describe('MCP OAuth and passive transport', () => {
 		const legacy = f.values.get('mcpLegacyViewFingerprints') as LegacyViewFingerprints;
 		expect(legacy).toEqual({ accessVersion: 'existing-random-epoch', views: { mine: original } });
 		const before = JSON.stringify([...f.values]);
+		const settingsBefore = f.storedSettings();
 		f.settingsWrites.mockImplementationOnce(() => {
 			throw new Error('Synthetic write failure');
 		});
@@ -269,6 +270,7 @@ describe('MCP OAuth and passive transport', () => {
 			})
 		).rejects.toThrow('Synthetic write failure');
 		expect(JSON.stringify([...f.values])).toBe(before);
+		expect(f.storedSettings()).toEqual(settingsBefore);
 		await Promise.all([
 			f.writer.updateSettings({
 				views: [{ ...f.settings.views[0], searches: ['repo:sandbox/other'] }]
@@ -279,7 +281,7 @@ describe('MCP OAuth and passive transport', () => {
 		expect(final.accessVersion).toBe(f.values.get('mcpAccessVersion'));
 		expect(final.accessVersion).not.toBe(legacy.accessVersion);
 		expect(final.views).toEqual({});
-		expect(parseSettings(f.values.get('settings') as string).views[0].name).toBe('Third');
+		expect(f.storedSettings().views[0].name).toBe('Third');
 	});
 
 	it('replaces a missing legacy-initial epoch on a default save and never reuses it after reset', async () => {

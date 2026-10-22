@@ -9,7 +9,7 @@ describe('feed links', () => {
 			DB: {
 				prepare: () => ({ bind: () => ({ first: async () => ({ user_id: 1, view: 'mine' }) }) })
 			},
-			POLLER: {
+			WORKSPACE: {
 				idFromName: () => 'poller',
 				get: () => ({ feedEntries: async () => ({ name: 'Mine', entries: [] }) })
 			}

@@ -53,7 +53,7 @@ Hush pushes facts, not guesses. Each time Hush reads a pull request or issue fro
 - Your own actions never push. Comments and reviews by bots never push.
 - A muted item never pushes. An item that you snoozed until a time or until something happens pushes only when its snooze ends.
 - The first time Hush reads an item, it pushes only for events of the last hour.
-- **Push new items**: each view also has its own switch, in **Settings → Views**. With it on, Hush pushes when a pull request or issue shows up in that view for the first time. Items that you opened do not push. When you change a view's searches, the items that it finds then do not push.
+- **Push new items**: each view also has its own switch, in **Settings → Views**. With it on, Hush pushes when a pull request or issue comes into that view, also when it comes back after it left. Items that you opened do not push. When you change a view's searches, the items that it finds then do not push. After a pause, the items that Hush finds again do not push.
 
 To get fewer pushes, turn off facts, [mute](/docs/pull-requests-and-issues#snooze) items that you do not want to hear about, or use the digest and the limit below.
 

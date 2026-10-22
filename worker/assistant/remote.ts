@@ -40,8 +40,8 @@ export async function remoteMcp(request: Request, env: Env): Promise<Response> {
 	const read = async () => {
 		const current = await auth.validate(token);
 		if (!current || current.id !== grant.id) throw new Error('Access revoked');
-		const snapshot = await env.POLLER.get(
-			env.POLLER.idFromName(String(user.id))
+		const snapshot = await env.WORKSPACE.get(
+			env.WORKSPACE.idFromName(String(user.id))
 		).savedViewsSnapshot({ userId: user.id, login: user.login });
 		if (snapshot.accessVersion !== current.accessVersion) throw new Error('Access revoked');
 		return snapshot;

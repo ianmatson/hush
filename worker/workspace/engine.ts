@@ -24,6 +24,7 @@ import type { ChannelOutcome, WorkspaceStore } from './store';
 import {
 	analysisSpent,
 	analysisUsed,
+	ALERT_HISTORY_MS,
 	ANALYSIS_RETRY_MS,
 	bringDiscoveryForward,
 	claimReads,
@@ -58,7 +59,6 @@ import {
 
 export const SYNC_KEY = 'sync';
 export const FORGET_AFTER_MS = 30 * DAY_MS;
-export const ALERT_HISTORY_MS = 30 * DAY_MS;
 export const MAX_DEPARTURE_READS = 50;
 export const MAX_PROJECT_READS = 200;
 export const RUN_CALL_BUDGET = 40;
@@ -267,6 +267,16 @@ export class WorkspaceEngine {
 		const sourcesDue = { ...this.sync.sourcesDue };
 		for (const board of boards) sourcesDue[board.spec.id] = now;
 		this.saveSync({ ...this.sync, sourcesDue, projectsDue: now });
+	}
+
+	refreshEverything(now: number) {
+		const sourcesDue = Object.fromEntries(Object.keys(this.sync.sourcesDue).map((id) => [id, now]));
+		this.saveSync({
+			...this.sync,
+			sourcesDue,
+			projectsDue: now,
+			notifications: { ...this.sync.notifications, dueAt: now }
+		});
 	}
 
 	refreshTeamsSoon(now: number) {

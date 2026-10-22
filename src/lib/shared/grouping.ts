@@ -282,11 +282,11 @@ export function groupWithClosed(
 	ctx: GroupContext,
 	closedLabel: string
 ): Section[] {
-	const kept = items.filter((i) => i.keptAfterClose).sort(newestCloseFirst);
+	const kept = items.filter((i) => i.retained).sort(newestCloseFirst);
 	const closed = kept.length ? [{ key: CLOSED_SECTION, label: closedLabel, items: kept }] : [];
 	return [
 		...groupItems(
-			items.filter((i) => !i.keptAfterClose),
+			items.filter((i) => !i.retained),
 			by,
 			ctx
 		),

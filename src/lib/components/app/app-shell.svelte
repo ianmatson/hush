@@ -34,7 +34,7 @@
 		if (takeSearchParams('signed_in').signed_in !== '1') return;
 		justSignedIn = true;
 		// A new sign-in can mean a new token: what this browser cached may be out of date.
-		for (const queryKey of [keys.dashAll, keys.teams]) queryClient.invalidateQueries({ queryKey });
+		for (const queryKey of [keys.items, keys.teams]) queryClient.invalidateQueries({ queryKey });
 	});
 	$effect(() => {
 		if (!justSignedIn || !me.data) return;

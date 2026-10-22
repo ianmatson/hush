@@ -5,10 +5,15 @@ import { sortItemsBy, sortOfView } from './sorting';
 import type { CategoryGroup, DashItem, DashKind, ItemView } from './types';
 
 export const inSavedView = (item: DashItem, view: ItemView) =>
-	item.sections.includes(view.id) && (keepsClosed(view) || !item.keptAfterClose);
+	item.views.includes(view.id) || (keepsClosed(view) && item.retainedIn.includes(view.id));
 
 export const inViewPopulation = (item: DashItem, view: ItemView, showSnoozed = false) =>
 	item.dismissed === showSnoozed && inSavedView(item, view);
+
+export const asSeenIn = (item: DashItem, view: ItemView): DashItem => ({
+	...item,
+	retained: !item.views.includes(view.id)
+});
 
 export function viewPopulation(
 	items: DashItem[],
@@ -17,11 +22,13 @@ export function viewPopulation(
 	categoryFilter: CategoryFilter[] = [],
 	showSnoozed = false
 ): DashItem[] {
-	return items.filter(
-		(item) =>
-			inViewPopulation(item, view, showSnoozed) &&
-			matchesCategoryFilters(item.categories, categoryFilter, categoryGroups)
-	);
+	return items
+		.filter(
+			(item) =>
+				inViewPopulation(item, view, showSnoozed) &&
+				matchesCategoryFilters(item.categories, categoryFilter, categoryGroups)
+		)
+		.map((item) => asSeenIn(item, view));
 }
 
 export function savedViewSections(

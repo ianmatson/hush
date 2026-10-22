@@ -45,19 +45,15 @@ function seed(view: CompiledView, previous: ViewState, found: Membership, ctx: T
 		const window = usableWindow(ctx.sources.get(clause.sourceId), ctx.now);
 		for (const candidate of window?.candidates ?? []) baseline.add(candidate.id);
 	}
-	const candidatesOf = (keep: (binding: string) => boolean) =>
+	const acceptedWhere = (keep: (binding: string) => boolean) =>
 		new Set(
-			view.clauses
-				.filter((clause) => keep(clause.binding))
-				.flatMap(
-					(clause) =>
-						usableWindow(ctx.sources.get(clause.sourceId), ctx.now)?.candidates.map((c) => c.id) ??
-						[]
-				)
+			[...found.acceptedBy]
+				.filter(([binding]) => keep(binding))
+				.flatMap(([, accepted]) => [...accepted])
 		);
-	const settled = candidatesOf((binding) => !awaiting.has(binding));
+	const settled = acceptedWhere((binding) => !awaiting.has(binding));
 	const awaitingOnly = new Set(
-		[...candidatesOf((binding) => awaiting.has(binding))].filter((id) => !settled.has(id))
+		[...acceptedWhere((binding) => awaiting.has(binding))].filter((id) => !settled.has(id))
 	);
 	return { seeded, baseline, awaiting, awaitingOnly };
 }

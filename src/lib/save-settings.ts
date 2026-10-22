@@ -51,7 +51,7 @@ export async function applySettings(patch: SettingsPatch, replace = false): Prom
 		void queryClient.invalidateQueries({ queryKey: keys.me });
 		throw err;
 	}
-	if (patch.dash || replace) void queryClient.invalidateQueries({ queryKey: keys.dashAll });
+	if (patch.dash || replace) void queryClient.invalidateQueries({ queryKey: keys.items });
 }
 
 export async function saveSettings(

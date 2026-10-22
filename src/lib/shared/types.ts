@@ -1,4 +1,5 @@
 import type { Activity } from './activity';
+import type { Snapshot } from './changes';
 import type { SnoozeChoice } from './item-snooze';
 // Types shared by the Worker (worker/) and the SPA (src/).
 
@@ -255,7 +256,7 @@ export interface StackLink {
 	draft: boolean;
 }
 
-export interface DashItem {
+export interface TurnedItem {
 	id: string;
 	kind: DashKind;
 	number: number;
@@ -301,10 +302,6 @@ export interface DashItem {
 	urgent?: boolean;
 	categories?: string[];
 	pinnedCategories?: string[];
-	// Computed.
-	sections: string[];
-	sourceFilters?: Record<string, string[]>;
-	sourceQueries?: string[];
 	turn: Turn;
 	turnReason: string;
 	/** When the current turn started, best estimate. */
@@ -315,8 +312,6 @@ export interface DashItem {
 	/** Lower sorts first inside a turn group. */
 	priority: number;
 	dismissed: boolean;
-	keptAfterClose?: boolean;
-	keptSections?: string[];
 	/** You muted it: hidden until you unmute it (not until it changes). */
 	muted?: boolean;
 	/** What changed since you last looked (none before your first look). */
@@ -327,6 +322,16 @@ export interface DashItem {
 	snooze?: SnoozeChoice;
 	projectStatus?: Record<string, string | null>;
 	projectStatusUnknown?: boolean;
+}
+
+export interface DashItem extends TurnedItem {
+	itemId: string;
+	revision: number;
+	baseline: Snapshot;
+	analysisStale: boolean;
+	retained: boolean;
+	views: string[];
+	retainedIn: string[];
 }
 
 export interface DashProjectStatus {
@@ -340,34 +345,6 @@ export interface DashProject {
 	title: string;
 	url: string;
 	statuses: DashProjectStatus[];
-}
-
-export type DashSourceItem = Pick<
-	DashItem,
-	| 'id'
-	| 'updatedAt'
-	| 'sections'
-	| 'sourceFilters'
-	| 'sourceQueries'
-	| 'keptAfterClose'
-	| 'keptSections'
-	| 'projectStatus'
-	| 'projectStatusUnknown'
->;
-
-export interface DashResponse {
-	kind: DashKind;
-	items: DashItem[];
-	sourceItems?: DashSourceItem[];
-	projectErrors?: string[];
-	sourceFailures?: Record<string, number>;
-	sections: { id: string; name: string; count: number; skipped?: string }[];
-	teams: TeamDTO[];
-	fetchedAt: number;
-	errors: string[];
-	/** This is the saved list; a new one is on its way (a live message says when). */
-	refreshing?: boolean;
-	projects?: DashProject[];
 }
 
 export interface FeedDTO {
@@ -471,7 +448,7 @@ export interface PeekEntry {
 
 /** One alert from the history (the bell). */
 export interface AlertDTO {
-	id: number;
+	id: string;
 	sentAt: number;
 	title: string;
 	body: string;
@@ -564,7 +541,7 @@ export interface PeekStack {
  */
 export type LiveMessage =
 	| { type: 'alerts' }
-	| { type: 'dash'; kind: DashKind }
+	| { type: 'items'; revision: number; views: string[] }
 	| { type: 'settings' }
 	/** A poll started (on) or ended: open tabs show "Syncing…". */
 	| { type: 'syncing'; on: boolean }

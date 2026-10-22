@@ -50,7 +50,9 @@ const item = (id: string, over: Partial<DashItem> = {}): DashItem =>
 		requestedTeams: [],
 		myLastReviewAt: null,
 		categories: [],
-		sections: ['mine'],
+		views: ['mine'],
+		retainedIn: [],
+		retained: false,
 		turn: 'them',
 		turnReason: 'Waiting',
 		priority: 1,
@@ -73,9 +75,14 @@ const items = [
 	}),
 	item('a', { requestedMe: true, categories: ['low'], turn: 'you', priority: 0, comments: 5 }),
 	item('b', { kind: 'issue', assignees: ['ian'], labels: [{ name: 'bug', color: 'red' }] }),
-	item('closed', { state: 'merged', keptAfterClose: true, closedAt: '2026-10-21T00:00:00Z' }),
+	item('closed', {
+		state: 'merged',
+		views: [],
+		retainedIn: ['mine'],
+		closedAt: '2026-10-21T00:00:00Z'
+	}),
 	item('muted', { dismissed: true, muted: true }),
-	item('other', { sections: ['other'] })
+	item('other', { views: ['other'] })
 ];
 const shape = (v: ItemView) =>
 	savedViewSections(viewPopulation(items, v, groups), v, context, ['pr', 'issue']).map((s) => [
@@ -145,13 +152,14 @@ describe('shared saved view projection', () => {
 							sort,
 							sections: [{ name: 'Opened', rule: 'author:ian' }]
 						};
-						const oldPopulation = items.filter(
-							(i) =>
-								i.dismissed === false &&
-								i.sections.includes(v.id) &&
-								(keepsClosed(v) || !i.keptAfterClose) &&
-								matchesCategoryFilters(i.categories, [], groups)
-						);
+						const oldPopulation = items
+							.filter(
+								(i) =>
+									i.dismissed === false &&
+									(i.views.includes(v.id) || (keepsClosed(v) && i.retainedIn.includes(v.id))) &&
+									matchesCategoryFilters(i.categories, [], groups)
+							)
+							.map((i) => ({ ...i, retained: !i.views.includes(v.id) }));
 						const before = groupWithClosed(
 							sortItemsBy(oldPopulation, sortOfView(v)),
 							groupBy,

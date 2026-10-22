@@ -11,8 +11,8 @@ import type { Settings } from '../../src/lib/shared/types';
 import type { ItemId } from '../../src/lib/model/types';
 import type { PushMessage } from '../webpush';
 import type { StoredAlert } from './store';
+import { MAX_INDIVIDUAL_PUSHES } from './work';
 
-export const MAX_INDIVIDUAL_PUSHES = 3;
 export const DIGEST_LINES = 4;
 export const QUIET_RECHECK_MS = 5 * MINUTE_MS;
 

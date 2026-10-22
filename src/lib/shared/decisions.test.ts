@@ -359,7 +359,7 @@ const needsReply = { commentsNeedMe: true, urgent: false, smart: [], choices: {}
 
 describe('turns with comment answers', () => {
 	const turnOf = (s: SubjectFacts, d = NO_DECISIONS) =>
-		computeTurn(dashFactsOf(s, ME, new Set(), d), ME, []);
+		computeTurn(dashFactsOf(s, ME, new Set(), d), ME);
 
 	it('a comment on your PR that needs nothing from you is not your turn', () => {
 		expect(turnOf(pr()).turn).toBe('you');

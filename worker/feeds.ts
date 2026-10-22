@@ -8,7 +8,7 @@ export async function renderFeed(env: Env, token: string): Promise<Response> {
 		.bind(await sha256(token))
 		.first<{ user_id: number; view: string }>();
 	if (!feed) return new Response('Not found', { status: 404 });
-	const tab = await env.POLLER.get(env.POLLER.idFromName(String(feed.user_id))).feedEntries(
+	const tab = await env.WORKSPACE.get(env.WORKSPACE.idFromName(String(feed.user_id))).feedEntries(
 		feed.view
 	);
 	if (!tab) return new Response('Not found', { status: 404 });

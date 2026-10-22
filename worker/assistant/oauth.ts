@@ -162,8 +162,8 @@ export class McpAuthorization extends DurableObject<Env> {
 	}
 
 	#snapshot(principal: SnapshotPrincipal): Promise<SavedViewsSnapshot> {
-		return this.env.POLLER.get(
-			this.env.POLLER.idFromName(String(principal.userId))
+		return this.env.WORKSPACE.get(
+			this.env.WORKSPACE.idFromName(String(principal.userId))
 		).savedViewsSnapshot({ userId: principal.userId, login: principal.login });
 	}
 

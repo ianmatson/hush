@@ -24,6 +24,8 @@ export const READ_RETRY_BASE_MS = MINUTE_MS;
 export const READ_RETRY_MAX_MS = 30 * MINUTE_MS;
 export const MAX_NOTIFICATION_VERSIONS = 1000;
 export const MAX_ANALYSIS_QUEUE = 200;
+export const ALERT_HISTORY_MS = 30 * DAY_MS;
+export const MAX_INDIVIDUAL_PUSHES = 3;
 export const ANALYSIS_BATCH = 12;
 export const ANALYSIS_RETRY_MS = 5 * MINUTE_MS;
 
