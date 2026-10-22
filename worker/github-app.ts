@@ -3,6 +3,7 @@ import type { Env } from './db';
 import { gh } from './github';
 
 export const INSTALLATIONS_TTL_MS = 5 * MINUTE_MS;
+export const MAX_PAGES = 10;
 const JWT_LIFETIME_S = 9 * 60;
 const CLOCK_SKEW_S = 60;
 
@@ -60,11 +61,22 @@ type InstallationRow = {
 	repository_selection: 'all' | 'selected';
 };
 
+export async function allPages<T>(token: string, path: string): Promise<T[]> {
+	const rows: T[] = [];
+	let url: string | null = `${path}${path.includes('?') ? '&' : '?'}per_page=100`;
+	for (let page = 0; url && page < MAX_PAGES; page++) {
+		const res = await gh(token, url);
+		if (!res.ok) throw new Error(`GitHub returned ${res.status} for ${path}.`);
+		rows.push(...((await res.json()) as T[]));
+		url = res.headers.get('Link')?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
+	}
+	return rows;
+}
+
 export async function appInstallations(env: Env, now = Date.now()): Promise<AppInstallation[]> {
 	if (cached && now - cached.at < INSTALLATIONS_TTL_MS) return cached.installations;
-	const res = await gh(await appJwt(env, now), '/app/installations?per_page=100');
-	if (!res.ok) throw new Error(`GitHub returned ${res.status} for the app installations.`);
-	const installations = ((await res.json()) as InstallationRow[]).map((row) => ({
+	const rows = await allPages<InstallationRow>(await appJwt(env, now), '/app/installations');
+	const installations = rows.map((row) => ({
 		id: row.id,
 		accountId: row.account.id,
 		suspended: row.suspended_at !== null,

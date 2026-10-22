@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api } from '$lib/api';
-	import { keys, meQuery, queryClient, webhooksQuery } from '$lib/queries';
+	import { meQuery, webhooksQuery } from '$lib/queries';
+	import { refreshWebhooksAfterInstall } from '$lib/webhook-install';
 	import { takeSearchParams } from '$lib/search-params';
 	import type { WebhookAccount } from '$lib/shared/types';
 	import { ago } from '$lib/time';
@@ -32,10 +32,12 @@
 
 	onMount(() => {
 		if (!takeSearchParams(INSTALLED_PARAM)[INSTALLED_PARAM]) return;
-		void queryClient
-			.fetchQuery({ queryKey: keys.webhooks, queryFn: () => api.webhooks(true) })
-			.then(() => document.getElementById(CARD_ID)?.scrollIntoView({ block: 'start' }));
-		toast.success('The Hush GH app is installed. Items you track there now update in seconds.');
+		refreshWebhooksAfterInstall()
+			.then(() => {
+				toast.success('The Hush GH app is installed. Items you track there now update in seconds.');
+				document.getElementById(CARD_ID)?.scrollIntoView({ block: 'start' });
+			})
+			.catch((err: Error) => toast.error(err.message));
 	});
 </script>
 

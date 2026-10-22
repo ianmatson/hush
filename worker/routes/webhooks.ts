@@ -1,8 +1,12 @@
 import type { WebhookAccess, WebhookAccount } from '../../src/lib/shared/types';
 import { overLimit, query, routes, workspace } from '../app';
 import { appToken, userToken } from '../db';
-import { appInstallations, forgetInstallations, type AppInstallation } from '../github-app';
-import { gh } from '../github';
+import {
+	allPages,
+	appInstallations,
+	forgetInstallations,
+	type AppInstallation
+} from '../github-app';
 import { routeKeysOf, validSignature, webhooksEnabled, type WebhookPayload } from '../webhooks';
 import { routedUsers } from '../workspace/routes';
 
@@ -35,13 +39,16 @@ const app = routes()
 		if (c.req.query('refresh') === '1') forgetInstallations();
 		const user = c.get('user');
 		const token = (await appToken(c.env, user)) ?? (await userToken(c.env, user));
-		const [orgsRes, installations] = await Promise.all([
-			gh(token, '/user/orgs?per_page=100'),
-			appInstallations(c.env)
-		]);
-		if (!orgsRes.ok)
-			return c.json({ error: `GitHub returned ${orgsRes.status} for your orgs.` }, 502);
-		const orgs = (await orgsRes.json()) as { login: string; id: number }[];
+		let orgs: { login: string; id: number }[];
+		let installations: AppInstallation[];
+		try {
+			[orgs, installations] = await Promise.all([
+				allPages<{ login: string; id: number }>(token, '/user/orgs'),
+				appInstallations(c.env)
+			]);
+		} catch (error) {
+			return c.json({ error: (error as Error).message }, 502);
+		}
 		const accounts = [
 			{ login: user.login, id: user.id, kind: 'user' as const },
 			...orgs.map((org) => ({ login: org.login, id: org.id, kind: 'org' as const }))

@@ -86,6 +86,35 @@ describe('appInstallations', () => {
 	});
 });
 
+describe('allPages', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('follows the next links, so an installation on page two counts', async () => {
+		forgetInstallations();
+		const pages = [
+			[{ id: 1, account: { id: 10 }, suspended_at: null, repository_selection: 'all' }],
+			[{ id: 2, account: { id: 42 }, suspended_at: null, repository_selection: 'selected' }]
+		];
+		const calls: string[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				calls.push(url);
+				const second = url.includes('page=2');
+				return new Response(JSON.stringify(pages[second ? 1 : 0]), {
+					status: 200,
+					headers: second
+						? {}
+						: { Link: '<https://api.github.com/app/installations?per_page=100&page=2>; rel="next"' }
+				});
+			})
+		);
+		const installations = await appInstallations(appEnv(), NOW);
+		expect(installations.map((i) => i.accountId)).toEqual([10, 42]);
+		expect(calls).toHaveLength(2);
+	});
+});
+
 describe('GET /api/account/webhooks', () => {
 	beforeEach(() => forgetInstallations());
 	afterEach(() => vi.unstubAllGlobals());
