@@ -43,7 +43,7 @@
 	});
 </script>
 
-{#if access || webhooks.isPending}
+{#if access || webhooks.isPending || webhooks.isError}
 	<Card.Root id={CARD_ID} class="scroll-mt-20">
 		<Card.Header>
 			<Card.Title>Webhook updates</Card.Title>
@@ -75,6 +75,10 @@
 						</li>
 					{/each}
 				</ul>
+			{:else if webhooks.isError}
+				<p role="alert" class="text-xs text-destructive">
+					Could not load the accounts: {webhooks.error.message}
+				</p>
 			{:else}
 				<ListSkeleton rows={LIKELY_ACCOUNT_COUNT} label="Loading accounts" />
 			{/if}

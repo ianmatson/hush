@@ -65,7 +65,7 @@
 	});
 </script>
 
-{#if slack.data?.available || mentions?.available || slack.isPending}
+{#if slack.data?.available || mentions?.available || slack.isPending || slack.isError}
 	<Card.Root id="slack">
 		<Card.Header>
 			<Card.Title>Slack</Card.Title>
@@ -87,6 +87,10 @@
 					</div>
 					<Skeleton class="h-7 w-24 shrink-0" />
 				</div>
+			{:else if slack.isError}
+				<p role="alert" class="text-xs text-destructive">
+					Could not load Slack: {slack.error.message}
+				</p>
 			{/if}
 			{#if slack.data?.available}
 				<div class="flex items-center justify-between gap-4">

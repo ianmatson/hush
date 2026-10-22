@@ -287,13 +287,13 @@
 						<p class="text-xs leading-relaxed text-muted-foreground">
 							Missing an org? GitHub hides every org that has not approved Hush, so Hush cannot list
 							those.
-							<a
-								class="underline underline-offset-2 hover:text-foreground"
-								href={approveUrl}
-								target="_blank"
-								rel="noreferrer">Request approval</a
-							>{#if custom}. Your custom token can read it until then.{:else}, or use a custom token
-								until then.{/if}
+							{#if approveUrl}<a
+									class="underline underline-offset-2 hover:text-foreground"
+									href={approveUrl}
+									target="_blank"
+									rel="noreferrer">Request approval</a
+								>{:else}<span>Request approval</span>{/if}{#if custom}. Your custom token can read
+								it until then.{:else}, or use a custom token until then.{/if}
 							{#if orgNote.off}
 								<button
 									type="button"
