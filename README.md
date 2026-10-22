@@ -119,7 +119,7 @@ SLACK_MENTIONS_CLIENT_SECRET=…
 
 ### Webhooks from the GitHub App (optional)
 
-A GitHub App sends webhooks for the orgs that install it ([plan](plans/github-app-webhooks.md)). It does not replace the OAuth app: sign-in, reads, searches, and notifications still use each user's OAuth token. A webhook only makes the Workspaces that track the item read it again. Without `GITHUB_APP_ID` and `GITHUB_WEBHOOK_SECRET` the feature is off: `/api/github/webhook` answers 404 and the daily cron does nothing.
+A GitHub App sends webhooks for the orgs that install it (built in #93 and #94). It does not replace the OAuth app: sign-in, reads, searches, and notifications still use each user's OAuth token. A webhook only makes the Workspaces that track the item read it again. Without `GITHUB_APP_ID` and `GITHUB_WEBHOOK_SECRET` the feature is off: `/api/github/webhook` answers 404 and the daily cron does nothing.
 
 Local development uses **Hush GH (dev)** (`hush-gh-dev`, installable only on `@ianmatson`). Its permissions are read-only Metadata, Pull requests, Issues, and Checks, and it subscribes to Check suite, Issue comment, Issues, Pull request, Pull request review, Pull request review comment, and Pull request review thread. Add to `.dev.vars` (the private key as PKCS#8, on one line with `\n`):
 

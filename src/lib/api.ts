@@ -89,6 +89,8 @@ export const api = {
 	setToken: (token: string) => ok(client.api.account.token.$put({ json: { token } })),
 	/** The orgs your GitHub sign-in can see (GitHub omits orgs that have not approved Hush). */
 	orgs: () => ok(client.api.account.orgs.$get()),
+	webhooks: (refresh = false) =>
+		ok(client.api.account.webhooks.$get({ query: refresh ? { refresh: '1' } : {} })),
 	logout: () => ok(client.api.auth.logout.$post()),
 	deleteAccount: () => ok(client.api.account.$delete()),
 	sync: () => ok(client.api.sync.$post()),

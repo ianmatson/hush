@@ -373,6 +373,7 @@ export interface MeDTO {
 	lastPollAt: number | null;
 	nextPollAt: number | null;
 	lastPollError: string | null;
+	lastWebhookAt: number | null;
 	scopes: string[];
 	/** 'app': the token from Sign in with GitHub. 'own': a token you added in Settings. */
 	tokenSource: 'app' | 'own';
@@ -406,6 +407,18 @@ export interface SlackMentionsPageDTO {
  */
 export type OrgAccess =
 	{ available: false } | { available: true; orgs: string[]; approveUrl: string };
+
+export type WebhookInstallState = 'installed' | 'suspended' | 'missing';
+
+export interface WebhookAccount {
+	login: string;
+	kind: 'user' | 'org';
+	state: WebhookInstallState;
+	selection: 'all' | 'selected' | null;
+	url: string;
+}
+
+export type WebhookAccess = { available: false } | { available: true; accounts: WebhookAccount[] };
 
 // --- Peek: one PR or issue in the side panel, with actions on it ---------------------
 

@@ -5,7 +5,7 @@ description: What Hush stores about you, where it keeps it, who else sees it, an
 
 Hush is a small open-source app. It runs your GitHub searches and reads your GitHub notifications so that it can show your lists and push what changed, and that is all it uses your data for. It has no ads and no analytics, and it does not sell or share your data. Everything below is also in [the source code](https://github.com/ianmatson/hush).
 
-_Last updated: 12 October 2026._
+_Last updated: 22 October 2026._
 
 ## The short version
 
@@ -30,6 +30,7 @@ _Last updated: 12 October 2026._
 - The categories of your pull requests and issues, and the ones that you chose by hand.
 - The results of your searches, and the items that you snoozed or muted.
 - Your teams (their names), for team review requests.
+- For each pull request and issue that you track: its repository id and number, so that change events from the [Hush GH app](/docs/github-access#webhook-updates) reach your lists. Hush keeps this list also when none of your orgs installed the app, and deletes it when Hush stops polling for you. From each event, Hush reads only the event name, its action, the installation id, the repository id, and the item numbers. It does not store the events.
 
 The [peek](/docs/peek) shows a PR's whole description and all its comments when you open it, and its changed files when you open the **Files** tab. Hush gets them from GitHub at that moment and does not keep them. Hush reads no other code.
 
@@ -65,12 +66,12 @@ Hush deletes this when:
 
 ## Where it is kept
 
-Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your lists, settings, alerts, and devices are in a database of their own for your account (a Cloudflare Durable Object). Your account, sessions, and feeds are in one shared database (Cloudflare D1).
+Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your lists, settings, alerts, and devices are in a database of their own for your account (a Cloudflare Durable Object). Your account, sessions, feeds, and the repository id and number of the items that you track for webhook updates are in one shared database (Cloudflare D1).
 
 ## Who else sees it
 
 - **GitHub**, where your data comes from. Hush sends GitHub only the requests that it needs, with your token. The app shows avatars and the images in comments from GitHub's own servers, so GitHub also sees those requests from your browser.
-- **Cloudflare**, which runs Hush and stores its data. Cloudflare also keeps request logs (addresses, status codes, and errors) for a few days, which Hush uses to find bugs.
+- **Cloudflare**, which runs Hush and stores its data. Cloudflare also keeps request logs (addresses, status codes, and errors) for a few days, which Hush uses to find bugs. For each event from the Hush GH app, the log also has the event name, its action, the installation id, and how many people it reached, but no repository, item, or person.
 - **The people who can see the repository**, for an image or video that you add to a comment. Hush uploads it to GitHub, as github.com does. In a public repository, anyone with its link can see it. Hush cannot delete it from GitHub.
 - **Slack**, if you connect it. Hush sends it your alerts, and, for mentions in the peek, a search for the PR or issue that you open.
 - **Your browser's push service** (Apple, Google, Mozilla, or Microsoft) carries each push to your device. The message is encrypted for your device, so the push service cannot read it; it sees only that a message went to it.

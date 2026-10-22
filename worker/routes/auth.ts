@@ -299,6 +299,7 @@ const app = routes()
 			lastPollAt: status.lastPollAt,
 			nextPollAt: status.nextPollAt,
 			lastPollError: status.lastError,
+			lastWebhookAt: status.lastWebhookAt,
 			smartDecisionsPaused: !!status.smartDecisionsPaused,
 			smartDecisionsChecking: !!status.smartDecisionsChecking,
 			scopes: scopesOf(u),

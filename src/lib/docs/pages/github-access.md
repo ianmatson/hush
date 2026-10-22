@@ -49,6 +49,18 @@ After you sign in, a note lists the orgs that Hush can see. The same list is in 
 
 If an org uses SAML SSO, GitHub asks you to authorize Hush for it when you sign in. If you did not, GitHub hides the org's private repositories, and your views do not show their items. Sign in again and authorize the org. For a custom token, choose **Configure SSO** next to the token on github.com/settings/tokens.
 
+## Webhook updates
+
+Hush learns about changes by polling: your notifications every 5 minutes, and the searches of your views every 15 minutes. An org can also install the **Hush GH** app. Then GitHub tells Hush at once when a pull request or issue in that org changes, and the items that you track there update in seconds. For everything else, polling continues as before.
+
+- **To install it,** go to **Settings → General → Webhook updates**. The card lists your own account and the orgs that your sign-in can see, with the state of the app on each. Choose **Install…**. On an org, GitHub shows **Request** to members who are not owners. An owner can install the app on all repositories or only on some.
+- **The app can only read** metadata, pull requests, issues, and checks. It cannot change anything on GitHub, and it gives Hush no access of its own: when an item changes, Hush reads it again with the access of each person who tracks it.
+- **The app does not replace the [org approval](#when-an-org-is-missing).** If an org has not approved Hush, Hush still cannot read the org's private items, and the app cannot change that.
+- **Polling still brings** new items (the next search of a view finds them), an item that joins or leaves a view because of a GitHub-only search term such as a label, CI results of pull requests from forks, and everything in orgs without the app.
+- **To remove it,** choose **Manage** next to the account, and then **Uninstall** on GitHub. Only an owner can uninstall it from an org.
+
+The card also shows when the last webhook for one of your items came in.
+
 ## Custom token
 
 A custom token is a token that you give Hush in place of your GitHub sign-in. Use one only when an org has not approved Hush yet.

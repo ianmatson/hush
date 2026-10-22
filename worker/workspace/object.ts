@@ -77,6 +77,7 @@ export interface PollStatus {
 	lastPollAt: number | null;
 	lastError: string | null;
 	nextPollAt: number | null;
+	lastWebhookAt: number | null;
 	smartDecisionsPaused: boolean;
 	smartDecisionsChecking: boolean;
 }
@@ -398,6 +399,7 @@ export class Workspace extends DurableObject<Env> {
 			lastPollAt: sync.notifications.lastPollAt,
 			lastError: sync.lastError,
 			nextPollAt: sync.lifecycle === 'active' ? sync.notifications.dueAt : null,
+			lastWebhookAt: sync.lastWebhookAt ?? null,
 			smartDecisionsPaused:
 				sync.retryAt.ai > now && sync.analysisUsage.tokens >= dailyTokenBudget(this.env),
 			smartDecisionsChecking: sync.analysis.length > 0
