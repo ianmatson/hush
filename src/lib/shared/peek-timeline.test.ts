@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	hiddenOlderCount,
-	keepLoadedOlder,
-	PEEK_TIMELINE_PAGE,
-	showOlderLabel,
-	withOlderPage
-} from './peek-timeline';
+import { hiddenOlderCount, keepLoadedOlder, withOlderPage } from './peek-timeline';
 import type { PeekDTO, PeekEntry } from './types';
 
 const entry = (id: string): PeekEntry => ({
@@ -76,26 +70,5 @@ describe('keepLoadedOlder', () => {
 	it('takes the fresh page when nothing is cached', () => {
 		const fresh = peek(['a'], 1, null);
 		expect(keepLoadedOlder(undefined, fresh)).toBe(fresh);
-	});
-});
-
-describe('showOlderLabel', () => {
-	it('counts a full page and the rest', () => {
-		const hidden = PEEK_TIMELINE_PAGE + 7;
-		expect(showOlderLabel(peek(['a'], hidden + 1, 'at-a'))).toBe(
-			`Show ${PEEK_TIMELINE_PAGE} older of ${hidden}`
-		);
-	});
-
-	it('counts the last page', () => {
-		expect(showOlderLabel(peek(['a'], 3, 'at-a'))).toBe('Show 2 older');
-	});
-
-	it('still offers older items when kept items that were deleted make the count wrong', () => {
-		expect(showOlderLabel(peek(['a', 'b', 'c'], 2, 'before-a'))).toBe('Show older');
-	});
-
-	it('offers nothing at the first item', () => {
-		expect(showOlderLabel(peek(['a'], 1, null))).toBeNull();
 	});
 });

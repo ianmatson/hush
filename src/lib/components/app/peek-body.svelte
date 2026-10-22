@@ -14,7 +14,7 @@
 	import { taskCheckboxes, type SavedTaskText } from '$lib/task-checkboxes';
 	import { keys } from '$lib/queries';
 	import { api } from '$lib/api';
-	import { hiddenOlderCount, showOlderLabel, withOlderPage } from '$lib/shared/peek-timeline';
+	import { hiddenOlderCount, withOlderPage } from '$lib/shared/peek-timeline';
 	import { setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
 	import { threadsByReview } from '$lib/shared/diff';
@@ -390,7 +390,7 @@
 						disabled={olderLoadingFor === shownSubject}
 						onclick={() => loadOlder(p.timeline.before)}
 					>
-						{olderLoadingFor === shownSubject ? 'Loading…' : showOlderLabel(p)}
+						{olderLoadingFor === shownSubject ? 'Loading…' : 'Show older'}
 					</button>
 				{:else if hiddenOlder}
 					<a

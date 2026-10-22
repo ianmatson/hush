@@ -15,7 +15,6 @@ import { isBot } from '../src/lib/shared/bots';
 import { ciRunning, ciWord } from '../src/lib/shared/ci';
 import { bodyExcerpt } from '../src/lib/shared/decisions';
 import { requestedByName, sameLogin } from '../src/lib/shared/logins';
-import { PEEK_TIMELINE_PAGE } from '../src/lib/shared/peek-timeline';
 import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts, TeamMention } from '../src/lib/shared/subject';
@@ -849,6 +848,8 @@ export const forTeams = (q: ExpandedQuery, s: SubjectFacts, me: string) =>
 
 // ---------------------------------------------------------------------------
 // Peek: one PR or issue with its description, checks, and latest comments. About 1 point.
+
+const PEEK_TIMELINE_PAGE = 25;
 
 const PERSON = `login avatarUrl(size: 48) __typename`;
 
