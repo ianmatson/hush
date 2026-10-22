@@ -55,6 +55,7 @@ export function itemInView(
 		kind: item.kind,
 		number: item.number,
 		title: item.title,
+		body: item.body,
 		url: item.url,
 		repo: item.repo,
 		author: item.author,

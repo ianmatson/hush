@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { flip } from 'svelte/animate';
 	import { fade } from 'svelte/transition';
+	import { labelInk } from '$lib/item-state';
 	import { buttonClass, cx } from './demo-ui';
 	import { demoKey } from './demo-keys';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -67,13 +68,6 @@
 	};
 	const REASON_SAYS_CI = /\bCI\b/;
 	const REASON_SAYS_REVIEW = /approved|changes|ready to merge/i;
-	const LIGHT_LABEL_LUMA = 0.6;
-
-	function labelInk(hex: string) {
-		const n = parseInt(hex, 16);
-		const luma = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-		return luma > LIGHT_LABEL_LUMA ? '#1a1a1a' : '#fff';
-	}
 </script>
 
 <ul class="grid grid-cols-[minmax(0,1fr)] gap-0.5" aria-label="Pull requests and issues">

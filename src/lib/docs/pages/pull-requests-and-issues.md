@@ -11,6 +11,10 @@ Each item is a card by default: its title, then its repository, author, and size
 
 The settings under the layout are for the layout you use. With cards, **Row contents** chooses the parts of each card. With the table, **Table columns** chooses the columns: the turn, the repository, the author, the category icons or names, CI, the size, the comment count, and the time. See [`rowLayout`](/docs/settings#rowlayout) and [`tableColumns`](/docs/settings#tablecolumns).
 
+### Hover card
+
+Hold the mouse pointer on a row for half a second to see its card: the full title, the state, whose turn it is and why, CI and reviews, the start of the description, all the labels and categories, the author, the assignees, and the review requests. Move to the next row and its card shows at once. The buttons on a row, and the parts that have their own tooltip, do not open the card. The card does not show for the item in the peek, and it does not show on touch screens. A key press, a click, or a scroll closes it. The rows of a stack in the peek show the card too.
+
 ## Group by
 
 The **Display** button, at the top right, has **Group by**, [Sort](#sort), and [Merged and closed](#merged-and-closed). Group by puts the list into sections. Each view keeps its own choice (the [`groupBy`](/docs/settings#views) of the view): **Mine** starts with **Your role**, and a new view with **Status**.

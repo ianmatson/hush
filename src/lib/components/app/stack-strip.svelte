@@ -4,6 +4,7 @@
 	import type { Turn } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
 	import { ciBadge } from '$lib/ci-badge';
+	import { itemHoverZone } from '$lib/item-hover.svelte';
 	import Layers from '@lucide/svelte/icons/layers';
 
 	let {
@@ -41,9 +42,11 @@
 		{#each membersTopFirst as m (m.key)}
 			{@const current = m.key === currentKey}
 			{@const ci = ciBadge(m.itemInList?.ci)}
+			{@const itemInList = m.itemInList}
 			<li>
 				<button
 					type="button"
+					{@attach itemInList ? itemHoverZone(() => ({ item: itemInList, marks: [] })) : undefined}
 					class={cn(
 						'flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs transition-colors',
 						current

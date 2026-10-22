@@ -132,10 +132,10 @@
 			{#if mentions?.available}
 				<div class="flex items-center justify-between gap-4 border-t pt-4">
 					<div>
-						<p class="text-sm font-medium">Mentions in the peek</p>
+						<p class="text-sm font-medium">Show Slack mentions</p>
 						<p class="text-xs text-muted-foreground">
 							{mentions.connected
-								? 'The peek shows Slack messages that link to the PR or issue.'
+								? 'Each PR and issue shows the Slack messages that link to it.'
 								: 'Search the PostHog Slack for messages that link to a PR or issue.'}
 						</p>
 					</div>

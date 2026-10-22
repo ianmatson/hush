@@ -62,7 +62,7 @@ Hush deletes this when:
 - your Slack account is deactivated (your Slack ids);
 - you delete your Hush account.
 
-**Mentions in the peek** (only for members of the PostHog GitHub org, in the PostHog Slack): Hush stores your Slack user id and a Slack user token, encrypted, that can only search messages that you can see. Hush searches Slack each time you open the peek of a PR or issue. It does not store the results, and it does not send them to Jev or any other model. Once a day at most, Hush asks GitHub if you are still in the PostHog org. **Turn off** in **Settings → Notifications → Slack**, or leaving the org, deletes the token.
+**Show Slack mentions** (only for members of the PostHog GitHub org, in the PostHog Slack): Hush stores your Slack user id and a Slack user token, encrypted, that can only search messages that you can see. Hush searches Slack each time you open the peek of a PR or issue. It does not store the results, and it does not send them to Jev or any other model. Once a day at most, Hush asks GitHub if you are still in the PostHog org. **Turn off** in **Settings → Notifications → Slack**, or leaving the org, deletes the token.
 
 ## Where it is kept
 

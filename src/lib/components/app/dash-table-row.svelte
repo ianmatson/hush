@@ -2,6 +2,7 @@
 	import type { ComponentProps } from 'svelte';
 	import { on } from 'svelte/events';
 	import { rowMenus } from '$lib/row-menus.svelte';
+	import { itemHoverZone } from '$lib/item-hover.svelte';
 	import { ciBadge } from '$lib/ci-badge';
 	import { keysOf } from '$lib/keys.svelte';
 	import type { DashItem } from '$lib/shared/types';
@@ -142,6 +143,7 @@
 		(i.dismissed || i.retained) && 'opacity-60'
 	)}
 	{@attach (node) => on(node, 'click', onrowclick)}
+	{@attach itemHoverZone(() => ({ item: i, marks }))}
 	role="option"
 	tabindex="-1"
 	aria-selected={selected || checked}

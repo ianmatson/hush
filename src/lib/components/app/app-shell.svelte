@@ -9,6 +9,7 @@
 	import AppHeader from './app-header.svelte';
 	import TabStatus from './tab-status.svelte';
 	import CommandPalette from './command-palette.svelte';
+	import ItemHoverCard from './item-hover-card.svelte';
 	import AlertsPanel from './alerts-panel.svelte';
 	import { watchReturns } from '$lib/recheck';
 	import { connectLive } from '$lib/live.svelte';
@@ -95,6 +96,7 @@
 			<OrgNote />
 			<TabStatus />
 			<CommandPalette />
+			<ItemHoverCard />
 			<AlertsPanel />
 		{/if}
 		{#if unreachable}

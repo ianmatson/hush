@@ -2,6 +2,13 @@ import DOMPurify from 'dompurify';
 import { inAppPathForGitHubUrl } from '$lib/shared/in-app-links';
 
 let hooked = false;
+let taskCheckboxesEnabled = false;
+
+function setTaskCheckboxState(input: Element) {
+	if (taskCheckboxesEnabled && input.getAttribute('type') === 'checkbox')
+		input.removeAttribute('disabled');
+	else input.setAttribute('disabled', '');
+}
 
 function pointLink(link: Element) {
 	const inAppPath = inAppPathForGitHubUrl(link.getAttribute('href') ?? '');
@@ -19,7 +26,7 @@ function pointLink(link: Element) {
  * Clean GitHub's rendered HTML before it goes into the page. GitHub already sanitizes it, but
  * Hush must not trust that: this is the only place where remote HTML reaches the DOM.
  */
-export function sanitize(html: string): string {
+export function sanitize(html: string, { editableTasks = false } = {}): string {
 	if (!hooked) {
 		DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 			if (node.tagName === 'A') pointLink(node);
@@ -27,13 +34,17 @@ export function sanitize(html: string): string {
 				node.setAttribute('loading', 'lazy');
 				node.setAttribute('referrerpolicy', 'no-referrer');
 			}
-			// Task-list checkboxes are for show only.
-			if (node.tagName === 'INPUT') node.setAttribute('disabled', '');
+			if (node.tagName === 'INPUT') setTaskCheckboxState(node);
 		});
 		hooked = true;
 	}
-	return DOMPurify.sanitize(html, {
-		FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'iframe'],
-		FORBID_ATTR: ['style']
-	});
+	taskCheckboxesEnabled = editableTasks;
+	try {
+		return DOMPurify.sanitize(html, {
+			FORBID_TAGS: ['style', 'form', 'button', 'textarea', 'select', 'iframe'],
+			FORBID_ATTR: ['style']
+		});
+	} finally {
+		taskCheckboxesEnabled = false;
+	}
 }

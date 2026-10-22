@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { rowMenus } from '$lib/row-menus.svelte';
+	import { itemHoverZone } from '$lib/item-hover.svelte';
 	import { ciBadge } from '$lib/ci-badge';
 	import { keysOf } from '$lib/keys.svelte';
 	import ChangeChips from './change-chips.svelte';
@@ -33,6 +34,7 @@
 	import { labelUrl, profileUrl, repoUrl } from '$lib/shared/github-links';
 	import GhLink from './gh-link.svelte';
 	import type { RowMark } from '$lib/marks';
+	import { labelInk } from '$lib/item-state';
 
 	let {
 		item: i,
@@ -129,13 +131,6 @@
 				? { label: 'Changes requested', tone: 'text-signal-fail' }
 				: null
 	);
-
-	/** Black or white text on a GitHub label color. */
-	function ink(hex: string) {
-		const n = parseInt(hex, 16);
-		const l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-		return l > 0.6 ? '#1a1a1a' : '#fff';
-	}
 </script>
 
 {#snippet newDot()}
@@ -158,6 +153,7 @@
 		(i.dismissed || i.retained) && 'opacity-60'
 	)}
 	onclick={onrowclick}
+	{@attach itemHoverZone(() => ({ item: i, marks }))}
 	role="option"
 	tabindex="-1"
 	aria-selected={selected || checked}
@@ -324,7 +320,7 @@
 								'max-w-40 truncate rounded-full px-1.5 py-0.5 hover:text-inherit hover:no-underline hover:brightness-95',
 								added && 'ring-2 ring-signal-review ring-offset-1 ring-offset-background'
 							)}
-							style="background:#{l.color}; color:{ink(l.color)}"
+							style="background:#{l.color}; color:{labelInk(l.color)}"
 							insideRow>{l.name}</GhLink
 						>
 					{/snippet}

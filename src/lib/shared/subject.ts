@@ -146,6 +146,7 @@ export function dashFactsOf(
 		kind: s.kind,
 		number: s.number,
 		title: s.title,
+		body: s.body ?? '',
 		url: s.url,
 		repo: s.repo,
 		author: s.author,

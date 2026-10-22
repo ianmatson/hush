@@ -738,6 +738,7 @@ describe('peekEntryFromRest', () => {
 			html: '<p>hi</p>',
 			body: 'hi',
 			canEdit: true,
+			canUpdate: true,
 			reactions: { id: 'IC_1', canReact: true, groups: [] }
 		});
 	});

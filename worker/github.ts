@@ -857,7 +857,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
   repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) {
     __typename ...P ...I
     ... on PullRequest {
-      id number title url state isDraft merged createdAt bodyHTML additions deletions changedFiles
+      id number title url state isDraft merged createdAt body bodyHTML additions deletions changedFiles
       baseRefName headRefName headRefOid headRepository { nameWithOwner } reviewDecision mergeable mergeStateStatus locked
       ${REACTION_FIELDS}
       viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate viewerCanMergeAsAdmin
@@ -888,8 +888,8 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       }
     }
     ... on Issue {
-      id number title url state createdAt bodyHTML locked ${REACTION_FIELDS}
-      viewerDidAuthor viewerCanClose viewerCanReopen
+      id number title url state createdAt body bodyHTML locked ${REACTION_FIELDS}
+      viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate
       repository { nameWithOwner viewerPermission }
       author { ${PERSON} }
       labels(first: 10) { nodes { name color } }
@@ -946,6 +946,7 @@ export function peekEntryFromRest(
 		html: j.body_html ?? '',
 		body: j.body ?? '',
 		canEdit: typeof j.body === 'string',
+		canUpdate: typeof j.body === 'string',
 		...(type === 'review' ? { state: j.state ?? 'COMMENTED', inline: 0 } : {}),
 		reactions: { id: j.node_id, canReact: true, groups: [] }
 	};
@@ -1005,6 +1006,7 @@ export async function fetchPeek(
 						html: t.bodyHTML ?? '',
 						body: t.body ?? '',
 						canEdit: !!t.viewerDidAuthor && !!t.viewerCanUpdate && !!t.body?.trim(),
+						canUpdate: !!t.viewerCanUpdate,
 						state: t.state,
 						inline: t.comments?.totalCount ?? 0,
 						reactions: reactionsOf(t)
@@ -1018,6 +1020,7 @@ export async function fetchPeek(
 						html: t.bodyHTML ?? '',
 						body: t.body ?? '',
 						canEdit: !!t.viewerDidAuthor && !!t.viewerCanUpdate,
+						canUpdate: !!t.viewerCanUpdate,
 						reactions: reactionsOf(t)
 					}
 		);
@@ -1032,6 +1035,7 @@ export async function fetchPeek(
 		author: person(n.author),
 		authorAssociation: n.authorAssociation ?? null,
 		createdAt: n.createdAt,
+		body: n.body ?? '',
 		html: n.bodyHTML ?? '',
 		reactions: reactionsOf(n),
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
