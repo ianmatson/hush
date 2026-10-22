@@ -1114,6 +1114,15 @@ export async function fetchPeek(
 				.filter((id: unknown): id is number => typeof id === 'number')
 		)
 	];
+	const stack =
+		n.state === 'OPEN'
+			? await readStack(token, `${owner}/${repo}`, {
+					number: n.number,
+					head: n.headRefName,
+					base: n.baseRefName,
+					defaultBranch: r.defaultBranchRef?.name ?? ''
+				}).catch(() => null)
+			: NO_STACK;
 	base.can.pr = {
 		headOid: n.headRefOid,
 		mergeState: n.mergeStateStatus ?? 'UNKNOWN',
@@ -1123,13 +1132,15 @@ export async function fetchPeek(
 			...(r.rebaseMergeAllowed ? ['REBASE' as const] : [])
 		],
 		mergeAsAdmin: !!n.viewerCanMergeAsAdmin,
-		headBranchDeletable: hushCanDeleteHeadBranch({
-			repo: r.nameWithOwner ?? `${owner}/${repo}`,
-			head: n.headRefName,
-			headRepo: n.headRepository?.nameWithOwner ?? null,
-			defaultBranch: r.defaultBranchRef?.name ?? '',
-			repoDeletesHeadBranches: !!r.deleteBranchOnMerge
-		}),
+		headBranchDeletable:
+			stack !== null &&
+			hushCanDeleteHeadBranch({
+				repo: r.nameWithOwner ?? `${owner}/${repo}`,
+				head: n.headRefName,
+				headRepo: n.headRepository?.nameWithOwner ?? null,
+				defaultBranch: r.defaultBranchRef?.name ?? '',
+				repoDeletesHeadBranches: !!r.deleteBranchOnMerge
+			}),
 		autoMerge: {
 			on: !!n.autoMergeRequest,
 			method: n.autoMergeRequest?.mergeMethod ?? null,
@@ -1137,15 +1148,7 @@ export async function fetchPeek(
 			canDisable: !!n.viewerCanDisableAutoMerge
 		},
 		failedRuns,
-		stack:
-			n.state === 'OPEN'
-				? await readStack(token, `${owner}/${repo}`, {
-						number: n.number,
-						head: n.headRefName,
-						base: n.baseRefName,
-						defaultBranch: r.defaultBranchRef?.name ?? ''
-					}).catch(() => NO_STACK)
-				: NO_STACK
+		stack: stack ?? NO_STACK
 	};
 	const peek: PeekDTO = {
 		...base,

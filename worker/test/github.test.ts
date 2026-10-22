@@ -449,6 +449,47 @@ describe('peek timeline pages', () => {
 	});
 });
 
+describe('peek head branch', () => {
+	const openPr = {
+		id: 'PR_1',
+		__typename: 'PullRequest',
+		number: 1,
+		state: 'OPEN',
+		headRefName: 'ian/feature',
+		baseRefName: 'main',
+		headRepository: { nameWithOwner: 'o/r' },
+		repository: {
+			nameWithOwner: 'o/r',
+			defaultBranchRef: { name: 'main' },
+			deleteBranchOnMerge: false
+		}
+	};
+	const gitHub = (branchWalk: () => Response) =>
+		vi.fn(async (url: string, init?: RequestInit) => {
+			if (url.includes('/stacks')) return Response.json([]);
+			if (body(init).query.includes('pullRequests(baseRefName')) return branchWalk();
+			return Response.json({ data: { repository: { issueOrPullRequest: openPr } } });
+		});
+
+	it('offers to delete a branch that no open PR is built on', async () => {
+		vi.stubGlobal(
+			'fetch',
+			gitHub(() => Response.json({ data: { repository: { pullRequests: { nodes: [] } } } }))
+		);
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.can.pr?.headBranchDeletable).toBe(true);
+	});
+
+	it('does not offer it when Hush could not read the PRs built on the branch', async () => {
+		vi.stubGlobal(
+			'fetch',
+			gitHub(() => Response.json({ message: 'Server Error' }, { status: 500 }))
+		);
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.can.pr?.headBranchDeletable).toBe(false);
+	});
+});
+
 describe('peek comment editing permissions', () => {
 	it.each(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])(
 		'does not permit editing %s reviews without body text',
