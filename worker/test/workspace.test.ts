@@ -342,3 +342,79 @@ describe('Workspace projects and teams', () => {
 		expect(h.workspace.snapshot.config.teams.map((t) => t.slug)).toEqual(['posthog/web']);
 	});
 });
+
+describe('Workspace failures', () => {
+	it('backs off a failed read, retries it, and gives up after five tries', async () => {
+		const h = started();
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		expect(h.workspace.schedule.reads['PR_1']).toMatchObject({
+			attempts: 1,
+			notBefore: h.clock() + MINUTE_MS
+		});
+		expect(h.alarms.at(-1)).toBeGreaterThanOrEqual(h.clock() + MINUTE_MS);
+		for (const wait of [1, 2, 4, 8]) {
+			h.advance(wait * MINUTE_MS);
+			await h.workspace.run(h.clock);
+		}
+		expect(h.workspace.schedule.reads['PR_1']).toBeUndefined();
+		expect(h.readers.itemCalls).toHaveLength(5);
+	});
+
+	it('stops calling GitHub in the same run after a rate limit', async () => {
+		const h = started();
+		h.readers.notificationResults.push({ status: 'rate-limited', retryAt: h.clock() + HOUR_MS });
+		await h.workspace.run(h.clock);
+		expect(h.readers.sourceCalls).toBe(0);
+	});
+
+	it('keeps a read that was asked for again while the first read ran', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		h.readers.beforeItemsAnswer = () => {
+			h.readers.beforeItemsAnswer = null;
+			h.workspace.requestRead(['PR_1'], 'background', h.clock());
+		};
+		await h.workspace.run(h.clock);
+		expect(h.workspace.schedule.reads['PR_1']).toBeDefined();
+	});
+
+	it('keeps memory equal to storage when a save fails', () => {
+		const h = started();
+		const save = h.store.save.bind(h.store);
+		h.store.save = () => {
+			throw new Error('disk full');
+		};
+		expect(() =>
+			h.workspace.apply(
+				{ kind: 'items', read: [facts(1)], inaccessible: [], quiet: false },
+				h.clock()
+			)
+		).toThrow('disk full');
+		expect(h.workspace.broken).toBe(true);
+		expect(h.workspace.snapshot.items.has('PR_1')).toBe(false);
+		h.store.save = save;
+		const reopened = Workspace.open(h.deps, h.clock())!;
+		reopened.apply({ kind: 'items', read: [facts(1)], inaccessible: [], quiet: false }, h.clock());
+		expect(h.store.load()?.items.has('PR_1')).toBe(true);
+	});
+
+	it('keeps an item it read lately for 30 days after it leaves every view', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		h.advance(SOURCE_EVERY_MS);
+		h.readers.facts.set('PR_1', facts(1, { title: 'Still open' }));
+		h.readers.sourceResults.push(answerSearch([]));
+		await h.workspace.run(h.clock);
+		h.advance(DAY_MS);
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.items.has('PR_1')).toBe(true);
+		h.advance(30 * DAY_MS);
+		h.workspace.touch(h.clock());
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.items.has('PR_1')).toBe(false);
+	});
+});

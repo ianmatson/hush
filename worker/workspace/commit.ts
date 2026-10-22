@@ -219,7 +219,9 @@ function applyInput(draft: Draft, input: Input, now: number) {
 		}
 		case 'source': {
 			const source = draft.sources.get(input.sourceId);
-			if (source) draft.putSource(applySourceRead(source, input.read, now));
+			if (!source) return;
+			const next = applySourceRead(source, input.read, now);
+			if (!sameJson(next, source)) draft.putSource(next);
 			return;
 		}
 		case 'seen':
@@ -333,6 +335,7 @@ interface Admission {
 
 function alertCauses(
 	draft: Draft,
+	revision: number,
 	alertable: Set<ItemId>,
 	admissions: Admission[],
 	wakes: SnoozeWake[],
@@ -365,7 +368,7 @@ function alertCauses(
 	return [...byItem].map(([itemId, { reasons, titles }]) => {
 		const item = draft.items.get(itemId)!;
 		return {
-			id: `${itemId}@${item.revision}:${reasons.join('+')}`,
+			id: `${itemId}@${revision}:${reasons.join('+')}`,
 			itemId,
 			reasons,
 			title: [...new Set(titles)].join(' · '),
@@ -394,6 +397,7 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		sources: draft.sources
 	};
 	const evaluator = createEvaluator(evaluation);
+	const timePassed = inputs.some((each) => each.kind === 'time');
 	const cause: TransitionCause = inputs.every((each) => COMMAND_KINDS.has(each.kind))
 		? 'command'
 		: 'observation';
@@ -425,14 +429,28 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		const touched = [...transition.state.members, ...transition.state.retained].some((id) =>
 			draft.changes.items.has(id)
 		);
-		if (touched || draft.changes.views.has(view.view.id) || draft.changes.config)
+		const sourceChanged = view.clauses.some(
+			(clause) =>
+				draft.changes.sources.has(clause.sourceId) ||
+				draft.changes.removedSources.has(clause.sourceId)
+		);
+		if (
+			touched ||
+			sourceChanged ||
+			timePassed ||
+			draft.changes.views.has(view.view.id) ||
+			draft.changes.config
+		)
 			changedViews.push(view.view.id);
 		const boundary = evaluator.evaluate(view, transition.state).nextBoundary;
 		if (boundary !== null && (nextBoundary === null || boundary < nextBoundary))
 			nextBoundary = boundary;
 	}
-	for (const id of before.views.keys()) if (!nextViews.has(id)) draft.changes.removedViews.add(id);
-	const alerts = alertCauses(draft, alertable, admissions, wakes, now);
+	for (const id of before.views.keys())
+		if (!nextViews.has(id)) {
+			draft.changes.removedViews.add(id);
+			changedViews.push(id);
+		}
 	const changed =
 		draft.changes.items.size +
 			draft.changes.removedItems.size +
@@ -441,13 +459,15 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 			draft.changes.views.size +
 			draft.changes.removedViews.size >
 			0 || draft.changes.config;
+	const revision = changed ? before.revision + 1 : before.revision;
+	const alerts = alertCauses(draft, revision, alertable, admissions, wakes, now);
 	return {
 		data: {
 			config: draft.config,
 			items: draft.items,
 			sources: draft.sources,
 			views: nextViews,
-			revision: changed ? before.revision + 1 : before.revision
+			revision
 		},
 		changes: draft.changes,
 		alerts,

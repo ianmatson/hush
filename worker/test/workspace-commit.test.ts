@@ -37,7 +37,6 @@ function empty(settings: Settings): WorkspaceData {
 }
 
 const windowOf = (ids: ItemId[], at = NOW): SourceWindow => ({
-	at,
 	candidates: ids.map((id) => ({ id, updatedAt: new Date(at).toISOString() })),
 	truncated: false
 });
@@ -325,5 +324,49 @@ describe('commit: attention', () => {
 		expect(pinned.data.items.get('PR_1')?.attention.pins).toEqual(['low']);
 		expect(pinned.data.views.get('v')?.members).toEqual(['PR_1']);
 		expect(pinned.alerts).toEqual([]);
+	});
+});
+
+describe('commit: change reporting', () => {
+	const views: ItemView[] = [
+		{ id: 'v', name: 'v', searches: [open], groupBy: 'none', pushNew: true }
+	];
+
+	it('announces a view whose search failed, even with the same members', () => {
+		const base = seeded(views, ['PR_1']);
+		const failed = run(base.data, {
+			kind: 'source',
+			sourceId: sourceIdOf(base.data),
+			read: { outcome: 'failed', error: 'timeout' }
+		});
+		expect(failed.changedViews).toEqual(['v']);
+	});
+
+	it('writes nothing for the same search result again', () => {
+		const base = seeded(views, ['PR_1']);
+		const again = run(base.data, {
+			kind: 'source',
+			sourceId: sourceIdOf(base.data),
+			read: { outcome: 'ok', window: windowOf(['PR_1']) }
+		});
+		expect(again.changes.sources.size).toBe(0);
+		expect(again.data.revision).toBe(base.data.revision);
+	});
+
+	it('gives a re-entry its own alert id', () => {
+		const base = seeded(views, ['PR_1']);
+		const sourceId = sourceIdOf(base.data);
+		const ok = (ids: string[]): Input => ({
+			kind: 'source',
+			sourceId,
+			read: { outcome: 'ok', window: windowOf(ids) }
+		});
+		const second = run(base.data, [
+			{ kind: 'items', read: [facts(2)], inaccessible: [], quiet: false },
+			ok(['PR_1', 'PR_2'])
+		]);
+		const left = run(second.data, ok(['PR_1']));
+		const back = run(left.data, ok(['PR_1', 'PR_2']));
+		expect(second.alerts[0].id).not.toBe(back.alerts[0].id);
 	});
 });

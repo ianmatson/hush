@@ -13,7 +13,6 @@ import type { SourceSpec, SourceWindow } from './types';
 
 const spec: SourceSpec = { id: 's1', adapter: 'search', kind: 'pr', query: 'is:pr is:open' };
 const windowOf = (ids: string[], truncated = false): SourceWindow => ({
-	at: NOW,
 	candidates: ids.map((id) => ({ id, updatedAt: new Date(NOW).toISOString() })),
 	truncated
 });

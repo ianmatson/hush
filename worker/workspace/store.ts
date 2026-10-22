@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 const CONFIG_KEY = 'config';
 const REVISION_KEY = 'revision';
+const TITLE_SEPARATOR = ' · ';
 
 export type AlertDelivery =
 	| { status: 'pending' }
@@ -194,26 +195,34 @@ export class WorkspaceStore {
 	}
 
 	private addAlert(alert: AlertCause, now: number) {
-		const pending = this.rows<{ id: string }>(
-			`SELECT id FROM alerts WHERE item_id = ? AND json_extract(delivery, '$.status') = 'pending'`,
-			alert.itemId
+		const pending = this.rows<AlertRow>(
+			`SELECT * FROM alerts WHERE item_id = ? AND id != ? AND json_extract(delivery, '$.status') = 'pending'`,
+			alert.itemId,
+			alert.id
+		).map(alertOf);
+		const combined = pending.reduce<AlertCause>(
+			(merged, older) => ({
+				...merged,
+				reasons: [...new Set([...older.reasons, ...merged.reasons])],
+				title: [
+					...new Set([
+						...older.title.split(TITLE_SEPARATOR),
+						...merged.title.split(TITLE_SEPARATOR)
+					])
+				].join(TITLE_SEPARATOR)
+			}),
+			alert
 		);
-		for (const { id } of pending)
-			if (id !== alert.id)
-				this.run(
-					'UPDATE alerts SET delivery = ? WHERE id = ?',
-					JSON.stringify({ status: 'superseded', by: alert.id } satisfies AlertDelivery),
-					id
-				);
+		for (const older of pending) this.setDelivery(older.id, { status: 'superseded', by: alert.id });
 		this.run(
 			`INSERT OR IGNORE INTO alerts (id, item_id, reasons, title, body, url, created_at, delivery)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			alert.id,
-			alert.itemId,
-			JSON.stringify(alert.reasons),
-			alert.title,
-			alert.body,
-			alert.url,
+			combined.id,
+			combined.itemId,
+			JSON.stringify(combined.reasons),
+			combined.title,
+			combined.body,
+			combined.url,
 			now,
 			JSON.stringify({ status: 'pending' } satisfies AlertDelivery)
 		);

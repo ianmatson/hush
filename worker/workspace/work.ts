@@ -18,6 +18,9 @@ export const PAUSE_AFTER_WITH_PUSH_MS = 90 * DAY_MS;
 export const READ_BATCH = 40;
 export const SOURCE_BATCH = 10;
 export const MAX_PENDING_READS = 500;
+export const MAX_READ_ATTEMPTS = 5;
+export const READ_RETRY_BASE_MS = MINUTE_MS;
+export const READ_RETRY_MAX_MS = 30 * MINUTE_MS;
 export const MAX_NOTIFICATION_VERSIONS = 1000;
 export const MAX_ANALYSIS_QUEUE = 200;
 export const ANALYSIS_BATCH = 12;
@@ -26,6 +29,15 @@ export const ANALYSIS_RETRY_MS = 5 * MINUTE_MS;
 export type Lifecycle = 'active' | 'paused' | 'stopped';
 export type ReadPriority = 'interactive' | 'background';
 export type Resource = 'github' | 'ai';
+
+export interface ReadRequest {
+	priority: ReadPriority;
+	version: number;
+	attempts: number;
+	notBefore: number;
+}
+
+export type ReadClaims = Record<ItemId, number>;
 
 export interface NotificationCursor {
 	dueAt: number;
@@ -46,7 +58,8 @@ export interface Sync {
 	projectsDue: number;
 	teamsDue: number;
 	discoveryAt: number;
-	reads: Record<ItemId, ReadPriority>;
+	reads: Record<ItemId, ReadRequest>;
+	readSeq: number;
 	readAt: Record<ItemId, number>;
 	analysis: ItemId[];
 	boundaryAt: number | null;
@@ -91,6 +104,7 @@ export function initialSync(now: number): Sync {
 		teamsDue: now,
 		discoveryAt: 0,
 		reads: {},
+		readSeq: 0,
 		readAt: {},
 		analysis: [],
 		boundaryAt: null,
@@ -132,8 +146,10 @@ function githubDue(sync: Sync, interest: Interest): number | null {
 		sync.teamsDue,
 		sync.projectsDue,
 		...Object.values(sync.sourcesDue),
-		...Object.keys(sync.reads).map(() => 0),
-		...[...interest.ids].map((id) => safetyReadDue(sync, id, interest))
+		...Object.values(sync.reads).map((request) => request.notBefore),
+		...[...interest.ids]
+			.filter((id) => !(id in sync.reads))
+			.map((id) => safetyReadDue(sync, id, interest))
 	]);
 	return due === null ? null : Math.max(due, sync.retryAt.github);
 }
@@ -156,9 +172,13 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 		cleanup: false
 	};
 	if (sync.lifecycle !== 'active') return none;
-	const github = now >= sync.retryAt.github;
-	const interactive = Object.keys(sync.reads).filter((id) => sync.reads[id] === 'interactive');
-	const background = Object.keys(sync.reads).filter((id) => sync.reads[id] === 'background');
+	const github = githubOpen(sync, now);
+	const ready = (priority: ReadPriority) =>
+		Object.entries(sync.reads)
+			.filter(([, request]) => request.priority === priority && request.notBefore <= now)
+			.map(([id]) => id);
+	const interactive = ready('interactive');
+	const background = ready('background');
 	const safety = [...interest.ids]
 		.filter((id) => !(id in sync.reads))
 		.map((id) => [id, safetyReadDue(sync, id, interest)] as const)
@@ -189,27 +209,72 @@ export function withSources(sync: Sync, sourceIds: Iterable<string>, now: number
 	return { ...sync, sourcesDue };
 }
 
-export function requestReads(sync: Sync, ids: Iterable<ItemId>, priority: ReadPriority): Sync {
+export const githubOpen = (sync: Sync, now: number) => now >= sync.retryAt.github;
+
+export function requestReads(
+	sync: Sync,
+	ids: Iterable<ItemId>,
+	priority: ReadPriority,
+	now: number
+): Sync {
 	const reads = { ...sync.reads };
-	for (const id of ids) if (reads[id] !== 'interactive') reads[id] = priority;
-	const kept = Object.entries(reads).slice(-MAX_PENDING_READS);
-	return { ...sync, reads: Object.fromEntries(kept) };
+	let readSeq = sync.readSeq;
+	for (const id of ids) {
+		const kept = reads[id]?.priority === 'interactive' ? 'interactive' : priority;
+		reads[id] = { priority: kept, version: ++readSeq, attempts: 0, notBefore: now };
+	}
+	const bounded = Object.entries(reads)
+		.sort(([, a], [, b]) => a.version - b.version)
+		.slice(-MAX_PENDING_READS);
+	return { ...sync, reads: Object.fromEntries(bounded), readSeq };
 }
 
-export function readsDone(sync: Sync, ids: Iterable<ItemId>, now: number): Sync {
+export const claimReads = (sync: Sync, ids: ItemId[]): ReadClaims =>
+	Object.fromEntries(ids.map((id) => [id, sync.reads[id]?.version ?? 0]));
+
+export function readsDone(sync: Sync, claims: ReadClaims, now: number): Sync {
 	const reads = { ...sync.reads };
 	const readAt = { ...sync.readAt };
-	for (const id of ids) {
-		delete reads[id];
+	for (const [id, version] of Object.entries(claims)) {
 		readAt[id] = now;
+		if ((reads[id]?.version ?? 0) === version) delete reads[id];
 	}
 	return { ...sync, reads, readAt };
 }
 
-export function forgetReads(sync: Sync, keep: ReadonlySet<ItemId>): Sync {
-	const kept = <T>(record: Record<ItemId, T>) =>
+export const readRetryDelay = (attempts: number) =>
+	Math.min(READ_RETRY_BASE_MS * 2 ** (attempts - 1), READ_RETRY_MAX_MS);
+
+export function readsFailed(sync: Sync, claims: ReadClaims, now: number): Sync {
+	const reads = { ...sync.reads };
+	const readAt = { ...sync.readAt };
+	for (const [id, version] of Object.entries(claims)) {
+		const current = reads[id];
+		if (current && current.version !== version) continue;
+		const attempts = (current?.attempts ?? 0) + 1;
+		if (attempts >= MAX_READ_ATTEMPTS) {
+			delete reads[id];
+			readAt[id] = now;
+			continue;
+		}
+		reads[id] = {
+			priority: current?.priority ?? 'background',
+			version,
+			attempts,
+			notBefore: now + readRetryDelay(attempts)
+		};
+	}
+	return { ...sync, reads, readAt };
+}
+
+export function forgetReads(
+	sync: Sync,
+	pending: ReadonlySet<ItemId>,
+	stored: ReadonlySet<ItemId>
+): Sync {
+	const kept = <T>(record: Record<ItemId, T>, keep: ReadonlySet<ItemId>) =>
 		Object.fromEntries(Object.entries(record).filter(([id]) => keep.has(id)));
-	return { ...sync, readAt: kept(sync.readAt), reads: kept(sync.reads) };
+	return { ...sync, reads: kept(sync.reads, pending), readAt: kept(sync.readAt, stored) };
 }
 
 export function sourcesRan(sync: Sync, ids: Iterable<string>, now: number): Sync {

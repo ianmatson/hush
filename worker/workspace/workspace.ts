@@ -15,6 +15,10 @@ import {
 	analysisUsed,
 	ANALYSIS_RETRY_MS,
 	bringDiscoveryForward,
+	claimReads,
+	githubOpen,
+	readsFailed,
+	type ReadClaims,
 	MAX_ANALYSIS_QUEUE,
 	nextUtcDay,
 	PROJECTS_EVERY_MS,
@@ -111,6 +115,7 @@ const locatorOf = (repo: string, number: number) => `${repo.toLowerCase()}#${num
 
 export class Workspace {
 	private interest: Interest = { ids: new Set(), ciRunning: new Set() };
+	private storageFailed = false;
 
 	private constructor(
 		private readonly deps: WorkspaceDeps,
@@ -141,34 +146,47 @@ export class Workspace {
 		return this.sync;
 	}
 
+	get broken(): boolean {
+		return this.storageFailed;
+	}
+
+	private persist(write: () => void) {
+		try {
+			write();
+		} catch (error) {
+			this.storageFailed = true;
+			throw error;
+		}
+	}
+
 	apply(input: Input | Input[], now: number): CommitResult {
 		const result = commit(this.data, input, now);
-		this.data = result.data;
-		this.interest = {
+		const interest: Interest = {
 			ids: result.interest,
 			ciRunning: new Set(
-				[...result.interest].filter((id) => ciRunning(this.data.items.get(id)?.facts.ci))
+				[...result.interest].filter((id) => ciRunning(result.data.items.get(id)?.facts.ci))
 			)
 		};
-		this.sync = {
-			...forgetReads(withSources(this.sync, this.data.sources.keys(), now), this.knownIds()),
+		const pending = new Set([...interest.ids, ...Object.keys(this.sync.reads)]);
+		const stored = new Set(result.data.items.keys());
+		const sync: Sync = {
+			...forgetReads(withSources(this.sync, result.data.sources.keys(), now), pending, stored),
 			boundaryAt: result.nextBoundary,
-			analysis: this.analysisQueue(now)
+			analysis: this.analysisQueue(result.data, interest, now)
 		};
-		this.deps.store.save(result, now, { [SYNC_KEY]: this.sync });
+		this.persist(() => this.deps.store.save(result, now, { [SYNC_KEY]: sync }));
+		this.data = result.data;
+		this.interest = interest;
+		this.sync = sync;
 		if (result.changedViews.length) this.deps.announce(this.data.revision, result.changedViews);
 		this.reschedule();
 		return result;
 	}
 
-	private analysisWanted() {
-		return this.data.config.settings.smartDecisions && !!this.deps.readers.analyze;
-	}
-
-	private requestsFor(id: ItemId, now: number) {
-		const item = this.data.items.get(id);
+	private requestsFor(id: ItemId, now: number, data = this.data) {
+		const item = data.items.get(id);
 		if (!item) return [];
-		const { me, settings, analysisVersion } = this.data.config;
+		const { me, settings, analysisVersion } = data.config;
 		return analysisRequests(
 			item.analysis,
 			item.facts,
@@ -179,19 +197,16 @@ export class Workspace {
 		);
 	}
 
-	private analysisQueue(now: number): ItemId[] {
-		if (!this.analysisWanted()) return [];
-		return [...this.interest.ids]
-			.filter((id) => this.requestsFor(id, now).length > 0)
+	private analysisQueue(data: WorkspaceData, interest: Interest, now: number): ItemId[] {
+		if (!data.config.settings.smartDecisions || !this.deps.readers.analyze) return [];
+		return [...interest.ids]
+			.filter((id) => this.requestsFor(id, now, data).length > 0)
 			.slice(0, MAX_ANALYSIS_QUEUE);
 	}
 
-	private knownIds() {
-		return new Set([...this.interest.ids, ...Object.keys(this.sync.reads)]);
-	}
-
-	private saveSync() {
-		this.deps.store.writeState(SYNC_KEY, this.sync);
+	private saveSync(sync = this.sync) {
+		this.persist(() => this.deps.store.writeState(SYNC_KEY, sync));
+		this.sync = sync;
 		this.reschedule();
 	}
 
@@ -200,22 +215,23 @@ export class Workspace {
 	}
 
 	touch(now: number) {
-		this.sync = touched(this.sync, now);
-		this.saveSync();
+		this.saveSync(touched(this.sync, now));
 	}
 
-	requestRead(ids: ItemId[], priority: ReadPriority) {
-		this.sync = requestReads(this.sync, ids, priority);
-		this.saveSync();
+	requestRead(ids: ItemId[], priority: ReadPriority, now: number) {
+		this.saveSync(requestReads(this.sync, ids, priority, now));
 	}
 
 	stop(reason: string) {
-		this.sync = stopped(this.sync, reason);
-		this.saveSync();
+		this.saveSync(stopped(this.sync, reason));
 	}
 
 	private stillCurrent(generation: number) {
 		return this.sync.generation === generation && this.sync.lifecycle === 'active';
+	}
+
+	private mayCallGithub(generation: number, now: number) {
+		return this.stillCurrent(generation) && githubOpen(this.sync, now);
 	}
 
 	async run(clock: () => number): Promise<void> {
@@ -223,14 +239,14 @@ export class Workspace {
 		const generation = this.sync.generation;
 		const plan = planRun(this.sync, this.interest, clock());
 		if (plan.teams) await this.refreshTeams(generation, clock);
-		if (plan.notifications && this.stillCurrent(generation))
+		if (plan.notifications && this.mayCallGithub(generation, clock()))
 			await this.pollNotifications(generation, clock);
-		if (plan.sources.length && this.stillCurrent(generation))
+		if (plan.sources.length && this.mayCallGithub(generation, clock()))
 			await this.refreshSources(plan.sources, generation, clock);
 		const reads = planRun(this.sync, this.interest, clock()).reads;
-		if (reads.length && this.stillCurrent(generation))
+		if (reads.length && this.mayCallGithub(generation, clock()))
 			await this.readItems(reads, generation, clock);
-		if (plan.projects && this.stillCurrent(generation))
+		if (plan.projects && this.mayCallGithub(generation, clock()))
 			await this.refreshProjects(generation, clock);
 		const analysis = planRun(this.sync, this.interest, clock()).analysis;
 		if (analysis.length && this.stillCurrent(generation))
@@ -284,7 +300,7 @@ export class Workspace {
 			if (id && this.interest.ids.has(id)) known.push(id);
 			else unknown = true;
 		}
-		let sync = requestReads(this.sync, known, 'background');
+		let sync = requestReads(this.sync, known, 'background', now);
 		if (unknown) sync = bringDiscoveryForward(sync, this.searchSourceIds(), now);
 		this.sync = notificationsPolled(sync, now, {
 			lastModified: result.lastModified,
@@ -319,7 +335,11 @@ export class Workspace {
 		if (result.retryAt)
 			this.sync = rateLimited(this.sync, 'github', result.retryAt, 'GitHub rate limit.');
 		const departed = this.departedOpenMembers(result.reads);
-		const probe = departed.length ? await this.deps.readers.items(departed) : null;
+		const claims = claimReads(this.sync, departed);
+		const probe =
+			departed.length && this.mayCallGithub(generation, clock())
+				? await this.deps.readers.items(departed)
+				: null;
 		if (!this.stillCurrent(generation)) return;
 		const now = clock();
 		const inputs: Input[] = [...result.reads].map(([sourceId, read]) => ({
@@ -327,49 +347,55 @@ export class Workspace {
 			sourceId,
 			read
 		}));
-		if (probe)
-			inputs.push({
-				kind: 'items',
-				read: probe.read,
-				inaccessible: probe.inaccessible,
-				quiet: !this.sync.notifications.initialized
-			});
 		this.sync = sourcesRan(this.sync, result.reads.keys(), now);
-		if (probe)
-			this.sync = readsDone(
-				this.sync,
-				departed.filter((id) => !probe.failed.includes(id)),
-				now
-			);
+		if (probe) {
+			inputs.push(this.itemsInput(probe));
+			this.sync = this.afterItemReads(claims, probe, now);
+		}
 		const hydrate = [...result.reads.values()].flatMap((read) =>
 			read.outcome === 'ok'
 				? read.window.candidates.filter((c) => this.needsRead(c)).map((c) => c.id)
 				: []
 		);
-		this.sync = requestReads(this.sync, hydrate, 'background');
+		this.sync = requestReads(this.sync, hydrate, 'background', now);
 		this.apply(inputs, now);
 	}
 
+	private itemsInput(result: ItemsResult): Input {
+		return {
+			kind: 'items',
+			read: result.read,
+			inaccessible: result.inaccessible,
+			quiet: !this.sync.notifications.initialized
+		};
+	}
+
+	private afterItemReads(claims: ReadClaims, result: ItemsResult, now: number): Sync {
+		const failed = new Set(result.failed);
+		const pick = (keep: (id: ItemId) => boolean) =>
+			Object.fromEntries(Object.entries(claims).filter(([id]) => keep(id)));
+		let sync = readsDone(
+			this.sync,
+			pick((id) => !failed.has(id)),
+			now
+		);
+		sync = readsFailed(
+			sync,
+			pick((id) => failed.has(id)),
+			now
+		);
+		return result.retryAt
+			? rateLimited(sync, 'github', result.retryAt, 'GitHub rate limit.')
+			: sync;
+	}
+
 	private async readItems(ids: ItemId[], generation: number, clock: () => number) {
+		const claims = claimReads(this.sync, ids);
 		const result = await this.deps.readers.items(ids);
 		if (!this.stillCurrent(generation)) return;
 		const now = clock();
-		if (result.retryAt)
-			this.sync = rateLimited(this.sync, 'github', result.retryAt, 'GitHub rate limit.');
-		this.sync = readsDone(
-			this.sync,
-			ids.filter((id) => !result.failed.includes(id)),
-			now
-		);
-		this.apply(
-			{
-				kind: 'items',
-				read: result.read,
-				inaccessible: result.inaccessible,
-				quiet: !this.sync.notifications.initialized
-			},
-			now
-		);
+		this.sync = this.afterItemReads(claims, result, now);
+		this.apply(this.itemsInput(result), now);
 	}
 
 	private async refreshTeams(generation: number, clock: () => number) {

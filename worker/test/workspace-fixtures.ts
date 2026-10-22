@@ -64,7 +64,6 @@ export const configWith = (settings: Settings): Config => ({
 });
 
 export const windowOf = (ids: ItemId[], at = NOW): SourceWindow => ({
-	at,
 	candidates: ids.map((id) => ({ id, updatedAt: new Date(at).toISOString() })),
 	truncated: false
 });
@@ -81,7 +80,10 @@ export class FakeReaders implements Readers {
 		return this.notificationResults.shift() ?? { status: 'not-modified', pollIntervalMs: 60_000 };
 	}
 
+	sourceCalls = 0;
+
 	async sources(specs: SourceSpec[]): Promise<SourcesResult> {
+		this.sourceCalls++;
 		const next = this.sourceResults.shift();
 		return next ? next(specs) : { reads: new Map() };
 	}

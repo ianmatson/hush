@@ -30,7 +30,7 @@ const hit = (section: string, id: string, updatedAt = '2026-10-22T10:00:00Z'): S
 
 describe('readSources', () => {
 	it('gives each source its own window, and a failed search its own failure', async () => {
-		const result = await readSources('t', [spec('a'), spec('b'), spec('c', 'board')], () => NOW, {
+		const result = await readSources('t', [spec('a'), spec('b'), spec('c', 'board')], {
 			search: async () =>
 				answer([hit('a', 'PR_1'), hit('a', 'PR_1', '2026-10-22T11:00:00Z')], ['b']),
 			board: async () => answer([hit('c', 'PR_2')])
@@ -38,7 +38,6 @@ describe('readSources', () => {
 		expect(result.reads.get('a')).toEqual({
 			outcome: 'ok',
 			window: {
-				at: NOW,
 				candidates: [{ id: 'PR_1', updatedAt: '2026-10-22T11:00:00Z' }],
 				truncated: false
 			}
@@ -52,7 +51,7 @@ describe('readSources', () => {
 
 	it('marks a full page of results as truncated', async () => {
 		const hits = Array.from({ length: 100 }, (_, i) => hit('a', `PR_${i}`));
-		const result = await readSources('t', [spec('a')], () => NOW, {
+		const result = await readSources('t', [spec('a')], {
 			search: async () => answer(hits),
 			board: async () => answer([])
 		});

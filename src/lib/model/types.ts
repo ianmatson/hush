@@ -63,7 +63,6 @@ export interface SourceCandidate {
 }
 
 export interface SourceWindow {
-	at: number;
 	candidates: SourceCandidate[];
 	truncated: boolean;
 }

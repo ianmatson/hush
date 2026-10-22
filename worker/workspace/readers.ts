@@ -22,7 +22,6 @@ type ShortSearch = typeof searchShort;
 export async function readSources(
 	token: string,
 	specs: SourceSpec[],
-	now: () => number,
 	run: { search: ShortSearch; board: ShortSearch }
 ): Promise<SourcesResult> {
 	const queries = (adapter: SourceSpec['adapter']): ExpandedQuery[] =>
@@ -43,7 +42,6 @@ export async function readSources(
 			found.set(hit.id, { id: hit.id, updatedAt: hit.updatedAt });
 		candidates.set(hit.query.section, found);
 	}
-	const at = now();
 	const reads = new Map<string, SourceRead>(
 		specs.map((spec) => {
 			if (failed.has(spec.id))
@@ -56,7 +54,7 @@ export async function readSources(
 				spec.id,
 				{
 					outcome: 'ok',
-					window: { at, candidates: found, truncated: found.length >= SOURCE_RESULTS_MAX }
+					window: { candidates: found, truncated: found.length >= SOURCE_RESULTS_MAX }
 				}
 			];
 		})
@@ -102,10 +100,10 @@ export async function readNotifications(
 	};
 }
 
-export function githubReaders(token: string, me: string, now: () => number = Date.now): Readers {
+export function githubReaders(token: string, me: string): Readers {
 	return {
 		notifications: (cursor) => readNotifications(token, cursor),
-		sources: (specs) => readSources(token, specs, now, { search: searchShort, board: boardShort }),
+		sources: (specs) => readSources(token, specs, { search: searchShort, board: boardShort }),
 		async items(ids) {
 			const { read, inaccessible, failed } = await fetchItems(token, me, ids);
 			return { read, inaccessible, failed };

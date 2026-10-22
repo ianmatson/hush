@@ -170,7 +170,6 @@ export function sourceWith(spec: SourceSpec, ids: string[], over: Partial<Source
 	return {
 		...newSource(spec),
 		window: {
-			at: NOW,
 			candidates: ids.map((id) => ({ id, updatedAt: new Date(NOW).toISOString() })),
 			truncated: false
 		},
