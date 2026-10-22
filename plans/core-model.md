@@ -1,6 +1,6 @@
 # Hush core model
 
-Date: 2026-10-22. Status: agreed design; not built.
+Date: 2026-10-22. Status: steps 1–5 built in PR #92; step 6 (webhooks) open.
 Supersedes the data model under plans/github-app-webhooks.md (PR #90); redesign webhooks after the core cutover.
 
 ## 1. Core decisions
