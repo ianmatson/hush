@@ -63,8 +63,8 @@
 			</div>
 		{/if}
 		{#if canDeleteBranch && p.pr}
-			<label for="merge-delete-branch" class="flex cursor-pointer items-center gap-2 text-sm">
-				<Checkbox id="merge-delete-branch" bind:checked={deleteBranch} />
+			<label for="merge-delete-branch" class="flex cursor-pointer items-start gap-2 text-sm">
+				<Checkbox id="merge-delete-branch" class="mt-0.5" bind:checked={deleteBranch} />
 				<span>Delete <span class="font-mono text-xs">{p.pr.head}</span> after the merge</span>
 			</label>
 		{/if}
