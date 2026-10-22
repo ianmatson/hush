@@ -72,6 +72,7 @@
 	<Command.Item
 		value={o.value}
 		data-checked={on}
+		aria-checked={on}
 		disabled={!on && full}
 		onSelect={() => ontoggle(o, !on)}
 	>

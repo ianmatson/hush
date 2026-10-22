@@ -449,6 +449,33 @@ describe('peek timeline pages', () => {
 	});
 });
 
+describe('peek labels and assignees', () => {
+	it('shows every applied label, past the ten that the stored facts keep', async () => {
+		const labels = Array.from({ length: 12 }, (_, i) => ({ name: `label-${i}`, color: 'ededed' }));
+		const fetchMock = vi.fn(async () =>
+			Response.json({
+				data: {
+					repository: {
+						issueOrPullRequest: {
+							id: 'I_1',
+							__typename: 'Issue',
+							labels: { nodes: labels.slice(0, 10) },
+							peekLabels: { nodes: labels },
+							assignees: { nodes: [{ login: 'ada', avatarUrl: 'https://a', __typename: 'User' }] }
+						}
+					}
+				}
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.labels).toHaveLength(12);
+		expect(result?.peek.assignees).toEqual([{ login: 'ada', avatar: 'https://a', bot: false }]);
+		const query = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).query as string;
+		expect(query).toContain('peekLabels: labels(first: 100)');
+	});
+});
+
 describe('peek comment editing permissions', () => {
 	it.each(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])(
 		'does not permit editing %s reviews without body text',

@@ -24,7 +24,7 @@ The full page shows the same pull request or issue as the peek, in a wider colum
 
 - Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
 - With **Click opens** set to **Full page** (in **Settings → General → Row layout**), a click on a row and Enter in {{key:palette}} open the full page. {{key:list.peek}} still opens the peek.
-- {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
+- {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. If the peek was open when you left the list, it is still open on the same item there.
 - The keys for an item work here too: {{key:list.copy}} copies its GitHub link, {{key:dash.snooze}} snoozes it until new activity (or wakes it up), {{key:dash.mute}} mutes or unmutes it, and {{key:dash.read}} marks it as read or unread. Snooze, mute, and unread work only for items in your views. {{key:palette}} has the same actions, and the other snooze times.
 - {{key:list.help}} shows the keys of the full page.
 - The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.

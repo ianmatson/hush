@@ -492,6 +492,7 @@
 		closeRowMenus();
 		sel.clear();
 		if (!cursorIsIn(stack)) selectedId = inListMembers(rotated(stack))[0]?.id ?? selectedId;
+		if (opensFullPage) return goto(itemPagePath(m.repo, m.number, 'pr'));
 		peekedOutsideKey = m.key;
 		take();
 	}

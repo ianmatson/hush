@@ -30,11 +30,16 @@ const TRIAGE_PERMISSIONS = new Set(['ADMIN', 'MAINTAIN', 'WRITE', 'TRIAGE']);
 export const canEditItemFields = (permission: string | null | undefined): boolean =>
 	!!permission && TRIAGE_PERMISSIONS.has(permission);
 
+const PATH_DOT_SEGMENTS = new Set(['.', '..']);
+
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 
 const validValue: Record<ItemField, (value: unknown) => value is string> = {
 	labels: (value): value is string =>
-		typeof value === 'string' && !!value.trim() && value.length <= MAX_LABEL_NAME,
+		typeof value === 'string' &&
+		!!value.trim() &&
+		value.length <= MAX_LABEL_NAME &&
+		!PATH_DOT_SEGMENTS.has(value),
 	assignees: (value): value is string => typeof value === 'string' && LOGIN.test(value)
 };
 

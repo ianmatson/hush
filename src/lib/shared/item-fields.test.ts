@@ -30,6 +30,8 @@ describe('item field edits', () => {
 		['labels', 'bug', []],
 		['labels', [''], []],
 		['labels', ['x'.repeat(51)], []],
+		['labels', [], ['.']],
+		['labels', [], ['..']],
 		['labels', Array.from({ length: MAX_FIELD_CHANGES + 1 }, (_, i) => `l${i}`), []],
 		['assignees', ['not a login'], []],
 		['assignees', [], ['-dash']]

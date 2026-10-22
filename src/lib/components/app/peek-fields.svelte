@@ -1,14 +1,8 @@
 <script lang="ts">
 	import { createQuery, keepPreviousData } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { api } from '$lib/api';
-	import {
-		assignableUsersQuery,
-		keys,
-		queryClient,
-		refetchUnlessLive,
-		repoLabelsQuery
-	} from '$lib/queries';
+	import { assignableUsersQuery, keys, queryClient, repoLabelsQuery } from '$lib/queries';
+	import { writeItemField } from '$lib/item-field-sync';
 	import {
 		MAX_ASSIGNEES,
 		canEditItemFields,
@@ -107,28 +101,18 @@
 		};
 	}
 
-	let writesInFlight = 0;
-
 	async function toggle(field: ItemField, option: FieldOption, on: boolean) {
-		const key = peekKey;
-		const target = { repo: p.repo, number: p.number };
-		queryClient.setQueryData<PeekDTO>(key, (old) => old && changed(old, field, option, on));
-		writesInFlight++;
+		queryClient.setQueryData<PeekDTO>(peekKey, (old) => old && changed(old, field, option, on));
 		try {
-			await api.editItemField({
-				...target,
+			await writeItemField({
+				repo: p.repo,
+				number: p.number,
 				field,
 				add: on ? [option.value] : [],
 				remove: on ? [] : [option.value]
 			});
 		} catch (err) {
 			toast.error((err as Error).message);
-		} finally {
-			writesInFlight--;
-			if (!writesInFlight) {
-				void queryClient.invalidateQueries({ queryKey: key });
-				refetchUnlessLive(keys.items);
-			}
 		}
 	}
 </script>
