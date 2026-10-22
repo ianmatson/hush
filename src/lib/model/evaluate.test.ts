@@ -343,8 +343,11 @@ describe('analysis inputs', () => {
 	it('gives category questions only identity fields, so roles cannot make their answers stale', () => {
 		const requested = facts(28, { reviewRequests: [{ name: ME, team: false }] });
 		const notRequested = { ...requested, reviewRequests: [] };
-		expect(identityInput(requested)).not.toHaveProperty('you');
-		expect(identityInput(requested)).not.toHaveProperty('comments');
+		expect(identityInput(requested)).toMatchObject({
+			comments: [],
+			newCommentsForYou: [],
+			you: { login: '', roles: [] }
+		});
 		expect(identityInputOf(notRequested)).toBe(identityInputOf(requested));
 		expect(replyInputOf(notRequested, ME)).not.toBe(replyInputOf(requested, ME));
 	});

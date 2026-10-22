@@ -11,20 +11,17 @@ import type { SubjectFacts } from '../shared/subject';
 import type { Knowledge } from './eligibility';
 import type { Analysis } from './types';
 
-export type IdentityInput = Pick<
-	DecisionState,
-	'title' | 'repo' | 'kind' | 'author' | 'labels' | 'body'
->;
-
 export const replyInput = (facts: SubjectFacts, me: string): DecisionState =>
 	decisionState(facts, me);
 
-export function identityInput(facts: SubjectFacts): IdentityInput {
-	const { title, repo, kind, author, labels, body } = decisionState(facts, '');
-	return { title, repo, kind, author, labels, body };
-}
+export const identityInput = (facts: SubjectFacts): DecisionState => ({
+	...decisionState(facts, ''),
+	comments: [],
+	newCommentsForYou: [],
+	you: { login: '', roles: [] }
+});
 
-const inputHash = (input: DecisionState | IdentityInput) => cyrb53(JSON.stringify(input));
+const inputHash = (input: DecisionState) => cyrb53(JSON.stringify(input));
 
 export const replyInputOf = (facts: SubjectFacts, me: string) => inputHash(replyInput(facts, me));
 

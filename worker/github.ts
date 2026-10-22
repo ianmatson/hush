@@ -718,6 +718,44 @@ export async function fetchDetails(
 	return { subjects, errors: [...new Set(errors)].slice(0, 3) };
 }
 
+export interface ItemReads {
+	read: SubjectFacts[];
+	inaccessible: string[];
+	failed: string[];
+	errors: string[];
+}
+
+export async function fetchItems(token: string, me: string, ids: string[]): Promise<ItemReads> {
+	const read: SubjectFacts[] = [];
+	const inaccessible: string[] = [];
+	const failed = new Set<string>();
+	const errors: string[] = [];
+	await inRequests(
+		token,
+		ids,
+		DETAILS_CHUNK,
+		(chunk) => ({
+			query: `query($me: String!, $ids: [ID!]!) { nodes(ids: $ids) { __typename ...P ...I } }\n${SUBJECT_FIELDS}`,
+			variables: { me, ids: chunk }
+		}),
+		(chunk, data, graphqlErrors) => {
+			const nodes = (data?.nodes as unknown as (Node | null)[] | undefined) ?? [];
+			chunk.forEach((id, index) => {
+				const node = nodes[index];
+				const errorsHere = graphqlErrors.filter((error) =>
+					hasGraphqlErrorAt([error], ['nodes', index])
+				);
+				if (node?.id && !errorsHere.length) read.push(toSubject(node, me));
+				else if (data && isDeletedOrNoAccess(node, errorsHere)) inaccessible.push(id);
+				else failed.add(id);
+			});
+		},
+		errors,
+		(chunk) => chunk.forEach((id) => failed.add(id))
+	);
+	return { read, inaccessible, failed: [...failed], errors: [...new Set(errors)].slice(0, 3) };
+}
+
 /** Details of an item that did not change are read again after this long, as a safety net. */
 export const DETAILS_TTL = HOUR_MS;
 
