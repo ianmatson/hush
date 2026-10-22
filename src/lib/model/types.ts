@@ -98,18 +98,10 @@ export interface ViewState {
 	retained: ItemId[];
 	seededBindings: string[];
 	baseline: ItemId[];
+	awaitingRefresh: string[];
 }
 
-export type Row = Omit<
-	DashItem,
-	'sections' | 'sourceFilters' | 'sourceQueries' | 'keptAfterClose' | 'keptSections'
-> & {
-	itemId: ItemId;
-	revision: number;
-	baseline: Snapshot;
-	retained: boolean;
-	analysisStale: boolean;
-};
+export type Row = Omit<DashItem, 'views' | 'retainedIn'>;
 
 export interface SourceHealth {
 	sourceId: string;

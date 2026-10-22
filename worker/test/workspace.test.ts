@@ -682,3 +682,20 @@ describe('Workspace step 3 fixes', () => {
 		expect(h.readers.itemCalls.length).toBe(calls + 1);
 	});
 });
+
+describe('Workspace resume', () => {
+	it('does not announce older items as new after a pause', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.facts.set('PR_2', facts(2));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		h.advance(PAUSE_AFTER_NO_PUSH_MS + DAY_MS);
+		await h.workspace.run(h.clock);
+		h.workspace.touch(h.clock());
+		h.readers.sourceResults.push(answerSearch(['PR_1', 'PR_2']));
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.views.get('v')?.members.sort()).toEqual(['PR_1', 'PR_2']);
+		expect(h.sender.sent).toEqual([]);
+	});
+});

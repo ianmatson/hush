@@ -370,3 +370,32 @@ describe('commit: change reporting', () => {
 		expect(second.alerts[0].id).not.toBe(back.alerts[0].id);
 	});
 });
+
+describe('commit: quiet per view', () => {
+	it('lets an established view alert while a new view still waits on an answer', () => {
+		const website: ItemView = { id: 'v', name: 'Website', searches: [open], groupBy: 'none' };
+		const base = seeded([website], ['PR_1']);
+		const lowEffort: ItemView = {
+			id: 'low',
+			name: 'Low',
+			searches: [`${open} category:effort/low`],
+			groupBy: 'none'
+		};
+		const added = run(base.data, {
+			kind: 'settings',
+			settings: settingsWith([website, lowEffort])
+		});
+		expect(added.data.views.get('low')?.baseline).toEqual(['PR_1']);
+		const requested = facts(1, {
+			updatedAt: new Date(NOW + MINUTE_MS).toISOString(),
+			reviewRequests: [{ name: ME, team: false }]
+		});
+		const read = run(added.data, {
+			kind: 'items',
+			read: [requested],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(read.alerts.map((a) => a.reasons)).toEqual([['review-requested']]);
+	});
+});

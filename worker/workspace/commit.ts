@@ -426,6 +426,11 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 	};
 	const evaluator = createEvaluator(evaluation);
 	const timePassed = inputs.some((each) => each.kind === 'time');
+	const freshSources = new Set(
+		inputs.flatMap((each) =>
+			each.kind === 'source' && each.read.outcome === 'ok' ? [each.sourceId] : []
+		)
+	);
 	const cause: TransitionCause = inputs.every((each) => COMMAND_KINDS.has(each.kind))
 		? 'command'
 		: 'observation';
@@ -438,20 +443,27 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 	let nextBoundary: number | null = null;
 	for (const view of views) {
 		const kept = before.views.get(view.view.id) ?? null;
-		const stored = kept && draft.reseed ? { ...kept, seededBindings: [], baseline: [] } : kept;
+		const stored =
+			kept && draft.reseed
+				? {
+						...kept,
+						seededBindings: [],
+						baseline: [],
+						awaitingRefresh: view.clauses.map((clause) => clause.binding)
+					}
+				: kept;
 		const found = evaluator.membership(view);
 		const transition = transitionView(
 			view,
 			stored,
 			found,
-			{ ...evaluation, closedNow: draft.closedNow },
+			{ ...evaluation, closedNow: draft.closedNow, freshSources },
 			cause
 		);
 		nextViews.set(view.view.id, transition.state);
 		if (!sameJson(kept, transition.state)) draft.changes.views.add(view.view.id);
-		for (const id of transition.alertable) alertable.add(id);
+		for (const id of transition.alertable) if (!transition.quiet.has(id)) alertable.add(id);
 		for (const id of transition.departed) departed.add(id);
-		for (const id of transition.quiet) draft.quietItems.add(id);
 		for (const id of [...found.candidates, ...transition.state.retained]) interest.add(id);
 		if (view.view.pushNew)
 			for (const itemId of transition.admitted)

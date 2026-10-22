@@ -8,6 +8,7 @@ export interface TransitionContext {
 	items: ReadonlyMap<ItemId, Item>;
 	sources: ReadonlyMap<string, Source>;
 	closedNow: ReadonlySet<ItemId>;
+	freshSources: ReadonlySet<string>;
 	now: number;
 }
 
@@ -24,7 +25,8 @@ export const emptyViewState = (scope: string): ViewState => ({
 	members: [],
 	retained: [],
 	seededBindings: [],
-	baseline: []
+	baseline: [],
+	awaitingRefresh: []
 });
 
 function seed(view: CompiledView, previous: ViewState, found: Membership, ctx: TransitionContext) {
@@ -34,13 +36,16 @@ function seed(view: CompiledView, previous: ViewState, found: Membership, ctx: T
 	);
 	const seeded = new Set(stillSeeded);
 	const baseline = new Set(previous.baseline);
+	const awaiting = new Set(previous.awaitingRefresh.filter((binding) => bindings.has(binding)));
 	for (const clause of view.clauses) {
 		if (seeded.has(clause.binding) || !found.validBindings.has(clause.binding)) continue;
+		if (awaiting.has(clause.binding) && !ctx.freshSources.has(clause.sourceId)) continue;
+		awaiting.delete(clause.binding);
 		seeded.add(clause.binding);
 		const window = usableWindow(ctx.sources.get(clause.sourceId), ctx.now);
 		for (const candidate of window?.candidates ?? []) baseline.add(candidate.id);
 	}
-	return { seeded, baseline };
+	return { seeded, baseline, awaiting };
 }
 
 function retain(view: CompiledView, previous: ViewState, ctx: TransitionContext): ItemId[] {
@@ -61,7 +66,7 @@ export function transitionView(
 	cause: TransitionCause
 ): ViewTransition {
 	const previous = stored?.scope === view.scope ? stored : emptyViewState(view.scope);
-	const { seeded, baseline } = seed(view, previous, found, ctx);
+	const { seeded, baseline, awaiting } = seed(view, previous, found, ctx);
 	const before = new Set(previous.members);
 	const members = found.members;
 	const admitted =
@@ -73,7 +78,8 @@ export function transitionView(
 			members: [...members],
 			retained,
 			seededBindings: [...seeded],
-			baseline: [...baseline].filter((id) => found.candidates.has(id) && found.unsettled.has(id))
+			baseline: [...baseline].filter((id) => found.candidates.has(id) && found.unsettled.has(id)),
+			awaitingRefresh: [...awaiting]
 		},
 		admitted,
 		quiet: baseline,

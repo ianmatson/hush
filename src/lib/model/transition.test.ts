@@ -13,7 +13,11 @@ function step(
 	const built = world(w);
 	const compiled = built.compiled.views[0];
 	const found = built.evaluator.membership(compiled);
-	const context = { ...built.evaluation, closedNow: new Set(closedNow) };
+	const context = {
+		...built.evaluation,
+		closedNow: new Set(closedNow),
+		freshSources: new Set<string>()
+	};
 	const transition = transitionView(compiled, previous, found, context, cause);
 	return { ...transition, found, built };
 }
@@ -122,7 +126,8 @@ describe('new in view', () => {
 			members: [],
 			retained: [b.id],
 			seededBindings: ['x'],
-			baseline: []
+			baseline: [],
+			awaitingRefresh: []
 		};
 		const changed = step(
 			{ views: [view('v', open)], items: [item(a), item(b)], results: { 0: [a.id] } },
@@ -285,5 +290,46 @@ describe('interest', () => {
 		expect([...interestOf([state], [result.found])].sort()).toEqual(
 			[shown.id, hidden.id, 'PR_closed'].sort()
 		);
+	});
+});
+
+describe('reseeding after a pause', () => {
+	it('waits for a fresh search before it seeds again', () => {
+		const a = facts(1);
+		const b = facts(2);
+		const seeded = step(
+			{ views: [view('v', open)], items: [item(a), item(b)], results: { 0: [a.id] } },
+			null
+		);
+		const awaiting = {
+			...seeded.state,
+			seededBindings: [],
+			baseline: [],
+			awaitingRefresh: [...seeded.state.seededBindings]
+		};
+		const stale = step(
+			{ views: [view('v', open)], items: [item(a), item(b)], results: { 0: [a.id] } },
+			awaiting
+		);
+		expect(stale.state.seededBindings).toEqual([]);
+		const built = world({
+			views: [view('v', open)],
+			items: [item(a), item(b)],
+			results: { 0: [a.id, b.id] }
+		});
+		const compiled = built.compiled.views[0];
+		const fresh = transitionView(
+			compiled,
+			stale.state,
+			built.evaluator.membership(compiled),
+			{
+				...built.evaluation,
+				closedNow: new Set(),
+				freshSources: new Set([compiled.clauses[0].sourceId])
+			},
+			'observation'
+		);
+		expect(fresh.admitted).toEqual([]);
+		expect(fresh.state.awaitingRefresh).toEqual([]);
 	});
 });
