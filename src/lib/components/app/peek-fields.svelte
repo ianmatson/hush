@@ -13,6 +13,8 @@
 	import type { PeekDTO } from '$lib/shared/types';
 	import ItemFieldPicker, { type FieldOption } from './item-field-picker.svelte';
 	import GhLink from './gh-link.svelte';
+	import Tip from './tip.svelte';
+	import { cn } from '$lib/utils';
 	import Tag from '@lucide/svelte/icons/tag';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 
@@ -138,41 +140,60 @@
 	</ItemFieldPicker>
 {/snippet}
 
-{#if !hasAssignees && !hasLabels}
-	{#if editable}
-		<div class="flex flex-wrap items-center gap-1" data-peek-fields>
-			{@render assigneePicker()}
-			{@render labelPicker()}
-		</div>
-	{/if}
-{:else}
-	<div class="grid gap-1.5" data-peek-fields>
-		{#if hasAssignees || editable}
-			<div class="flex flex-wrap items-center gap-1" aria-label="Assignees" role="group">
-				{#each shown.assignees as a (a.login)}
-					<GhLink href={profileUrl(a.login, a.bot)} class="{CHIP} no-underline! hover:bg-muted">
-						{#if a.avatar}
-							<img src={a.avatar} alt="" class="-ml-1 size-4 rounded-full bg-muted" />
+{#if hasAssignees || hasLabels || editable}
+	<div class="@container" data-peek-fields>
+		<div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
+			{#if hasAssignees || editable}
+				<div class="flex min-h-[1.375rem] items-center gap-1" aria-label="Assignees" role="group">
+					{#if hasAssignees}
+						<div class="flex items-center">
+							{#each shown.assignees as a, i (a.login)}
+								<Tip text={a.login}>
+									{#snippet children(props)}
+										<GhLink
+											{...props}
+											href={profileUrl(a.login, a.bot)}
+											class={cn('relative rounded-full ring-2 ring-background', i && '-ml-1.5')}
+											aria-label={a.login}
+										>
+											{#if a.avatar}
+												<img src={a.avatar} alt="" class="size-5 rounded-full bg-muted" />
+											{:else}
+												<span class="block size-5 rounded-full bg-muted"></span>
+											{/if}
+										</GhLink>
+									{/snippet}
+								</Tip>
+							{/each}
+						</div>
+						{#if shown.assignees.length === 1}
+							<span class="ml-0.5 text-xs">{shown.assignees[0].login}</span>
 						{/if}
-						<span class="text-foreground">{a.login}</span>
-					</GhLink>
-				{/each}
-				{#if editable}{@render assigneePicker()}{/if}
-			</div>
-		{/if}
-		{#if hasLabels || editable}
-			<div class="flex flex-wrap items-center gap-1" aria-label="Labels" role="group">
-				{#each shown.labels as l (l.name)}
-					<a
-						href={labelUrl(p.repo, l.name)}
-						target="_blank"
-						rel="noreferrer"
-						class={CHIP}
-						style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
-					>
-				{/each}
-				{#if editable}{@render labelPicker()}{/if}
-			</div>
-		{/if}
+					{/if}
+					{#if editable}{@render assigneePicker()}{/if}
+				</div>
+			{/if}
+			{#if hasAssignees && (hasLabels || editable)}
+				<span class="mt-[0.1875rem] hidden h-4 w-px bg-border @md:block" aria-hidden="true"></span>
+			{/if}
+			{#if hasLabels || editable}
+				<div
+					class="flex min-w-0 flex-1 basis-64 flex-wrap items-center gap-1"
+					aria-label="Labels"
+					role="group"
+				>
+					{#each shown.labels as l (l.name)}
+						<a
+							href={labelUrl(p.repo, l.name)}
+							target="_blank"
+							rel="noreferrer"
+							class={CHIP}
+							style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
+						>
+					{/each}
+					{#if editable}{@render labelPicker()}{/if}
+				</div>
+			{/if}
+		</div>
 	</div>
 {/if}

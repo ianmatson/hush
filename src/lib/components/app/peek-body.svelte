@@ -201,25 +201,16 @@
 	{@const Icon = stateIcon(p)}
 	<article class="grid gap-5 p-4 pb-6" data-item-ready={subjectKey(repo, number)}>
 		<header class="grid gap-2">
-			<div class="flex flex-wrap items-center gap-2 text-xs">
+			<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 				<span class={cn('flex items-center gap-1 rounded-full px-2 py-0.5 font-medium', st.tone)}
 					><Icon class="size-3.5" />{st.label}</span
 				>
 				<a
-					class="font-mono text-muted-foreground hover:text-foreground hover:underline"
+					class="font-mono hover:text-foreground hover:underline"
 					href={p.url}
 					target="_blank"
 					rel="noreferrer">{p.repo}#{p.number}</a
 				>
-				<PeekProjects repo={p.repo} number={p.number} />
-				{#if p.kind === 'pr' || p.kind === 'issue'}
-					<PeekSlack {repo} {number} kind={p.kind} class="ml-auto" />
-				{/if}
-			</div>
-			<h2 class="text-base leading-snug font-semibold text-balance">
-				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
-			</h2>
-			<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 				<GhLink
 					href={profileUrl(p.author.login, p.author.bot)}
 					class="flex items-center gap-1.5 text-foreground"
@@ -238,27 +229,34 @@
 						<span>{p.pr.files} {p.pr.files === 1 ? 'file' : 'files'}</span>
 					</a>
 				{/if}
+				<PeekProjects repo={p.repo} number={p.number} />
+				{#if p.kind === 'pr' || p.kind === 'issue'}
+					<PeekSlack {repo} {number} kind={p.kind} class="ml-auto" />
+				{/if}
 			</div>
-			{#if p.pr}
-				{@const { base, head, headRepo } = p.pr}
-				{@const fromFork = !!headRepo && headRepo !== p.repo}
-				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${head}` : head}
-				<Tip focusable={false} text="{base} ← {headLabel}">
-					{#snippet children(props)}
-						<p {...props} class="truncate font-mono text-[0.7rem] text-muted-foreground">
-							<GhLink href={branchUrl(p.repo, base)}>{base}</GhLink> ←
-							{#if headRepo}<GhLink href={branchUrl(headRepo, head)}>{headLabel}</GhLink
-								>{:else}{headLabel}{/if}
-						</p>
-					{/snippet}
-				</Tip>
-			{/if}
+			<h2 class="text-base leading-snug font-semibold text-balance">
+				<a class="hover:underline" href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
+			</h2>
 			<PeekFields {p} />
 		</header>
 
 		{#if p.pr}
 			{@const pr = p.pr}
+			{@const fromFork = !!pr.headRepo && pr.headRepo !== p.repo}
+			{@const headLabel = fromFork ? `${pr.headRepo?.split('/')[0]}:${pr.head}` : pr.head}
 			<section class="grid gap-3 rounded-xl border p-3 text-[0.8rem]">
+				<Tip focusable={false} text="{pr.base} ← {headLabel}">
+					{#snippet children(props)}
+						<p
+							{...props}
+							class="truncate border-b pb-3 font-mono text-[0.7rem] text-muted-foreground"
+						>
+							<GhLink href={branchUrl(p.repo, pr.base)}>{pr.base}</GhLink> ←
+							{#if pr.headRepo}<GhLink href={branchUrl(pr.headRepo, pr.head)}>{headLabel}</GhLink
+								>{:else}{headLabel}{/if}
+						</p>
+					{/snippet}
+				</Tip>
 				<div class="grid gap-1.5">
 					<h3 class="text-xs font-medium text-muted-foreground">Reviews</h3>
 					{#if !pr.reviews.length && !pr.requested.length}
