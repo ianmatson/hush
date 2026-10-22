@@ -3,7 +3,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
-	import { followWhileGrowing, revealEntry } from '$lib/reveal';
+	import { followWhileGrowing, keepInPlace, revealEntry } from '$lib/reveal';
 	import {
 		meQuery,
 		peekQuery,
@@ -13,6 +13,8 @@
 	} from '$lib/queries';
 	import { taskCheckboxes, type SavedTaskText } from '$lib/task-checkboxes';
 	import { keys } from '$lib/queries';
+	import { api } from '$lib/api';
+	import { hiddenOlderCount, withOlderPage } from '$lib/shared/peek-timeline';
 	import { setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
 	import { threadsByReview } from '$lib/shared/diff';
@@ -77,11 +79,15 @@
 	);
 	let composerEnd = $state<HTMLElement | null>(null);
 	let shownEntryCount: number | null = null;
+	let shownNewestId: string | undefined;
 	$effect.pre(() => {
-		const count = q.data?.timeline.items.length;
-		if (count === undefined) return;
-		const entryAdded = shownEntryCount !== null && count > shownEntryCount;
-		shownEntryCount = count;
+		const items = q.data?.timeline.items;
+		if (!items) return;
+		const newestId = items.at(-1)?.id;
+		const entryAdded =
+			shownEntryCount !== null && items.length > shownEntryCount && newestId !== shownNewestId;
+		shownEntryCount = items.length;
+		shownNewestId = newestId;
 		if (entryAdded && composerEnd) untrack(() => followWhileGrowing(composerEnd!));
 	});
 	function updatePeek(change: (old: PeekDTO) => PeekDTO) {
@@ -110,6 +116,34 @@
 				})),
 			onconflict: reloadPeek
 		});
+	const shownSubject = $derived(subjectKey(repo, number));
+	const hiddenOlder = $derived(q.data ? hiddenOlderCount(q.data) : 0);
+	let olderLoadingFor = $state<string | null>(null);
+	let prependingOlder = $state(false);
+	let activity = $state<HTMLElement | null>(null);
+	let olderError = $state<{ subject: string; message: string } | null>(null);
+	async function loadOlder(before: string | null) {
+		const subject = shownSubject;
+		const queryKey = keys.peek(repo, number);
+		if (!before || olderLoadingFor === subject) return;
+		olderLoadingFor = subject;
+		olderError = null;
+		try {
+			const page = await api.peekOlder(repo, number, before);
+			prependingOlder = true;
+			await keepInPlace(activity?.querySelector('[data-peek-entry]') ?? null, () =>
+				queryClient.setQueryData<PeekDTO>(
+					queryKey,
+					(old) => old && withOlderPage(old, before, page)
+				)
+			);
+		} catch (err) {
+			olderError = { subject, message: (err as Error).message };
+		} finally {
+			olderLoadingFor = null;
+			prependingOlder = false;
+		}
+	}
 	let allChecks = $state(false);
 	let editingId = $state<string | null>(null);
 	let editTrigger: HTMLButtonElement | null = null;
@@ -346,21 +380,33 @@
 			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
 
-		<section class="grid">
+		<section class="grid" bind:this={activity}>
 			<h3 class="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
 				<MessageSquare class="size-3.5" />Activity
-				{#if p.timeline.total > p.timeline.items.length}
+				{#if p.timeline.before}
+					<button
+						type="button"
+						class="ml-auto font-normal underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+						disabled={olderLoadingFor === shownSubject}
+						onclick={() => loadOlder(p.timeline.before)}
+					>
+						{olderLoadingFor === shownSubject ? 'Loading…' : 'Show older'}
+					</button>
+				{:else if hiddenOlder}
 					<a
 						href={p.url}
 						target="_blank"
 						rel="noreferrer"
 						class="ml-auto flex items-center gap-1 font-normal hover:text-foreground"
-						>{p.timeline.total - p.timeline.items.length} older on GitHub<ExternalLink
-							class="size-3"
-						/></a
+						>{hiddenOlder} older on GitHub<ExternalLink class="size-3" /></a
 					>
 				{/if}
 			</h3>
+			{#if olderError?.subject === shownSubject}
+				<p class="pb-3 text-xs text-signal-fail" role="alert">
+					Could not load older activity: {olderError.message}
+				</p>
+			{/if}
 			{#if !p.timeline.items.length}
 				<p
 					class="pb-3 text-sm text-muted-foreground"
@@ -375,7 +421,11 @@
 				{@const canEdit =
 					e.canEdit && typeof e.body === 'string' && (e.type !== 'review' || !!e.body.trim())}
 				{@const showReactions = e.reactions && (e.html.trim() || e.reactions.groups.length)}
-				<div class="grid gap-1.5 pb-3" in:revealEntry>
+				<div
+					class="grid gap-1.5 pb-3"
+					data-peek-entry
+					in:revealEntry={{ instant: prependingOlder }}
+				>
 					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
 						<GhLink
 							href={profileUrl(e.author.login, e.author.bot)}

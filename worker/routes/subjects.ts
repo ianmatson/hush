@@ -1,8 +1,11 @@
 import { isGitHubName, parseRepoFullName } from '../../src/lib/shared/item-page';
-import type { PeekDTO } from '../../src/lib/shared/types';
+import type { PeekDTO, PeekTimelinePage } from '../../src/lib/shared/types';
 import { userToken } from '../db';
-import { fetchPeek, GitHubError } from '../github';
-import { routes, workspace, json } from '../app';
+import { fetchPeek, fetchPeekOlder, GitHubError } from '../github';
+import { routes, workspace, json, query } from '../app';
+
+const GRAPHQL_CURSOR = /^[A-Za-z0-9+/=_:-]{1,500}$/;
+const NOT_FOUND = 'GitHub did not find this PR or issue. Maybe you have no access.';
 
 // --- Quick check -----------------------------------------------------------
 
@@ -29,11 +32,7 @@ const app = routes()
 			return c.json({ error: 'Not a PR or issue.' }, 400);
 		try {
 			const found = await fetchPeek(await userToken(c.env, u), u.login, owner, repo, number);
-			if (!found)
-				return c.json(
-					{ error: 'GitHub did not find this PR or issue. Maybe you have no access.' },
-					404
-				);
+			if (!found) return c.json({ error: NOT_FOUND }, 404);
 			if (found.subject)
 				c.executionCtx.waitUntil(
 					workspace(c.env, u.id)
@@ -43,6 +42,23 @@ const app = routes()
 			return c.json(found.peek satisfies PeekDTO, 200, {
 				'Cache-Control': 'private, no-store'
 			});
+		} catch (err) {
+			const status = err instanceof GitHubError && err.status === 401 ? 401 : 502;
+			return c.json({ error: (err as Error).message }, status);
+		}
+	})
+	.get('/api/peek/:owner/:repo/:number/older', query<{ before: string }>(), async (c) => {
+		const u = c.get('user');
+		const { owner, repo } = c.req.param();
+		const number = Number(c.req.param('number'));
+		const { before } = c.req.valid('query');
+		if (!isGitHubName(owner) || !isGitHubName(repo) || !Number.isInteger(number) || number < 1)
+			return c.json({ error: 'Not a PR or issue.' }, 400);
+		if (!before || !GRAPHQL_CURSOR.test(before)) return c.json({ error: 'Bad page cursor.' }, 400);
+		try {
+			const page = await fetchPeekOlder(await userToken(c.env, u), owner, repo, number, before);
+			if (!page) return c.json({ error: NOT_FOUND }, 404);
+			return c.json(page satisfies PeekTimelinePage, 200, { 'Cache-Control': 'private, no-store' });
 		} catch (err) {
 			const status = err instanceof GitHubError && err.status === 401 ? 401 : 502;
 			return c.json({ error: (err as Error).message }, status);

@@ -461,6 +461,11 @@ export interface PeekEntry {
 	inline?: number;
 }
 
+export interface PeekTimelinePage {
+	items: PeekEntry[];
+	before: string | null;
+}
+
 /** One alert from the history (the bell). */
 export interface AlertDTO {
 	id: string;
@@ -508,7 +513,7 @@ export interface PeekDTO {
 		checksTotal: number;
 		lastReview: { oid: string; at: string } | null;
 	};
-	timeline: { total: number; items: PeekEntry[] };
+	timeline: PeekTimelinePage & { total: number };
 	/** What you may do here: the action buttons read it (shared/actions.ts). */
 	can: PeekCan;
 }

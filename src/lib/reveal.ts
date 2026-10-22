@@ -1,3 +1,4 @@
+import { tick } from 'svelte';
 import { slide, type TransitionConfig } from 'svelte/transition';
 import { cubicOut } from 'svelte/easing';
 
@@ -5,7 +6,8 @@ const REVEAL_MS = 280;
 const REVEAL_RISE_PX = 6;
 const FOLLOW_SLACK_PX = 48;
 
-export function revealEntry(node: Element): TransitionConfig {
+export function revealEntry(node: Element, { instant = false } = {}): TransitionConfig {
+	if (instant) return { duration: 0 };
 	const opening = slide(node, { duration: REVEAL_MS, easing: cubicOut });
 	return {
 		...opening,
@@ -39,6 +41,15 @@ export function followWhileGrowing(anchor: Element, durationMs = REVEAL_MS) {
 		if (now < until) requestAnimationFrame(step);
 	};
 	requestAnimationFrame(step);
+}
+
+export async function keepInPlace(anchor: Element | null, change: () => void) {
+	const scroller = anchor && (scrollParentOf(anchor) ?? document.scrollingElement);
+	const topBefore = anchor?.getBoundingClientRect().top;
+	change();
+	await tick();
+	if (!anchor?.isConnected || !scroller || topBefore === undefined) return;
+	scroller.scrollTop += anchor.getBoundingClientRect().top - topBefore;
 }
 
 const COLLAPSE_SIDEWAYS_MS = 200;

@@ -5,6 +5,7 @@ import {
 	fetchDetails,
 	fetchTeams,
 	fetchPeek,
+	fetchPeekOlder,
 	fetchSubjects,
 	forTeams,
 	gh,
@@ -405,6 +406,46 @@ describe('subject reads with partial GraphQL responses', () => {
 		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
 		expect(result?.peek.can.id).toBe('PR_1');
 		expect(result?.subject).toBeNull();
+	});
+});
+
+describe('peek timeline pages', () => {
+	const comment = (id: string) => ({ __typename: 'IssueComment', id, body: id, bodyHTML: id });
+	const answer = (pageInfo: { hasPreviousPage: boolean; startCursor: string | null }) =>
+		vi.fn(async (_url: string, _init: RequestInit) =>
+			Response.json({
+				data: {
+					repository: {
+						issueOrPullRequest: {
+							id: 'subject_1',
+							__typename: 'Issue',
+							timelineItems: { totalCount: 30, pageInfo, nodes: [comment('c_1')] }
+						}
+					}
+				}
+			})
+		);
+
+	it('gives the cursor of the page before the newest items', async () => {
+		vi.stubGlobal('fetch', answer({ hasPreviousPage: true, startCursor: 'Y3Vyc29y' }));
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.timeline).toMatchObject({ total: 30, before: 'Y3Vyc29y' });
+	});
+
+	it('gives no cursor at the first item', async () => {
+		vi.stubGlobal('fetch', answer({ hasPreviousPage: false, startCursor: 'Y3Vyc29y' }));
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.timeline.before).toBeNull();
+	});
+
+	it('asks for the items before a cursor', async () => {
+		const fetch = answer({ hasPreviousPage: true, startCursor: 'b2xkZXI=' });
+		vi.stubGlobal('fetch', fetch);
+		const page = await fetchPeekOlder('t', 'o', 'r', 1, 'Y3Vyc29y');
+		expect(page).toEqual({ items: [expect.objectContaining({ id: 'c_1' })], before: 'b2xkZXI=' });
+		const sent = JSON.parse(String(fetch.mock.calls[0][1].body));
+		expect(sent.variables).toMatchObject({ o: 'o', r: 'r', n: 1, before: 'Y3Vyc29y' });
+		expect(sent.query).toContain('before: $before');
 	});
 });
 

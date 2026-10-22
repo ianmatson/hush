@@ -6,6 +6,7 @@ import type {
 	PeekDTO,
 	PeekEntry,
 	PeekPerson,
+	PeekTimelinePage,
 	StackLink,
 	TeamDTO
 } from '../src/lib/shared/types';
@@ -848,9 +849,34 @@ export const forTeams = (q: ExpandedQuery, s: SubjectFacts, me: string) =>
 // ---------------------------------------------------------------------------
 // Peek: one PR or issue with its description, checks, and latest comments. About 1 point.
 
-const PEEK_TIMELINE = 10;
+const PEEK_TIMELINE_PAGE = 25;
 
 const PERSON = `login avatarUrl(size: 48) __typename`;
+
+const COMMENT_ENTRY = `... on IssueComment { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate createdAt url ${REACTION_FIELDS} }`;
+const REVIEW_ENTRY = `... on PullRequestReview { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate state submittedAt createdAt url comments { totalCount } ${REACTION_FIELDS} }`;
+const PR_TIMELINE = {
+	types: 'ISSUE_COMMENT, PULL_REQUEST_REVIEW',
+	entries: `${COMMENT_ENTRY} ${REVIEW_ENTRY}`
+};
+const ISSUE_TIMELINE = { types: 'ISSUE_COMMENT', entries: COMMENT_ENTRY };
+
+const peekTimeline = (
+	timeline: { types: string; entries: string },
+	cursorArgument = ''
+) => `timelineItems(last: ${PEEK_TIMELINE_PAGE}${cursorArgument}, itemTypes: [${timeline.types}]) {
+        totalCount
+        pageInfo { hasPreviousPage startCursor }
+        nodes { __typename ${timeline.entries} }
+      }`;
+
+const PEEK_OLDER_QUERY = `query($o: String!, $r: String!, $n: Int!, $before: String!) {
+  repository(owner: $o, name: $r) { issueOrPullRequest(number: $n) {
+    __typename
+    ... on PullRequest { ${peekTimeline(PR_TIMELINE, ', before: $before')} }
+    ... on Issue { ${peekTimeline(ISSUE_TIMELINE, ', before: $before')} }
+  } }
+}`;
 
 // The peek also asks for fragments P and I, so each peek refreshes the stored facts too.
 const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
@@ -878,14 +904,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
           ... on StatusContext { context state targetUrl }
         }
       } } } } }
-      timelineItems(last: ${PEEK_TIMELINE}, itemTypes: [ISSUE_COMMENT, PULL_REQUEST_REVIEW]) {
-        totalCount
-        nodes {
-          __typename
-          ... on IssueComment { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate createdAt url ${REACTION_FIELDS} }
-          ... on PullRequestReview { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate state submittedAt createdAt url comments { totalCount } ${REACTION_FIELDS} }
-        }
-      }
+      ${peekTimeline(PR_TIMELINE)}
     }
     ... on Issue {
       id number title url state createdAt body bodyHTML locked ${REACTION_FIELDS}
@@ -894,10 +913,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       author { ${PERSON} }
       labels(first: 10) { nodes { name color } }
       assignees(first: 10) { nodes { login } }
-      timelineItems(last: ${PEEK_TIMELINE}, itemTypes: [ISSUE_COMMENT]) {
-        totalCount
-        nodes { __typename ... on IssueComment { author { ${PERSON} } body bodyHTML viewerDidAuthor viewerCanUpdate createdAt url ${REACTION_FIELDS} } }
-      }
+      ${peekTimeline(ISSUE_TIMELINE)}
     }
   } }
 }
@@ -952,6 +968,23 @@ export function peekEntryFromRest(
 	};
 }
 
+export async function fetchPeekOlder(
+	token: string,
+	owner: string,
+	repo: string,
+	number: number,
+	before: string
+): Promise<PeekTimelinePage | null> {
+	const result = await graphql(token, PEEK_OLDER_QUERY, { o: owner, r: repo, n: number, before });
+	if (!result.ok) throw new GitHubError(result.status, githubStatusMessage(result.status));
+	const n: Node | null | undefined = result.data?.repository?.issueOrPullRequest;
+	if (!n?.timelineItems) {
+		if (result.errors.length) throw new GitHubError(502, result.errors[0].message);
+		return null;
+	}
+	return peekTimelinePage(n.timelineItems);
+}
+
 function checkState(n: Node): CheckState {
 	if (n.__typename === 'StatusContext') return ciWord(n.state as CiState) ?? 'failure';
 	if (n.status !== 'COMPLETED') return 'pending';
@@ -969,31 +1002,8 @@ function checkState(n: Node): CheckState {
 
 const CHECK_ORDER: Record<CheckState, number> = { failure: 0, pending: 1, neutral: 2, success: 3 };
 
-/**
- * Fetch one PR or issue for the peek panel, with its facts for the store. Returns null when it
- * does not exist or is hidden.
- */
-export async function fetchPeek(
-	token: string,
-	me: string,
-	owner: string,
-	repo: string,
-	number: number
-): Promise<{ peek: PeekDTO; subject: SubjectFacts | null } | null> {
-	const result = await graphql(token, PEEK_QUERY, { me, o: owner, r: repo, n: number });
-	if (!result.ok) throw new GitHubError(result.status, githubStatusMessage(result.status));
-	const n: Node | null | undefined = result.data?.repository?.issueOrPullRequest;
-	if (!n) {
-		if (result.errors.length && result.data?.repository !== null)
-			throw new GitHubError(502, result.errors[0].message);
-		return null;
-	}
-	const pr = n.__typename === 'PullRequest';
-	const parsedSubject = toSubject(n, me);
-	const subject = hasGraphqlErrorAt(result.errors, ['repository', 'issueOrPullRequest'])
-		? null
-		: parsedSubject;
-	const items: PeekEntry[] = (n.timelineItems?.nodes ?? [])
+function peekTimelinePage(timeline: Node | null | undefined): PeekTimelinePage {
+	const items: PeekEntry[] = (timeline?.nodes ?? [])
 		.filter((t: Node) => t?.__typename)
 		.map((t: Node) =>
 			t.__typename === 'PullRequestReview'
@@ -1024,6 +1034,35 @@ export async function fetchPeek(
 						reactions: reactionsOf(t)
 					}
 		);
+	const pageInfo = timeline?.pageInfo;
+	return { items, before: pageInfo?.hasPreviousPage ? (pageInfo.startCursor ?? null) : null };
+}
+
+/**
+ * Fetch one PR or issue for the peek panel, with its facts for the store. Returns null when it
+ * does not exist or is hidden.
+ */
+export async function fetchPeek(
+	token: string,
+	me: string,
+	owner: string,
+	repo: string,
+	number: number
+): Promise<{ peek: PeekDTO; subject: SubjectFacts | null } | null> {
+	const result = await graphql(token, PEEK_QUERY, { me, o: owner, r: repo, n: number });
+	if (!result.ok) throw new GitHubError(result.status, githubStatusMessage(result.status));
+	const n: Node | null | undefined = result.data?.repository?.issueOrPullRequest;
+	if (!n) {
+		if (result.errors.length && result.data?.repository !== null)
+			throw new GitHubError(502, result.errors[0].message);
+		return null;
+	}
+	const pr = n.__typename === 'PullRequest';
+	const parsedSubject = toSubject(n, me);
+	const subject = hasGraphqlErrorAt(result.errors, ['repository', 'issueOrPullRequest'])
+		? null
+		: parsedSubject;
+	const page = peekTimelinePage(n.timelineItems);
 	const base: PeekDTO = {
 		kind: pr ? 'pr' : 'issue',
 		number: n.number,
@@ -1040,7 +1079,7 @@ export async function fetchPeek(
 		reactions: reactionsOf(n),
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
-		timeline: { total: n.timelineItems?.totalCount ?? items.length, items },
+		timeline: { total: n.timelineItems?.totalCount ?? page.items.length, ...page },
 		can: {
 			id: n.id,
 			author: !!n.viewerDidAuthor,
