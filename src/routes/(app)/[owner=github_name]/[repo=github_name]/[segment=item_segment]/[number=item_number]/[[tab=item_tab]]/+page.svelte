@@ -257,6 +257,14 @@
 			<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
 		</div>
 	{/if}
+	<div
+		class={cn(
+			'sticky bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)] mx-auto h-0 lg:bottom-[max(1rem,env(safe-area-inset-bottom))]',
+			!onFilesTab && 'max-w-4xl'
+		)}
+	>
+		<ScrollToBottom scroller={window} content={pageContent} class="absolute right-4 bottom-0" />
+	</div>
 </div>
 
 <div
@@ -324,11 +332,5 @@
 		<GhActions {repo} {number} need={null} moreAsIcon />
 	</div>
 </div>
-
-<ScrollToBottom
-	scroller={window}
-	content={pageContent}
-	class="fixed right-4 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)] lg:bottom-[max(1rem,env(safe-area-inset-bottom))]"
-/>
 
 <ShortcutsDialog bind:open={helpOpen} shortcuts={helpShortcuts} />
