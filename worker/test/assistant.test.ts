@@ -133,6 +133,8 @@ describe('passive saved views', () => {
 		expect(result.complete).toBe(true);
 		expect(result.freshness).toEqual({
 			evaluatedAt: NOW,
+			lastPollAt: null,
+			polling: true,
 			stale: false,
 			unknown: false,
 			truncated: false,

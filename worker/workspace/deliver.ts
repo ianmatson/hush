@@ -1,6 +1,5 @@
 import { MINUTE_MS } from '../../src/lib/shared/durations';
 import {
-	digestWindowIsOver,
 	holdReason,
 	limitRoom,
 	mayBuzzAgain,
@@ -38,6 +37,7 @@ export interface DeliveryContext {
 	lastPushOf(itemId: ItemId): PushMark | null;
 	heldByAttention(itemId: ItemId): boolean;
 	urgent(itemId: ItemId): boolean;
+	tagOf(itemId: ItemId): string;
 }
 
 export interface Outgoing {
@@ -52,11 +52,11 @@ export interface DeliveryPlan {
 	waitUntil: number | null;
 }
 
-const messageOf = (alert: StoredAlert): PushMessage => ({
+const messageOf = (alert: StoredAlert, ctx: DeliveryContext): PushMessage => ({
 	title: alert.title,
 	body: alert.body,
 	url: alert.url,
-	tag: alert.itemId
+	tag: ctx.tagOf(alert.itemId)
 });
 
 export function digestOf(alerts: StoredAlert[], duringQuiet: boolean, origin: string): PushMessage {
@@ -72,6 +72,16 @@ export function digestOf(alerts: StoredAlert[], duringQuiet: boolean, origin: st
 	};
 }
 
+function digestDueAt(alerts: StoredAlert[], ctx: DeliveryContext): number {
+	const window = ctx.settings.pushDigestMinutes! * MINUTE_MS;
+	const windowOver = ctx.state.lastDigestAt + window;
+	const firstAlert = Math.min(...alerts.map((alert) => alert.createdAt));
+	return firstAlert >= windowOver ? firstAlert + window : windowOver;
+}
+
+const retryAtOf = (alert: StoredAlert) =>
+	alert.delivery.status === 'pending' ? (alert.delivery.retryAt ?? 0) : 0;
+
 function limitFreesAt(ctx: DeliveryContext): number | null {
 	const limit = ctx.settings.pushLimit;
 	if (!limit) return null;
@@ -84,9 +94,13 @@ export function planDelivery(pending: StoredAlert[], ctx: DeliveryContext): Deli
 	const plan: DeliveryPlan = { skip: [], send: [], waitUntil: null };
 	const skip = (alert: StoredAlert, reason: SkipReason) =>
 		plan.skip.push({ alertId: alert.id, reason });
+	const wait = (at: number | null) => {
+		if (at !== null && (plan.waitUntil === null || at < plan.waitUntil)) plan.waitUntil = at;
+	};
 	const sendable: StoredAlert[] = [];
 	for (const alert of pending) {
-		if (!ctx.hasChannel) skip(alert, 'no-channel');
+		if (retryAtOf(alert) > ctx.now) wait(retryAtOf(alert));
+		else if (!ctx.hasChannel) skip(alert, 'no-channel');
 		else if (ctx.heldByAttention(alert.itemId)) skip(alert, 'held');
 		else if (
 			!alert.reasons.includes('snooze-over') &&
@@ -105,14 +119,11 @@ export function planDelivery(pending: StoredAlert[], ctx: DeliveryContext): Deli
 	const urgent = urgentNow ? sendable.filter((alert) => ctx.urgent(alert.itemId)) : [];
 	const rest = sendable.filter((alert) => !urgent.includes(alert));
 	const quietRecheck = ctx.now + QUIET_RECHECK_MS;
-	const wait = (at: number | null) => {
-		if (at !== null && (plan.waitUntil === null || at < plan.waitUntil)) plan.waitUntil = at;
-	};
 	if (urgent.length) {
 		if (holdReason(ctx.settings, ctx.now, ctx.state, true) === 'quiet') wait(quietRecheck);
 		else
 			for (const alert of urgent)
-				plan.send.push({ message: messageOf(alert), alertIds: [alert.id], digest: false });
+				plan.send.push({ message: messageOf(alert, ctx), alertIds: [alert.id], digest: false });
 	}
 	if (!rest.length) return plan;
 	const hold = holdReason(ctx.settings, ctx.now, ctx.state, false);
@@ -121,15 +132,15 @@ export function planDelivery(pending: StoredAlert[], ctx: DeliveryContext): Deli
 		return plan;
 	}
 	if (hold === 'digest') {
-		if (!digestWindowIsOver(ctx.settings, ctx.now, ctx.state)) {
-			wait(ctx.state.lastDigestAt + ctx.settings.pushDigestMinutes! * MINUTE_MS);
+		if (ctx.now < digestDueAt(rest, ctx)) {
+			wait(digestDueAt(rest, ctx));
 			return plan;
 		}
 		if (limitRoom(ctx.settings, ctx.now, ctx.state) === 0) {
 			wait(limitFreesAt(ctx));
 			return plan;
 		}
-		const message = rest.length === 1 ? messageOf(rest[0]) : digestOf(rest, false, ctx.origin);
+		const message = rest.length === 1 ? messageOf(rest[0], ctx) : digestOf(rest, false, ctx.origin);
 		plan.send.push({ message, alertIds: rest.map((a) => a.id), digest: true });
 		return plan;
 	}
@@ -140,7 +151,7 @@ export function planDelivery(pending: StoredAlert[], ctx: DeliveryContext): Deli
 	}
 	if (rest.length <= MAX_INDIVIDUAL_PUSHES)
 		for (const alert of rest.slice(0, room))
-			plan.send.push({ message: messageOf(alert), alertIds: [alert.id], digest: false });
+			plan.send.push({ message: messageOf(alert, ctx), alertIds: [alert.id], digest: false });
 	else
 		plan.send.push({
 			message: digestOf(rest, false, ctx.origin),

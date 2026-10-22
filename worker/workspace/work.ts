@@ -378,6 +378,15 @@ export function stopped(sync: Sync, error: string): Sync {
 	};
 }
 
+export const restarted = (sync: Sync): Sync => ({
+	...sync,
+	lifecycle: 'active',
+	generation: sync.generation + 1,
+	reads: {},
+	analysis: [],
+	lastError: null
+});
+
 export const cleanedUp = (sync: Sync, now: number): Sync => ({
 	...sync,
 	cleanupAt: now + CLEANUP_EVERY_MS

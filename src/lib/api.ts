@@ -130,8 +130,7 @@ export const api = {
 	pinItems: (ids: string[], pin: CategoryPin) =>
 		ok(client.api.items.pin.$post({ json: { ids, ...pin } })),
 	reevaluateItems: () => ok(client.api.items.reevaluate.$post()),
-	muteItems: (ids: string[], muted = true) =>
-		ok(client.api.items.mute.$post({ json: { ids, muted } })),
+	muteItems: (ids: string[]) => ok(client.api.items.mute.$post({ json: { ids } })),
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),

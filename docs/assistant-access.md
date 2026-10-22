@@ -170,8 +170,9 @@ The snapshot evaluates the stored items, search results, and view state with the
 same pure evaluator as the app (`src/lib/model`), so membership, grouping,
 sorting, closed-item retention, snooze/mute, unread, and changes-since-seen match
 the app for the same stored revision and time. Stale data stays stale: `get_view`
-reports it in `freshness` (stale, unknown, or truncated searches, and skipped
-team searches). Browser-local kind selection, category chips, collapsed groups,
+reports it in `freshness` (stale, unknown, or truncated searches, skipped team
+searches, the last notifications poll, and whether Hush still polls for this
+user). Browser-local kind selection, category chips, collapsed groups,
 held rows, and stack rotation are not saved configuration and are not
 reproduced.
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	digestWindowIsOver,
 	holdReason,
 	isWholeIn,
 	keptSends,
@@ -60,23 +59,13 @@ describe('holdReason', () => {
 	});
 });
 
-describe('limitRoom and digestWindowIsOver', () => {
+describe('limitRoom', () => {
 	it('counts each push in the window against the limit', () => {
 		const limited = { ...noDelivery, pushLimit: { count: 6, minutes: 30 } };
 		const fourRecent = { recentSends: Array(4).fill(NOW - MIN), lastDigestAt: 0 };
 		expect(limitRoom(limited, NOW, fourRecent)).toBe(2);
 		expect(limitRoom(limited, NOW, { ...fourRecent, recentSends: Array(9).fill(NOW) })).toBe(0);
 		expect(limitRoom(noDelivery, NOW, fourRecent)).toBe(Number.POSITIVE_INFINITY);
-	});
-	it('says when a digest interval is over', () => {
-		const digest = { ...noDelivery, pushDigestMinutes: 30 };
-		expect(digestWindowIsOver(digest, NOW, { recentSends: [], lastDigestAt: NOW - 31 * MIN })).toBe(
-			true
-		);
-		expect(digestWindowIsOver(digest, NOW, { recentSends: [], lastDigestAt: NOW - MIN })).toBe(
-			false
-		);
-		expect(digestWindowIsOver(noDelivery, NOW, noState)).toBe(false);
 	});
 });
 

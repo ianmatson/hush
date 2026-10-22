@@ -156,7 +156,7 @@ describe('commit: alerts', () => {
 		expect(
 			run(base.data, { kind: 'items', read: [requested], inaccessible: [], quiet: true }).alerts
 		).toEqual([]);
-		const muted = run(base.data, { kind: 'mute', itemIds: ['PR_1'], muted: true });
+		const muted = run(base.data, { kind: 'mute', itemIds: ['PR_1'] });
 		expect(
 			run(muted.data, { kind: 'items', read: [requested], inaccessible: [], quiet: false }).alerts
 		).toEqual([]);

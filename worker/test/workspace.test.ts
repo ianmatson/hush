@@ -3,7 +3,12 @@ import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 import type { ItemView } from '../../src/lib/shared/types';
 import { ME, NOW, facts } from '../../src/lib/model/testing';
 import type { DecisionRequest } from '../../src/lib/shared/decisions';
-import { WorkspaceEngine, type Analyzed } from '../workspace/engine';
+import {
+	DELIVERY_RETRY_MS,
+	MAX_DELIVERY_ATTEMPTS,
+	WorkspaceEngine,
+	type Analyzed
+} from '../workspace/engine';
 import type { Input } from '../workspace/commit';
 import { PAUSE_AFTER_NO_PUSH_MS, SOURCE_EVERY_MS } from '../workspace/work';
 import { configWith, harness, settingsWith, windowOf } from './workspace-fixtures';
@@ -73,7 +78,9 @@ describe('Workspace', () => {
 			pollIntervalMs: 60_000
 		});
 		await h.workspace.run(h.clock);
-		expect(h.sender.sent.map((m) => [m.tag, m.title])).toEqual([['PR_1', 'Review requested']]);
+		expect(h.sender.sent.map((m) => [m.tag, m.title])).toEqual([
+			['PostHog/posthog#1', 'Review requested']
+		]);
 		expect(h.store.alertHistory(5)[0]).toMatchObject({
 			reasons: ['review-requested'],
 			delivery: { status: 'sent' }
@@ -155,6 +162,26 @@ describe('Workspace', () => {
 		expect(h.workspace.schedule.lifecycle).toBe('stopped');
 		expect(h.rejectedCount()).toBe(1);
 		expect(h.alarms.at(-1)).toBeNull();
+	});
+
+	it('runs again after a new sign-in, and drops work of the old credential', async () => {
+		const h = started();
+		h.readers.notificationResults.push({ status: 'unauthorized' });
+		await h.workspace.run(h.clock);
+		const stoppedAt = h.workspace.schedule.generation;
+		h.workspace.restart(h.clock());
+		expect(h.workspace.schedule).toMatchObject({ lifecycle: 'active', lastError: null });
+		expect(h.workspace.schedule.generation).toBeGreaterThan(stoppedAt);
+		expect(h.alarms.at(-1)).not.toBeNull();
+	});
+
+	it('writes nothing after it is closed', async () => {
+		const h = started();
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		h.readers.facts.set('PR_1', facts(1));
+		h.workspace.close();
+		await h.workspace.run(h.clock);
+		expect(h.store.load()?.items.size ?? 0).toBe(0);
 	});
 
 	it('drops the results of work that a stop overtook', async () => {
@@ -471,6 +498,10 @@ describe('Workspace delivery', () => {
 		);
 		h.workspace.apply(reviewRequest(h), h.clock());
 		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toEqual([]);
+		expect(h.workspace.schedule.deliveryDue).toBe(h.clock() + 30 * MINUTE_MS);
+		h.advance(30 * MINUTE_MS);
+		await h.workspace.run(h.clock);
 		expect(h.sender.sent).toHaveLength(1);
 		const digestAt = h.clock();
 		h.advance(MINUTE_MS);
@@ -489,6 +520,61 @@ describe('Workspace delivery', () => {
 		expect(h.sender.sent).toHaveLength(1);
 		expect(h.workspace.schedule.deliveryDue).toBe(digestAt + 30 * MINUTE_MS);
 		expect(h.alarms.at(-1)).toBeLessThanOrEqual(digestAt + 30 * MINUTE_MS);
+	});
+
+	it('keeps a failed alert pending, retries it, and gives up after the last attempt', async () => {
+		const h = withAlert();
+		await h.workspace.run(h.clock);
+		h.sender.outcome = 'failed';
+		h.workspace.apply(reviewRequest(h), h.clock());
+		await h.workspace.run(h.clock);
+		const [first] = h.store.alertHistory(1);
+		expect(first.delivery).toEqual({
+			status: 'pending',
+			attempts: 1,
+			retryAt: h.clock() + DELIVERY_RETRY_MS
+		});
+		expect(h.store.lastPushes().size).toBe(0);
+		for (let attempt = 2; attempt <= MAX_DELIVERY_ATTEMPTS; attempt++) {
+			h.advance(DELIVERY_RETRY_MS * attempt);
+			await h.workspace.run(h.clock);
+		}
+		expect(h.sender.sent).toHaveLength(MAX_DELIVERY_ATTEMPTS);
+		expect(h.store.alertHistory(1)[0].delivery.status).toBe('failed');
+	});
+
+	it('checks the alert again before each send', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.facts.set('PR_2', facts(2));
+		h.readers.sourceResults.push(answerSearch(['PR_1', 'PR_2']));
+		await h.workspace.run(h.clock);
+		h.workspace.apply(
+			{
+				kind: 'items',
+				read: [
+					facts(1, {
+						updatedAt: new Date(h.clock()).toISOString(),
+						reviewRequests: [{ name: ME, team: false }]
+					}),
+					facts(2, {
+						updatedAt: new Date(h.clock()).toISOString(),
+						reviewRequests: [{ name: ME, team: false }]
+					})
+				],
+				inaccessible: [],
+				quiet: false
+			},
+			h.clock()
+		);
+		const send = h.sender.send.bind(h.sender);
+		h.sender.send = async (message, channels) => {
+			const outcomes = await send(message, channels);
+			h.workspace.apply({ kind: 'mute', itemIds: ['PR_1', 'PR_2'] }, h.clock());
+			return outcomes;
+		};
+		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toHaveLength(1);
 	});
 });
 
@@ -532,7 +618,7 @@ describe('Workspace storage and retries', () => {
 			expect(() => h.workspace.touch(h.clock())).toThrow('disk full');
 			h.store.writeState = writeState;
 			reopened = WorkspaceEngine.open(h.deps, h.clock())!;
-			reopened.apply({ kind: 'mute', itemIds: ['PR_1'], muted: true }, h.clock());
+			reopened.apply({ kind: 'mute', itemIds: ['PR_1'] }, h.clock());
 		};
 		await h.workspace.run(h.clock);
 		expect(h.store.load()?.items.get('PR_1')?.attention.muted).toBe(true);

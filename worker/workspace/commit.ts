@@ -59,7 +59,7 @@ export type Command =
 	| { kind: 'unread'; itemIds: ItemId[] }
 	| { kind: 'snooze'; itemIds: ItemId[]; snooze: Snooze }
 	| { kind: 'wake'; itemIds: ItemId[] }
-	| { kind: 'mute'; itemIds: ItemId[]; muted: boolean }
+	| { kind: 'mute'; itemIds: ItemId[] }
 	| { kind: 'pin'; itemIds: ItemId[]; pin: CategoryPin }
 	| { kind: 'settings'; settings: Settings }
 	| { kind: 'teams'; teams: TeamDTO[] }
@@ -257,14 +257,20 @@ function applyInput(draft: Draft, input: Input, now: number) {
 		case 'snooze':
 			return draft.updateAttention(input.itemIds, (attention) => ({
 				...attention,
-				snooze: input.snooze
+				snooze: input.snooze,
+				muted: false
 			}));
 		case 'wake':
-			return draft.updateAttention(input.itemIds, (attention) => ({ ...attention, snooze: null }));
+			return draft.updateAttention(input.itemIds, (attention) => ({
+				...attention,
+				snooze: null,
+				muted: false
+			}));
 		case 'mute':
 			return draft.updateAttention(input.itemIds, (attention) => ({
 				...attention,
-				muted: input.muted
+				snooze: null,
+				muted: true
 			}));
 		case 'pin':
 			return draft.updateAttention(input.itemIds, (attention) => ({

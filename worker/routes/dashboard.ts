@@ -63,11 +63,10 @@ const app = routes()
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
 		return c.json(await workspace(c.env, c.get('user').id).unsnooze(ids));
 	})
-	.post('/api/items/mute', json<{ ids: string[]; muted?: boolean }>(), async (c) => {
-		const body = c.req.valid('json');
-		const ids = itemIdsOf(body.ids);
+	.post('/api/items/mute', json<{ ids: string[] }>(), async (c) => {
+		const ids = itemIdsOf(c.req.valid('json').ids);
 		if (!ids.length) return c.json({ error: 'Invalid items' }, 400);
-		return c.json(await workspace(c.env, c.get('user').id).mute(ids, body.muted !== false));
+		return c.json(await workspace(c.env, c.get('user').id).mute(ids));
 	})
 	.post('/api/items/pin', json<{ ids: string[] } & CategoryPin>(), async (c) => {
 		const body = c.req.valid('json') as { ids?: unknown } & Record<string, unknown>;

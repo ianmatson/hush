@@ -48,10 +48,11 @@ const TITLE_SEPARATOR = ' · ';
 export type ChannelOutcome = 'sent' | 'failed';
 
 export type AlertDelivery =
-	| { status: 'pending' }
+	| { status: 'pending'; attempts?: number; retryAt?: number }
 	| { status: 'superseded'; by: string }
 	| { status: 'skipped'; reason: string }
-	| { status: 'sent'; at: number; channels: Record<string, ChannelOutcome> };
+	| { status: 'sent'; at: number; channels: Record<string, ChannelOutcome> }
+	| { status: 'failed'; at: number; channels: Record<string, ChannelOutcome> };
 
 export interface StoredAlert extends AlertCause {
 	createdAt: number;
@@ -216,6 +217,7 @@ export class WorkspaceStore {
 			}),
 			alert
 		);
+		const createdAt = Math.min(now, ...pending.map((older) => older.createdAt));
 		for (const older of pending) this.setDelivery(older.id, { status: 'superseded', by: alert.id });
 		this.run(
 			`INSERT OR IGNORE INTO alerts (id, item_id, reasons, title, body, url, created_at, delivery)
@@ -226,7 +228,7 @@ export class WorkspaceStore {
 			combined.title,
 			combined.body,
 			combined.url,
-			now,
+			createdAt,
 			JSON.stringify({ status: 'pending' } satisfies AlertDelivery)
 		);
 	}
@@ -251,6 +253,11 @@ export class WorkspaceStore {
 		return this.rows<AlertRow>('SELECT * FROM alerts ORDER BY created_at DESC LIMIT ?', limit).map(
 			alertOf
 		);
+	}
+
+	deliveryOf(id: string): AlertDelivery | null {
+		const [row] = this.rows<{ delivery: string }>('SELECT delivery FROM alerts WHERE id = ?', id);
+		return row ? JSON.parse(row.delivery) : null;
 	}
 
 	setDelivery(id: string, delivery: AlertDelivery) {

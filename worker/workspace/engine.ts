@@ -1,10 +1,10 @@
 import { ciRunning } from '../../src/lib/shared/ci';
 import type { DecisionAnswers, DecisionRequest } from '../../src/lib/shared/decisions';
-import { DAY_MS } from '../../src/lib/shared/durations';
+import { DAY_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { readsBoard } from '../../src/lib/shared/projects';
 import { keptSends } from '../../src/lib/shared/push-policy';
-import type { SubjectFacts } from '../../src/lib/shared/subject';
+import { subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
 import type { DashKind, DashProject, TeamDTO } from '../../src/lib/shared/types';
 import {
 	analysisRequests,
@@ -19,8 +19,8 @@ import type { ItemId, ProjectFacet, SourceSpec } from '../../src/lib/model/types
 import { CallBudget } from '../github';
 import type { PushMessage } from '../webpush';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
-import { planDelivery } from './deliver';
-import type { ChannelOutcome, WorkspaceStore } from './store';
+import { planDelivery, type Outgoing } from './deliver';
+import type { AlertDelivery, ChannelOutcome, WorkspaceStore } from './store';
 import {
 	analysisSpent,
 	analysisUsed,
@@ -43,6 +43,7 @@ import {
 	readsDone,
 	readsFailed,
 	requestReads,
+	restarted,
 	SAFETY_READ_EVERY_MS,
 	sourcesRan,
 	stopped,
@@ -62,6 +63,9 @@ export const FORGET_AFTER_MS = 30 * DAY_MS;
 export const MAX_DEPARTURE_READS = 50;
 export const MAX_PROJECT_READS = 200;
 export const RUN_CALL_BUDGET = 40;
+export const RUN_SEND_BUDGET = 10;
+export const MAX_DELIVERY_ATTEMPTS = 3;
+export const DELIVERY_RETRY_MS = 5 * MINUTE_MS;
 
 export interface NotificationThread {
 	id: string;
@@ -117,6 +121,7 @@ interface Run {
 	generation: number;
 	clock: () => number;
 	budget: CallBudget;
+	sends: CallBudget;
 }
 
 export type Channel = 'push' | 'slack';
@@ -140,9 +145,21 @@ export interface WorkspaceDeps {
 
 const locatorOf = (repo: string, number: number) => `${repo.toLowerCase()}#${number}`;
 
+function retriedDelivery(
+	before: Extract<AlertDelivery, { status: 'pending' }>,
+	channels: Record<string, ChannelOutcome>,
+	at: number
+): AlertDelivery {
+	const attempts = (before.attempts ?? 0) + 1;
+	return attempts >= MAX_DELIVERY_ATTEMPTS
+		? { status: 'failed', at, channels }
+		: { status: 'pending', attempts, retryAt: at + DELIVERY_RETRY_MS * attempts };
+}
+
 export class WorkspaceEngine {
 	private interest: Interest = { ids: new Set(), ciRunning: new Set() };
 	private storageFailed = false;
+	private closed = false;
 
 	private constructor(
 		private readonly deps: WorkspaceDeps,
@@ -177,7 +194,12 @@ export class WorkspaceEngine {
 		return this.storageFailed;
 	}
 
+	close() {
+		this.closed = true;
+	}
+
 	private persist(write: () => void) {
+		if (this.closed) throw new Error('This workspace was closed.');
 		if (this.storageFailed) throw new Error('This workspace failed to save. Open it again.');
 		try {
 			write();
@@ -258,6 +280,15 @@ export class WorkspaceEngine {
 		this.saveSync(stopped(this.sync, reason));
 	}
 
+	restart(now: number) {
+		this.saveSync(restarted(this.sync));
+		this.touch(now);
+	}
+
+	pushAvailable(hasPush: boolean) {
+		if (this.sync.hasPush !== hasPush) this.saveSync({ ...this.sync, hasPush });
+	}
+
 	itemAt(repo: string, number: number): ItemId | null {
 		return this.itemIdAt(repo, number);
 	}
@@ -291,13 +322,12 @@ export class WorkspaceEngine {
 		this.saveSync({ ...this.sync, focusedUntil, appSeenAt: now });
 	}
 
-	appBlurred(now: number) {
-		this.saveSync({ ...this.sync, focusedUntil: 0, appSeenAt: now });
-	}
-
 	private stillCurrent(generation: number) {
 		return (
-			!this.storageFailed && this.sync.generation === generation && this.sync.lifecycle === 'active'
+			!this.storageFailed &&
+			!this.closed &&
+			this.sync.generation === generation &&
+			this.sync.lifecycle === 'active'
 		);
 	}
 
@@ -317,7 +347,8 @@ export class WorkspaceEngine {
 		const run: Run = {
 			generation: this.sync.generation,
 			clock,
-			budget: new CallBudget(RUN_CALL_BUDGET)
+			budget: new CallBudget(RUN_CALL_BUDGET),
+			sends: new CallBudget(RUN_SEND_BUDGET)
 		};
 		const plan = planRun(this.sync, this.interest, clock());
 		if (plan.teams && this.mayCallGithub(run)) await this.refreshTeams(run);
@@ -331,9 +362,9 @@ export class WorkspaceEngine {
 		if (analysis.length && this.stillCurrent(run.generation)) await this.runAnalysis(analysis, run);
 		if (plan.boundary && this.stillCurrent(run.generation)) this.apply({ kind: 'time' }, clock());
 		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(run.generation))
-			await this.deliver(clock);
+			await this.deliver(run);
 		if (plan.cleanup && this.stillCurrent(run.generation)) this.cleanup(clock());
-		if (!this.storageFailed) this.saveSync();
+		if (!this.storageFailed && !this.closed) this.saveSync();
 	}
 
 	private itemIdAt(repo: string, number: number): ItemId | null {
@@ -499,15 +530,10 @@ export class WorkspaceEngine {
 			.decisions.urgent;
 	}
 
-	private async deliver(clock: () => number) {
-		const now = clock();
-		if (this.sync.deliveryDue === null || this.sync.deliveryDue > now) return;
-		const pending = this.deps.store.pendingAlerts();
-		const channels = pending.length ? await this.deps.sender.channels() : [];
+	private deliveryPlan(channels: Channel[], now: number) {
 		const lastPushes = this.deps.store.lastPushes();
-		const { settings } = this.data.config;
-		const plan = planDelivery(pending, {
-			settings,
+		return planDelivery(this.deps.store.pendingAlerts(), {
+			settings: this.data.config.settings,
 			now,
 			origin: this.deps.origin,
 			hasChannel: channels.length > 0,
@@ -516,28 +542,57 @@ export class WorkspaceEngine {
 			state: this.sync.delivery,
 			lastPushOf: (id) => lastPushes.get(id) ?? null,
 			heldByAttention: (id) => this.heldByAttention(id, now),
-			urgent: (id) => this.urgent(id)
+			urgent: (id) => this.urgent(id),
+			tagOf: (id) => {
+				const facts = this.data.items.get(id)?.facts;
+				return facts ? subjectKey(facts.repo, facts.number) : id;
+			}
 		});
+	}
+
+	private delivered(outgoing: Outgoing, outcomes: Record<Channel, ChannelOutcome>, at: number) {
+		const sent = Object.values(outcomes).includes('sent');
+		const { settings } = this.data.config;
+		const delivery = sent
+			? {
+					recentSends: keptSends([...this.sync.delivery.recentSends, at], at, settings.pushLimit),
+					lastDigestAt: outgoing.digest ? at : this.sync.delivery.lastDigestAt
+				}
+			: this.sync.delivery;
 		this.persist(() => {
-			for (const { alertId, reason } of plan.skip)
-				this.deps.store.setDelivery(alertId, { status: 'skipped', reason });
+			for (const alertId of outgoing.alertIds) {
+				const before = this.deps.store.deliveryOf(alertId);
+				if (sent) this.deps.store.setDelivery(alertId, { status: 'sent', at, channels: outcomes });
+				else if (before?.status === 'pending')
+					this.deps.store.setDelivery(alertId, retriedDelivery(before, outcomes, at));
+			}
 		});
-		let delivery = this.sync.delivery;
-		for (const outgoing of plan.send) {
-			const outcomes = await this.deps.sender.send(outgoing.message, channels);
-			const sentAt = clock();
-			if (Object.values(outcomes).includes('sent'))
-				delivery = {
-					recentSends: keptSends([...delivery.recentSends, sentAt], sentAt, settings.pushLimit),
-					lastDigestAt: outgoing.digest ? sentAt : delivery.lastDigestAt
-				};
+		this.saveSync({ ...this.sync, delivery });
+	}
+
+	private async deliver(run: Run) {
+		for (;;) {
+			const channels = this.deps.store.pendingAlerts().length
+				? await this.deps.sender.channels()
+				: [];
+			if (!this.stillCurrent(run.generation)) return;
+			const now = run.clock();
+			const plan = this.deliveryPlan(channels, now);
 			this.persist(() => {
-				for (const alertId of outgoing.alertIds)
-					this.deps.store.setDelivery(alertId, { status: 'sent', at: sentAt, channels: outcomes });
+				for (const { alertId, reason } of plan.skip)
+					this.deps.store.setDelivery(alertId, { status: 'skipped', reason });
 			});
+			if (plan.skip.length) this.deps.announceAlerts();
+			const [outgoing] = plan.send;
+			if (!outgoing || !run.sends.take()) {
+				this.sync = { ...this.sync, deliveryDue: outgoing ? now : plan.waitUntil };
+				return;
+			}
+			const outcomes = await this.deps.sender.send(outgoing.message, channels);
+			if (this.closed) return;
+			this.delivered(outgoing, outcomes, run.clock());
+			this.deps.announceAlerts();
 		}
-		if (plan.skip.length || plan.send.length) this.deps.announceAlerts();
-		this.sync = { ...this.sync, delivery, deliveryDue: plan.waitUntil };
 	}
 
 	private async refreshTeams(run: Run) {

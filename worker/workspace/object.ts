@@ -55,7 +55,8 @@ import { slackConnection } from '../slack-store';
 import { slackIsConfigured } from '../slack';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import type { Command, Config, WorkspaceData } from './commit';
-import { WorkspaceEngine, type Channel, type Sender, type WorkspaceDeps } from './engine';
+import { SYNC_KEY, WorkspaceEngine, type Channel, type Sender, type WorkspaceDeps } from './engine';
+import type { Sync } from './work';
 import { githubReaders, modelAnalyzer, type Credential } from './readers';
 import { WorkspaceStore, type ChannelOutcome, type SqlStorage } from './store';
 
@@ -97,6 +98,10 @@ interface Account {
 	userId: number;
 }
 
+interface SocketFocus {
+	focusedUntil: number;
+}
+
 const snoozeOf = (choice: SnoozeChoice, now: number, activityAt: string): Snooze => {
 	const id = crypto.randomUUID();
 	if (choice.event)
@@ -109,6 +114,7 @@ export class Workspace extends DurableObject<Env> {
 	private engine: WorkspaceEngine | null = null;
 	private running: Promise<void> | null = null;
 	private wantedAlarm: number | null | undefined;
+	private creating: Promise<WorkspaceEngine> | null = null;
 	private settingsWrites: Promise<unknown> = Promise.resolve();
 	private readonly store: WorkspaceStore;
 
@@ -181,11 +187,13 @@ export class Workspace extends DurableObject<Env> {
 			if (status >= 200 && status < 300) accepted++;
 			if (status === 404 || status === 410) gone.add(device.endpoint);
 		}
-		if (gone.size)
+		if (gone.size) {
 			this.store.writeState(
 				DEVICES_KEY,
 				devices.filter((device) => !gone.has(device.endpoint))
 			);
+			await this.refreshPush();
+		}
 		return accepted > 0;
 	}
 
@@ -223,8 +231,49 @@ export class Workspace extends DurableObject<Env> {
 		if (engine) return engine;
 		const userId = Number(this.ctx.id.name);
 		if (!Number.isInteger(userId)) throw new Error('Not signed in.');
-		await this.start(userId);
-		return this.open()!;
+		return this.created(userId);
+	}
+
+	private created(userId: number): Promise<WorkspaceEngine> {
+		this.creating ??= this.create(userId).finally(() => {
+			this.creating = null;
+		});
+		return this.creating;
+	}
+
+	private legacy(userId: number) {
+		return this.env.POLLER.get(this.env.POLLER.idFromName(String(userId)));
+	}
+
+	private async create(userId: number): Promise<WorkspaceEngine> {
+		const user = await getUser(this.env, userId);
+		if (!user) throw new Error('Not signed in.');
+		const legacy = await this.legacy(userId).exportLegacy();
+		this.store.migrate();
+		this.store.writeState(ACCOUNT_KEY, { userId } satisfies Account);
+		this.store.writeState(DEVICES_KEY, legacy.devices.slice(0, MAX_PUSH_DEVICES));
+		const config: Config = {
+			me: user.login,
+			settings: legacy.settings
+				? parseSettings(legacy.settings)
+				: structuredClone(DEFAULT_SETTINGS),
+			teams: [],
+			projectAccess: projectAccessOf(scopesOf(user)),
+			analysisVersion: ANALYSIS_VERSION,
+			projects: []
+		};
+		const engine = WorkspaceEngine.create(this.deps(), config, Date.now());
+		this.engine = engine;
+		engine.touch(Date.now());
+		this.ctx.waitUntil(this.legacy(userId).forget());
+		await this.refreshPush();
+		await this.settle();
+		return engine;
+	}
+
+	private async refreshPush() {
+		const engine = this.engine;
+		if (engine) engine.pushAvailable((await this.sender().channels()).length > 0);
 	}
 
 	private async settle() {
@@ -276,38 +325,26 @@ export class Workspace extends DurableObject<Env> {
 		});
 	}
 
-	private async legacySettings(userId: number): Promise<Settings> {
-		const legacy = this.env.POLLER.get(this.env.POLLER.idFromName(String(userId)));
-		const saved = await legacy.exportSettings().catch(() => null);
-		return saved ? parseSettings(saved) : structuredClone(DEFAULT_SETTINGS);
-	}
-
 	async start(userId: number): Promise<void> {
 		const user = await getUser(this.env, userId);
 		if (!user) throw new Error('Not signed in.');
-		this.store.migrate();
-		this.store.writeState(ACCOUNT_KEY, { userId } satisfies Account);
-		const projectAccess = projectAccessOf(scopesOf(user));
-		const engine = this.open();
-		if (!engine) {
-			const config: Config = {
-				me: user.login,
-				settings: await this.legacySettings(userId),
-				teams: [],
-				projectAccess,
-				analysisVersion: ANALYSIS_VERSION,
-				projects: []
-			};
-			this.engine = WorkspaceEngine.create(this.deps(), config, Date.now());
-		} else engine.apply({ kind: 'account', me: user.login, projectAccess }, Date.now());
-		(await this.active()).touch(Date.now());
+		const engine = this.open() ?? (await this.created(userId));
+		const now = Date.now();
+		engine.apply(
+			{ kind: 'account', me: user.login, projectAccess: projectAccessOf(scopesOf(user)) },
+			now
+		);
+		engine.restart(now);
 		await this.settle();
 	}
 
 	async stop(): Promise<void> {
+		const userId = this.account()?.userId ?? Number(this.ctx.id.name);
+		this.engine?.close();
 		this.engine = null;
 		await this.ctx.storage.deleteAlarm();
 		await this.ctx.storage.deleteAll();
+		if (Number.isInteger(userId)) await this.legacy(userId).forget();
 	}
 
 	async touch(): Promise<void> {
@@ -408,8 +445,8 @@ export class Workspace extends DurableObject<Env> {
 		return this.command({ kind: 'wake', itemIds });
 	}
 
-	mute(itemIds: ItemId[], muted = true) {
-		return this.command({ kind: 'mute', itemIds, muted });
+	mute(itemIds: ItemId[]) {
+		return this.command({ kind: 'mute', itemIds });
 	}
 
 	async pin(itemIds: ItemId[], pin: CategoryPin): Promise<Refusal | { ok: true }> {
@@ -419,13 +456,17 @@ export class Workspace extends DurableObject<Env> {
 	}
 
 	async markSeen(marks: SeenMark[]) {
-		const commands: Command[] = marks.slice(0, MAX_MARKS).map((mark) => ({
-			kind: 'seen',
-			itemId: mark.itemId,
-			revision: mark.revision,
-			snapshot: mark.baseline
-		}));
-		(await this.active()).apply(commands, Date.now());
+		const engine = await this.active();
+		const commands: Command[] = marks
+			.slice(0, MAX_MARKS)
+			.filter((mark) => mark.revision <= (engine.snapshot.items.get(mark.itemId)?.revision ?? -1))
+			.map((mark) => ({
+				kind: 'seen',
+				itemId: mark.itemId,
+				revision: mark.revision,
+				snapshot: mark.baseline
+			}));
+		engine.apply(commands, Date.now());
 		return this.settle().then(() => ({ ok: true as const }));
 	}
 
@@ -520,6 +561,7 @@ export class Workspace extends DurableObject<Env> {
 			Date.now()
 		);
 		this.broadcast({ type: 'settings' });
+		await this.refreshPush();
 		await this.settle();
 		return { settings: engine.snapshot.config.settings };
 	}
@@ -562,6 +604,7 @@ export class Workspace extends DurableObject<Env> {
 			data = null;
 		}
 		if (!data) throw new SnapshotUnavailable('schema_not_ready');
+		const sync = this.store.readState<Sync>(SYNC_KEY);
 		const values = await this.ctx.storage.get([ACCESS_VERSION_KEY, LEGACY_FINGERPRINTS_KEY]);
 		return {
 			principal: { ...principal },
@@ -570,16 +613,19 @@ export class Workspace extends DurableObject<Env> {
 				LegacyViewFingerprints | undefined,
 			views: data.config.settings.views,
 			categoryGroups: data.config.settings.categoryGroups,
-			items: this.present(data, Date.now())
+			items: this.present(data, Date.now()),
+			status: {
+				lifecycle: sync?.lifecycle ?? 'active',
+				lastPollAt: sync?.notifications.lastPollAt ?? null
+			}
 		};
 	}
 
-	feedEntries(feedView: string): { name: string; entries: FeedEntry[] } | null {
-		const engine = this.open();
-		if (!engine) return null;
+	async feedEntries(feedView: string): Promise<{ name: string; entries: FeedEntry[] } | null> {
+		const engine = await this.active();
 		const { settings } = engine.snapshot.config;
 		const rows = this.present(engine.snapshot, Date.now()).rows.filter(
-			(row) => !row.dismissed && row.views.length > 0
+			(row) => row.state === 'open' && !row.dismissed && row.views.length > 0
 		);
 		const entries = (keep: (row: ViewRow) => boolean) =>
 			rows
@@ -621,6 +667,7 @@ export class Workspace extends DurableObject<Env> {
 
 	async alertChannelsChanged(): Promise<void> {
 		(await this.active()).deliverSoon(Date.now());
+		await this.refreshPush();
 		await this.settle();
 	}
 
@@ -666,6 +713,7 @@ export class Workspace extends DurableObject<Env> {
 			DEVICES_KEY,
 			this.devices().filter((device) => device.endpoint !== endpoint)
 		);
+		await this.alertChannelsChanged();
 		return { ok: true };
 	}
 
@@ -700,17 +748,34 @@ export class Workspace extends DurableObject<Env> {
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	async webSocketMessage(_socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+	private async focusChanged(closing: WebSocket | null) {
 		const engine = this.open();
 		if (!engine) return;
-		const now = Date.now();
-		if (message === APP_FOCUS_MESSAGE) engine.appFocused(now + APP_FOCUS_LASTS_MS, now);
-		else if (message === APP_BLUR_MESSAGE) engine.appBlurred(now);
+		const focusedUntil = Math.max(
+			0,
+			...this.ctx
+				.getWebSockets()
+				.filter((socket) => socket !== closing)
+				.map((socket) => (socket.deserializeAttachment() as SocketFocus | null)?.focusedUntil ?? 0)
+		);
+		engine.appFocused(focusedUntil, Date.now());
 		await this.settle();
+	}
+
+	async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+		if (message !== APP_FOCUS_MESSAGE && message !== APP_BLUR_MESSAGE) return;
+		const focusedUntil = message === APP_FOCUS_MESSAGE ? Date.now() + APP_FOCUS_LASTS_MS : 0;
+		socket.serializeAttachment({ focusedUntil } satisfies SocketFocus);
+		await this.focusChanged(null);
 	}
 
 	async webSocketClose(socket: WebSocket, code: number): Promise<void> {
 		const sendable = code === 1000 || (code >= 3000 && code < 5000);
 		socket.close(sendable ? code : 1000);
+		await this.focusChanged(socket);
+	}
+
+	async webSocketError(socket: WebSocket): Promise<void> {
+		await this.focusChanged(socket);
 	}
 }

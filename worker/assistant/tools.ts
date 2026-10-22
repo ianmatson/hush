@@ -149,7 +149,12 @@ export function createSavedViewTools(
 					errors: grant ? [] : [...new Set(health.flatMap((source) => source.error ?? []))],
 					skipped: summary?.skipped ? (grant ? 'source_unavailable' : summary.skipped) : null
 				};
-				const freshness = { evaluatedAt: snapshot.items.evaluatedAt, ...sourceState };
+				const freshness = {
+					evaluatedAt: snapshot.items.evaluatedAt,
+					lastPollAt: snapshot.status.lastPollAt,
+					polling: snapshot.status.lifecycle === 'active',
+					...sourceState
+				};
 				const members = viewPopulation(
 					snapshot.items.rows.filter((row) => kinds.includes(row.kind)),
 					view,
@@ -213,6 +218,7 @@ export function createSavedViewTools(
 					freshness,
 					complete:
 						!grant &&
+						freshness.polling &&
 						!freshness.stale &&
 						!freshness.unknown &&
 						!freshness.errors.length &&

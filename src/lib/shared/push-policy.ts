@@ -66,17 +66,6 @@ export function limitRoom(settings: DeliverySettings, now: number, state: Delive
 	return Math.max(0, settings.pushLimit.count - used);
 }
 
-export function digestWindowIsOver(
-	settings: DeliverySettings,
-	now: number,
-	state: DeliveryState
-): boolean {
-	return (
-		settings.pushDigestMinutes !== null &&
-		now - state.lastDigestAt >= settings.pushDigestMinutes * MINUTE_MS
-	);
-}
-
 export function holdReason(
 	settings: DeliverySettings,
 	now: number,

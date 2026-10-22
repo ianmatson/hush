@@ -28,6 +28,7 @@ function context(
 		lastPushOf: () => null,
 		heldByAttention: () => false,
 		urgent: () => false,
+		tagOf: (itemId) => itemId,
 		...over,
 		settings: {
 			pushRepeat: 'once',
@@ -41,6 +42,9 @@ function context(
 		}
 	} satisfies DeliveryContext;
 }
+
+const createdAt = (at: number, ...alerts: StoredAlert[]) =>
+	alerts.map((pending) => ({ ...pending, createdAt: at }));
 
 const sentIds = (plan: ReturnType<typeof planDelivery>) => plan.send.flatMap((s) => s.alertIds);
 
@@ -103,10 +107,19 @@ describe('planDelivery', () => {
 	it('sends one digest when the digest window is over', () => {
 		const settings = { pushDigestMinutes: 30 };
 		const state = { recentSends: [], lastDigestAt: NOW - 31 * MINUTE_MS };
-		const plan = planDelivery([alert(1), alert(2)], context({ settings, state }));
+		const waiting = createdAt(NOW - 5 * MINUTE_MS, alert(1), alert(2));
+		const plan = planDelivery(waiting, context({ settings, state }));
 		expect(plan.send).toEqual([
 			expect.objectContaining({ digest: true, alertIds: [alert(1).id, alert(2).id] })
 		]);
+	});
+
+	it('starts a digest window with the first alert after a quiet time', () => {
+		const settings = { pushDigestMinutes: 30 };
+		const state = { recentSends: [], lastDigestAt: NOW - 3 * 60 * MINUTE_MS };
+		const plan = planDelivery([alert(1)], context({ settings, state }));
+		expect(plan.send).toEqual([]);
+		expect(plan.waitUntil).toBe(NOW + 30 * MINUTE_MS);
 	});
 
 	it('waits for room under the send limit', () => {
@@ -132,7 +145,7 @@ describe('planDelivery', () => {
 		expect(early.send).toEqual([]);
 		expect(early.waitUntil).toBe(NOW + 10 * MINUTE_MS);
 		const due = planDelivery(
-			[alert(1)],
+			createdAt(NOW - MINUTE_MS, alert(1)),
 			context({ settings, state: { recentSends: [], lastDigestAt: NOW - 30 * MINUTE_MS } })
 		);
 		expect(sentIds(due)).toEqual([alert(1).id]);
@@ -141,14 +154,15 @@ describe('planDelivery', () => {
 	it('holds a due digest until the limit has room again', () => {
 		const settings = { pushDigestMinutes: 5, pushLimit: { count: 1, minutes: 60 } };
 		const lastDigestAt = NOW - 10 * MINUTE_MS;
+		const waiting = createdAt(NOW - 6 * MINUTE_MS, alert(1), alert(2));
 		const full = planDelivery(
-			[alert(1), alert(2)],
+			waiting,
 			context({ settings, state: { recentSends: [NOW - MINUTE_MS], lastDigestAt } })
 		);
 		expect(full.send).toEqual([]);
 		expect(full.waitUntil).toBe(NOW - MINUTE_MS + 60 * MINUTE_MS);
 		const room = planDelivery(
-			[alert(1), alert(2)],
+			waiting,
 			context({ settings, state: { recentSends: [NOW - 61 * MINUTE_MS], lastDigestAt } })
 		);
 		expect(room.send).toEqual([

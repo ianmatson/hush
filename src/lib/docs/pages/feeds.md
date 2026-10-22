@@ -26,4 +26,4 @@ The feed of a view or a category has the open pull requests and issues that are 
 - The repository, the number, and who wrote the newest comment.
 - The author.
 
-When an entry changes, it gets a new ID, so most readers show it as new again. Feed readers usually check every few minutes; the feed can be up to 2 minutes old. A feed stops working when you delete its view or category.
+When an entry changes, it gets a new ID, so most readers show it as new again. Feed readers usually check every few minutes. The feed shows what Hush last read from GitHub, which can be up to about 15 minutes old, and readers can get a copy that is up to 2 minutes older. A feed stops working when you delete its view or category.
