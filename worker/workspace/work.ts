@@ -10,6 +10,9 @@ export const RUNNING_CI_READ_EVERY_MS = 5 * MINUTE_MS;
 export const DISCOVERY_GAP_MS = 5 * MINUTE_MS;
 export const SAFETY_READ_SLACK_MS = 10 * MINUTE_MS;
 export const CLEANUP_EVERY_MS = DAY_MS;
+export const PROJECTS_EVERY_MS = 15 * MINUTE_MS;
+export const TEAMS_EVERY_MS = 6 * HOUR_MS;
+export const TEAMS_RETRY_MS = 10 * MINUTE_MS;
 export const PAUSE_AFTER_NO_PUSH_MS = 14 * DAY_MS;
 export const PAUSE_AFTER_WITH_PUSH_MS = 90 * DAY_MS;
 export const READ_BATCH = 40;
@@ -40,6 +43,8 @@ export interface Sync {
 	hasPush: boolean;
 	notifications: NotificationCursor;
 	sourcesDue: Record<string, number>;
+	projectsDue: number;
+	teamsDue: number;
 	discoveryAt: number;
 	reads: Record<ItemId, ReadPriority>;
 	readAt: Record<ItemId, number>;
@@ -53,6 +58,8 @@ export interface Sync {
 
 export interface Plan {
 	notifications: boolean;
+	teams: boolean;
+	projects: boolean;
 	sources: string[];
 	reads: ItemId[];
 	analysis: ItemId[];
@@ -80,6 +87,8 @@ export function initialSync(now: number): Sync {
 			versions: {}
 		},
 		sourcesDue: {},
+		projectsDue: now,
+		teamsDue: now,
 		discoveryAt: 0,
 		reads: {},
 		readAt: {},
@@ -120,6 +129,8 @@ const earliest = (values: (number | null | undefined)[]) =>
 function githubDue(sync: Sync, interest: Interest): number | null {
 	const due = earliest([
 		sync.notifications.dueAt,
+		sync.teamsDue,
+		sync.projectsDue,
 		...Object.values(sync.sourcesDue),
 		...Object.keys(sync.reads).map(() => 0),
 		...[...interest.ids].map((id) => safetyReadDue(sync, id, interest))
@@ -136,6 +147,8 @@ export function nextWake(sync: Sync, interest: Interest): number | null {
 export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 	const none: Plan = {
 		notifications: false,
+		teams: false,
+		projects: false,
 		sources: [],
 		reads: [],
 		analysis: [],
@@ -154,6 +167,8 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 		.map(([id]) => id);
 	return {
 		notifications: github && sync.notifications.dueAt <= now,
+		teams: github && sync.teamsDue <= now,
+		projects: github && sync.projectsDue <= now,
 		sources: github
 			? Object.entries(sync.sourcesDue)
 					.filter(([, due]) => due <= now)

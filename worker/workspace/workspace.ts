@@ -1,11 +1,13 @@
 import { ciRunning } from '../../src/lib/shared/ci';
 import { DAY_MS } from '../../src/lib/shared/durations';
 import type { DecisionAnswers, DecisionRequest } from '../../src/lib/shared/decisions';
-import type { DashKind } from '../../src/lib/shared/types';
+import { projectKeyOf } from '../../src/lib/shared/grouping';
+import { readsBoard } from '../../src/lib/shared/projects';
+import type { DashKind, DashProject, TeamDTO } from '../../src/lib/shared/types';
 import { analysisRequests, currentInputOf, mergeAnalysis } from '../../src/lib/model/analysis';
 import type { SourceRead } from '../../src/lib/model/sources';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
-import type { ItemId, SourceSpec } from '../../src/lib/model/types';
+import type { ItemId, ProjectFacet, SourceSpec } from '../../src/lib/model/types';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
 import type { WorkspaceStore } from './store';
 import {
@@ -15,6 +17,9 @@ import {
 	bringDiscoveryForward,
 	MAX_ANALYSIS_QUEUE,
 	nextUtcDay,
+	PROJECTS_EVERY_MS,
+	TEAMS_EVERY_MS,
+	TEAMS_RETRY_MS,
 	cleanedUp,
 	forgetReads,
 	initialSync,
@@ -39,6 +44,7 @@ export const SYNC_KEY = 'sync';
 export const FORGET_AFTER_MS = 30 * DAY_MS;
 export const ALERT_HISTORY_MS = 30 * DAY_MS;
 export const MAX_DEPARTURE_READS = 50;
+export const MAX_PROJECT_READS = 200;
 
 export interface NotificationThread {
 	id: string;
@@ -77,10 +83,18 @@ export interface Analyzed {
 	tokens: number;
 }
 
+export interface ProjectStatuses {
+	statusOf: Map<ItemId, Record<string, string | null>>;
+	incomplete: Set<ItemId>;
+	definitions: DashProject[];
+}
+
 export interface Readers {
 	notifications(cursor: NotificationCursor): Promise<NotificationsResult>;
 	sources(specs: SourceSpec[]): Promise<SourcesResult>;
 	items(ids: ItemId[]): Promise<ItemsResult>;
+	teams(): Promise<TeamDTO[] | null>;
+	projects(ids: ItemId[]): Promise<ProjectStatuses>;
 	analyze?(request: DecisionRequest): Promise<Analyzed | null>;
 }
 
@@ -208,12 +222,16 @@ export class Workspace {
 		this.sync = pausedIfIdle(this.sync, clock());
 		const generation = this.sync.generation;
 		const plan = planRun(this.sync, this.interest, clock());
-		if (plan.notifications) await this.pollNotifications(generation, clock);
+		if (plan.teams) await this.refreshTeams(generation, clock);
+		if (plan.notifications && this.stillCurrent(generation))
+			await this.pollNotifications(generation, clock);
 		if (plan.sources.length && this.stillCurrent(generation))
 			await this.refreshSources(plan.sources, generation, clock);
 		const reads = planRun(this.sync, this.interest, clock()).reads;
 		if (reads.length && this.stillCurrent(generation))
 			await this.readItems(reads, generation, clock);
+		if (plan.projects && this.stillCurrent(generation))
+			await this.refreshProjects(generation, clock);
 		const analysis = planRun(this.sync, this.interest, clock()).analysis;
 		if (analysis.length && this.stillCurrent(generation))
 			await this.runAnalysis(analysis, generation, clock);
@@ -351,6 +369,51 @@ export class Workspace {
 				quiet: !this.sync.notifications.initialized
 			},
 			now
+		);
+	}
+
+	private async refreshTeams(generation: number, clock: () => number) {
+		const teams = await this.deps.readers.teams();
+		if (!this.stillCurrent(generation)) return;
+		const now = clock();
+		this.sync = { ...this.sync, teamsDue: now + (teams ? TEAMS_EVERY_MS : TEAMS_RETRY_MS) };
+		if (teams) this.apply({ kind: 'teams', teams }, now);
+	}
+
+	private projectItemIds(): ItemId[] {
+		const { settings, projectAccess } = this.data.config;
+		if (projectAccess === 'none') return [];
+		const wanted = settings.views.filter(
+			(view) => projectKeyOf(view.groupBy) || view.searches.some(readsBoard)
+		);
+		const ids = wanted.flatMap((view) => {
+			const state = this.data.views.get(view.id);
+			return state ? [...state.members, ...state.retained] : [];
+		});
+		return [...new Set(ids)].slice(0, MAX_PROJECT_READS);
+	}
+
+	private facetAfter(id: ItemId, statuses: ProjectStatuses): ProjectFacet {
+		const fresh = statuses.statusOf.get(id);
+		if (fresh && !statuses.incomplete.has(id))
+			return { state: 'known', statuses: fresh, stale: false };
+		const previous = this.data.items.get(id)?.project;
+		return previous?.state === 'known' ? { ...previous, stale: true } : { state: 'unknown' };
+	}
+
+	private async refreshProjects(generation: number, clock: () => number) {
+		const ids = this.projectItemIds();
+		this.sync = { ...this.sync, projectsDue: clock() + PROJECTS_EVERY_MS };
+		if (!ids.length) return;
+		const statuses = await this.deps.readers.projects(ids);
+		if (!this.stillCurrent(generation)) return;
+		this.apply(
+			{
+				kind: 'projects',
+				facets: ids.map((id) => [id, this.facetAfter(id, statuses)]),
+				definitions: statuses.definitions
+			},
+			clock()
 		);
 	}
 

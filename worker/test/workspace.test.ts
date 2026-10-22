@@ -268,3 +268,77 @@ describe('Workspace analysis', () => {
 		expect(h.workspace.snapshot.items.get('PR_1')?.analysis?.choices ?? {}).toEqual({});
 	});
 });
+
+describe('Workspace projects and teams', () => {
+	const projectViews: ItemView[] = [
+		{
+			id: 'p',
+			name: 'Board',
+			searches: ['is:pr is:open repo:PostHog/posthog'],
+			groupBy: 'project:PostHog/7'
+		}
+	];
+	const definition = {
+		key: 'PostHog/7',
+		title: 'Website',
+		url: 'https://github.com/orgs/PostHog/projects/7',
+		statuses: []
+	};
+
+	function projectHarness() {
+		const h = harness();
+		const config = { ...configWith(settingsWith(projectViews)), projectAccess: 'read' as const };
+		const workspace = Workspace.create(h.deps, config, h.clock());
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		return { ...h, workspace };
+	}
+
+	it('reads project status for members of project views, and keeps it stale after a failed read', async () => {
+		const h = projectHarness();
+		await h.workspace.run(h.clock);
+		h.readers.projectStatuses = {
+			statusOf: new Map([['PR_1', { 'PostHog/7': 'doing' }]]),
+			incomplete: new Set(),
+			definitions: [definition]
+		};
+		h.advance(SOURCE_EVERY_MS);
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.items.get('PR_1')?.project).toEqual({
+			state: 'known',
+			statuses: { 'PostHog/7': 'doing' },
+			stale: false
+		});
+		expect(h.workspace.snapshot.config.projects).toEqual([definition]);
+		h.readers.projectStatuses = {
+			statusOf: new Map(),
+			incomplete: new Set(['PR_1']),
+			definitions: []
+		};
+		h.advance(SOURCE_EVERY_MS);
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.items.get('PR_1')?.project).toMatchObject({
+			state: 'known',
+			stale: true
+		});
+	});
+
+	it('does not read projects without project access', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		expect(h.readers.projectCalls).toEqual([]);
+	});
+
+	it('refreshes teams every six hours, and keeps the last list when GitHub fails', async () => {
+		const h = started();
+		h.readers.teamsResult = [{ slug: 'posthog/web', name: 'Web', org: 'posthog' }];
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.config.teams.map((t) => t.slug)).toEqual(['posthog/web']);
+		h.readers.teamsResult = null;
+		h.advance(7 * HOUR_MS);
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.config.teams.map((t) => t.slug)).toEqual(['posthog/web']);
+	});
+});

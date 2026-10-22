@@ -6,7 +6,7 @@ import type { ProjectAccess } from '../../src/lib/shared/projects';
 import { factEvents, type PushFact } from '../../src/lib/shared/push-facts';
 import { snoozeOutcome } from '../../src/lib/shared/snooze';
 import { enrichmentOf, type SubjectFacts } from '../../src/lib/shared/subject';
-import type { Settings, TeamDTO } from '../../src/lib/shared/types';
+import type { DashProject, Settings, TeamDTO } from '../../src/lib/shared/types';
 import { compileViews } from '../../src/lib/model/compile';
 import { attentionState, createEvaluator, snoozeIsOver } from '../../src/lib/model/evaluate';
 import { applySourceRead, withSpec, type SourceRead } from '../../src/lib/model/sources';
@@ -31,6 +31,7 @@ export interface Config {
 	teams: TeamDTO[];
 	projectAccess: ProjectAccess;
 	analysisVersion: string;
+	projects: DashProject[];
 }
 
 export interface WorkspaceData {
@@ -43,7 +44,7 @@ export interface WorkspaceData {
 
 export type Observation =
 	| { kind: 'items'; read: SubjectFacts[]; inaccessible: ItemId[]; quiet: boolean }
-	| { kind: 'projects'; facets: [ItemId, ProjectFacet][] }
+	| { kind: 'projects'; facets: [ItemId, ProjectFacet][]; definitions: DashProject[] }
 	| { kind: 'analysis'; itemId: ItemId; analysis: Analysis }
 	| { kind: 'source'; sourceId: string; read: SourceRead };
 
@@ -196,12 +197,20 @@ function applyInput(draft: Draft, input: Input, now: number) {
 	switch (input.kind) {
 		case 'items':
 			return applyFacts(draft, input.read, input.inaccessible, input.quiet);
-		case 'projects':
+		case 'projects': {
 			for (const [id, project] of input.facets) {
 				const item = draft.items.get(id);
 				if (item && !sameJson(item.project, project)) draft.putItem({ ...item, project });
 			}
+			const byKey = new Map(draft.config.projects.map((project) => [project.key, project]));
+			for (const definition of input.definitions) byKey.set(definition.key, definition);
+			const projects = [...byKey.values()];
+			if (!sameJson(projects, draft.config.projects)) {
+				draft.config = { ...draft.config, projects };
+				draft.changes.config = true;
+			}
 			return;
+		}
 		case 'analysis': {
 			const item = draft.items.get(input.itemId);
 			if (item && !sameJson(item.analysis, input.analysis))

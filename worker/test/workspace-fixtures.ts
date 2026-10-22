@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
-import type { ItemView, Settings } from '../../src/lib/shared/types';
+import type { ItemView, Settings, TeamDTO } from '../../src/lib/shared/types';
 import { ANALYSIS_VERSION, EFFORT, ME, NOW } from '../../src/lib/model/testing';
 import type { ItemId, SourceSpec, SourceWindow } from '../../src/lib/model/types';
 import type { Config } from '../workspace/commit';
@@ -9,6 +9,7 @@ import { WorkspaceStore, type SqlStorage, type SqlValue } from '../workspace/sto
 import type {
 	ItemsResult,
 	NotificationsResult,
+	ProjectStatuses,
 	Readers,
 	SourcesResult,
 	WorkspaceDeps
@@ -58,7 +59,8 @@ export const configWith = (settings: Settings): Config => ({
 	settings,
 	teams: [],
 	projectAccess: 'none',
-	analysisVersion: ANALYSIS_VERSION
+	analysisVersion: ANALYSIS_VERSION,
+	projects: []
 });
 
 export const windowOf = (ids: ItemId[], at = NOW): SourceWindow => ({
@@ -82,6 +84,23 @@ export class FakeReaders implements Readers {
 	async sources(specs: SourceSpec[]): Promise<SourcesResult> {
 		const next = this.sourceResults.shift();
 		return next ? next(specs) : { reads: new Map() };
+	}
+
+	teamsResult: TeamDTO[] | null = [];
+	projectStatuses: ProjectStatuses = {
+		statusOf: new Map(),
+		incomplete: new Set(),
+		definitions: []
+	};
+	projectCalls: ItemId[][] = [];
+
+	async teams(): Promise<TeamDTO[] | null> {
+		return this.teamsResult;
+	}
+
+	async projects(ids: ItemId[]): Promise<ProjectStatuses> {
+		this.projectCalls.push(ids);
+		return this.projectStatuses;
 	}
 
 	async items(ids: ItemId[]): Promise<ItemsResult> {

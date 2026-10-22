@@ -4,12 +4,14 @@ import type { SourceRead } from '../../src/lib/model/sources';
 import type { SourceCandidate, SourceSpec } from '../../src/lib/model/types';
 import {
 	fetchItems,
+	fetchTeams,
 	githubStatusMessage,
 	listNotifications,
 	searchShort,
 	subjectNumber
 } from '../github';
-import { boardShort } from '../projects';
+import { decide, decisionsAvailable, type DecisionEnv } from '../decide';
+import { boardShort, itemStatuses } from '../projects';
 import type { NotificationCursor } from './work';
 import type { NotificationsResult, Readers, SourcesResult } from './workspace';
 
@@ -107,6 +109,28 @@ export function githubReaders(token: string, me: string, now: () => number = Dat
 		async items(ids) {
 			const { read, inaccessible, failed } = await fetchItems(token, me, ids);
 			return { read, inaccessible, failed };
+		},
+		async teams() {
+			const { teams, error } = await fetchTeams(token, me);
+			return error ? null : teams;
+		},
+		async projects(ids) {
+			const result = await itemStatuses(token, ids).catch(() => null);
+			if (!result) return { statusOf: new Map(), incomplete: new Set(ids), definitions: [] };
+			const missing = ids.filter((id) => !result.statusOf.has(id));
+			return {
+				statusOf: result.statusOf,
+				incomplete: new Set([...(result.incomplete ?? []), ...missing]),
+				definitions: result.projects
+			};
 		}
+	};
+}
+
+export function modelAnalyzer(env: DecisionEnv): Readers['analyze'] {
+	if (!decisionsAvailable(env)) return undefined;
+	return async (request) => {
+		const decided = await decide(env, request);
+		return decided ? { answers: decided.answers, tokens: decided.tokens } : null;
 	};
 }
