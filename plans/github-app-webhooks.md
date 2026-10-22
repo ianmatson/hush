@@ -1,6 +1,6 @@
 # Webhook updates from a GitHub App
 
-Status: draft, 2026-10-22. Step 6 of plans/core-model.md, on top of the Workspace model (PR #92).
+Status: agreed with Astra, 2026-10-22. Step 6 of plans/core-model.md, on top of the Workspace model (PR #92). Not built.
 
 ## Goal
 
