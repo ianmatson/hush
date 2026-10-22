@@ -2,6 +2,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import SettingSelect from './settings/setting-select.svelte';
 	import { MERGE_LABEL } from '$lib/shared/actions';
 	import type { MergeMethod, PeekDTO } from '$lib/shared/types';
 
@@ -24,6 +25,7 @@
 	} = $props();
 
 	const methods = $derived(p.can.pr?.methods ?? []);
+	const methodOptions = $derived(methods.map((m) => ({ id: m, label: MERGE_LABEL[m] })));
 	let confirmButton = $state<HTMLButtonElement | null>(null);
 
 	function confirm() {
@@ -50,16 +52,14 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		{#if methods.length > 1}
-			<div role="radiogroup" aria-label="Merge method" class="grid gap-1">
-				{#each methods as m (m)}
-					<Button
-						role="radio"
-						aria-checked={method === m}
-						variant={method === m ? 'secondary' : 'ghost'}
-						class="justify-start"
-						onclick={() => (method = m)}>{MERGE_LABEL[m]}</Button
-					>
-				{/each}
+			<div class="flex items-center justify-between gap-3 text-sm">
+				<span>Merge method</span>
+				<SettingSelect
+					value={method}
+					options={methodOptions}
+					onchange={(m) => (method = m)}
+					label="Merge method"
+				/>
 			</div>
 		{/if}
 		{#if canDeleteBranch && p.pr}
