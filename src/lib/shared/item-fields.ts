@@ -1,3 +1,5 @@
+import type { PeekDTO, PeekPerson } from './types';
+
 export type ItemField = 'labels' | 'assignees';
 
 export interface RepoLabel {
@@ -67,4 +69,35 @@ export function withFieldChange<T>(
 	const kept = current.filter((value) => !removed.has(key(value).toLowerCase()));
 	const present = new Set(kept.map((value) => key(value).toLowerCase()));
 	return [...kept, ...change.add.filter((value) => !present.has(key(value).toLowerCase()))];
+}
+
+export type PendingFieldEdit = { id: number; on: boolean } & (
+	{ field: 'labels'; label: PeekDTO['labels'][number] } | { field: 'assignees'; person: PeekPerson }
+);
+
+export const pendingEditValue = (edit: PendingFieldEdit): string =>
+	edit.field === 'labels' ? edit.label.name : edit.person.login;
+
+export function withPendingEdits<T extends Pick<PeekDTO, 'labels' | 'assignees'>>(
+	fields: T,
+	edits: PendingFieldEdit[]
+): T {
+	return edits.reduce((shown, edit) => {
+		const remove = edit.on ? [] : [pendingEditValue(edit)];
+		return edit.field === 'labels'
+			? {
+					...shown,
+					labels: withFieldChange(shown.labels, (l) => l.name, {
+						add: edit.on ? [edit.label] : [],
+						remove
+					})
+				}
+			: {
+					...shown,
+					assignees: withFieldChange(shown.assignees, (a) => a.login, {
+						add: edit.on ? [edit.person] : [],
+						remove
+					})
+				};
+	}, fields);
 }

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { createQuery, keepPreviousData } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { assignableUsersQuery, keys, queryClient, repoLabelsQuery } from '$lib/queries';
-	import { writeItemField } from '$lib/item-field-sync';
+	import { assignableUsersQuery, repoLabelsQuery } from '$lib/queries';
+	import { editItemField, pendingFieldEdits } from '$lib/item-field-sync.svelte';
 	import {
 		MAX_ASSIGNEES,
 		canEditItemFields,
-		withFieldChange,
+		withPendingEdits,
 		type ItemField
 	} from '$lib/shared/item-fields';
 	import { labelUrl, profileUrl } from '$lib/shared/github-links';
@@ -26,8 +26,9 @@
 	const EMPTY_BUTTON = `${EDIT_BUTTON} border border-dashed px-2`;
 
 	const editable = $derived(canEditItemFields(p.can.permission));
-	const hasAssignees = $derived(p.assignees.length > 0);
-	const hasLabels = $derived(p.labels.length > 0);
+	const shown = $derived(withPendingEdits(p, pendingFieldEdits(p.repo, p.number)));
+	const hasAssignees = $derived(shown.assignees.length > 0);
+	const hasLabels = $derived(shown.labels.length > 0);
 
 	let labelsOpen = $state(false);
 	let labelSearch = $state('');
@@ -58,7 +59,7 @@
 	}));
 
 	const chosenLabels = $derived<FieldOption[]>(
-		p.labels.map((l) => ({ value: l.name, label: l.name, color: l.color }))
+		shown.labels.map((l) => ({ value: l.name, label: l.name, color: l.color }))
 	);
 	const labelOptions = $derived<FieldOption[]>(
 		(labelsQ.data ?? []).map((l) => ({
@@ -69,7 +70,7 @@
 		}))
 	);
 	const chosenAssignees = $derived<FieldOption[]>(
-		p.assignees.map((a) => ({ value: a.login, label: a.login, avatar: a.avatar }))
+		shown.assignees.map((a) => ({ value: a.login, label: a.login, avatar: a.avatar }))
 	);
 	const assigneeOptions = $derived<FieldOption[]>(
 		(usersQ.data ?? []).map((u) => ({
@@ -80,37 +81,17 @@
 		}))
 	);
 
-	const peekKey = $derived(keys.peek(p.repo, p.number));
-
-	function changed(old: PeekDTO, field: ItemField, option: FieldOption, on: boolean): PeekDTO {
-		const remove = on ? [] : [option.value];
-		if (field === 'labels')
-			return {
-				...old,
-				labels: withFieldChange(old.labels, (l) => l.name, {
-					add: on ? [{ name: option.value, color: option.color ?? '' }] : [],
-					remove
-				})
-			};
-		return {
-			...old,
-			assignees: withFieldChange(old.assignees, (a) => a.login, {
-				add: on ? [{ login: option.value, avatar: option.avatar ?? null, bot: false }] : [],
-				remove
-			})
-		};
-	}
-
 	async function toggle(field: ItemField, option: FieldOption, on: boolean) {
-		queryClient.setQueryData<PeekDTO>(peekKey, (old) => old && changed(old, field, option, on));
+		const edit =
+			field === 'labels'
+				? { field, on, label: { name: option.value, color: option.color ?? '' } }
+				: {
+						field,
+						on,
+						person: { login: option.value, avatar: option.avatar ?? null, bot: false }
+					};
 		try {
-			await writeItemField({
-				repo: p.repo,
-				number: p.number,
-				field,
-				add: on ? [option.value] : [],
-				remove: on ? [] : [option.value]
-			});
+			await editItemField(p.repo, p.number, edit);
 		} catch (err) {
 			toast.error((err as Error).message);
 		}
@@ -125,7 +106,7 @@
 		selected={chosenAssignees}
 		loading={usersQ.isFetching}
 		error={usersQ.error?.message ?? null}
-		full={p.assignees.length >= MAX_ASSIGNEES}
+		full={shown.assignees.length >= MAX_ASSIGNEES}
 		fullReason="GitHub allows up to {MAX_ASSIGNEES} assignees."
 		bind:search={assigneeSearch}
 		bind:open={assigneesOpen}
@@ -168,7 +149,7 @@
 	<div class="grid gap-1.5" data-peek-fields>
 		{#if hasAssignees || editable}
 			<div class="flex flex-wrap items-center gap-1" aria-label="Assignees" role="group">
-				{#each p.assignees as a (a.login)}
+				{#each shown.assignees as a (a.login)}
 					<GhLink href={profileUrl(a.login, a.bot)} class="{CHIP} no-underline! hover:bg-muted">
 						{#if a.avatar}
 							<img src={a.avatar} alt="" class="-ml-1 size-4 rounded-full bg-muted" />
@@ -181,7 +162,7 @@
 		{/if}
 		{#if hasLabels || editable}
 			<div class="flex flex-wrap items-center gap-1" aria-label="Labels" role="group">
-				{#each p.labels as l (l.name)}
+				{#each shown.labels as l (l.name)}
 					<a
 						href={labelUrl(p.repo, l.name)}
 						target="_blank"
