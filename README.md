@@ -117,6 +117,21 @@ SLACK_MENTIONS_CLIENT_SECRET=…
 
 **Hush Mentions** is internal, so it also redirects to `http://localhost:5173/api/slack/mentions/callback`.
 
+### Webhooks from the GitHub App (optional)
+
+A GitHub App sends webhooks for the orgs that install it ([plan](plans/github-app-webhooks.md)). It does not replace the OAuth app: sign-in, reads, searches, and notifications still use each user's OAuth token. A webhook only makes the Workspaces that track the item read it again. Without `GITHUB_APP_ID` and `GITHUB_WEBHOOK_SECRET` the feature is off: `/api/github/webhook` answers 404 and the daily cron does nothing.
+
+Local development uses **Hush GH (dev)** (`hush-gh-dev`, installable only on `@ianmatson`). Its permissions are read-only Metadata, Pull requests, Issues, and Checks, and it subscribes to Check suite, Issue comment, Issues, Pull request, Pull request review, Pull request review comment, and Pull request review thread. Add to `.dev.vars` (the private key as PKCS#8, on one line with `\n`):
+
+```sh
+GITHUB_APP_ID=…
+GITHUB_APP_SLUG=…
+GITHUB_APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----\n"
+GITHUB_WEBHOOK_SECRET=…
+```
+
+`pnpm webhook:replay <event> <payload.json>` signs a payload with the local secret and posts it to `:8787` (samples are in `worker/test/fixtures/webhooks/`). For real deliveries, run `cloudflared tunnel --url http://localhost:8787` and set the app's Webhook URL to the tunnel plus `/api/github/webhook`. Trigger the daily route cleanup with `curl http://localhost:8787/cdn-cgi/local/scheduled`.
+
 ## Deploy (Cloudflare Workers Free plan)
 
 ```sh
@@ -136,6 +151,11 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 # optional, peek mentions (SLACK_MENTIONS_TEAM_ID and SLACK_MENTIONS_GITHUB_ORG are in wrangler.jsonc;
 # add SLACK_MENTIONS_CLIENT_ID there):
 #   npx wrangler secret put SLACK_MENTIONS_CLIENT_SECRET
+# optional, GitHub App webhooks (README → Webhooks from the GitHub App):
+#   npx wrangler secret put GITHUB_APP_ID
+#   npx wrangler secret put GITHUB_APP_SLUG
+#   npx wrangler secret put GITHUB_APP_PRIVATE_KEY
+#   npx wrangler secret put GITHUB_WEBHOOK_SECRET
 pnpm run deploy                          # build + remote migrations + deploy the app and the site
 ```
 
@@ -153,6 +173,8 @@ Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users m
 | Durable Object requests | 100k/day   | ~0.3–1k (one alarm for each due check)   |
 | DO rows written         | 100k/day   | changed records and schedule checkpoints |
 | KV / Queues             | not used   | —                                        |
+
+With the GitHub App, every delivery of an installed org is one Worker request and one D1 read, also when nobody tracks the item. A tracked item adds one Durable Object request for each user who tracks it (at most 60 a minute for each user), and route sync writes one D1 row for each item that joins or leaves a user's views. Measure an org's delivery volume before you install the app there: above about 30,000 deliveries a day, install it on selected repositories only.
 
 The Workspace sets its alarm for the next due check only: notifications every 5 minutes (15 when you are idle and have no alert channel), the searches of your views every 15 minutes, and item reads when something changed. Open tabs get changes over their WebSocket, so they do not poll.
 

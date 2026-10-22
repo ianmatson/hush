@@ -21,6 +21,10 @@ import diff from './routes/diff';
 import suggest from './routes/suggest';
 import seen from './routes/seen';
 import mcp from './routes/mcp';
+import webhooks from './routes/webhooks';
+import type { Env } from './db';
+import { webhooksEnabled } from './webhooks';
+import { forgetStaleRoutes } from './workspace/routes';
 
 export { Poller } from './legacy-poller';
 export { Workspace } from './workspace/object';
@@ -56,7 +60,8 @@ app.use('/api/*', async (c, next) => {
 		'/api/push/vapid-key',
 		'/api/health',
 		'/api/slack/events',
-		'/api/slack/interactions'
+		'/api/slack/interactions',
+		'/api/github/webhook'
 	];
 	if (open.includes(c.req.path)) return next();
 	const notSignedIn = async () => {
@@ -108,7 +113,8 @@ const api = app
 	.route('/', suggest)
 	.route('/', dashboard)
 	.route('/', feeds)
-	.route('/', live);
+	.route('/', live)
+	.route('/', webhooks);
 export type AppType = typeof api;
 
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
@@ -124,4 +130,8 @@ app.onError((err, c) => {
 // Everything else is the SPA (served by the assets binding).
 app.all('*', (c: Ctx) => c.env.ASSETS.fetch(c.req.raw));
 
-export default app;
+const scheduled: ExportedHandlerScheduledHandler<Env> = async (_controller, env, ctx) => {
+	if (webhooksEnabled(env)) ctx.waitUntil(forgetStaleRoutes(env.DB, Date.now()));
+};
+
+export default Object.assign(app, { scheduled });

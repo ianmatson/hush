@@ -29,6 +29,7 @@ export interface SubjectFacts {
 	id: string;
 	kind: DashKind;
 	repo: string;
+	repoId?: number | null;
 	number: number;
 	title: string;
 	url: string;

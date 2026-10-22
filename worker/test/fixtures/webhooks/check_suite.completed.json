@@ -1,0 +1,26 @@
+{
+	"action": "completed",
+	"installation": {
+		"id": 101
+	},
+	"repository": {
+		"id": 777,
+		"full_name": "someone/fork"
+	},
+	"check_suite": {
+		"conclusion": "failure",
+		"pull_requests": [
+			{
+				"number": 16,
+				"base": {
+					"repo": {
+						"id": 555
+					}
+				}
+			},
+			{
+				"number": 17
+			}
+		]
+	}
+}

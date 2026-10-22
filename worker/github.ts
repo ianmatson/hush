@@ -329,7 +329,7 @@ const MENTION_EVENTS = `mentionEvents: timelineItems(itemTypes: [MENTIONED_EVENT
 export const SUBJECT_FIELDS = `
 fragment P on PullRequest {
   id number title url isDraft state merged closedAt createdAt updatedAt additions deletions reviewDecision mergeable bodyText
-  repository { nameWithOwner defaultBranchRef { name } }
+  repository { nameWithOwner databaseId defaultBranchRef { name } }
   baseRefName ${stackBelowFields(MAX_STACK_LEVELS_BELOW)}
   author { login avatarUrl(size: 48) __typename } authorAssociation
   labels(first: 10) { nodes { name color } }
@@ -348,7 +348,7 @@ fragment P on PullRequest {
 }
 fragment I on Issue {
   id number title url state stateReason closedAt createdAt updatedAt bodyText
-  repository { nameWithOwner }
+  repository { nameWithOwner databaseId }
   author { login avatarUrl(size: 48) __typename } authorAssociation
   labels(first: 10) { nodes { name color } }
   assignees(first: 10) { nodes { login } }
@@ -449,6 +449,7 @@ export function toSubject(n: Node, me: string): SubjectFacts {
 		id: n.id,
 		kind: pr ? 'pr' : 'issue',
 		repo: n.repository?.nameWithOwner ?? '',
+		repoId: n.repository?.databaseId ?? null,
 		number: n.number,
 		title: n.title ?? '',
 		url: n.url,

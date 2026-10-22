@@ -38,6 +38,16 @@ const alert = (id: string, reason: 'ci-failed' | 'review-requested', title: stri
 	url: 'https://github.com/PostHog/posthog/pull/1'
 });
 
+describe('WorkspaceStore.exists', () => {
+	it('says whether the Workspace tables exist, without creating them', () => {
+		const store = new WorkspaceStore(memoryStorage());
+		expect(store.exists()).toBe(false);
+		expect(store.exists()).toBe(false);
+		store.migrate();
+		expect(store.exists()).toBe(true);
+	});
+});
+
 describe('WorkspaceStore alerts', () => {
 	it('merges a new cause into the pending alert of the item, and keeps the older one as history', () => {
 		const store = new WorkspaceStore(memoryStorage());

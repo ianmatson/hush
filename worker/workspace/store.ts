@@ -110,6 +110,14 @@ export class WorkspaceStore {
 		this.storage.sql.exec(query, ...bindings);
 	}
 
+	exists(): boolean {
+		return (
+			this.rows<{ found: number }>(
+				"SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = 'state'"
+			).length > 0
+		);
+	}
+
 	migrate() {
 		this.storage.sql.exec(WORKSPACE_SCHEMA);
 	}

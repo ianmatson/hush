@@ -20,6 +20,7 @@ import { CallBudget } from '../github';
 import type { PushMessage } from '../webpush';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
 import { planDelivery, type Outgoing } from './deliver';
+import { routesOf, type RouteTable } from './routes';
 import type { AlertDelivery, ChannelOutcome, StoredAlert, WorkspaceStore } from './store';
 import {
 	analysisSpent,
@@ -42,7 +43,9 @@ import {
 	rateLimited,
 	readsDone,
 	readsFailed,
+	renewReads,
 	requestReads,
+	ROUTES_RETRY_MS,
 	restarted,
 	SAFETY_READ_EVERY_MS,
 	sourcesRan,
@@ -59,6 +62,7 @@ import {
 } from './work';
 
 export const SYNC_KEY = 'sync';
+export const ROUTES_KEY = 'webhookRoutes';
 export const FORGET_AFTER_MS = 30 * DAY_MS;
 export const MAX_DEPARTURE_READS = 50;
 export const MAX_PROJECT_READS = 200;
@@ -140,6 +144,7 @@ export interface WorkspaceDeps {
 	announce(revision: number, viewIds: string[]): void;
 	announceAlerts(): void;
 	credentialRejected(): void;
+	routes?: RouteTable;
 }
 
 const locatorOf = (repo: string, number: number) => `${repo.toLowerCase()}#${number}`;
@@ -158,12 +163,16 @@ function retriedDelivery(
 export class WorkspaceEngine {
 	private interest: Interest = { ids: new Set(), ciRunning: new Set() };
 	private unusable: string | null = null;
+	private readonly reading = new Set<ItemId>();
+	private routesSent: Set<string>;
 
 	private constructor(
 		private readonly deps: WorkspaceDeps,
 		private data: WorkspaceData,
 		private sync: Sync
-	) {}
+	) {
+		this.routesSent = new Set(deps.store.readState<string[]>(ROUTES_KEY) ?? []);
+	}
 
 	static open(deps: WorkspaceDeps, now: number): WorkspaceEngine | null {
 		const data = deps.store.load();
@@ -220,7 +229,8 @@ export class WorkspaceEngine {
 			...forgetReads(withSources(this.sync, result.data.sources.keys(), now), pending, remembered),
 			boundaryAt: result.nextBoundary,
 			analysis: this.analysisQueue(result.data, interest, now),
-			deliveryDue: result.alerts.length ? now : this.sync.deliveryDue
+			deliveryDue: result.alerts.length ? now : this.sync.deliveryDue,
+			routesDue: this.routesDueAfter(result.data, interest, now)
 		};
 		this.persist(() => this.deps.store.save(result, now, { [SYNC_KEY]: sync }));
 		this.data = result.data;
@@ -229,6 +239,81 @@ export class WorkspaceEngine {
 		if (result.changedViews.length) this.deps.announce(this.data.revision, result.changedViews);
 		this.reschedule();
 		return result;
+	}
+
+	private wantedRoutes(data = this.data, interest = this.interest) {
+		return new Set(routesOf(data.items, interest.ids).keys());
+	}
+
+	private routesDueAfter(
+		data: WorkspaceData,
+		interest: Interest,
+		now: number,
+		pending = this.sync.routesDue
+	) {
+		if (!this.deps.routes || pending !== null) return pending;
+		const wanted = this.wantedRoutes(data, interest);
+		const same =
+			wanted.size === this.routesSent.size && [...wanted].every((r) => this.routesSent.has(r));
+		return same ? null : now;
+	}
+
+	invalidate(routes: string[], now: number) {
+		if (this.sync.lifecycle !== 'active') return;
+		const byRoute = routesOf(this.data.items, this.interest.ids);
+		const renew = routes
+			.flatMap((route) => byRoute.get(route) ?? [])
+			.filter((id) => !(id in this.sync.reads) || this.reading.has(id));
+		if (renew.length) this.saveSync({ ...renewReads(this.sync, renew, now), lastWebhookAt: now });
+	}
+
+	private async syncRoutes(run: Run, repair: boolean) {
+		const table = this.deps.routes!;
+		const wanted = this.wantedRoutes();
+		try {
+			const sent = repair ? new Set(await table.list()) : this.routesSent;
+			if (!this.stillCurrent(run.generation)) return;
+			const now = run.clock();
+			await table.apply(
+				[...wanted].filter((route) => !sent.has(route)),
+				[...sent].filter((route) => !wanted.has(route)),
+				now
+			);
+			if (!this.stillCurrent(run.generation)) return;
+			this.persist(() => this.deps.store.writeState(ROUTES_KEY, [...wanted]));
+			this.routesSent = wanted;
+			this.sync = {
+				...this.sync,
+				routesDue: this.routesDueAfter(this.data, this.interest, now, null)
+			};
+		} catch (error) {
+			console.error('route sync failed', (error as Error).message);
+			const retryAt = run.clock() + ROUTES_RETRY_MS;
+			this.sync = {
+				...this.sync,
+				routesDue: retryAt,
+				cleanupAt: repair ? retryAt : this.sync.cleanupAt
+			};
+		}
+	}
+
+	private async dropRoutes() {
+		if (!this.deps.routes || (!this.routesSent.size && this.sync.routesDue === null)) return;
+		this.persist(() => this.deps.store.writeState(ROUTES_KEY, []));
+		this.routesSent = new Set();
+		this.sync = { ...this.sync, routesDue: null };
+		await this.deps.routes
+			.clear()
+			.catch((error: Error) => console.error('route delete failed', error.message));
+	}
+
+	private async readNow(ids: ItemId[], run: Run) {
+		for (const id of ids) this.reading.add(id);
+		try {
+			return await this.deps.readers.items(ids, run.budget);
+		} finally {
+			for (const id of ids) this.reading.delete(id);
+		}
 	}
 
 	private requestsFor(id: ItemId, now: number, data = this.data) {
@@ -278,7 +363,10 @@ export class WorkspaceEngine {
 	}
 
 	restart(now: number) {
-		this.saveSync(restarted(this.sync));
+		this.saveSync({
+			...restarted(this.sync),
+			routesDue: this.routesDueAfter(this.data, this.interest, now, null)
+		});
 		this.touch(now);
 	}
 
@@ -354,6 +442,10 @@ export class WorkspaceEngine {
 		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(run.generation))
 			await this.deliver(run);
 		if (plan.cleanup && this.stillCurrent(run.generation)) this.cleanup(clock());
+		const routesDue = planRun(this.sync, this.interest, clock()).routes;
+		if (this.deps.routes && (routesDue || plan.cleanup) && this.stillCurrent(run.generation))
+			await this.syncRoutes(run, plan.cleanup);
+		if (!this.unusable && this.sync.lifecycle !== 'active') await this.dropRoutes();
 		if (!this.unusable) this.saveSync();
 	}
 
@@ -439,9 +531,7 @@ export class WorkspaceEngine {
 		const departed = this.departedOpenMembers(reads);
 		const claims = claimReads(this.sync, departed);
 		const probe =
-			departed.length && this.mayCallGithub(run)
-				? await this.deps.readers.items(departed, run.budget)
-				: null;
+			departed.length && this.mayCallGithub(run) ? await this.readNow(departed, run) : null;
 		if (!this.stillCurrent(run.generation)) return;
 		const now = run.clock();
 		this.noteBudget(run);
@@ -493,7 +583,7 @@ export class WorkspaceEngine {
 
 	private async readItems(ids: ItemId[], run: Run) {
 		const claims = claimReads(this.sync, ids);
-		const result = await this.deps.readers.items(ids, run.budget);
+		const result = await this.readNow(ids, run);
 		if (!this.stillCurrent(run.generation)) return;
 		const now = run.clock();
 		this.noteBudget(run);

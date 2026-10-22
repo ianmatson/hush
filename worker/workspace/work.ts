@@ -28,6 +28,7 @@ export const ALERT_HISTORY_MS = 30 * DAY_MS;
 export const MAX_INDIVIDUAL_PUSHES = 3;
 export const ANALYSIS_BATCH = 12;
 export const ANALYSIS_RETRY_MS = 5 * MINUTE_MS;
+export const ROUTES_RETRY_MS = 5 * MINUTE_MS;
 
 export type Lifecycle = 'active' | 'paused' | 'stopped';
 export type ReadPriority = 'interactive' | 'background';
@@ -38,6 +39,7 @@ export interface ReadRequest {
 	version: number;
 	attempts: number;
 	notBefore: number;
+	interactiveVersion?: number;
 }
 
 export type ReadClaims = Record<ItemId, number>;
@@ -71,6 +73,8 @@ export interface Sync {
 	cleanupAt: number;
 	retryAt: Record<Resource, number>;
 	deliveryDue: number | null;
+	routesDue: number | null;
+	lastWebhookAt: number | null;
 	delivery: DeliveryState;
 	appSeenAt: number;
 	focusedUntil: number;
@@ -88,6 +92,7 @@ export interface Plan {
 	analysis: ItemId[];
 	boundary: boolean;
 	cleanup: boolean;
+	routes: boolean;
 }
 
 export interface Interest {
@@ -123,6 +128,8 @@ export function initialSync(now: number): Sync {
 		cleanupAt: now + CLEANUP_EVERY_MS,
 		retryAt: { github: 0, ai: 0 },
 		deliveryDue: null,
+		routesDue: null,
+		lastWebhookAt: null,
 		delivery: { recentSends: [], lastDigestAt: 0 },
 		appSeenAt: 0,
 		focusedUntil: 0,
@@ -178,7 +185,8 @@ export function nextWake(sync: Sync, interest: Interest): number | null {
 		analysisDue,
 		sync.boundaryAt,
 		sync.cleanupAt,
-		sync.deliveryDue
+		sync.deliveryDue,
+		sync.routesDue
 	]);
 }
 
@@ -192,7 +200,8 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 		reads: [],
 		analysis: [],
 		boundary: false,
-		cleanup: false
+		cleanup: false,
+		routes: false
 	};
 	if (sync.lifecycle !== 'active') return none;
 	const github = githubOpen(sync, now);
@@ -223,7 +232,8 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 		reads: github ? [...interactive, ...background, ...safety].slice(0, READ_BATCH) : [],
 		analysis: now >= sync.retryAt.ai ? sync.analysis.slice(0, ANALYSIS_BATCH) : [],
 		boundary: sync.boundaryAt !== null && sync.boundaryAt <= now,
-		cleanup: sync.cleanupAt <= now
+		cleanup: sync.cleanupAt <= now,
+		routes: sync.routesDue !== null && sync.routesDue <= now
 	};
 }
 
@@ -235,23 +245,40 @@ export function withSources(sync: Sync, sourceIds: Iterable<string>, now: number
 
 export const githubOpen = (sync: Sync, now: number) => now >= sync.retryAt.github;
 
-export function requestReads(
+function withReads(
 	sync: Sync,
 	ids: Iterable<ItemId>,
-	priority: ReadPriority,
-	now: number
+	next: (current: ReadRequest | undefined, version: number) => ReadRequest
 ): Sync {
 	const reads = { ...sync.reads };
 	let readSeq = sync.readSeq;
-	for (const id of ids) {
-		const kept = reads[id]?.priority === 'interactive' ? 'interactive' : priority;
-		reads[id] = { priority: kept, version: ++readSeq, attempts: 0, notBefore: now };
-	}
+	for (const id of ids) reads[id] = next(reads[id], ++readSeq);
 	const bounded = Object.entries(reads)
 		.sort(([, a], [, b]) => a.version - b.version)
 		.slice(-MAX_PENDING_READS);
 	return { ...sync, reads: Object.fromEntries(bounded), readSeq };
 }
+
+export const requestReads = (
+	sync: Sync,
+	ids: Iterable<ItemId>,
+	priority: ReadPriority,
+	now: number
+): Sync =>
+	withReads(sync, ids, (current, version) => ({
+		priority: current?.priority === 'interactive' ? 'interactive' : priority,
+		version,
+		attempts: 0,
+		notBefore: now,
+		interactiveVersion: priority === 'interactive' ? version : current?.interactiveVersion
+	}));
+
+export const renewReads = (sync: Sync, ids: Iterable<ItemId>, now: number): Sync =>
+	withReads(sync, ids, (current, version) =>
+		current
+			? { ...current, version }
+			: { priority: 'background', version, attempts: 0, notBefore: now }
+	);
 
 export const claimReads = (sync: Sync, ids: ItemId[]): ReadClaims =>
 	Object.fromEntries(ids.map((id) => [id, sync.reads[id]?.version ?? 0]));
@@ -275,7 +302,7 @@ export function readsFailed(sync: Sync, claims: ReadClaims, now: number): Sync {
 	const readAt = { ...sync.readAt };
 	for (const [id, version] of Object.entries(claims)) {
 		const current = reads[id];
-		if (current && current.version !== version) continue;
+		if ((current?.interactiveVersion ?? 0) > version) continue;
 		const attempts = (current?.attempts ?? 0) + 1;
 		if (attempts >= MAX_READ_ATTEMPTS) {
 			delete reads[id];
@@ -284,7 +311,7 @@ export function readsFailed(sync: Sync, claims: ReadClaims, now: number): Sync {
 		}
 		reads[id] = {
 			priority: current?.priority ?? 'background',
-			version,
+			version: current?.version ?? version,
 			attempts,
 			notBefore: now + readRetryDelay(attempts)
 		};

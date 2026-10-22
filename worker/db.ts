@@ -39,6 +39,11 @@ export interface Env {
 	SLACK_SIGNING_SECRET?: string;
 	SLACK_MENTIONS_CLIENT_ID?: string;
 	SLACK_MENTIONS_CLIENT_SECRET?: string;
+	GITHUB_APP_ID?: string;
+	GITHUB_APP_SLUG?: string;
+	GITHUB_APP_PRIVATE_KEY?: string;
+	GITHUB_WEBHOOK_SECRET?: string;
+	WEBHOOK_LIMIT?: RateLimit;
 	SLACK_MENTIONS_TEAM_ID?: string;
 	SLACK_MENTIONS_GITHUB_ORG?: string;
 }
