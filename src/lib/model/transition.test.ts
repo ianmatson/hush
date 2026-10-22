@@ -333,3 +333,23 @@ describe('reseeding after a pause', () => {
 		expect(fresh.state.awaitingRefresh).toEqual([]);
 	});
 });
+
+describe('waiting for a fresh search', () => {
+	it('neither admits nor alerts for an item only a waiting binding supports', () => {
+		const a = facts(1);
+		const unread = step({ views: [view('v', open)], items: [], results: { 0: [a.id] } }, null);
+		const awaiting = {
+			...unread.state,
+			seededBindings: [],
+			baseline: [],
+			awaitingRefresh: [...unread.state.seededBindings]
+		};
+		const readLater = step(
+			{ views: [view('v', open)], items: [item(a)], results: { 0: [a.id] } },
+			awaiting
+		);
+		expect(readLater.admitted).toEqual([]);
+		expect(readLater.quiet.has(a.id)).toBe(true);
+		expect(readLater.state.members).toEqual([a.id]);
+	});
+});

@@ -45,7 +45,21 @@ function seed(view: CompiledView, previous: ViewState, found: Membership, ctx: T
 		const window = usableWindow(ctx.sources.get(clause.sourceId), ctx.now);
 		for (const candidate of window?.candidates ?? []) baseline.add(candidate.id);
 	}
-	return { seeded, baseline, awaiting };
+	const candidatesOf = (keep: (binding: string) => boolean) =>
+		new Set(
+			view.clauses
+				.filter((clause) => keep(clause.binding))
+				.flatMap(
+					(clause) =>
+						usableWindow(ctx.sources.get(clause.sourceId), ctx.now)?.candidates.map((c) => c.id) ??
+						[]
+				)
+		);
+	const settled = candidatesOf((binding) => !awaiting.has(binding));
+	const awaitingOnly = new Set(
+		[...candidatesOf((binding) => awaiting.has(binding))].filter((id) => !settled.has(id))
+	);
+	return { seeded, baseline, awaiting, awaitingOnly };
 }
 
 function retain(view: CompiledView, previous: ViewState, ctx: TransitionContext): ItemId[] {
@@ -66,11 +80,13 @@ export function transitionView(
 	cause: TransitionCause
 ): ViewTransition {
 	const previous = stored?.scope === view.scope ? stored : emptyViewState(view.scope);
-	const { seeded, baseline, awaiting } = seed(view, previous, found, ctx);
+	const { seeded, baseline, awaiting, awaitingOnly } = seed(view, previous, found, ctx);
 	const before = new Set(previous.members);
 	const members = found.members;
 	const admitted =
-		cause === 'command' ? [] : [...members].filter((id) => !before.has(id) && !baseline.has(id));
+		cause === 'command'
+			? []
+			: [...members].filter((id) => !before.has(id) && !baseline.has(id) && !awaitingOnly.has(id));
 	const retained = retain(view, previous, ctx);
 	return {
 		state: {
@@ -82,7 +98,7 @@ export function transitionView(
 			awaitingRefresh: [...awaiting]
 		},
 		admitted,
-		quiet: baseline,
+		quiet: new Set([...baseline, ...awaitingOnly]),
 		departed: [...before].filter((id) => !members.has(id)),
 		alertable: new Set([...before, ...members, ...retained])
 	};
