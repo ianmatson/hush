@@ -12,6 +12,7 @@ import {
 	knownRowLayout,
 	knownTableColumns
 } from './row-layout';
+import { DEFAULT_OPEN_ITEMS, knownOpenItems } from './open-items';
 import type { Settings } from './types';
 
 const knownDashKeys = (dash: object | undefined) =>
@@ -36,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	swipe: DEFAULT_SWIPE,
 	rows: DEFAULT_ROWS,
 	rowLayout: DEFAULT_ROW_LAYOUT,
+	openItems: DEFAULT_OPEN_ITEMS,
 	tableColumns: DEFAULT_TABLE_COLUMNS
 };
 
@@ -60,6 +62,7 @@ export function parseSettings(json: string | null | undefined): Settings {
 			pushFacts: raw.pushFacts ? knownPushFacts(raw.pushFacts) : DEFAULT_PUSH_FACTS,
 			rows: knownRowParts(raw.rows ?? {}),
 			rowLayout: knownRowLayout(raw.rowLayout),
+			openItems: knownOpenItems(raw.openItems),
 			tableColumns: knownTableColumns(raw.tableColumns),
 			alertChannels: { ...DEFAULT_SETTINGS.alertChannels, ...(raw.alertChannels ?? {}) }
 		};

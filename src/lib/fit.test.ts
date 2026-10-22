@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitItems } from './fit';
+import { fitItems, fitWithTrailingControl } from './fit';
 
 const options = { gap: 4, moreWidth: 30 };
 
@@ -18,5 +18,32 @@ describe('fitItems', () => {
 
 	it('counts the reserved space of other controls', () => {
 		expect(fitItems([50, 50], 120, { ...options, reserved: 20 })).toEqual([0]);
+	});
+});
+
+describe('fitWithTrailingControl', () => {
+	const sizes = { gap: 4, moreWidth: 30, controlWidth: 20 };
+
+	it('shows every item and the control when they all fit', () => {
+		expect(fitWithTrailingControl([50, 50], 130, sizes)).toBe(2);
+	});
+
+	it('swaps the control for the more button when the items do not fit', () => {
+		expect(fitWithTrailingControl([50, 50, 50], 150, sizes)).toBe(2);
+	});
+
+	it('hides at least one item when only the control does not fit', () => {
+		expect(fitWithTrailingControl([50, 50], 110, sizes)).toBe(1);
+	});
+
+	it('shows only the more button when no item fits', () => {
+		expect(fitWithTrailingControl([200], 100, sizes)).toBe(0);
+	});
+
+	it('keeps room for a more button wider than the control', () => {
+		const widths = Array.from({ length: 10 }, () => 30);
+		const shown = fitWithTrailingControl(widths, 345, { gap: 4, moreWidth: 65, controlWidth: 26 });
+		expect(shown * 34 + 65).toBeLessThanOrEqual(345);
+		expect(shown).toBe(8);
 	});
 });

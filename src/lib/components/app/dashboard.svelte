@@ -492,6 +492,7 @@
 		closeRowMenus();
 		sel.clear();
 		if (!cursorIsIn(stack)) selectedId = inListMembers(rotated(stack))[0]?.id ?? selectedId;
+		if (opensFullPage) return goto(itemPagePath(m.repo, m.number, 'pr'));
 		peekedOutsideKey = m.key;
 		take();
 	}
@@ -643,12 +644,15 @@
 		closeRowMenus();
 		if (e.currentTarget instanceof HTMLElement) e.currentTarget.focus({ preventScroll: true });
 		if (sel.click(e, i.id, order, selectedId)) return;
-		// A click on the card peeks it.
 		sel.clear();
 		peekedOutsideKey = null;
 		selectedId = i.id;
-		take();
+		if (opensFullPage) openFullPage(i);
+		else take();
 	}
+
+	const opensFullPage = $derived(me.data?.settings.openItems === 'page');
+	const openFullPage = (i: DashItem) => goto(itemPagePath(i.repo, i.number, i.kind));
 
 	function onToggle(e: MouseEvent, i: DashItem) {
 		if (e.shiftKey) sel.range(order, i.id, selectedId);
@@ -687,7 +691,7 @@
 			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
 			'list.open': () => i && open(i, i.actionUrl),
 			'list.openGitHub': () => i && open(i, i.url),
-			'list.fullPage': () => i && goto(itemPagePath(i.repo, i.number, i.kind)),
+			'list.fullPage': () => i && openFullPage(i),
 			'list.copy': () => copyItemLinks(targets()),
 			'list.refresh': () => refresh(),
 			'list.search': () => (palette.open = true),

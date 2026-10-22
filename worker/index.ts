@@ -18,6 +18,7 @@ import actions from './routes/actions';
 import tasks from './routes/tasks';
 import attachments from './routes/attachments';
 import projects from './routes/projects';
+import itemFields from './routes/item-fields';
 import diff from './routes/diff';
 import suggest from './routes/suggest';
 import seen from './routes/seen';
@@ -111,6 +112,7 @@ const api = app
 	.route('/', tasks)
 	.route('/', attachments)
 	.route('/', projects)
+	.route('/', itemFields)
 	.route('/', diff)
 	.route('/', suggest)
 	.route('/', dashboard)

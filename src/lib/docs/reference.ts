@@ -353,9 +353,22 @@ Hush adds \`"v"\` (the menu version) next to your menus. Leave it: it tells Hush
 { "rowLayout": "table" }
 \`\`\``
 	},
+	openItems: {
+		type: '"peek" or "page"',
+		body: `What a click or a tap on a PR or issue in a list opens. **Settings → General → Row layout** sets it.
+
+- \`"peek"\` (default): the peek, a panel next to the list. The list stays usable, and the peek follows the cursor.
+- \`"page"\`: the full page of the PR or issue. Back (or Escape) goes back to the list.
+
+The keys do not change: {{key:list.peek}} opens the peek and {{key:list.fullPage}} the full page. In the search (⌘K), Enter opens the item the same way as a click.
+
+\`\`\`json settings
+{ "openItems": "page" }
+\`\`\``
+	},
 	tableColumns: {
 		type: 'array of column ids',
-		body: `The columns that the table layout shows, from left to right in a fixed order. The avatar and the title always show. The table has no action button: click a row to open it in the peek, or use the right-click menu and the keys. With \`"categoryNames"\` on, the names show in place of the icons of \`"categories"\`. Columns: ${TABLE_COLUMNS.map((c) => `\`"${c.id}"\` (${c.label}${c.prOnly ? ', pull requests only' : ''})`).join(', ')}. The default shows ${DEFAULT_TABLE_COLUMNS.map((id) => `\`"${id}"\``).join(', ')}.
+		body: `The columns that the table layout shows, from left to right in a fixed order. The avatar and the title always show. The table has no action button: click a row to open it (see \`openItems\`), or use the right-click menu and the keys. With \`"categoryNames"\` on, the names show in place of the icons of \`"categories"\`. Columns: ${TABLE_COLUMNS.map((c) => `\`"${c.id}"\` (${c.label}${c.prOnly ? ', pull requests only' : ''})`).join(', ')}. The default shows ${DEFAULT_TABLE_COLUMNS.map((id) => `\`"${id}"\``).join(', ')}.
 
 \`\`\`json settings
 { "rowLayout": "table", "tableColumns": ["reason", "author", "time"] }

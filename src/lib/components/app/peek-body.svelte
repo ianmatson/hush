@@ -32,14 +32,17 @@
 	import PeekSlack from './peek-slack.svelte';
 	import PeekProjects from './peek-projects.svelte';
 	import PeekFiles from './peek-files.svelte';
+	import PeekAssignees from './peek-assignees.svelte';
+	import PeekLabels from './peek-labels.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import ReviewThread from './review-thread.svelte';
 	import ExternalBadge from './external-badge.svelte';
 	import GhLink from './gh-link.svelte';
-	import { branchUrl, labelUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
+	import { branchUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
 	import { FILES_TAB, itemPagePath } from '$lib/shared/item-page';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
 	import CircleMinus from '@lucide/svelte/icons/circle-minus';
@@ -145,6 +148,7 @@
 		}
 	}
 	let allChecks = $state(false);
+	let checksOpen = $state(false);
 	let editingId = $state<string | null>(null);
 	let editTrigger: HTMLButtonElement | null = null;
 	function closeEditor() {
@@ -211,6 +215,7 @@
 					rel="noreferrer">{p.repo}#{p.number}</a
 				>
 				<PeekProjects repo={p.repo} number={p.number} />
+				<PeekAssignees {p} />
 				{#if p.kind === 'pr' || p.kind === 'issue'}
 					<PeekSlack {repo} {number} kind={p.kind} class="ml-auto" />
 				{/if}
@@ -252,19 +257,7 @@
 					{/snippet}
 				</Tip>
 			{/if}
-			{#if p.labels.length}
-				<div class="flex flex-wrap gap-1">
-					{#each p.labels as l (l.name)}
-						<a
-							href={labelUrl(p.repo, l.name)}
-							target="_blank"
-							rel="noreferrer"
-							class="rounded-full border px-2 py-0.5 text-[0.7rem] hover:brightness-95 dark:hover:brightness-125"
-							style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
-						>
-					{/each}
-				</div>
-			{/if}
+			<PeekLabels {p} />
 		</header>
 
 		{#if p.pr}
@@ -323,34 +316,45 @@
 						? pr.checks
 						: pr.checks.filter((c) => c.state === 'failure' || c.state === 'pending')}
 					<div class="grid gap-1.5 border-t pt-3">
-						<h3
-							class="flex flex-wrap items-center gap-x-2 text-xs font-medium text-muted-foreground"
-						>
-							Checks
-							{#each counts(pr.checks) as { s, n } (s)}
-								<span class={cn('font-normal', CHECK[s].tone)}>{n} {CHECK[s].label}</span>
-							{/each}
-						</h3>
-						{#each shown as c, k (k)}
-							{@const ci = CHECK[c.state]}
-							<a
-								href={c.url ?? p.url + '/checks'}
-								target="_blank"
-								rel="noreferrer"
-								class="-mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-muted"
-							>
-								<ci.icon class={cn('size-4 shrink-0', ci.tone)} />
-								<span class="truncate">{c.name}</span>
-							</a>
-						{/each}
-						{#if shown.length < pr.checks.length || pr.checksTotal > pr.checks.length}
+						<h3 class="text-xs">
 							<button
 								type="button"
-								class="justify-self-start text-xs text-muted-foreground underline-offset-2 hover:underline"
-								onclick={() => (allChecks = !allChecks)}
+								class="flex flex-wrap items-center gap-x-2 font-medium text-muted-foreground hover:text-foreground"
+								aria-expanded={checksOpen}
+								onclick={() => (checksOpen = !checksOpen)}
 							>
-								{allChecks ? 'Show only failed and running' : `Show all ${pr.checksTotal}`}
+								<span class="flex items-center gap-1"
+									><ChevronRight
+										class={cn('size-3.5 transition-transform', checksOpen && 'rotate-90')}
+									/>Checks</span
+								>
+								{#each counts(pr.checks) as { s, n } (s)}
+									<span class={cn('font-normal', CHECK[s].tone)}>{n} {CHECK[s].label}</span>
+								{/each}
 							</button>
+						</h3>
+						{#if checksOpen}
+							{#each shown as c, k (k)}
+								{@const ci = CHECK[c.state]}
+								<a
+									href={c.url ?? p.url + '/checks'}
+									target="_blank"
+									rel="noreferrer"
+									class="-mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-muted"
+								>
+									<ci.icon class={cn('size-4 shrink-0', ci.tone)} />
+									<span class="truncate">{c.name}</span>
+								</a>
+							{/each}
+							{#if shown.length < pr.checks.length || pr.checksTotal > pr.checks.length}
+								<button
+									type="button"
+									class="justify-self-start text-xs text-muted-foreground underline-offset-2 hover:underline"
+									onclick={() => (allChecks = !allChecks)}
+								>
+									{allChecks ? 'Show only failed and running' : `Show all ${pr.checksTotal}`}
+								</button>
+							{/if}
 						{/if}
 					</div>
 				{/if}

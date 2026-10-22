@@ -62,6 +62,7 @@ export function settingsAuthorization(settings: Settings) {
 			'swipe',
 			'rows',
 			'rowLayout',
+			'openItems',
 			'tableColumns'
 		]),
 		views: settings.views

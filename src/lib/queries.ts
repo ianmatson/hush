@@ -92,6 +92,8 @@ export const keys = {
 	commitDiff: (repo: string, sha: string) => ['commit-diff', repo, sha] as const,
 	reviewThreads: (repo: string, number: number) => ['review-threads', repo, number] as const,
 	projects: (repo: string, number: number) => ['projects', repo, number] as const,
+	repoLabels: (repo: string, q: string) => ['repo-labels', repo, q] as const,
+	assignableUsers: (repo: string, q: string) => ['assignable-users', repo, q] as const,
 	alerts: ['alerts'] as const,
 	suggest: (repo: string, kind: 'user' | 'ref', query: string, from: string) =>
 		['suggest', repo, kind, query, from] as const,
@@ -229,6 +231,24 @@ export const projectsQuery = (repo: string, number: number) =>
 		queryKey: keys.projects(repo, number),
 		queryFn: () => api.projects(repo, number),
 		staleTime: 2 * MINUTE_MS,
+		gcTime: 10 * MINUTE_MS,
+		refetchOnWindowFocus: false
+	});
+
+export const repoLabelsQuery = (repo: string, q: string) =>
+	queryOptions({
+		queryKey: keys.repoLabels(repo, q),
+		queryFn: async () => (await api.repoLabels(repo, q)).labels,
+		staleTime: 5 * MINUTE_MS,
+		gcTime: 10 * MINUTE_MS,
+		refetchOnWindowFocus: false
+	});
+
+export const assignableUsersQuery = (repo: string, q: string) =>
+	queryOptions({
+		queryKey: keys.assignableUsers(repo, q),
+		queryFn: async () => (await api.assignableUsers(repo, q)).users,
+		staleTime: 5 * MINUTE_MS,
 		gcTime: 10 * MINUTE_MS,
 		refetchOnWindowFocus: false
 	});
