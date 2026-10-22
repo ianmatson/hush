@@ -1,0 +1,92 @@
+import { stillKept } from '../shared/closed-items';
+import { usableWindow } from './sources';
+import type { CompiledView, Item, ItemId, Membership, Source, ViewState } from './types';
+
+export type TransitionCause = 'observation' | 'command';
+
+export interface TransitionContext {
+	items: ReadonlyMap<ItemId, Item>;
+	sources: ReadonlyMap<string, Source>;
+	now: number;
+}
+
+export interface ViewTransition {
+	state: ViewState;
+	admitted: ItemId[];
+	departed: ItemId[];
+	alertable: Set<ItemId>;
+}
+
+export const emptyViewState = (scope: string): ViewState => ({
+	scope,
+	members: [],
+	retained: [],
+	seededBindings: [],
+	baseline: []
+});
+
+function seed(view: CompiledView, previous: ViewState, found: Membership, ctx: TransitionContext) {
+	const bindings = new Set(view.clauses.map((clause) => clause.binding));
+	const stillSeeded = previous.seededBindings.filter(
+		(binding) => bindings.has(binding) && found.validBindings.has(binding)
+	);
+	const seeded = new Set(stillSeeded);
+	const baseline = new Set(previous.baseline);
+	for (const clause of view.clauses) {
+		if (seeded.has(clause.binding) || !found.validBindings.has(clause.binding)) continue;
+		seeded.add(clause.binding);
+		const window = usableWindow(ctx.sources.get(clause.sourceId), ctx.now);
+		for (const candidate of window?.candidates ?? []) baseline.add(candidate.id);
+	}
+	return { seeded, baseline };
+}
+
+function retain(
+	view: CompiledView,
+	previous: ViewState,
+	members: Set<ItemId>,
+	ctx: TransitionContext
+): ItemId[] {
+	if (view.view.keepClosed === false) return [];
+	const closedAndKept = (id: ItemId) => {
+		const item = ctx.items.get(id);
+		return !!item && item.facts.state !== 'open' && stillKept(item.facts, ctx.now);
+	};
+	return [...new Set([...previous.retained, ...previous.members])].filter(
+		(id) => !members.has(id) && closedAndKept(id)
+	);
+}
+
+export function transitionView(
+	view: CompiledView,
+	stored: ViewState | null,
+	found: Membership,
+	ctx: TransitionContext,
+	cause: TransitionCause
+): ViewTransition {
+	const previous = stored?.scope === view.scope ? stored : emptyViewState(view.scope);
+	const { seeded, baseline } = seed(view, previous, found, ctx);
+	const before = new Set(previous.members);
+	const members = found.members;
+	const admitted =
+		cause === 'command' ? [] : [...members].filter((id) => !before.has(id) && !baseline.has(id));
+	const retained = retain(view, previous, members, ctx);
+	return {
+		state: {
+			scope: view.scope,
+			members: [...members],
+			retained,
+			seededBindings: [...seeded],
+			baseline: [...baseline].filter((id) => found.candidates.has(id) && found.unsettled.has(id))
+		},
+		admitted,
+		departed: [...before].filter((id) => !members.has(id)),
+		alertable: new Set([...before, ...members, ...retained])
+	};
+}
+
+export const interestOf = (states: Iterable<ViewState>, memberships: Iterable<Membership>) =>
+	new Set<ItemId>([
+		...[...states].flatMap((state) => [...state.members, ...state.retained]),
+		...[...memberships].flatMap((membership) => [...membership.candidates])
+	]);

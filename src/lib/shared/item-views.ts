@@ -58,7 +58,7 @@ export function viewKinds(view: Pick<ItemView, 'searches'>): DashKind[] {
 	return DASH_KINDS.filter((kind) => view.searches.some((q) => searchKinds(q).includes(kind)));
 }
 
-const withKind = (kind: DashKind, query: string) =>
+export const withKind = (kind: DashKind, query: string) =>
 	NAMES_A_KIND.test(query) ? query : `is:${kind} ${query}`.trim();
 
 export function sectionsFor(kind: DashKind, views: ItemView[], now = Date.now()): DashSection[] {
