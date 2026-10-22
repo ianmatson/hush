@@ -264,7 +264,7 @@ export class WorkspaceEngine {
 		const renew = routes
 			.flatMap((route) => byRoute.get(route) ?? [])
 			.filter((id) => !(id in this.sync.reads) || this.reading.has(id));
-		if (renew.length) this.saveSync(renewReads(this.sync, renew, now));
+		if (renew.length) this.saveSync({ ...renewReads(this.sync, renew, now), lastWebhookAt: now });
 	}
 
 	private async syncRoutes(run: Run, repair: boolean) {
@@ -288,7 +288,12 @@ export class WorkspaceEngine {
 			};
 		} catch (error) {
 			console.error('route sync failed', (error as Error).message);
-			this.sync = { ...this.sync, routesDue: run.clock() + ROUTES_RETRY_MS };
+			const retryAt = run.clock() + ROUTES_RETRY_MS;
+			this.sync = {
+				...this.sync,
+				routesDue: retryAt,
+				cleanupAt: repair ? retryAt : this.sync.cleanupAt
+			};
 		}
 	}
 

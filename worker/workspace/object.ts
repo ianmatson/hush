@@ -364,11 +364,8 @@ export class Workspace extends DurableObject<Env> {
 
 	private existing(): WorkspaceEngine | null {
 		if (this.engine && !this.engine.broken) return this.engine;
-		try {
-			this.engine = WorkspaceEngine.open(this.deps(), Date.now());
-		} catch {
-			return null;
-		}
+		if (!this.store.exists()) return null;
+		this.engine = WorkspaceEngine.open(this.deps(), Date.now());
 		return this.engine;
 	}
 

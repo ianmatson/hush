@@ -98,13 +98,27 @@ describe('read renewal', () => {
 	});
 });
 
+describe('interactive reads and webhooks', () => {
+	it('backs off an interactive read that fails after a webhook renewed it', () => {
+		const peeked = requestReads(initialSync(NOW), ['PR_1'], 'interactive', NOW);
+		const claim = { PR_1: peeked.reads.PR_1.version };
+		const renewed = renewReads(peeked, ['PR_1'], NOW);
+		expect(readsFailed(renewed, claim, NOW).reads.PR_1).toMatchObject({
+			attempts: 1,
+			notBefore: NOW + readRetryDelay(1)
+		});
+	});
+});
+
 describe('Workspace.invalidate', () => {
 	it('requests a read of a tracked item, and nothing for a route it does not track', async () => {
 		const h = await tracking();
 		h.workspace.invalidate(['555#2', '999#1'], h.clock());
 		expect(h.workspace.schedule.reads).toEqual({});
+		expect(h.workspace.schedule.lastWebhookAt).toBeNull();
 		h.workspace.invalidate(['555#1'], h.clock());
 		expect(Object.keys(h.workspace.schedule.reads)).toEqual(['PR_1']);
+		expect(h.workspace.schedule.lastWebhookAt).toBe(h.clock());
 		expect(h.alarms.at(-1)).toBe(h.clock());
 	});
 
@@ -112,8 +126,11 @@ describe('Workspace.invalidate', () => {
 		const h = await tracking();
 		h.workspace.invalidate(['555#1'], h.clock());
 		const version = h.workspace.schedule.reads.PR_1.version;
+		const receivedAt = h.clock();
+		h.advance(MINUTE_MS);
 		h.workspace.invalidate(['555#1'], h.clock());
 		expect(h.workspace.schedule.reads.PR_1.version).toBe(version);
+		expect(h.workspace.schedule.lastWebhookAt).toBe(receivedAt);
 	});
 
 	it('asks for one more read when a delivery arrives during a read', async () => {
@@ -207,6 +224,20 @@ describe('route sync', () => {
 		await workspace.run(h.clock);
 		expect(routes.rows.size).toBe(0);
 		expect(h.store.readState(ROUTES_KEY) ?? []).toEqual([]);
+	});
+
+	it('retries a failed daily repair as a repair', async () => {
+		const h = await tracking();
+		h.routes.rows.clear();
+		h.routes.rows.add('1#1');
+		h.routes.failNext = true;
+		h.advance(25 * HOUR_MS);
+		h.workspace.touch(h.clock());
+		await h.workspace.run(h.clock);
+		expect([...h.routes.rows]).toEqual(['1#1']);
+		h.advance(ROUTES_RETRY_MS);
+		await h.workspace.run(h.clock);
+		expect([...h.routes.rows]).toEqual(['555#1']);
 	});
 
 	it('repairs drift in the daily cleanup', async () => {

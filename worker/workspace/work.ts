@@ -39,6 +39,7 @@ export interface ReadRequest {
 	version: number;
 	attempts: number;
 	notBefore: number;
+	interactiveVersion?: number;
 }
 
 export type ReadClaims = Record<ItemId, number>;
@@ -73,6 +74,7 @@ export interface Sync {
 	retryAt: Record<Resource, number>;
 	deliveryDue: number | null;
 	routesDue: number | null;
+	lastWebhookAt: number | null;
 	delivery: DeliveryState;
 	appSeenAt: number;
 	focusedUntil: number;
@@ -127,6 +129,7 @@ export function initialSync(now: number): Sync {
 		retryAt: { github: 0, ai: 0 },
 		deliveryDue: null,
 		routesDue: null,
+		lastWebhookAt: null,
 		delivery: { recentSends: [], lastDigestAt: 0 },
 		appSeenAt: 0,
 		focusedUntil: 0,
@@ -266,7 +269,8 @@ export const requestReads = (
 		priority: current?.priority === 'interactive' ? 'interactive' : priority,
 		version,
 		attempts: 0,
-		notBefore: now
+		notBefore: now,
+		interactiveVersion: priority === 'interactive' ? version : current?.interactiveVersion
 	}));
 
 export const renewReads = (sync: Sync, ids: Iterable<ItemId>, now: number): Sync =>
@@ -298,7 +302,7 @@ export function readsFailed(sync: Sync, claims: ReadClaims, now: number): Sync {
 	const readAt = { ...sync.readAt };
 	for (const [id, version] of Object.entries(claims)) {
 		const current = reads[id];
-		if (current && current.version !== version && current.priority === 'interactive') continue;
+		if ((current?.interactiveVersion ?? 0) > version) continue;
 		const attempts = (current?.attempts ?? 0) + 1;
 		if (attempts >= MAX_READ_ATTEMPTS) {
 			delete reads[id];
