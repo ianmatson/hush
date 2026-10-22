@@ -67,6 +67,7 @@ const LEGACY_FINGERPRINTS_KEY = 'mcpLegacyViewFingerprints';
 const ALERT_HISTORY_SHOWN = 100;
 const MAX_MARKS = 50;
 const FEED_ENTRIES = 50;
+const SOON_MS = 1000;
 
 export interface PollStatus {
 	lastPollAt: number | null;
@@ -230,8 +231,11 @@ export class Workspace extends DurableObject<Env> {
 		const at = this.wantedAlarm;
 		if (at === undefined) return;
 		this.wantedAlarm = undefined;
-		if (at === null) await this.ctx.storage.deleteAlarm();
-		else if ((await this.ctx.storage.getAlarm()) !== at) await this.ctx.storage.setAlarm(at);
+		if (at === null) return this.ctx.storage.deleteAlarm();
+		const wakeAt = Math.max(at, Date.now() + SOON_MS);
+		const current = await this.ctx.storage.getAlarm();
+		if (current === null || current > wakeAt || current < Date.now())
+			await this.ctx.storage.setAlarm(wakeAt);
 	}
 
 	private broadcast(message: LiveMessage) {

@@ -20,51 +20,63 @@ const hash = async (value) =>
 		'base64url'
 	);
 const script = `
-import app, { Poller, McpAuthorization } from './worker/index.ts';
-import { ActivePoller } from './worker/poller.ts';
+import app, { Workspace, McpAuthorization, Poller } from './worker/index.ts';
+import { ANALYSIS_VERSION } from './worker/workspace/object.ts';
+import { WorkspaceStore } from './worker/workspace/store.ts';
+import { compileViews, viewScope } from './src/lib/model/compile.ts';
 import { DEFAULT_SETTINGS } from './src/lib/shared/settings.ts';
-import { mergeSettings } from './src/lib/shared/settings-schema.ts';
 import { legacyFingerprintView } from './src/lib/shared/view-authorization.ts';
-import { finishItem } from './src/lib/shared/dashboard.ts';
-import { dashFactsOf } from './src/lib/shared/subject.ts';
-import { dashSignature } from './worker/poller/dashboard-cache.ts';
 import { subjectFixture } from './worker/test/subject-fixtures.ts';
-import { SCHEMA, SCHEMA_VERSION } from './worker/poller/schema.ts';
 let clock = Date.now();
 Date.now = () => clock;
-class SettingsWriter extends ActivePoller {
-  async persist(patch) { await this.saveSettings(mergeSettings(await this.settings(), patch)); }
-}
-export class FixturePoller extends Poller {
-  async seed(schema = SCHEMA_VERSION) {
-    if (!await this.ctx.storage.get('schema')) this.ctx.storage.sql.exec(SCHEMA);
+const TABLES = ['state', 'items', 'sources', 'view_state', 'alerts'];
+export class FixtureWorkspace extends Workspace {
+  async seed() {
+    const store = new WorkspaceStore(this.ctx.storage);
+    store.migrate();
+    store.writeState('account', {userId: 1});
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    const config = {me: 'synthetic-user', settings, teams: [], projectAccess: 'none', analysisVersion: ANALYSIS_VERSION, projects: []};
+    store.create(config);
     const subject = subjectFixture({author: 'synthetic-user'});
-    const item = finishItem(dashFactsOf(subject, 'synthetic-user', new Set()), ['mine'], ['Mine'], 'synthetic-user', 3, clock);
-    const data = {kind: 'pr', items: [item], sourceItems: [], sections: [{id: 'mine', name: 'Mine', count: 1}], teams: [], fetchedAt: clock, errors: []};
-    await this.ctx.storage.put({userId: 1, schema, settings: JSON.stringify(DEFAULT_SETTINGS), mcpAccessVersion: crypto.randomUUID(), 'dash:pr': {sig: dashSignature('pr', DEFAULT_SETTINGS), data}});
+    const item = {id: subject.id, revision: 1, facts: subject, project: {state: 'unavailable'}, analysis: null, attention: {seen: null, markedUnread: false, snooze: null, muted: false, pins: []}};
+    const ctx = {dash: settings.dash, categoryGroups: settings.categoryGroups, smartDecisions: settings.smartDecisions, teams: [], analysisVersion: ANALYSIS_VERSION, now: clock};
+    const compiled = compileViews(settings.views, ctx);
+    const sources = new Map(compiled.sources.map((spec) => [spec.id, {spec, window: {candidates: spec.kind === subject.kind ? [{id: subject.id, updatedAt: subject.updatedAt}] : [], truncated: false}, failedSince: null, error: null}]));
+    const views = new Map(settings.views.map((view) => [view.id, {scope: viewScope(view, ctx), members: [subject.id], retained: [], seededBindings: [], baseline: [], awaitingRefresh: []}]));
+    const items = new Map([[item.id, item]]);
+    store.save({
+      data: {config, items, sources, views, revision: 1},
+      changes: {items: new Set(items.keys()), removedItems: new Set(), sources: new Set(sources.keys()), removedSources: new Set(), views: new Set(views.keys()), removedViews: new Set(), config: false},
+      alerts: [], changedViews: [], departed: [], interest: new Set(), nextBoundary: null
+    }, clock);
+    await this.ctx.storage.put({mcpAccessVersion: crypto.randomUUID()});
   }
-  async settings(patches, fail = false) {
+  async alarm() {}
+  notReady() {
+    this.ctx.storage.sql.exec("DELETE FROM state WHERE key = 'config'");
+  }
+  failNextWrite() {
     const storage = this.ctx.storage;
-    const transaction = storage.transaction.bind(storage);
-    if (fail) storage.transaction = (run) => transaction(async (tx) => {
-      await run(tx);
-      throw new Error('Synthetic transaction failure');
-    });
-    const writer = new SettingsWriter(this.ctx, this.env);
-    try { await Promise.all(patches.map((patch) => writer.persist(patch))); return {ok: true}; }
-    catch (error) { return {error: error.message}; }
-    finally { storage.transaction = transaction; }
+    const put = storage.put.bind(storage);
+    storage.put = async () => {
+      storage.put = put;
+      throw new Error('Synthetic write failure');
+    };
   }
   async reset() {
-    await this.ctx.storage.deleteAll();
-    await this.settings([{}]);
+    await this.stop();
+    await this.updateSettings({});
     const first = await this.ctx.storage.get('mcpAccessVersion');
-    await this.ctx.storage.deleteAll();
-    await this.settings([{}]);
+    await this.stop();
+    await this.updateSettings({});
     const second = await this.ctx.storage.get('mcpAccessVersion');
     return {first, second};
   }
-  async inspect() { return {entries: [...await this.ctx.storage.list()], alarm: await this.ctx.storage.getAlarm()}; }
+  async inspect() {
+    const sql = Object.fromEntries(TABLES.map((table) => [table, this.ctx.storage.sql.exec('SELECT * FROM ' + table).toArray()]));
+    return {entries: [...await this.ctx.storage.list()], sql, alarm: await this.ctx.storage.getAlarm()};
+  }
 }
 export class FixtureAuthorization extends McpAuthorization {
   async inspect() { return {entries: [...await this.ctx.storage.list()], alarm: await this.ctx.storage.getAlarm()}; }
@@ -76,16 +88,26 @@ export class FixtureAuthorization extends McpAuthorization {
     }
   }
 }
+async function saveSettings(workspace, patches, fail) {
+  try {
+    if (fail) await workspace.failNextWrite();
+    await Promise.all(patches.map((patch) => workspace.updateSettings(patch)));
+    return {ok: true};
+  } catch (error) {
+    return {error: error.message};
+  }
+}
+export { Poller };
 export default { async fetch(request, env, ctx) {
   const path = new URL(request.url).pathname;
-  const poller = env.POLLER.get(env.POLLER.idFromName('1'));
+  const workspace = env.WORKSPACE.get(env.WORKSPACE.idFromName('1'));
   const auth = env.MCP_AUTH.get(env.MCP_AUTH.idFromName('mcp-authorization-v1'));
-  if (path === '/__fixture/seed') { await poller.seed(); return Response.json({ok:true}); }
-  if (path === '/__fixture/inspect') return Response.json({poller: await poller.inspect(), oauth: await auth.inspect()});
-  if (path === '/__fixture/bad-schema') { await poller.seed(2); return Response.json({ok:true}); }
-  if (path === '/__fixture/active') return Response.json(await poller.markSeen([]));
-  if (path === '/__fixture/settings') { const body = await request.json(); return Response.json(await poller.settings(body.patches, body.fail)); }
-  if (path === '/__fixture/reset') return Response.json(await poller.reset());
+  if (path === '/__fixture/seed') { await workspace.seed(); return Response.json({ok:true}); }
+  if (path === '/__fixture/inspect') return Response.json({workspace: await workspace.inspect(), oauth: await auth.inspect()});
+  if (path === '/__fixture/not-ready') { await workspace.notReady(); return Response.json({ok:true}); }
+  if (path === '/__fixture/active') return Response.json(await workspace.markSeen([]));
+  if (path === '/__fixture/settings') { const body = await request.json(); return Response.json(await saveSettings(workspace, body.patches, body.fail)); }
+  if (path === '/__fixture/reset') return Response.json(await workspace.reset());
   if (path === '/__fixture/legacy') { await auth.legacy(); return Response.json({ok:true}); }
   if (path === '/__fixture/time') { clock = (await request.json()).now; return Response.json({ok:true}); }
   return app.fetch(request, env, ctx);
@@ -113,7 +135,8 @@ try {
 		script: bundled.outputFiles[0].text,
 		compatibilityDate: '2026-07-01',
 		durableObjects: {
-			POLLER: { className: 'FixturePoller', useSQLite: true },
+			POLLER: { className: 'Poller', useSQLite: true },
+			WORKSPACE: { className: 'FixtureWorkspace', useSQLite: true },
 			MCP_AUTH: { className: 'FixtureAuthorization', useSQLite: true }
 		},
 		d1Databases: ['DB'],
@@ -254,7 +277,8 @@ try {
 	const save = (patches, fail = false) =>
 		request('/__fixture/settings', { method: 'POST', body: JSON.stringify({ patches, fail }) });
 	const baseline = await (await request('/__fixture/inspect')).json();
-	const settings = JSON.parse(new Map(baseline.poller.entries).get('settings'));
+	const config = baseline.workspace.sql.state.find((row) => row.key === 'config');
+	const { settings } = JSON.parse(config.value);
 	assert.equal(
 		(
 			await (
@@ -277,10 +301,10 @@ try {
 		true
 	);
 	const saved = await (await request('/__fixture/inspect')).json();
-	const savedValues = new Map(saved.poller.entries);
+	const savedValues = new Map(saved.workspace.entries);
 	assert.equal(
 		savedValues.get('mcpAccessVersion'),
-		new Map(baseline.poller.entries).get('mcpAccessVersion')
+		new Map(baseline.workspace.entries).get('mcpAccessVersion')
 	);
 	assert.equal(
 		savedValues.get('mcpLegacyViewFingerprints').accessVersion,
@@ -296,7 +320,7 @@ try {
 				await save([{ views: [{ ...settings.views[0], searches: ['repo:sandbox/other'] }] }], true)
 			).json()
 		).error,
-		/Synthetic transaction failure/
+		/Synthetic write failure/
 	);
 	assert.equal(await (await request('/__fixture/inspect')).text(), stable);
 	const refresh = () =>
@@ -327,7 +351,7 @@ try {
 		);
 	}
 	await request('/__fixture/time', { method: 'POST', body: JSON.stringify({ now }) });
-	await request('/__fixture/bad-schema');
+	await request('/__fixture/not-ready');
 	const coldBefore = await (await request('/__fixture/inspect')).text();
 	assert.equal((await call()).status, 401);
 	assert.equal(await (await request('/__fixture/inspect')).text(), coldBefore);
@@ -338,7 +362,7 @@ try {
 	assert.notEqual(reset.second, 'initial');
 	assert.notEqual(reset.first, reset.second);
 	console.log(
-		'workerd: legacy grants survive concurrent harmless saves, silent rotating refresh, and real cached reads; failed transactions roll back; reset epochs are unique; passive reads preserve storage; unknown schema and replay fail closed.'
+		'workerd: legacy grants survive concurrent harmless saves, silent rotating refresh, and real cached reads; failed writes change nothing; reset epochs are unique; passive reads preserve storage; an unready workspace and replay fail closed.'
 	);
 } finally {
 	await mf?.dispose();
