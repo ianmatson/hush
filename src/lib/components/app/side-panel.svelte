@@ -14,6 +14,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ui } from '$lib/ui.svelte';
 	import X from '@lucide/svelte/icons/x';
+	import ScrollToBottom from './scroll-to-bottom.svelte';
 
 	/**
 	 * The right-side panel of the peek and the alert history. Wide screens: docked on the right,
@@ -29,7 +30,8 @@
 		children,
 		footer,
 		contentKey,
-		onclosecomplete
+		onclosecomplete,
+		scrollToBottom = false
 	}: {
 		open: boolean;
 		onclose: () => void;
@@ -45,6 +47,7 @@
 		footer?: Snippet;
 		contentKey?: string;
 		onclosecomplete?: () => void;
+		scrollToBottom?: boolean;
 	} = $props();
 
 	const wide = new MediaQuery(DOCKED_PANEL_QUERY);
@@ -100,6 +103,7 @@
 	}
 
 	let scroller = $state<HTMLElement | null>(null);
+	let scrollContent = $state<HTMLElement | null>(null);
 	let scrolledKey: string | undefined;
 	$effect(() => {
 		const key = contentKey;
@@ -121,6 +125,22 @@
 	});
 </script>
 
+{#snippet scrollArea(contentShown: boolean)}
+	<div class="relative flex min-h-0 flex-1 flex-col">
+		<div
+			bind:this={scroller}
+			class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+		>
+			<div bind:this={scrollContent}>
+				{#if contentShown}{@render children()}{/if}
+			</div>
+		</div>
+		{#if scrollToBottom}
+			<ScrollToBottom {scroller} content={scrollContent} class="absolute right-3 bottom-3" />
+		{/if}
+	</div>
+{/snippet}
+
 {#if open && wide.current}
 	<aside
 		class="fixed inset-y-0 right-0 z-30 flex w-(--peek-w) flex-col border-l bg-background"
@@ -137,12 +157,7 @@
 				>
 			</span>
 		</div>
-		<div
-			bind:this={scroller}
-			class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
-		>
-			{@render children()}
-		</div>
+		{@render scrollArea(true)}
 		{#if footer}
 			<div class="flex shrink-0 flex-wrap items-center gap-1 border-t p-2">{@render footer()}</div>
 		{/if}
@@ -188,12 +203,7 @@
 					>
 				</div>
 			</div>
-			<div
-				bind:this={scroller}
-				class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
-			>
-				{#if sheetContentShown}{@render children()}{/if}
-			</div>
+			{@render scrollArea(sheetContentShown)}
 			{#if footer && sheetContentShown}
 				<div class="flex shrink-0 flex-wrap items-center gap-1 border-t p-2">
 					{@render footer()}

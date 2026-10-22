@@ -81,6 +81,7 @@
 	title={shown?.title ?? 'Peek'}
 	contentKey={shown ? `${shown.repo}#${shown.number}` : undefined}
 	footer={footer || shown?.number ? bar : undefined}
+	scrollToBottom
 >
 	{#snippet start(wide)}
 		{#if wide}
