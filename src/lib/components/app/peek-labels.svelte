@@ -11,8 +11,10 @@
 	let { p }: { p: PeekDTO } = $props();
 
 	const GAP = 4;
-	const CHIP =
-		'shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] whitespace-nowrap hover:brightness-95 dark:hover:brightness-125';
+	const CHIP_LOOK =
+		'rounded-full border px-2 py-0.5 text-[0.7rem] hover:brightness-95 dark:hover:brightness-125';
+	const CHIP = `${CHIP_LOOK} shrink-0 whitespace-nowrap`;
+	const LISTED_CHIP = `${CHIP_LOOK} max-w-full break-words`;
 	const BUTTON =
 		'flex h-[1.375rem] shrink-0 items-center gap-1 rounded-full px-1.5 text-[0.7rem] whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none data-[state=open]:bg-muted data-[state=open]:text-foreground';
 	const MORE = `${BUTTON} border px-2 font-medium`;
@@ -52,12 +54,12 @@
 	const moreText = $derived(`+${hidden} more`);
 </script>
 
-{#snippet chip(l: { name: string; color: string })}
+{#snippet chip(l: { name: string; color: string }, listed = false)}
 	<a
 		href={labelUrl(p.repo, l.name)}
 		target="_blank"
 		rel="noreferrer"
-		class={CHIP}
+		class={listed ? LISTED_CHIP : CHIP}
 		style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
 	>
 {/snippet}
@@ -100,9 +102,12 @@
 			{:else if hidden}
 				<Popover.Root>
 					<Popover.Trigger class={MORE} aria-label="{moreText} labels">{moreText}</Popover.Trigger>
-					<Popover.Content align="start" class="flex w-72 flex-wrap gap-1 p-2">
+					<Popover.Content
+						align="start"
+						class="flex max-h-[min(20rem,var(--bits-popover-content-available-height))] w-72 flex-wrap content-start gap-1 overflow-y-auto p-2"
+					>
 						{#each labels as l (l.name)}
-							{@render chip(l)}
+							{@render chip(l, true)}
 						{/each}
 					</Popover.Content>
 				</Popover.Root>

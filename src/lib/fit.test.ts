@@ -39,4 +39,11 @@ describe('fitWithTrailingControl', () => {
 	it('shows only the more button when no item fits', () => {
 		expect(fitWithTrailingControl([200], 100, sizes)).toBe(0);
 	});
+
+	it('keeps room for a more button wider than the control', () => {
+		const widths = Array.from({ length: 10 }, () => 30);
+		const shown = fitWithTrailingControl(widths, 345, { gap: 4, moreWidth: 65, controlWidth: 26 });
+		expect(shown * 34 + 65).toBeLessThanOrEqual(345);
+		expect(shown).toBe(8);
+	});
 });
