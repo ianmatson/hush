@@ -4,7 +4,7 @@ import { closedLabel } from './closed-items';
 import { DAY_MS } from './durations';
 import { sameLogin } from './logins';
 import { readsBoard } from './projects';
-import type { DashItem, DashSection, DashSettings, TeamDTO, Turn } from './types';
+import type { DashItem, DashSection, DashSettings, TeamDTO, Turn, TurnedItem } from './types';
 
 export const DEFAULT_DASH: DashSettings = {
 	excludedTeams: [],
@@ -92,8 +92,7 @@ export function expandSections(
 }
 
 export type DashFacts = Omit<
-	DashItem,
-	| 'sections'
+	TurnedItem,
 	| 'turn'
 	| 'turnReason'
 	| 'waitingSince'
@@ -144,8 +143,9 @@ export type TurnFacts = Pick<
 >;
 
 const NEW_COMMITS_REASON = 'New commits since your review';
+const FOLLOWING = 'Involves you';
 
-export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): TurnResult {
+export function computeTurn(i: TurnFacts, me: string): TurnResult {
 	const mine = sameLogin(i.author, me);
 	const assigned = i.assignees.some((a) => sameLogin(a, me));
 	const commenter = i.lastHumanCommentBy;
@@ -195,7 +195,7 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 				commentedAt || i.createdAt
 			);
 		if (lastByMe) return r('them', 'Waiting for a reply', 0, commentedAt);
-		return r('none', sectionNames[0] ?? 'Involves you', 0, i.updatedAt);
+		return r('none', FOLLOWING, 0, i.updatedAt);
 	}
 
 	if (mine) {
@@ -249,26 +249,18 @@ export function computeTurn(i: TurnFacts, me: string, sectionNames: string[]): T
 			i.myLastReviewAt
 		);
 	if (lastByMe) return r('them', 'Waiting for a reply', 0, commentedAt);
-	return r('none', sectionNames[0] ?? 'Involves you', 0, i.updatedAt);
+	return r('none', FOLLOWING, 0, i.updatedAt);
 }
 
 export function finishItem(
 	facts: DashFacts,
-	sections: string[],
-	sectionNames: string[],
 	me: string,
 	staleDays: number,
 	now = Date.now()
-): DashItem {
-	const t = computeTurn(facts, me, sectionNames);
+): TurnedItem {
+	const t = computeTurn(facts, me);
 	const stale = t.turn !== 'none' && now - Date.parse(t.waitingSince) > staleDays * DAY_MS;
-	return {
-		...facts,
-		...t,
-		sections,
-		stale,
-		dismissed: false
-	};
+	return { ...facts, ...t, stale, dismissed: false };
 }
 
 /** Server-side filters from the settings. */

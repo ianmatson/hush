@@ -146,10 +146,10 @@ describe('tabStatusOf', () => {
 
 describe('what counts', () => {
 	it('counts an item as unread only while it is in the list', () => {
-		expect(countsAsUnread({ unread: true, dismissed: false })).toBe(true);
-		expect(countsAsUnread({ unread: false, dismissed: false })).toBe(false);
-		expect(countsAsUnread({ unread: true, dismissed: true })).toBe(false);
-		expect(countsAsUnread({ unread: true, dismissed: false, keptAfterClose: true })).toBe(false);
+		expect(countsAsUnread({ unread: true, dismissed: false, views: ['mine'] })).toBe(true);
+		expect(countsAsUnread({ unread: false, dismissed: false, views: ['mine'] })).toBe(false);
+		expect(countsAsUnread({ unread: true, dismissed: true, views: ['mine'] })).toBe(false);
+		expect(countsAsUnread({ unread: true, dismissed: false, views: [] })).toBe(false);
 	});
 
 	it('counts the alerts sent after you last opened the history', () => {

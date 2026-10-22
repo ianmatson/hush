@@ -7,11 +7,11 @@
 	import { setMode, mode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, meQuery, queryClient, refetchUnlessLive, signOut } from '$lib/queries';
+	import { itemsQuery, keys, meQuery, queryClient, refetchUnlessLive, signOut } from '$lib/queries';
 	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
-	import { keepsClosed } from '$lib/shared/closed-items';
+	import { inSavedView } from '$lib/shared/view-projection';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
 	import Palette from '@lucide/svelte/icons/palette';
 	import * as Command from '$lib/components/ui/command';
@@ -49,8 +49,7 @@
 
 	const touchOnly = new MediaQuery('pointer: coarse');
 	const me = createQuery(meQuery);
-	const prs = createQuery(() => dashQuery('pr'));
-	const issues = createQuery(() => dashQuery('issue'));
+	const items = createQuery(itemsQuery);
 
 	let search = $state('');
 	let highlighted = $state('');
@@ -64,31 +63,21 @@
 		if (!palette.open) return [];
 		const turn = { you: 'Your turn', team: "Team's turn", them: 'Waiting', none: 'Other' };
 		const views = me.data?.settings.views ?? [];
-		return [prs.data, issues.data].flatMap((d) =>
-			(d?.items ?? [])
-				.flatMap((i) => {
-					const home = views.find(
-						(v) => i.sections.includes(v.id) && (!i.keptAfterClose || keepsClosed(v))
-					);
-					return home ? [{ i, home }] : [];
-				})
-				.map(({ i, home }) => ({
-					id: `dash:${i.id}`,
-					label: i.title,
-					detail: `${i.repo}#${i.number}`,
-					icon: (i.kind === 'pr' ? GitPullRequest : CircleDot) as Component,
-					keywords: [
-						i.repo,
-						`#${i.number}`,
-						i.author,
-						i.turnReason,
-						...i.labels.map((l) => l.name)
-					],
-					url: i.url,
-					where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${i.state === 'open' ? turn[i.turn] : i.turnReason}`,
-					run: () => peek({ page: 'view', view: home.id, kind: i.kind, id: i.id }, `/v/${home.id}`)
-				}))
-		);
+		return (items.data?.rows ?? [])
+			.flatMap((i) => {
+				const home = views.find((v) => inSavedView(i, v));
+				return home ? [{ i, home }] : [];
+			})
+			.map(({ i, home }) => ({
+				id: `dash:${i.id}`,
+				label: i.title,
+				detail: `${i.repo}#${i.number}`,
+				icon: (i.kind === 'pr' ? GitPullRequest : CircleDot) as Component,
+				keywords: [i.repo, `#${i.number}`, i.author, i.turnReason, ...i.labels.map((l) => l.name)],
+				url: i.url,
+				where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${i.state === 'open' ? turn[i.turn] : i.turnReason}`,
+				run: () => peek({ page: 'view', view: home.id, kind: i.kind, id: i.id }, `/v/${home.id}`)
+			}));
 	});
 
 	const goEntries = $derived<Entry[]>([
@@ -115,7 +104,7 @@
 		const t = toast.loading('Syncing with GitHub…');
 		try {
 			const status = await api.sync();
-			await refetchUnlessLive(keys.dashAll);
+			await refetchUnlessLive(keys.items);
 			await queryClient.invalidateQueries({ queryKey: keys.me });
 			if (status.lastError) toast.error(status.lastError, { id: t });
 			else toast.success('Synced', { id: t });

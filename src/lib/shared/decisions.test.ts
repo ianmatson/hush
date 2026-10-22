@@ -7,16 +7,9 @@ import {
 	NO_DECISIONS,
 	bodyExcerpt,
 	conditionId,
-	contentHash,
-	forgetIdentityAnswers,
-	identityHash,
-	mergeDecisions,
 	newCommentsForYou,
-	planDecisions,
-	readDecisions,
 	smartConditions,
-	yesOrNo,
-	type StoredDecisions
+	yesOrNo
 } from './decisions';
 import { holdReason } from './push-policy';
 import { parseQuery } from './query';
@@ -76,10 +69,6 @@ function pr(over: Partial<SubjectFacts> = {}): SubjectFacts {
 	};
 }
 
-const CHOICE = { key: 'area-options', options: { bugs: 'Bugs: Defects', docs: 'Docs: Guides' } };
-const CHOICES = [CHOICE];
-const CHOICE_QUESTION = `choice_${CHOICE.key}`;
-
 const MIGRATIONS = { id: conditionId('database migrations'), text: 'database migrations' };
 
 describe('conditionId', () => {
@@ -127,230 +116,12 @@ describe('newCommentsForYou', () => {
 	});
 });
 
-describe('planDecisions', () => {
-	it('asks about the comments when the newest one is by another person', () => {
-		const plan = planDecisions(pr(), ME, null, []);
-		expect(Object.keys(plan!.request.questions).sort()).toEqual(['reply', 'urgency']);
-		expect(plan!.request.state.newCommentsForYou).toEqual([
-			{ author: 'bob', body: 'Thanks, looks good!' }
-		]);
-		expect(plan!.request.state.you.roles).toEqual(['author']);
-	});
-	it('does not ask about comments by bots, by you, or when there are none', () => {
-		for (const lastComment of [
-			comment('renovate[bot]', 'Rebased', T2, true),
-			comment(ME, 'Pushed a fix', T2),
-			null
-		])
-			expect(
-				Object.keys(planDecisions(pr({ lastComment }), ME, null, [])!.request.questions)
-			).toEqual(['urgency']);
-	});
-	it('asks only for the about: conditions it is given', () => {
-		const plan = planDecisions(pr(), ME, null, [MIGRATIONS]);
-		expect(plan!.aboutIds).toEqual({ [`about_${MIGRATIONS.id}`]: MIGRATIONS.id });
-		expect(plan!.request.questions[`about_${MIGRATIONS.id}`]).toMatchObject({ type: 'noul' });
-	});
-	it('asks nothing when the stored answers are for the same text', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 },
-			choices: { [CHOICE.key]: { id: 'bugs', confidence: 0.9 } }
-		};
-		expect(planDecisions(s, ME, stored, [MIGRATIONS], CHOICES)).toBeNull();
-	});
-	it('asks only a new condition or a changed group of an item it already read', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s)
-		};
-		expect(
-			Object.keys(planDecisions(s, ME, stored, [MIGRATIONS], CHOICES)!.request.questions).sort()
-		).toEqual([`about_${MIGRATIONS.id}`, CHOICE_QUESTION]);
-	});
-	it('asks one choice for each group and the conditions of a new item', () => {
-		const other = { key: 'effort-options', options: { low: 'Low: Minutes' } };
-		const plan = planDecisions(pr(), ME, null, [MIGRATIONS], [CHOICE, other])!;
-		expect(Object.keys(plan.request.questions).sort()).toEqual([
-			`about_${MIGRATIONS.id}`,
-			CHOICE_QUESTION,
-			'choice_effort-options',
-			'reply',
-			'urgency'
-		]);
-		expect(plan.request.questions[CHOICE_QUESTION]).toMatchObject({
-			type: 'choice',
-			criteria: CHOICE.options
-		});
-	});
-	it('asks only the comment questions when a comment is new', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 },
-			choices: { [CHOICE.key]: { id: 'bugs', confidence: 0.9 } }
-		};
-		const commented = pr({ lastComment: comment('bob', 'Can you add a test?', T2) });
-		expect(
-			Object.keys(
-				planDecisions(commented, ME, stored, [MIGRATIONS], CHOICES)!.request.questions
-			).sort()
-		).toEqual(['reply', 'urgency']);
-	});
-	it('asks the category and conditions again when the title, description, or labels change', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s)
-		};
-		const retitled = pr({ title: 'Revert the login change' });
-		expect(
-			Object.keys(planDecisions(retitled, ME, stored, [MIGRATIONS], CHOICES)!.request.questions)
-		).toEqual(expect.arrayContaining([CHOICE_QUESTION, `about_${MIGRATIONS.id}`]));
-	});
-	it('does not ask again for new commits, CI, or reviews', () => {
-		const s = pr();
-		const stored: StoredDecisions = { contentHash: contentHash(s), reply: 0.1, urgency: 0.2 };
-		const moved = pr({ ci: 'FAILURE', lastCommitAt: T2, reviewDecision: 'APPROVED' });
-		expect(planDecisions(moved, ME, stored, [])).toBeNull();
-	});
-});
-
-describe('readDecisions', () => {
-	const s = pr();
-	const answered = (over: Partial<StoredDecisions>) => ({ contentHash: contentHash(s), ...over });
-
+describe('yesOrNo', () => {
 	it('turns probabilities into yes, no, or unknown', () => {
 		expect(yesOrNo(0.85)).toBe(true);
 		expect(yesOrNo(0.1)).toBe(false);
 		expect(yesOrNo(0.5)).toBeNull();
 		expect(yesOrNo(undefined)).toBeNull();
-	});
-	it('reads the answers for the same text', () => {
-		const d = readDecisions(
-			answered({
-				reply: 0.05,
-				urgency: 1.8,
-				identityHash: identityHash(s),
-				about: { a: 0.95, b: 0.5, c: 0.1 },
-				choices: { area: { id: 'bugs', confidence: 0.7 } }
-			}),
-			s
-		);
-		expect(d).toEqual({
-			commentsNeedMe: false,
-			urgent: true,
-			smart: ['a'],
-			choices: { area: 'bugs' }
-		});
-	});
-	it('keeps a choice Jev was unsure about: each item gets one category', () => {
-		const d = readDecisions(
-			answered({
-				identityHash: identityHash(s),
-				choices: { area: { id: 'bugs', confidence: 0.2 } }
-			}),
-			s
-		);
-		expect(d.choices).toEqual({ area: 'bugs' });
-	});
-	it('keeps the category and conditions after a new comment', () => {
-		const stored = answered({
-			reply: 0.05,
-			identityHash: identityHash(s),
-			about: { a: 0.95 },
-			choices: { area: { id: 'bugs', confidence: 0.9 } }
-		});
-		const commented = pr({ lastComment: comment('carol', 'Any news?', T2) });
-		expect(readDecisions(stored, commented)).toEqual({
-			commentsNeedMe: null,
-			urgent: false,
-			smart: ['a'],
-			choices: { area: 'bugs' }
-		});
-	});
-	it('ignores answers for older text', () => {
-		const old = { contentHash: 'old', reply: 0.05, urgency: 1.8, about: { a: 0.95 } };
-		expect(readDecisions(old, s)).toEqual(NO_DECISIONS);
-	});
-});
-
-describe('mergeDecisions', () => {
-	it('keeps the identity answers when only the comments were asked again', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: 'old',
-			reply: 0.1,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 },
-			choices: { [CHOICE.key]: { id: 'bugs', confidence: 0.8 } }
-		};
-		const plan = planDecisions(s, ME, stored, [MIGRATIONS], CHOICES)!;
-		const merged = mergeDecisions(stored, plan, {
-			reply: { type: 'noul', noul: 0.95 },
-			urgency: { type: 'score', score: 0.3 }
-		});
-		expect(merged).toEqual({
-			contentHash: contentHash(s),
-			reply: 0.95,
-			urgency: 0.3,
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.9 },
-			choices: { [CHOICE.key]: { id: 'bugs', confidence: 0.8 } }
-		});
-	});
-	it('stores the choice of each group and the conditions of a new item', () => {
-		const s = pr();
-		const plan = planDecisions(s, ME, null, [MIGRATIONS], CHOICES)!;
-		const merged = mergeDecisions(null, plan, {
-			[`about_${MIGRATIONS.id}`]: { type: 'noul', noul: 0.1 },
-			[CHOICE_QUESTION]: { type: 'choice', choice: 'bugs', confidence: 0.75 }
-		});
-		expect(merged).toMatchObject({
-			identityHash: identityHash(s),
-			about: { [MIGRATIONS.id]: 0.1 },
-			choices: { [CHOICE.key]: { id: 'bugs', confidence: 0.75 } }
-		});
-	});
-	it('adds the choice of a new group to the stored choices', () => {
-		const s = pr();
-		const stored: StoredDecisions = {
-			contentHash: contentHash(s),
-			reply: 0.1,
-			urgency: 0.2,
-			identityHash: identityHash(s),
-			choices: { old: { id: 'low', confidence: 0.9 } }
-		};
-		const plan = planDecisions(s, ME, stored, [], CHOICES)!;
-		const merged = mergeDecisions(stored, plan, {
-			[CHOICE_QUESTION]: { type: 'choice', choice: 'docs', confidence: 0.6 }
-		});
-		expect(merged.choices).toEqual({
-			old: { id: 'low', confidence: 0.9 },
-			[CHOICE.key]: { id: 'docs', confidence: 0.6 }
-		});
-	});
-	it('forgets identity answers for a re-evaluation', () => {
-		const stored: StoredDecisions = {
-			contentHash: 'c',
-			reply: 0.1,
-			identityHash: 'i',
-			about: { a: 1 },
-			choices: { area: { id: 'bugs', confidence: 1 } }
-		};
-		expect(forgetIdentityAnswers(stored)).toEqual({ contentHash: 'c', reply: 0.1 });
 	});
 });
 
@@ -359,7 +130,7 @@ const needsReply = { commentsNeedMe: true, urgent: false, smart: [], choices: {}
 
 describe('turns with comment answers', () => {
 	const turnOf = (s: SubjectFacts, d = NO_DECISIONS) =>
-		computeTurn(dashFactsOf(s, ME, new Set(), d), ME, []);
+		computeTurn(dashFactsOf(s, ME, new Set(), d), ME);
 
 	it('a comment on your PR that needs nothing from you is not your turn', () => {
 		expect(turnOf(pr()).turn).toBe('you');

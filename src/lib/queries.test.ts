@@ -47,7 +47,7 @@ describe('persisted cache', () => {
 	});
 
 	it('saves the lists that a reload shows at once', () => {
-		expect(persisted(keys.dash('pr'))).toBe(true);
+		expect(persisted(keys.items)).toBe(true);
 		expect(persisted(keys.alerts)).toBe(true);
 	});
 });

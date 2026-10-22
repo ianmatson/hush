@@ -2,7 +2,8 @@ import { keys, queryClient } from './queries';
 import { categoryQueryName, itemQueryFacts } from './shared/categories';
 import { ruleMatches } from './shared/rules';
 import { compileExpr, exprMatches, parseExpr, usesAbout } from './shared/query';
-import type { DashItem, DashProject, DashResponse, RuleMatch, Settings } from './shared/types';
+import type { DashItem, RuleMatch, Settings } from './shared/types';
+import type { ItemsResponse } from './model/present';
 import type { RulePreview } from './components/app/rules/rule-builder.svelte';
 import type { ValueSuggestion, ValueSuggestions } from './shared/rule-builder';
 
@@ -13,21 +14,8 @@ function withoutAbout(when: RuleMatch): RuleMatch {
 	return rest;
 }
 
-type DashAnswers = (DashResponse | undefined)[];
-
-export const itemsIn = (answers: DashAnswers): DashItem[] => answers.flatMap((d) => d?.items ?? []);
-
-export function projectsIn(answers: DashAnswers): DashProject[] {
-	const all = answers.flatMap((d) => d?.projects ?? []);
-	return [...new Map(all.map((p) => [p.key, p])).values()];
-}
-
 const cachedItems = (): DashItem[] =>
-	itemsIn(
-		(['pr', 'issue'] as const).map((kind) =>
-			queryClient.getQueryData<DashResponse>(keys.dash(kind))
-		)
-	);
+	queryClient.getQueryData<ItemsResponse>(keys.items)?.rows ?? [];
 
 export function previewItems(
 	query: string,

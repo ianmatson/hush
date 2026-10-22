@@ -101,7 +101,7 @@ For example, `from:github-actions` finds the items where the newest thing is a c
 about:"database migrations or schema changes"
 ```
 
-It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision model, reads the title, labels, start of the description, and last 2 comments, and decides whether the item is about what you wrote. It matches only when Jev is sure.
+It needs [smart decisions](/docs/settings#smartdecisions) on. Jev, a decision model, reads the title, repository, author, labels, and start of the description, and decides whether the item is about what you wrote. It matches only when Jev is sure.
 
 - Use it only in the rules of [categories](/docs/categories#rules). Hush checks the condition when you save, and again when an item's text changes.
 - Put exact words first where you can: in `repo:acme/api about:"migrations"`, Jev reads only the items of acme/api.

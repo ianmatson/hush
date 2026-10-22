@@ -3,43 +3,39 @@ import { api } from '$lib/api';
 import { keys, queryClient, refetchUnlessLive } from '$lib/queries';
 import type { CategoryPin } from '$lib/shared/categories';
 import { snoozeLabel, type SnoozeChoice } from '$lib/shared/item-snooze';
-import type { CategoryGroup, DashItem, DashKind, DashResponse } from '$lib/shared/types';
+import type { CategoryGroup, DashItem } from '$lib/shared/types';
+import type { ItemsResponse } from '$lib/model/present';
 
 export const UNTIL_NEW_ACTIVITY: SnoozeChoice = {};
 
-const DASH_KINDS: DashKind[] = ['pr', 'issue'];
 const SEEN_BATCH = 50;
 
-const dashKeysOf = (items: DashItem[]) =>
-	[...new Set(items.map((i) => i.kind))].map((kind) => keys.dash(kind));
+const cancelItems = () => queryClient.cancelQueries({ queryKey: keys.items });
 
-const cancelDash = (items: DashItem[]) =>
-	Promise.all(dashKeysOf(items).map((queryKey) => queryClient.cancelQueries({ queryKey })));
+const invalidateItems = () => queryClient.invalidateQueries({ queryKey: keys.items });
 
-function invalidateDash(items: DashItem[]) {
-	for (const queryKey of dashKeysOf(items)) queryClient.invalidateQueries({ queryKey });
-}
-
-const refetchDash = (items: DashItem[]) => refetchUnlessLive(...dashKeysOf(items));
+const refetchItems = () => refetchUnlessLive(keys.items);
 
 export const willMute = (items: Pick<DashItem, 'muted'>[]) => !items.every((i) => i.muted);
 
-function dashItemsOf(ids: string[]): DashItem[] {
-	const cached = DASH_KINDS.flatMap(
-		(kind) => queryClient.getQueryData<DashResponse>(keys.dash(kind))?.items ?? []
-	);
-	const byId = new Map(cached.map((i) => [i.id, i]));
+function cachedRows(ids: string[]): DashItem[] {
+	const rows = queryClient.getQueryData<ItemsResponse>(keys.items)?.rows ?? [];
+	const byId = new Map(rows.map((row) => [row.id, row]));
 	return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-function patchDashItems(ids: Set<string>, patch: (x: DashItem) => DashItem) {
-	for (const kind of DASH_KINDS)
-		queryClient.setQueryData<DashResponse>(keys.dash(kind), (old) =>
-			old?.items.some((x) => ids.has(x.id))
-				? { ...old, items: old.items.map((x) => (ids.has(x.id) ? patch(x) : x)) }
-				: old
-		);
+function patchRows(ids: Set<string>, patch: (x: DashItem) => DashItem) {
+	queryClient.setQueryData<ItemsResponse>(keys.items, (old) =>
+		old?.rows.some((x) => ids.has(x.id))
+			? { ...old, rows: old.rows.map((x) => (ids.has(x.id) ? patch(x) : x)) }
+			: old
+	);
 }
+
+const itemIdsOf = (rows: DashItem[]) => rows.map((row) => row.itemId);
+
+const seenMarksOf = (rows: DashItem[]) =>
+	rows.map(({ itemId, revision, baseline }) => ({ itemId, revision, baseline }));
 
 const SNOOZE_FIELDS = ['dismissed', 'muted', 'snooze'] as const satisfies (keyof DashItem)[];
 const READ_FIELDS = ['unread', 'seenAt', 'changes'] as const satisfies (keyof DashItem)[];
@@ -55,27 +51,27 @@ function patchWithRollback(
 	fields: ActionFields,
 	patch: (x: DashItem) => DashItem
 ): () => void {
-	const before = new Map(dashItemsOf([...ids]).map((i) => [i.id, pickFields(i, fields)]));
-	patchDashItems(ids, patch);
-	return () => patchDashItems(new Set(before.keys()), (x) => ({ ...x, ...before.get(x.id) }));
+	const before = new Map(cachedRows([...ids]).map((i) => [i.id, pickFields(i, fields)]));
+	patchRows(ids, patch);
+	return () => patchRows(new Set(before.keys()), (x) => ({ ...x, ...before.get(x.id) }));
 }
 
 const describe = (items: DashItem[]) =>
 	items.length === 1 ? items[0].title : `${items.length} items`;
 
-function sendInBatches(ids: string[], send: (batch: string[]) => Promise<unknown>) {
-	const batches = Array.from({ length: Math.ceil(ids.length / SEEN_BATCH) }, (_, k) =>
-		ids.slice(k * SEEN_BATCH, (k + 1) * SEEN_BATCH)
+function sendInBatches<T>(values: T[], send: (batch: T[]) => Promise<unknown>) {
+	const batches = Array.from({ length: Math.ceil(values.length / SEEN_BATCH) }, (_, k) =>
+		values.slice(k * SEEN_BATCH, (k + 1) * SEEN_BATCH)
 	);
 	return Promise.all(batches.map(send));
 }
 
 export async function toggleMuteItems(ids: string[]) {
-	const items = dashItemsOf(ids);
+	const items = cachedRows(ids);
 	if (!items.length) return;
 	const mute = willMute(items);
 	const set = new Set(items.map((i) => i.id));
-	await cancelDash(items);
+	await cancelItems();
 	const rollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
 		...x,
 		dismissed: mute,
@@ -83,24 +79,24 @@ export async function toggleMuteItems(ids: string[]) {
 		snooze: undefined
 	}));
 	try {
-		if (mute) await api.muteItems([...set]);
-		else await api.unsnoozeItems([...set]);
+		if (mute) await api.muteItems(itemIdsOf(items));
+		else await api.unsnoozeItems(itemIdsOf(items));
 		toast(mute ? 'Muted' : 'Unmuted', {
 			description: describe(items),
 			action: mute ? { label: 'Undo', onClick: () => void unsnoozeItems([...set]) } : undefined
 		});
 	} catch (err) {
 		rollback();
-		invalidateDash(items);
+		invalidateItems();
 		toast.error((err as Error).message);
 	}
 }
 
 export async function snoozeItems(ids: string[], choice: SnoozeChoice) {
-	const items = dashItemsOf(ids);
+	const items = cachedRows(ids);
 	if (!items.length) return;
 	const set = new Set(items.map((i) => i.id));
-	await cancelDash(items);
+	await cancelItems();
 	const rollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
 		...x,
 		dismissed: true,
@@ -108,10 +104,7 @@ export async function snoozeItems(ids: string[], choice: SnoozeChoice) {
 		snooze: choice
 	}));
 	try {
-		await api.snoozeItems(
-			items.map((i) => ({ id: i.id, updatedAt: i.updatedAt })),
-			choice
-		);
+		await api.snoozeItems(itemIdsOf(items), choice);
 		toast(`Snoozed ${snoozeLabel(choice).replace(/^Until/, 'until')}`, {
 			description: describe(items),
 			action: {
@@ -122,26 +115,26 @@ export async function snoozeItems(ids: string[], choice: SnoozeChoice) {
 						dismissed: false,
 						snooze: undefined
 					}));
-					api.unsnoozeItems([...set]).catch((e) => {
+					api.unsnoozeItems(itemIdsOf(items)).catch((e) => {
 						undoRollback();
 						toast.error(e.message);
-						invalidateDash(items);
+						invalidateItems();
 					});
 				}
 			}
 		});
 	} catch (err) {
 		rollback();
-		invalidateDash(items);
+		invalidateItems();
 		toast.error((err as Error).message);
 	}
 }
 
 export async function unsnoozeItems(ids: string[]) {
-	const items = dashItemsOf(ids);
+	const items = cachedRows(ids);
 	if (!items.length) return;
 	const set = new Set(items.map((i) => i.id));
-	await cancelDash(items);
+	await cancelItems();
 	const rollback = patchWithRollback(set, SNOOZE_FIELDS, (x) => ({
 		...x,
 		dismissed: false,
@@ -149,45 +142,47 @@ export async function unsnoozeItems(ids: string[]) {
 		snooze: undefined
 	}));
 	try {
-		await api.unsnoozeItems([...set]);
+		await api.unsnoozeItems(itemIdsOf(items));
 		toast('Back in the list', { description: describe(items) });
 	} catch (err) {
 		rollback();
-		invalidateDash(items);
+		invalidateItems();
 		toast.error((err as Error).message);
 	}
 }
 
 export async function markItemsSeen(ids: string[]) {
-	const items = dashItemsOf(ids);
+	const items = cachedRows(ids);
 	const unread = items.filter((i) => i.unread);
 	let rollback = () => {};
 	if (unread.length) {
-		await cancelDash(unread);
+		await cancelItems();
 		rollback = patchWithRollback(new Set(unread.map((i) => i.id)), READ_FIELDS, (x) => ({
 			...x,
 			unread: false
 		}));
 	}
-	sendInBatches(ids, api.seen).catch(() => {
+	sendInBatches(seenMarksOf(items), api.seen).catch(() => {
 		rollback();
-		invalidateDash(items);
+		invalidateItems();
 	});
 }
 
 export async function setItemsRead(ids: string[], read: boolean) {
-	const items = dashItemsOf(ids);
-	await cancelDash(items);
+	const items = cachedRows(ids);
+	await cancelItems();
 	const rollback = patchWithRollback(new Set(ids), READ_FIELDS, (x) => ({
 		...x,
 		unread: !read,
 		...(read ? { seenAt: Date.now(), changes: [] } : { seenAt: null })
 	}));
 	try {
-		await sendInBatches(ids, read ? api.seen : api.unseen);
+		await (read
+			? sendInBatches(seenMarksOf(items), api.seen)
+			: sendInBatches(itemIdsOf(items), api.unseen));
 	} catch (err) {
 		rollback();
-		invalidateDash(items);
+		invalidateItems();
 		toast.error((err as Error).message);
 	}
 }
@@ -198,17 +193,17 @@ async function sendPin(
 	patch: (x: DashItem) => DashItem,
 	message: string
 ) {
-	const items = dashItemsOf(ids);
-	await cancelDash(items);
+	const items = cachedRows(ids);
+	await cancelItems();
 	const rollback = patchWithRollback(new Set(ids), PIN_FIELDS, patch);
 	try {
-		await api.pinItems(ids, pin);
+		await api.pinItems(itemIdsOf(items), pin);
 		toast(message, { description: describe(items) });
-		refetchDash(items);
+		refetchItems();
 	} catch (err) {
 		rollback();
 		toast.error((err as Error).message);
-		invalidateDash(items);
+		invalidateItems();
 	}
 }
 
@@ -234,7 +229,7 @@ export function pinItems(ids: string[], pin: CategoryPin, groups: CategoryGroup[
 }
 
 export function toggleItemsRead(ids: string[]) {
-	const anyUnread = dashItemsOf(ids).some((i) => i.unread);
+	const anyUnread = cachedRows(ids).some((i) => i.unread);
 	return setItemsRead(ids, anyUnread);
 }
 

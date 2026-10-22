@@ -1,18 +1,37 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { snapshotOf } from '../../src/lib/shared/changes';
-import { MUTED_AT } from '../../src/lib/shared/item-snooze';
+import { HOUR_MS } from '../../src/lib/shared/durations';
+import { STALE_SOURCE_LIMIT_MS } from '../../src/lib/model/sources';
 import { createSavedViewAdapter, SAVED_VIEW_TOOL_DEFINITIONS } from '../assistant/adapter';
-import { createSnapshotReader } from '../assistant/snapshot';
 import { createSavedViewTools } from '../assistant/tools';
-import { DASH_TTL } from '../poller/shared';
+import type { Env } from '../db';
 import { assistantFixture, NOW, VIEW } from './assistant-fixtures';
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock('cloudflare:workers', () => ({
+	DurableObject: class {
+		constructor(
+			public ctx: DurableObjectState,
+			public env: Env
+		) {}
+	}
+}));
+
+beforeEach(() => {
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(NOW);
+});
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+});
 
 function success<T>(result: { ok: true; data: T } | { ok: false; error: unknown }): T {
 	if (!result.ok) throw new Error(JSON.stringify(result.error));
 	return result.data;
 }
+
+const numbers = (page: { groups: { items: { number: number }[] }[] }) =>
+	page.groups.flatMap((g) => g.items.map((i) => i.number));
 
 describe('passive saved views', () => {
 	it('continues within a group and rejects a cursor for another saved view', async () => {
@@ -22,7 +41,6 @@ describe('passive saved views', () => {
 			{ ...VIEW, id: 'second' }
 		];
 		f.saveSettings();
-		for (const data of [f.pr, f.issue]) for (const item of data.items) item.sections.push('second');
 		const first = success(await f.tools.get_view({ view_id: 'mine', limit: 2 }));
 		const next = success(
 			await f.tools.get_view({ view_id: 'mine', limit: 2, cursor: first.nextCursor! })
@@ -39,17 +57,17 @@ describe('passive saved views', () => {
 		});
 	});
 
-	it('returns cached categories and manual pins with display metadata', async () => {
+	it('returns categories and manual pins with display metadata', async () => {
 		const f = assistantFixture();
 		const group = f.settings.categoryGroups[0];
 		const category = group.categories[0];
-		f.pr.items[0].categories = [category.id];
-		f.pr.items[0].pinnedCategories = [category.id];
+		f.updateItem('PR_1', (item) => (item.attention.pins = [category.id]));
 		f.settings.views[0].groupBy = `category:${group.id}`;
 		f.saveSettings();
 		const page = success(await f.tools.get_view({ view_id: 'mine' }));
 		expect(page.categoryGroups[0]).toMatchObject({ id: group.id, name: group.name });
 		expect(page.groups[0].items[0]).toMatchObject({
+			number: 1,
 			categories: [category.id],
 			pinnedCategories: [category.id]
 		});
@@ -58,34 +76,39 @@ describe('passive saved views', () => {
 
 	it('evaluates event snoozes from stored facts and expires retained closed items locally', async () => {
 		const f = assistantFixture();
-		f.subjects[0].ci = 'FAILURE';
-		f.db
-			.prepare('UPDATE subjects SET facts = ? WHERE key = ?')
-			.run(JSON.stringify(f.subjects[0]), f.items[0].id);
-		f.db
-			.prepare(
-				'INSERT INTO dash_snoozed (item_id, updated_at, snooze_event, snoozed_at) VALUES (?, ?, ?, ?)'
-			)
-			.run(f.items[0].id, f.items[0].updatedAt, 'ci_pass', NOW - 100);
-		const closed = f.pr.items[1];
-		closed.keptAfterClose = true;
-		closed.state = 'merged';
-		closed.closedAt = new Date(NOW - 24 * 3600_000).toISOString();
-		expect(
-			success(await f.tools.get_view({ view_id: 'mine' })).groups.flatMap((g) =>
-				g.items.map((i) => i.number)
-			)
-		).toEqual([3]);
-		f.subjects[0].ci = 'SUCCESS';
-		f.db
-			.prepare('UPDATE subjects SET facts = ? WHERE key = ?')
-			.run(JSON.stringify(f.subjects[0]), f.items[0].id);
-		expect(
-			success(await f.tools.get_view({ view_id: 'mine' })).groups.flatMap((g) =>
-				g.items.map((i) => i.number)
-			)
-		).toEqual([1, 3]);
-		expect(f.db.prepare('SELECT count(*) AS n FROM dash_snoozed').get()).toMatchObject({ n: 1 });
+		f.updateItem('PR_1', (item) => {
+			item.facts.ci = 'FAILURE';
+			item.attention.snooze = {
+				kind: 'event',
+				id: 'snooze-1',
+				at: NOW - 100,
+				event: 'ci_pass',
+				until: NOW + 7 * 24 * HOUR_MS
+			};
+		});
+		f.updateFacts('PR_2', {
+			state: 'merged',
+			closedAt: new Date(NOW - 24 * HOUR_MS).toISOString()
+		});
+		f.updateView('mine', (state) => (state.retained = ['PR_2']));
+		expect(numbers(success(await f.tools.get_view({ view_id: 'mine' })))).toEqual([3]);
+		f.updateFacts('PR_1', { ci: 'SUCCESS' });
+		expect(numbers(success(await f.tools.get_view({ view_id: 'mine' })))).toEqual([1, 3]);
+		const stored = f.db.prepare(`SELECT attention FROM items WHERE id = 'PR_1'`).get() as {
+			attention: string;
+		};
+		expect(JSON.parse(stored.attention).snooze).toMatchObject({ event: 'ci_pass' });
+		expect(f.writes).not.toHaveBeenCalled();
+	});
+
+	it('keeps a recently closed item that the view retains', async () => {
+		const f = assistantFixture();
+		f.updateFacts('PR_2', { state: 'merged', closedAt: new Date(NOW - HOUR_MS).toISOString() });
+		f.updateView('mine', (state) => (state.retained = ['PR_2']));
+		const page = success(await f.tools.get_view({ view_id: 'mine' }));
+		expect(numbers(page)).toContain(2);
+		const closed = page.groups.flatMap((g) => g.items).find((i) => i.number === 2)!;
+		expect(closed).toMatchObject({ retained: true, retainedIn: ['mine'], views: [] });
 	});
 
 	it('rejects a kind that is not supported by the saved searches', async () => {
@@ -108,9 +131,20 @@ describe('passive saved views', () => {
 		]);
 		expect(result.totalItems).toBe(3);
 		expect(result.complete).toBe(true);
-		expect(result.freshness.map((f) => f.state)).toEqual(['fresh', 'fresh']);
+		expect(result.freshness).toEqual({
+			evaluatedAt: NOW,
+			lastPollAt: null,
+			polling: true,
+			stale: false,
+			unknown: false,
+			truncated: false,
+			errors: [],
+			skipped: null
+		});
 		const item = result.groups[0].items[0];
 		expect(item).toMatchObject({
+			views: ['mine'],
+			retainedIn: [],
 			turn: expect.any(String),
 			turnReason: expect.any(String),
 			priority: expect.any(Number),
@@ -138,17 +172,15 @@ describe('passive saved views', () => {
 	it('paginates grouped rows without omission and binds cursors to scope, view, and kind', async () => {
 		const f = assistantFixture();
 		const first = success(await f.tools.get_view({ view_id: 'mine', limit: 1 }));
+		f.setNow(NOW + 1_000);
 		const second = success(
 			await f.tools.get_view({ view_id: 'mine', limit: 1, cursor: first.nextCursor! })
 		);
+		f.setNow(NOW + 2_000);
 		const third = success(
 			await f.tools.get_view({ view_id: 'mine', limit: 1, cursor: second.nextCursor! })
 		);
-		expect(
-			[first, second, third].flatMap((page) =>
-				page.groups.flatMap((g) => g.items.map((i) => i.number))
-			)
-		).toEqual([1, 2, 3]);
+		expect([first, second, third].flatMap(numbers)).toEqual([1, 2, 3]);
 		expect(third.nextCursor).toBeNull();
 		expect(
 			await f.tools.get_view({ view_id: 'mine', kind: 'pr', cursor: first.nextCursor! })
@@ -158,7 +190,7 @@ describe('passive saved views', () => {
 			ok: false,
 			error: { code: 'snapshot_changed' }
 		});
-		f.pr.items[0].title = 'Changed';
+		f.updateFacts('PR_1', { title: 'Changed' });
 		expect(await f.tools.get_view({ view_id: 'mine', cursor: first.nextCursor! })).toEqual({
 			ok: false,
 			error: { code: 'snapshot_changed' }
@@ -168,10 +200,20 @@ describe('passive saved views', () => {
 	it('rejects changed cursors after settings, marks, or seen snapshots change', async () => {
 		const f = assistantFixture();
 		const first = success(await f.tools.get_view({ view_id: 'mine', limit: 1 }));
-		f.db
-			.prepare('INSERT INTO seen (key, at, snapshot) VALUES (?, ?, ?)')
-			.run(f.items[0].id, NOW, JSON.stringify(snapshotOf(f.subjects[0], 'reviewer')));
+		f.updateItem('PR_1', (item) => {
+			item.attention.seen = {
+				at: NOW,
+				revision: item.revision,
+				snapshot: snapshotOf(item.facts, 'reviewer')
+			};
+		});
 		expect(await f.tools.get_view({ view_id: 'mine', cursor: first.nextCursor! })).toMatchObject({
+			ok: false,
+			error: { code: 'snapshot_changed' }
+		});
+		const marked = success(await f.tools.get_view({ view_id: 'mine', limit: 1 }));
+		f.updateItem('I_3', (item) => (item.attention.markedUnread = true));
+		expect(await f.tools.get_view({ view_id: 'mine', cursor: marked.nextCursor! })).toMatchObject({
 			ok: false,
 			error: { code: 'snapshot_changed' }
 		});
@@ -186,48 +228,85 @@ describe('passive saved views', () => {
 
 	it('hides snoozes and mutes and wakes timed and activity snoozes without writing', async () => {
 		const f = assistantFixture();
-		const insert = f.db.prepare(
-			'INSERT INTO dash_snoozed (item_id, updated_at, snoozed_until) VALUES (?, ?, ?)'
+		f.updateItem(
+			'PR_1',
+			(item) => (item.attention.snooze = { kind: 'time', id: 's1', at: NOW, until: NOW + 1000 })
 		);
-		insert.run(f.items[0].id, f.items[0].updatedAt, NOW + 1000);
-		insert.run(f.items[1].id, MUTED_AT, null);
-		insert.run(f.items[2].id, f.items[2].updatedAt, null);
+		f.updateItem('PR_2', (item) => (item.attention.muted = true));
+		f.updateItem(
+			'I_3',
+			(item) =>
+				(item.attention.snooze = {
+					kind: 'activity',
+					id: 's3',
+					at: NOW,
+					activityAt: item.facts.updatedAt
+				})
+		);
 		expect(success(await f.tools.get_view({ view_id: 'mine' })).totalItems).toBe(0);
 		f.setNow(NOW + 1001);
-		expect(
-			success(await f.tools.get_view({ view_id: 'mine' })).groups.flatMap((g) =>
-				g.items.map((i) => i.number)
-			)
-		).toEqual([1]);
-		f.issue.items[0].updatedAt = new Date(NOW + 2000).toISOString();
+		expect(numbers(success(await f.tools.get_view({ view_id: 'mine' })))).toEqual([1]);
+		f.updateFacts('I_3', { updatedAt: new Date(NOW + 2000).toISOString() });
 		expect(success(await f.tools.get_view({ view_id: 'mine' })).totalItems).toBe(2);
-		expect(f.db.prepare('SELECT count(*) AS n FROM dash_snoozed').get()).toMatchObject({ n: 3 });
+		const stored = f.db.prepare('SELECT id, attention FROM items ORDER BY id').all() as {
+			id: string;
+			attention: string;
+		}[];
+		expect(
+			stored.map((row) => {
+				const attention = JSON.parse(row.attention);
+				return [row.id, attention.snooze?.kind ?? null, attention.muted];
+			})
+		).toEqual([
+			['I_3', 'activity', false],
+			['PR_1', 'time', false],
+			['PR_2', null, true],
+			['PR_4', null, false]
+		]);
+		expect(f.writes).not.toHaveBeenCalled();
 	});
 
-	it('distinguishes stale, missing, incompatible, partial, and empty caches', async () => {
+	it('distinguishes stale, unknown, truncated, skipped, and empty sources', async () => {
 		const f = assistantFixture();
-		f.pr.errors = ['GitHub search failed'];
-		f.pr.sections[0].skipped = 'No tracked teams';
-		f.setNow(NOW + DASH_TTL);
+		f.settings.views[0].searches = [...VIEW.searches, 'is:pr team-review-requested:@team'];
+		f.saveSettings();
+		f.updateSource('pr', (source) => {
+			source.failedSince = NOW;
+			source.error = 'GitHub search failed';
+		});
 		let page = success(await f.tools.get_view({ view_id: 'mine' }));
 		expect(page.complete).toBe(false);
-		expect(page.freshness[0]).toMatchObject({
-			state: 'stale',
+		expect(page.freshness).toMatchObject({
+			stale: true,
+			unknown: false,
 			errors: ['GitHub search failed'],
-			skipped: 'No tracked teams'
+			skipped: 'You are not in any tracked team.'
 		});
-		f.values.delete('dash:pr');
+		expect(page.totalItems).toBe(3);
+		f.setNow(NOW + STALE_SOURCE_LIMIT_MS);
 		page = success(await f.tools.get_view({ view_id: 'mine' }));
-		expect(page.freshness[0]).toMatchObject({ state: 'missing', fetchedAt: null });
+		expect(page.freshness).toMatchObject({
+			unknown: true,
+			evaluatedAt: NOW + STALE_SOURCE_LIMIT_MS
+		});
 		expect(page.totalItems).toBe(1);
+		f.setNow(NOW);
 		f.settings.views[0].searches = ['is:issue repo:other/repo'];
-		f.values.set('settings', JSON.stringify(f.settings));
+		f.saveSettings({ searched: false });
 		page = success(await f.tools.get_view({ view_id: 'mine' }));
-		expect(page.freshness[0].state).toBe('settings_changed');
+		expect(page.freshness).toMatchObject({ unknown: true, stale: false, skipped: null });
+		expect(page.complete).toBe(false);
 		expect(page.totalItems).toBe(0);
+		f.settings.views[0].searches = VIEW.searches;
 		f.saveSettings();
-		f.issue.items = [];
+		f.updateSource('issue', (source) => (source.window = { candidates: [], truncated: true }));
+		f.updateSource('pr', (source) => {
+			source.window = { candidates: [], truncated: false };
+			source.failedSince = null;
+			source.error = null;
+		});
 		page = success(await f.tools.get_view({ view_id: 'mine' }));
+		expect(page.freshness).toMatchObject({ truncated: true, stale: false, unknown: false });
 		expect(page.groups).toEqual([]);
 		expect(page.complete).toBe(true);
 		expect(page.nextCursor).toBeNull();
@@ -235,14 +314,15 @@ describe('passive saved views', () => {
 
 	it('reads seen changes without marking read or touching any state, network, or alarm', async () => {
 		const f = assistantFixture();
-		const old = { ...f.subjects[0], comments: 0 };
-		f.db
-			.prepare('INSERT INTO seen (key, at, snapshot) VALUES (?, ?, ?)')
-			.run(f.items[0].id, NOW - 1, JSON.stringify(snapshotOf(old, 'reviewer')));
-		f.subjects[0].comments = 2;
-		f.db
-			.prepare('UPDATE subjects SET facts = ? WHERE key = ?')
-			.run(JSON.stringify(f.subjects[0]), f.items[0].id);
+		f.updateItem('PR_1', (item) => {
+			item.attention.seen = {
+				at: NOW - 1,
+				revision: item.revision,
+				snapshot: snapshotOf({ ...item.facts, comments: 0 }, 'reviewer')
+			};
+			item.facts.comments = 2;
+		});
+		f.values.set('mcpAccessVersion', 'epoch');
 		const before = JSON.stringify([...f.values]);
 		const changes = f.db.prepare('SELECT total_changes() AS n').get();
 		const network = vi.fn(() => {
@@ -259,17 +339,24 @@ describe('passive saved views', () => {
 		expect(f.db.prepare('SELECT total_changes() AS n').get()).toEqual(changes);
 		expect(JSON.stringify([...f.values])).toBe(before);
 		expect(f.writes).not.toHaveBeenCalled();
+		expect(f.storage.getAlarm).not.toHaveBeenCalled();
 		expect(network).not.toHaveBeenCalled();
+		expect(f.queries.length).toBeGreaterThan(0);
 		expect(f.queries.every((q) => q.startsWith('SELECT '))).toBe(true);
 	});
 
-	it('fails closed for another user or schema without migration, SQL, or writes', async () => {
+	it('fails closed for another user or an unready workspace without migration or writes', async () => {
 		const f = assistantFixture();
-		const other = createSnapshotReader(f.storage, { userId: 2, login: 'other' });
-		await expect(other(NOW)).rejects.toMatchObject({ code: 'scope_mismatch' });
-		f.values.set('schema', 0);
-		await expect(f.reader(NOW)).rejects.toMatchObject({ code: 'schema_not_ready' });
-		expect(f.queries).toEqual([]);
+		await expect(
+			f.workspace.savedViewsSnapshot({ userId: 2, login: 'other' })
+		).rejects.toMatchObject({ code: 'scope_mismatch' });
+		f.db.exec(`DELETE FROM state WHERE key = 'config'`);
+		await expect(f.reader()).rejects.toMatchObject({ code: 'schema_not_ready' });
+		f.db.exec('DROP TABLE items');
+		await expect(f.reader()).rejects.toMatchObject({ code: 'schema_not_ready' });
+		f.db.exec('DROP TABLE state');
+		await expect(f.reader()).rejects.toMatchObject({ code: 'scope_mismatch' });
+		expect(f.queries.every((q) => q.startsWith('SELECT '))).toBe(true);
 		expect(f.writes).not.toHaveBeenCalled();
 		expect(await f.tools.list_views()).toEqual({
 			ok: false,
@@ -283,7 +370,7 @@ describe('passive saved views', () => {
 			ok: false,
 			error: { code: 'invalid_arguments' }
 		});
-		expect(f.storage.get).not.toHaveBeenCalled();
+		expect(f.reader).not.toHaveBeenCalled();
 	});
 
 	it('returns bounded errors for invalid cursors, unknown views, and storage failures', async () => {
@@ -325,7 +412,7 @@ describe('transport-free MCP adapter', () => {
 			['list_views', { limit: null }]
 		])
 			expect((await call(name as string, args)).isError).toBe(true);
-		expect(f.storage.get).not.toHaveBeenCalled();
+		expect(f.reader).not.toHaveBeenCalled();
 		const response = await call('get_view', { view_id: 'mine', limit: 1 });
 		expect(response.isError).toBe(false);
 		expect(JSON.parse(response.content[0].text)).toEqual(response.structuredContent);

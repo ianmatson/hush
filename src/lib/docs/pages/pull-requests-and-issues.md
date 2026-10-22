@@ -78,7 +78,7 @@ Group by lists each open GitHub project that holds an item of the view, with the
 
 ## Merged and closed
 
-When a pull request or issue in a view is merged or closed, it does not leave the view at once. It stays for 24 hours after it closed, in a **Merged and closed** section at the end of the list (**Closed** in a view of issues only), with the newest first. Its row says **Merged**, **Closed**, **Closed as not planned**, or **Closed as duplicate**.
+When Hush sees a pull request or issue in a view get merged or closed, it does not leave the view at once. It stays for 24 hours after it closed, in a **Merged and closed** section at the end of the list (**Closed** in a view of issues only), with the newest first. Its row says **Merged**, **Closed**, **Closed as not planned**, or **Closed as duplicate**.
 
 - The section is the same for every Group by. Choose its name to close it or open it, as with other sections.
 - The numbers on the tabs and on the app icon do not count these items: they need nothing from you.
@@ -198,7 +198,7 @@ Snooze and Mute stay in Hush. They do not change your notifications on GitHub.
 
 ## Unread
 
-An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label alone does not count. An unread item has a dot on its avatar and a bold title.
+An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label alone does not count. An unread item has a dot on its avatar and a bold title. When a view fills for the first time (a new view, your first sign-in, or after Hush paused), the items that Hush did not know yet start as read: only items that come in after that are unread.
 
 You look at an item when you open it in the peek, open its full page, or open it on GitHub from Hush. If you opened one by mistake, press {{key:dash.read}} to make it unread again: the peek and the full page do not mark it as read again until you open it again. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
 
@@ -215,6 +215,6 @@ Select many items to snooze, mute, mark as read, or copy them together.
 
 ## Refresh
 
-Hush runs the searches of your views about every 15 minutes while it checks GitHub, also when no view is open. It keeps the results for 15 minutes. When you open a view after that, it shows the saved list at once ("Updating…") and searches GitHub again in the background; the list changes when the new results arrive.
+Hush runs the searches of your views about every 15 minutes while it checks GitHub, also when no view is open, and keeps each result until the next one. A view opens at once from what Hush stored, and changes while you look when new results or changes arrive. **Refresh** runs every search again at once. If a search drops a closed item before Hush reads it again, the item can leave at once, without its 24 hours in Merged and closed.
 
-A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 100 results for each search). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}}, or the refresh icon next to “Updated …” at the left of the toolbar, to read everything again now. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).
+A refresh is fast, also for large accounts. The searches ask only for each item's ID and update time (up to 100 results for each search). Then Hush reads the full details (CI, reviews, review threads, conflicts) only for items that are new, changed on GitHub, still running CI, or that it last read more than an hour ago. So a PR that did not change can show details up to an hour old. Press {{key:list.refresh}}, or the refresh icon next to “Updated …” at the left of the toolbar, to run every search and check notifications again now; Hush then reads the items that changed. The peek always reads the item fresh. When a search fails, a message says which one; if GitHub needs more access for it (for example an org that has not approved Hush), the message links to [GitHub access](/docs/github-access).

@@ -1,53 +1,10 @@
-import { snoozeEvent, snoozeOutcome, SNOOZE_EVENT_MAX_MS, type SnoozeEvent } from './snooze';
-import { enrichmentOf, type SubjectFacts } from './subject';
-import type { Change } from './types';
+import { snoozeEvent, type SnoozeEvent } from './snooze';
 
-export const MUTED_AT = '9999-12-31T23:59:59Z';
+import type { Change } from './types';
 
 export interface SnoozeChoice {
 	until?: number;
 	event?: SnoozeEvent;
-}
-
-export interface ItemMark {
-	updatedAt: string;
-	snoozedUntil: number | null;
-	snoozeEvent: SnoozeEvent | null;
-	snoozedAt: number | null;
-}
-
-export type MarkState =
-	{ kind: 'none' } | { kind: 'muted' } | { kind: 'snoozed'; snooze: SnoozeChoice };
-
-const AWAKE: MarkState = { kind: 'none' };
-
-export const eventSnoozeDeadline = (snoozedAt: number) => snoozedAt + SNOOZE_EVENT_MAX_MS;
-
-export function markState(
-	mark: ItemMark | undefined,
-	updatedAt: string,
-	facts: SubjectFacts | undefined,
-	me: string,
-	now: number
-): MarkState {
-	if (!mark) return AWAKE;
-	if (mark.updatedAt === MUTED_AT) return { kind: 'muted' };
-	if (mark.snoozeEvent) {
-		const since = mark.snoozedAt ?? 0;
-		const pastDeadline = now >= (mark.snoozedUntil ?? eventSnoozeDeadline(since));
-		const happened =
-			!!facts && snoozeOutcome(mark.snoozeEvent, enrichmentOf(facts), since, me).wake;
-		return pastDeadline || happened
-			? AWAKE
-			: { kind: 'snoozed', snooze: { event: mark.snoozeEvent } };
-	}
-	if (mark.snoozedUntil !== null)
-		return now < mark.snoozedUntil
-			? { kind: 'snoozed', snooze: { until: mark.snoozedUntil } }
-			: AWAKE;
-	return Date.parse(updatedAt) <= Date.parse(mark.updatedAt)
-		? { kind: 'snoozed', snooze: {} }
-		: AWAKE;
 }
 
 const READ_WORTHY = (c: Change) => c.kind !== 'labels';

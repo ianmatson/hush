@@ -1,5 +1,5 @@
 import type { Ctx } from './app';
-import { poller } from './app';
+import { workspace } from './app';
 import { graphql, hasGraphqlErrorAt } from './github';
 
 const NODE_SUBJECT_QUERY = `query($id: ID!) { node(id: $id) {
@@ -35,7 +35,7 @@ export async function nodeSubject(token: string, id: string): Promise<WrittenSub
 
 export function refreshWrittenSubject(c: Ctx, subject: WrittenSubject): void {
 	c.executionCtx.waitUntil(
-		poller(c.env, c.get('user').id)
+		workspace(c.env, c.get('user').id)
 			.recheck(subject.repo, subject.number)
 			.catch((error) => ({ error: (error as Error).message }))
 			.then((result) => {

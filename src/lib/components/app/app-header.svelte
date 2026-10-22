@@ -3,10 +3,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { alertsQuery, dashQuery, meQuery, signOut } from '$lib/queries';
+	import { alertsQuery, itemsQuery, meQuery, signOut } from '$lib/queries';
 	import { fitItems } from '$lib/fit';
 	import { tick } from 'svelte';
-	import type { DashResponse } from '$lib/shared/types';
 	import { alertsSeen } from '$lib/alerts.svelte';
 	import { countsAsUnread, newAlertCount } from '$lib/tab-status';
 	import { ui } from '$lib/ui.svelte';
@@ -29,10 +28,9 @@
 
 	const me = createQuery(meQuery);
 	const touchOnly = new MediaQuery('pointer: coarse');
-	const prs = createQuery(() => dashQuery('pr'));
-	const issues = createQuery(() => dashQuery('issue'));
-	const unreadIn = (d: DashResponse | undefined, viewId: string) =>
-		d?.items.filter((i) => countsAsUnread(i) && i.sections.includes(viewId)).length ?? 0;
+	const items = createQuery(itemsQuery);
+	const unreadIn = (viewId: string) =>
+		(items.data?.rows ?? []).filter((i) => countsAsUnread(i) && i.views.includes(viewId)).length;
 
 	// Alerts newer than the last time you opened the history (on this device).
 	const alerts = createQuery(alertsQuery);
@@ -42,7 +40,7 @@
 		...(me.data?.settings.views ?? []).map((v) => ({
 			href: `/v/${v.id}`,
 			label: v.name,
-			badge: unreadIn(prs.data, v.id) + unreadIn(issues.data, v.id)
+			badge: unreadIn(v.id)
 		}))
 	]);
 

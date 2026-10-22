@@ -1,4 +1,3 @@
-import { queryMatches } from './rules';
 import { cyrb53, type DecisionChoice } from './decisions';
 import { CATEGORY_SEPARATOR, queryError } from './query';
 import { parseMarkIcon } from './mark-icons';
@@ -131,16 +130,6 @@ function ruleUsable(rule: string): boolean {
 	return ok;
 }
 
-function placeInGroup(g: CategoryGroup, t: RuleFacts, pinned: string[]): string | null {
-	const chosenByYou = g.categories.find((x) => pinned.includes(x.id));
-	if (chosenByYou) return chosenByYou.id;
-	const ruled = g.categories.find((x) => ruleUsable(x.rule) && queryMatches(x.rule, t));
-	if (ruled) return ruled.id;
-	const choice = groupChoice(g);
-	const chosenByJev = choice ? t.enrichment?.jevChoices?.[choice.key] : undefined;
-	return g.categories.find((x) => x.id === chosenByJev)?.id ?? null;
-}
-
 export function pinsAfter(
 	pinned: string[],
 	pin: CategoryPin,
@@ -151,24 +140,6 @@ export function pinsAfter(
 	if (pin.category !== null && !group.categories.some((c) => c.id === pin.category)) return null;
 	const inGroup = new Set(group.categories.map((c) => c.id));
 	return [...pinned.filter((id) => !inGroup.has(id)), ...(pin.category ? [pin.category] : [])];
-}
-
-export interface Placement {
-	categories: string[];
-	pinned: string[];
-}
-
-export function placeItem(
-	t: RuleFacts,
-	pinned: string[] | undefined,
-	groups: CategoryGroup[]
-): Placement {
-	const ids = new Set(allCategories(groups).map((x) => x.id));
-	const known = (pinned ?? []).filter((id) => ids.has(id));
-	return {
-		categories: groups.flatMap((g) => placeInGroup(g, t, known) ?? []),
-		pinned: known
-	};
 }
 
 export type CategoryFilter = { category: string } | { notSortedIn: string };

@@ -37,7 +37,7 @@ export async function sendAction(
 		const entryIsTheOnlyPeekChange = id === 'comment' && res.entry !== null;
 		if (!entryIsTheOnlyPeekChange)
 			queryClient.invalidateQueries({ queryKey: keys.peek(p.repo, p.number) });
-		refetchUnlessLive(keys.dashAll);
+		refetchUnlessLive(keys.items);
 		if (res.stillMerging) progress.info(STILL_MERGING);
 		else progress.success(GH_ACTIONS[id].done, undoFor(p, id, opts));
 		return true;

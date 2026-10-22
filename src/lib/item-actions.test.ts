@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DashItem, DashResponse } from '$lib/shared/types';
+import type { DashItem } from '$lib/shared/types';
+import type { ItemsResponse } from '$lib/model/present';
 
 vi.mock('$app/environment', () => ({ browser: false }));
 vi.mock('svelte-sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
@@ -26,6 +27,10 @@ const failing = () => Promise.reject(new Error('GitHub is down'));
 const item = (id: string, extra: Partial<DashItem> = {}) =>
 	({
 		id,
+		itemId: `node-${id}`,
+		revision: 1,
+		views: ['mine'],
+		retainedIn: [],
 		kind: 'pr',
 		updatedAt: '2026-10-01T00:00:00Z',
 		unread: true,
@@ -35,14 +40,14 @@ const item = (id: string, extra: Partial<DashItem> = {}) =>
 	}) as DashItem;
 
 const cachedItem = (id: string) =>
-	queryClient.getQueryData<DashResponse>(keys.dash('pr'))?.items.find((i) => i.id === id);
+	queryClient.getQueryData<ItemsResponse>(keys.items)?.rows.find((i) => i.id === id);
 
 describe('optimistic item actions', () => {
 	beforeEach(() => {
 		queryClient.clear();
-		queryClient.setQueryData(keys.dash('pr'), {
-			items: [item('a'), item('b')]
-		} as unknown as DashResponse);
+		queryClient.setQueryData(keys.items, {
+			rows: [item('a'), item('b')]
+		} as unknown as ItemsResponse);
 	});
 
 	it('restores a snoozed item when the server refuses', async () => {
@@ -67,10 +72,8 @@ describe('optimistic item actions', () => {
 		vi.mocked(api.snoozeItems).mockImplementation(failing);
 		const snoozing = snoozeItems(['a'], {});
 		await Promise.resolve();
-		queryClient.setQueryData<DashResponse>(keys.dash('pr'), (old) =>
-			old
-				? { ...old, items: old.items.map((x) => (x.id === 'b' ? { ...x, muted: true } : x)) }
-				: old
+		queryClient.setQueryData<ItemsResponse>(keys.items, (old) =>
+			old ? { ...old, rows: old.rows.map((x) => (x.id === 'b' ? { ...x, muted: true } : x)) } : old
 		);
 		await snoozing;
 		expect(cachedItem('b')).toMatchObject({ muted: true });

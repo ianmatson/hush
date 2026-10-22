@@ -15,11 +15,11 @@ const { default: subjects } = await import('../routes/subjects');
 const { fetchPeek } = await import('../github');
 
 describe('peek', () => {
-	it('answers before the stored facts finish their decisions and project reads', async () => {
+	it('answers at once, and asks the workspace to read the item again', async () => {
 		const subject = subjectFixture();
-		const recordFetched = vi.fn(() => new Promise<void>(() => {}));
+		const recheck = vi.fn(() => new Promise<void>(() => {}));
 		const env = {
-			POLLER: { idFromName: () => 'test', get: () => ({ recordFetched }) }
+			WORKSPACE: { idFromName: () => 'test', get: () => ({ recheck }) }
 		} as unknown as Env;
 		const waitUntil = vi.fn();
 		const app = new Hono<AppEnv>();
@@ -39,7 +39,7 @@ describe('peek', () => {
 		} as unknown as ExecutionContext);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ kind: 'pr', number: 1, title: 'Fix' });
-		expect(recordFetched).toHaveBeenCalledWith(subject);
+		expect(recheck).toHaveBeenCalledWith('sandbox/web', 1, subject.id);
 		expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise));
 	});
 });

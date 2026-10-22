@@ -49,14 +49,10 @@ an identical view ID cannot restore a grant. Account deletion revokes all grants
 Missing access versions always receive a random version on save. Sign-in after
 storage reset also receives a random version.
 
-Existing grants with a current stored random access version remain valid. New
-fingerprints use a `v2:` semantic projection. On the first harmless save, the
-transaction preserves one original full-definition fingerprint per view for that
-same access version. This bounded compatibility record lets old grants and
-pending consent survive presentation edits without changing OAuth records on
-reads. Exact old fingerprints also work before the first save. A legacy grant
-issued with the fallback `initial` value when no version was stored requires
-reconnection after the first save or sign-in. Already-invalid versions are never
+Existing grants with a current stored random access version remain valid. View
+fingerprints use a `v2:` semantic projection, so presentation edits do not
+change them. Grants with older fingerprints, and grants issued with the fallback
+`initial` version, need a new connection. Already-invalid versions are never
 restored. No database migration or passive-read write is required.
 
 ## Standards and library choices
@@ -146,15 +142,14 @@ to MCP/OAuth paths. Normal Hush budgets and body sizes do not change.
 
 ## Passive reads and output boundaries
 
-The exported `Poller` has a private lazy active engine. Its constructor does
-not migrate. `savedViewsSnapshot` directly uses the storage reader and never
-initializes that engine. Existing UI RPCs, alarms, and socket events initialize
-the active engine before their existing behavior. Passive reads require the
-stored user ID and exact supported schema. Missing, old, unknown, or newer
-schemas fail without migration, reset, alarm, or writes.
+The exported `Workspace` opens its engine lazily. `savedViewsSnapshot` reads
+storage directly and never opens the engine. UI RPCs, alarms, and socket events
+open the engine first. Passive reads require the stored account to match the
+principal and the Workspace tables to exist; otherwise they fail without
+migration, reset, alarm, or writes.
 
-The reader uses KV caches and fixed SELECTs for subjects, snoozes and seen
-snapshots. It never decrypts GitHub tokens, fetches GitHub, marks read, touches
+The reader loads the Workspace tables with SELECTs and one KV value (the access
+version). It never decrypts GitHub tokens, fetches GitHub, marks read, touches
 activity, resumes polling, refreshes sessions/caches, or writes facts, decisions,
 alerts, or last-used telemetry. Inspection of the pinned library confirms that
 `unwrapToken` and `validateToken` only read/decrypt token records. Validation uses
@@ -167,17 +162,15 @@ unrelated categories, category rules/settings, project fields, outside stack
 members, global errors, and outside counts are removed. Grouping uses full
 internal facts before filtering output.
 
-The snapshot reads materialized `dash:pr` and `dash:issue` caches. Shared dashboard
-helpers supply membership, grouping, sorting, closed-item retention, local
-snooze/mute, unread, and changes-since-seen behavior. Stale compatible data stays
-stale; incompatible caches return no items. A cached source signature that only
-differs in view display names or source order remains compatible, including
-signatures that still contain display names. The reader does not rewrite that
-cache. When more than 40 source queries exist, a reordered cache can still
-reflect the previously selected queries until the poller rebuilds it; those
-queries stay within approved views. Browser-local kind selection,
-category chips, collapsed groups, held rows, and stack rotation are not saved
-configuration and are not reproduced.
+The snapshot evaluates the stored items, search results, and view state with the
+same pure evaluator as the app (`src/lib/model`), so membership, grouping,
+sorting, closed-item retention, snooze/mute, unread, and changes-since-seen match
+the app for the same stored revision and time. Stale data stays stale: `get_view`
+reports it in `freshness` (stale, unknown, or truncated searches, skipped team
+searches, the last notifications poll, and whether Hush still polls for this
+user). Browser-local kind selection, category chips, collapsed groups,
+held rows, and stack rotation are not saved configuration and are not
+reproduced.
 
 `list_views({ limit?, cursor? })` returns granted definitions in saved order.
 `get_view({ view_id, kind?: 'both' | 'pr' | 'issue', limit?, cursor? })` returns

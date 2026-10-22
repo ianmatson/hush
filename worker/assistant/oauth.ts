@@ -162,8 +162,8 @@ export class McpAuthorization extends DurableObject<Env> {
 	}
 
 	#snapshot(principal: SnapshotPrincipal): Promise<SavedViewsSnapshot> {
-		return this.env.POLLER.get(
-			this.env.POLLER.idFromName(String(principal.userId))
+		return this.env.WORKSPACE.get(
+			this.env.WORKSPACE.idFromName(String(principal.userId))
 		).savedViewsSnapshot({ userId: principal.userId, login: principal.login });
 	}
 
@@ -333,7 +333,7 @@ export class McpAuthorization extends DurableObject<Env> {
 			const views = record.views.filter((view) => decision.viewIds.includes(view.id));
 			for (const view of views) {
 				const current = snapshot.views.find((entry) => entry.id === view.id);
-				if (!current || !(await matchesViewFingerprint(snapshot, current, view.fingerprint)))
+				if (!current || !(await matchesViewFingerprint(current, view.fingerprint)))
 					throw new AuthorizationError('invalid_request', { description: 'View changed' });
 			}
 			const approved = await api.approveConsent(request, decision.requestId, {

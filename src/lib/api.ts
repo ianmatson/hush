@@ -2,6 +2,7 @@ import { hc, type ClientResponse } from 'hono/client';
 import type { SuccessStatusCode } from 'hono/utils/http-status';
 import type { AppType } from '../../.api-types/worker/index';
 import type { SnoozeChoice } from '$lib/shared/item-snooze';
+import type { Snapshot } from '$lib/shared/changes';
 import type { CategoryPin } from '$lib/shared/categories';
 import type { DashKind, MergeMethod, ReactionContent, Settings } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
@@ -92,8 +93,9 @@ export const api = {
 	deleteAccount: () => ok(client.api.account.$delete()),
 	sync: () => ok(client.api.sync.$post()),
 	/** You looked at these PRs or issues ("owner/repo#123"). */
-	seen: (keys: string[]) => ok(client.api.seen.$post({ json: { keys } })),
-	unseen: (keys: string[]) => ok(client.api.unseen.$post({ json: { keys } })),
+	seen: (marks: { itemId: string; revision: number; baseline: Snapshot }[]) =>
+		ok(client.api.seen.$post({ json: { marks } })),
+	unseen: (ids: string[]) => ok(client.api.unseen.$post({ json: { ids } })),
 	saveSettings: (s: SettingsPatch) =>
 		ok(client.api.settings.$put({ json: s as Partial<Settings> })),
 	/** Replace all your changes (settings.json, import): the rest goes back to defaults. */
@@ -121,20 +123,14 @@ export const api = {
 			})
 		),
 	countSearch: (q: string) => ok(client.api.searches.count.$get({ query: { q } })),
-	dashboard: (kind: DashKind, refresh = false) =>
-		ok(
-			client.api.dashboard[':kind'].$get({
-				param: { kind },
-				query: refresh ? { refresh: '1' } : {}
-			})
-		),
-	snoozeItems: (items: { id: string; updatedAt: string }[], choice: SnoozeChoice) =>
-		ok(client.api.dashboard.snooze.$post({ json: { items, ...choice } })),
-	unsnoozeItems: (ids: string[]) => ok(client.api.dashboard.unsnooze.$post({ json: { ids } })),
+	items: () => ok(client.api.items.$get()),
+	snoozeItems: (ids: string[], choice: SnoozeChoice) =>
+		ok(client.api.items.snooze.$post({ json: { ids, ...choice } })),
+	unsnoozeItems: (ids: string[]) => ok(client.api.items.unsnooze.$post({ json: { ids } })),
 	pinItems: (ids: string[], pin: CategoryPin) =>
 		ok(client.api.items.pin.$post({ json: { ids, ...pin } })),
 	reevaluateItems: () => ok(client.api.items.reevaluate.$post()),
-	muteItems: (ids: string[]) => ok(client.api.dashboard.mute.$post({ json: { ids } })),
+	muteItems: (ids: string[]) => ok(client.api.items.mute.$post({ json: { ids } })),
 	teams: (refresh = false) => ok(client.api.teams.$get({ query: refresh ? { refresh: '1' } : {} })),
 	recheck: (repo: string, number: number) =>
 		ok(client.api.recheck.$post({ json: { repo, number } })),

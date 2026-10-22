@@ -35,7 +35,7 @@
 	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { api } from '$lib/api';
-	import { dashQuery, keys, queryClient } from '$lib/queries';
+	import { itemsQuery, keys, queryClient } from '$lib/queries';
 	import { applySettings } from '$lib/save-settings';
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
@@ -72,7 +72,6 @@
 		DashItem,
 		DashKind,
 		DashProject,
-		DashResponse,
 		GroupBy,
 		ItemView,
 		ViewSort
@@ -151,42 +150,30 @@
 	const ROW_OUT = { duration: 200, easing: cubicOut };
 	const EMPTY_LIST_FALLBACK_MS = ROW_OUT.duration + 100;
 
-	const prQ = createQuery(() => ({
-		...dashQuery('pr'),
-		enabled: viewKinds(view).includes('pr')
-	}));
-	const issueQ = createQuery(() => ({
-		...dashQuery('issue'),
-		enabled: viewKinds(view).includes('issue')
-	}));
-	const queryOf = (k: DashKind) => (k === 'pr' ? prQ : issueQ);
-	const shownQueries = $derived(kinds.map(queryOf));
+	const itemsQ = createQuery(itemsQuery);
+	const queryOf = (_kind: DashKind) => itemsQ;
 	const me = createQuery(meQuery);
 	const data = $derived.by(() => {
-		const ds = shownQueries.flatMap((q): DashResponse[] => (q.data ? [q.data] : []));
-		if (!ds.length) return null;
+		const answer = itemsQ.data;
+		if (!answer) return null;
+		const summary = answer.views.find((v) => v.id === view.id);
+		const health = summary?.health ?? [];
 		return {
-			items: ds.flatMap((d) => d.items),
-			errors: [...new Set(ds.flatMap((d) => d.errors))],
-			skipped: [
-				...new Set(ds.flatMap((d) => d.sections.filter((s) => s.id === view.id && s.skipped)))
-			].map((s) => s.skipped!),
-			fetchedAt: Math.min(...ds.map((d) => d.fetchedAt)),
-			refreshing: ds.some((d) => d.refreshing),
-			projects: ds.some((d) => d.projects)
-				? [...new Map(ds.flatMap((d) => d.projects ?? []).map((p) => [p.key, p] as const)).values()]
-				: undefined
+			items: answer.rows.filter((row) => kinds.includes(row.kind)),
+			errors: [...new Set(health.flatMap((source) => source.error ?? []))],
+			skipped: summary?.skipped ? [summary.skipped] : [],
+			fetchedAt: me.data?.lastPollAt ?? answer.evaluatedAt,
+			refreshing: false,
+			projects: answer.projects
 		};
 	});
 	const pageOpenedAt = Date.now();
-	const fetching = $derived(shownQueries.some((q) => q.isFetching));
-	const revalidatingAfterOpen = $derived(
-		fetching && shownQueries.some((q) => q.dataUpdatedAt < pageOpenedAt)
-	);
-	const failedKinds = $derived(kinds.filter((k) => queryOf(k).isError));
+	const fetching = $derived(itemsQ.isFetching);
+	const revalidatingAfterOpen = $derived(fetching && itemsQ.dataUpdatedAt < pageOpenedAt);
+	const failedKinds = $derived(itemsQ.isError ? kinds.slice(0, 1) : []);
 	const kindNoun = (k: DashKind) => (k === 'pr' ? 'pull requests' : 'issues');
-	const pending = $derived(shownQueries.some((q) => q.isPending));
-	const everyKindAnswered = $derived(shownQueries.every((q) => !!q.data));
+	const pending = $derived(itemsQ.isPending);
+	const everyKindAnswered = $derived(!!itemsQ.data);
 	let refreshing = $state(false);
 	let categoryFilter = $state<CategoryFilter[]>([]);
 	let showSnoozed = $state(false);
@@ -533,19 +520,11 @@
 		untrack(() => sel.prune(order));
 	});
 
-	/** Force the server to search GitHub again (skips its 5-minute cache). */
 	async function refresh() {
 		refreshing = true;
 		try {
-			await Promise.all(
-				kinds.map((k) =>
-					queryClient.fetchQuery({
-						queryKey: keys.dash(k),
-						queryFn: () => api.dashboard(k, true),
-						staleTime: 0
-					})
-				)
-			);
+			await api.sync();
+			await queryClient.invalidateQueries({ queryKey: keys.items });
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -592,7 +571,9 @@
 	});
 
 	const countIn = (k: DashKind) =>
-		(queryOf(k).data?.items ?? []).filter((i) => !i.keptAfterClose && inShownPopulation(i)).length;
+		(itemsQ.data?.rows ?? []).filter(
+			(i) => i.kind === k && i.views.includes(view.id) && inShownPopulation(i)
+		).length;
 
 	const setGroupBy = (by: GroupBy) => by !== view.groupBy && updateView({ groupBy: by });
 	const setSort = (sort: ViewSort) => updateView({ sort });

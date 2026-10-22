@@ -1,4 +1,4 @@
-import type { DashItem } from '../src/lib/shared/types';
+import type { Row } from '../src/lib/model/types';
 
 export interface FeedEntry {
 	id: string;
@@ -10,7 +10,7 @@ export interface FeedEntry {
 	summary: string;
 }
 
-export function itemFeedEntry(i: DashItem): FeedEntry {
+export function itemFeedEntry(i: Row): FeedEntry {
 	return {
 		id: i.id,
 		updated: i.updatedAt,

@@ -5,7 +5,6 @@ import {
 	closedSectionLabel,
 	closedTimeOf,
 	keepsClosed,
-	keptAfterChange,
 	newestCloseFirst,
 	searchFindsOnlyOpen,
 	stillKept
@@ -32,21 +31,6 @@ describe('closed items', () => {
 		expect(closedTimeOf({ closedAt: CLOSED_AT, updatedAt: UPDATED_AT })).toBe(CLOSED_AT);
 		expect(closedTimeOf({ closedAt: null, updatedAt: UPDATED_AT })).toBe(UPDATED_AT);
 		expect(stillKept({ updatedAt: UPDATED_AT }, closedAtMs + KEEP_CLOSED_MS)).toBe(true);
-	});
-
-	it('keeps an item that closes while it is open in the list, or that it already keeps', () => {
-		expect(keptAfterChange({ state: 'open' }, { state: 'merged' })).toBe(true);
-		expect(keptAfterChange({ state: 'merged', keptAfterClose: true }, { state: 'merged' })).toBe(
-			true
-		);
-	});
-
-	it('does not keep an item that is open, or that a search found already closed', () => {
-		expect(keptAfterChange({ state: 'open' }, { state: 'open' })).toBe(false);
-		expect(keptAfterChange({ state: 'closed', keptAfterClose: true }, { state: 'open' })).toBe(
-			false
-		);
-		expect(keptAfterChange({ state: 'merged' }, { state: 'merged' })).toBe(false);
 	});
 
 	it('knows the searches that find only open items', () => {

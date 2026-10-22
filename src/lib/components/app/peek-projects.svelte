@@ -31,7 +31,7 @@
 			await api.editProject(change);
 			toast.success(done);
 			await queryClient.invalidateQueries({ queryKey: keys.projects(repo, number) });
-			refetchUnlessLive(keys.dashAll);
+			refetchUnlessLive(keys.items);
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {

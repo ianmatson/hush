@@ -137,30 +137,32 @@ export function createSavedViewTools(
 					(k) => !input.kind || input.kind === 'both' || k === input.kind
 				);
 				if (!kinds.length) throw new ToolFailure('invalid_arguments');
-				const dashboards = kinds.map((kind) => snapshot.dashboards.find((d) => d.kind === kind)!);
-				const data = dashboards.flatMap((d) => (d.data ? [d.data] : []));
+				const summary = snapshot.items.views.find((v) => v.id === view.id);
 				const categoryGroups = grant
 					? categoriesOfView(view, snapshot.categoryGroups)
 					: snapshot.categoryGroups;
-				const freshness = dashboards.map((d) => ({
-					kind: d.kind,
-					state: d.state,
-					fetchedAt: d.fetchedAt,
-					errors: grant ? [] : (d.data?.errors ?? []),
-					skipped: grant
-						? d.data?.sections.some((s) => s.id === view.id && s.skipped)
-							? 'source_unavailable'
-							: null
-						: (d.data?.sections.find((s) => s.id === view.id)?.skipped ?? null)
-				}));
+				const health = summary?.health ?? [];
+				const sourceState = {
+					stale: health.some((source) => source.stale),
+					unknown: health.some((source) => source.unknown),
+					truncated: health.some((source) => source.truncated),
+					errors: grant ? [] : [...new Set(health.flatMap((source) => source.error ?? []))],
+					skipped: summary?.skipped ? (grant ? 'source_unavailable' : summary.skipped) : null
+				};
+				const freshness = {
+					evaluatedAt: snapshot.items.evaluatedAt,
+					lastPollAt: snapshot.status.lastPollAt,
+					polling: snapshot.status.lifecycle === 'active',
+					...sourceState
+				};
 				const members = viewPopulation(
-					data.flatMap((d) => d.items),
+					snapshot.items.rows.filter((row) => kinds.includes(row.kind)),
 					view,
 					categoryGroups
 				);
-				const projects = [
-					...new Map(data.flatMap((d) => d.projects ?? []).map((p) => [p.key, p])).values()
-				].filter((project) => !grant || view.groupBy === `project:${project.key}`);
+				const projects = snapshot.items.projects.filter(
+					(project) => !grant || view.groupBy === `project:${project.key}`
+				);
 				const sections = savedViewSections(
 					members,
 					view,
@@ -197,7 +199,7 @@ export function createSavedViewTools(
 						}))
 					})),
 					sections,
-					freshness
+					sourceState
 				]);
 				const offset = offsetOf(input.cursor, revision, rows.length);
 				const page = rows.slice(offset, offset + limit);
@@ -216,12 +218,11 @@ export function createSavedViewTools(
 					freshness,
 					complete:
 						!grant &&
-						dashboards.every(
-							(d) =>
-								!!d.data &&
-								!d.data.errors.length &&
-								!d.data.sections.some((s) => s.id === view.id && s.skipped)
-						),
+						freshness.polling &&
+						!freshness.stale &&
+						!freshness.unknown &&
+						!freshness.errors.length &&
+						!freshness.skipped,
 					totalItems: members.length,
 					totalRows: rows.length,
 					groups: sections.flatMap(({ items, ...section }, index) => {

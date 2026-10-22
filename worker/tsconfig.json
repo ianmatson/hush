@@ -10,6 +10,6 @@
 		"skipLibCheck": true,
 		"isolatedModules": true
 	},
-	"include": ["./**/*.ts", "../src/lib/shared/**/*.ts"],
+	"include": ["./**/*.ts", "../src/lib/shared/**/*.ts", "../src/lib/model/**/*.ts"],
 	"exclude": ["./test/**", "../src/**/*.test.ts"]
 }

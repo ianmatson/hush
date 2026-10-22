@@ -7,39 +7,17 @@ import {
 	matchesCategoryFilters,
 	type CategoryFilter,
 	pinsAfter,
-	placeItem,
 	validateCategoryGroups
 } from './categories';
 import { queryMatches } from './rules';
 import { DEFAULT_SETTINGS } from './settings';
-import type { CategoryGroup, DashItem, Enrichment, ItemCategory, RuleFacts } from './types';
-
-const thread = (enrichment: Partial<Enrichment> = {}, over: Partial<RuleFacts> = {}) =>
-	({
-		repo: 'acme/web',
-		subjectType: 'PullRequest',
-		title: 'Fix the login timeout',
-		me: 'ian',
-		enrichment: {
-			kind: 'pr',
-			author: 'alice',
-			labels: [],
-			additions: 300,
-			deletions: 20,
-			smart: [],
-			...enrichment
-		},
-		...over
-	}) satisfies RuleFacts;
+import type { CategoryGroup, DashItem, ItemCategory } from './types';
 
 const group = (categories: ItemCategory[], id = 'area'): CategoryGroup => ({
 	id,
 	name: id,
 	categories
 });
-
-const place = (t: RuleFacts, groups: CategoryGroup[], pinned: string[] = []) =>
-	placeItem(t, pinned, groups);
 
 const API: ItemCategory = {
 	id: 'api',
@@ -70,51 +48,6 @@ const BIG: ItemCategory = {
 	description: ''
 };
 
-const jevChose = (g: CategoryGroup, id: string) => ({
-	jevChoices: { [groupChoice(g)!.key]: id }
-});
-
-describe('placeItem', () => {
-	const area = group([API, BUGS, DOCS]);
-
-	it('uses the first category whose rule matches', () => {
-		const t = thread({ labels: ['docs'], ...jevChose(area, 'bugs') }, { repo: 'acme/api' });
-		expect(place(t, [area]).categories).toEqual(['api']);
-	});
-	it('can use any of the conditions of an OR rule', () => {
-		expect(place(thread({ labels: ['api'] }), [area]).categories).toEqual(['api']);
-	});
-	it("uses Jev's choice when no rule matches", () => {
-		expect(place(thread(jevChose(area, 'bugs')), [area]).categories).toEqual(['bugs']);
-	});
-	it('leaves the item not sorted when no rule matches and Jev did not answer', () => {
-		expect(place(thread(), [area]).categories).toEqual([]);
-	});
-	it('ignores a Jev answer for other options or for a category that is gone', () => {
-		const before = group([BUGS, { ...DOCS, description: 'Docs pages' }]);
-		expect(place(thread(jevChose(before, 'bugs')), [area]).categories).toEqual([]);
-		expect(place(thread(jevChose(area, 'gone')), [area]).categories).toEqual([]);
-	});
-	it('keeps a category you chose, over rules and Jev', () => {
-		const t = thread(jevChose(area, 'bugs'), { repo: 'acme/api' });
-		expect(place(t, [area], ['docs'])).toEqual({ categories: ['docs'], pinned: ['docs'] });
-	});
-	it('lets a stored rule that is not valid now match nothing', () => {
-		const old = { ...API, rule: 'repo:acme/* type:ci' };
-		expect(place(thread(), [group([old])]).categories).toEqual([]);
-		const removedWord = { ...API, rule: 'repo:acme/* in:fyi' };
-		expect(place(thread(), [group([removedWord])]).categories).toEqual([]);
-	});
-	it('ignores a pin to a deleted category', () => {
-		expect(place(thread(), [area], ['gone'])).toEqual({ categories: [], pinned: [] });
-	});
-	it('gives one category from each group', () => {
-		const size = group([BIG], 'size');
-		const t = thread(jevChose(area, 'bugs'));
-		expect(place(t, [area, size]).categories).toEqual(['bugs', 'big']);
-	});
-});
-
 describe('Jev questions', () => {
 	it('ask one choice for a group, among the categories with a description', () => {
 		expect(groupChoice(group([API, BUGS, DOCS]))?.options).toEqual({
@@ -125,7 +58,6 @@ describe('Jev questions', () => {
 	it('ask nothing for a group with fewer than two descriptions', () => {
 		expect(groupChoice(group([API]))).toBeNull();
 		expect(groupChoice(group([API, BUGS]))).toBeNull();
-		expect(place(thread(), [group([API, BUGS])]).categories).toEqual([]);
 	});
 	it('ask again when the options change', () => {
 		const before = groupChoice(group([BUGS, DOCS]))!.key;
@@ -206,14 +138,6 @@ describe('defaults', () => {
 			expect(g.categories.map((c) => c.name)).toEqual(['Low', 'Medium', 'High']);
 			expect(Object.keys(groupChoice(g)!.options)).toHaveLength(3);
 		}
-		const [effort, impact] = DEFAULT_CATEGORY_GROUPS;
-		const t = thread({
-			jevChoices: {
-				...jevChose(effort, 'high-effort').jevChoices,
-				...jevChose(impact, 'low-impact').jevChoices
-			}
-		});
-		expect(place(t, DEFAULT_CATEGORY_GROUPS).categories).toEqual(['high-effort', 'low-impact']);
 	});
 });
 

@@ -93,12 +93,5 @@ async function fingerprint(value: unknown): Promise<string> {
 	return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export const legacyFingerprintView = (view: ItemView) => fingerprint(view);
-
 export const fingerprintView = async (view: ItemView) =>
 	`v2:${await fingerprint(viewAuthorization(view))}`;
-
-export interface LegacyViewFingerprints {
-	accessVersion: string;
-	views: Record<string, string>;
-}

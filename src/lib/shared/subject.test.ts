@@ -4,7 +4,8 @@ import { finishItem } from './dashboard';
 import { groupItems } from './grouping';
 import { queryMatches } from './rules';
 import { dashFactsOf, enrichmentOf, subjectRuleFacts, type SubjectFacts } from './subject';
-import type { LastComment } from './types';
+import type { DashItem, LastComment } from './types';
+import { snapshotOf } from './changes';
 
 const ME = 'ian';
 const T0 = '2026-09-10T00:00:00Z';
@@ -99,8 +100,16 @@ const comment = (author: string, createdAt: string, authorIsBot = false): LastCo
 	createdAt
 });
 
-const itemOf = (s: SubjectFacts, teams = new Set<string>()) =>
-	finishItem(dashFactsOf(s, ME, teams), [], [], ME, 3);
+const itemOf = (s: SubjectFacts, teams = new Set<string>()): DashItem => ({
+	...finishItem(dashFactsOf(s, ME, teams), ME, 3),
+	itemId: s.id,
+	revision: 1,
+	baseline: snapshotOf(s, ME),
+	analysisStale: false,
+	retained: false,
+	views: [],
+	retainedIn: []
+});
 
 describe('rule facts', () => {
 	const probe = pr({

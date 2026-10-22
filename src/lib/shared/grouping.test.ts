@@ -317,7 +317,7 @@ describe('custom sections', () => {
 
 describe('merged and closed items', () => {
 	const kept = (id: string, closedAt: string) =>
-		item(id, { state: 'merged', closedAt, keptAfterClose: true });
+		item(id, { state: 'merged', closedAt, retained: true });
 	const withClosed = (items: DashItem[], by: Parameters<typeof groupItems>[1]) =>
 		groupWithClosed(items, by, ctx, 'Merged and closed').map((s) => [
 			s.key,

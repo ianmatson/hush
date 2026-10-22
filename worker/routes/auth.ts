@@ -5,7 +5,7 @@ import { encryptSecret, randomToken, sha256 } from '../crypto';
 import { appToken, getUser, scopesOf, tokenContext, userToken, type Env } from '../db';
 import { getViewer, gh, type GhUser } from '../github';
 import { refreshSlackMentionsAccess } from '../slack-mentions';
-import { routes, SESSION_COOKIE, poller, json, type AppEnv } from '../app';
+import { routes, SESSION_COOKIE, workspace, json, type AppEnv } from '../app';
 import { SESSION_DAYS, SESSION_IDLE_MS, deviceLabel } from '../../src/lib/shared/session';
 import { DAY_MS } from '../../src/lib/shared/durations';
 import { authorization } from '../assistant/remote';
@@ -182,7 +182,6 @@ const app = routes()
 			use !== 'app' &&
 			previousToken !== null &&
 			!('error' in (await inspect(previousToken)));
-		const sameAppToken = previousToken === token && existing?.scopes === viewer.scopes.join(',');
 		await saveUser(
 			c.env,
 			viewer.user,
@@ -190,7 +189,7 @@ const app = routes()
 			token
 		);
 		await startSession(c, viewer.user.id);
-		await poller(c.env, viewer.user.id).start(viewer.user.id, keepOwn || sameAppToken);
+		await workspace(c.env, viewer.user.id).start(viewer.user.id);
 		c.executionCtx.waitUntil(
 			getUser(c.env, viewer.user.id)
 				.then((user) => (user ? refreshSlackMentionsAccess(c.env, user) : undefined))
@@ -220,7 +219,7 @@ const app = routes()
 			);
 		await saveUser(c.env, viewer.user, { value: token, scopes: viewer.scopes, source: 'own' });
 		// Sync again: the new token can see threads the old one could not.
-		await poller(c.env, u.id).start(u.id);
+		await workspace(c.env, u.id).start(u.id);
 		return c.json({ ok: true });
 	})
 	.post('/api/auth/logout', async (c) => {
@@ -268,7 +267,7 @@ const app = routes()
 	.delete('/api/account', async (c) => {
 		const u = c.get('user');
 		await authorization(c.env)?.revokeAll(u.id);
-		await poller(c.env, u.id).stop();
+		await workspace(c.env, u.id).stop();
 		await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id).run();
 		deleteCookie(c, SESSION_COOKIE, { path: '/' });
 		return c.json({ ok: true });
@@ -291,7 +290,7 @@ const app = routes()
 	})
 	.get('/api/me', async (c) => {
 		const u = c.get('user');
-		const { settings, status } = await poller(c.env, u.id).me();
+		const { settings, status } = await workspace(c.env, u.id).me();
 		const me: MeDTO = {
 			login: u.login,
 			name: u.name,

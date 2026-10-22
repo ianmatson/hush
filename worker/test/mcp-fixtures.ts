@@ -2,8 +2,10 @@ import { vi } from 'vitest';
 import type { Env } from '../db';
 import { sha256 } from '../crypto';
 import type { McpAuthorization } from '../assistant/oauth';
+import type { SnapshotPrincipal } from '../assistant/snapshot';
 import type { McpConsentDTO } from '../../src/lib/shared/mcp';
-import { assistantFixture, NOW } from './assistant-fixtures';
+import type { Settings } from '../../src/lib/shared/types';
+import { assistantFixture } from './assistant-fixtures';
 
 export const ORIGIN = 'https://app.example.test';
 export const RESOURCE = `${ORIGIN}/mcp`;
@@ -72,12 +74,12 @@ export async function mcpFixture(Authorization: typeof McpAuthorization) {
 	const env = {
 		APP_URL: ORIGIN,
 		DB,
-		POLLER: {
+		WORKSPACE: {
 			idFromName: (id: string) => id,
 			get: (id: string) => ({
-				savedViewsSnapshot: async (principal: { userId: number; login: string }) => {
+				savedViewsSnapshot: async (principal: SnapshotPrincipal) => {
 					if (id !== String(principal.userId)) throw new Error('Wrong storage');
-					return f.reader(NOW);
+					return f.workspace.savedViewsSnapshot(principal);
 				}
 			})
 		},
@@ -88,46 +90,14 @@ export async function mcpFixture(Authorization: typeof McpAuthorization) {
 		env
 	);
 	env.MCP_AUTH = { idFromName: () => 'auth', get: () => auth } as unknown as Env['MCP_AUTH'];
-	const { ActivePoller } = await import('../poller');
-	class SettingsWriter extends ActivePoller {
-		protected async who() {
-			return null;
-		}
-	}
-	let tail = Promise.resolve();
-	const settingsWrites = vi.fn();
-	const settingsStorage = {
-		...f.storage,
-		get: async (key: string | string[]) =>
-			Array.isArray(key)
-				? new Map(key.map((key) => [key, structuredClone(f.values.get(key))]))
-				: structuredClone(f.values.get(key)),
-		put: async (values: Record<string, unknown>) => {
-			settingsWrites(values);
-			for (const [key, value] of Object.entries(values)) f.values.set(key, structuredClone(value));
-		},
-		transaction: <T>(run: (storage: typeof settingsStorage) => Promise<T>): Promise<T> => {
-			const next = tail.then(async () => {
-				const before = structuredClone(f.values);
-				try {
-					return await run(settingsStorage);
-				} catch (error) {
-					f.values.clear();
-					for (const [key, value] of before) f.values.set(key, value);
-					throw error;
-				}
-			});
-			tail = next.then(
-				() => undefined,
-				() => undefined
-			);
+	let delivered: Promise<unknown> = Promise.resolve();
+	const writer = {
+		updateSettings: (body: Partial<Settings>, replace?: boolean) => {
+			const next = delivered.then(() => f.workspace.updateSettings(body, replace));
+			delivered = next.catch(() => undefined);
 			return next;
 		}
 	};
-	const writer = new SettingsWriter(
-		{ storage: settingsStorage, getWebSockets: () => [] } as unknown as DurableObjectState,
-		env
-	);
 	const principal = { userId: 1, login: 'reviewer', session };
 	const register = async (overrides = {}) => {
 		const response = await auth.protocol(
@@ -231,7 +201,6 @@ export async function mcpFixture(Authorization: typeof McpAuthorization) {
 		decide,
 		exchange,
 		connect,
-		writer,
-		settingsWrites
+		writer
 	};
 }

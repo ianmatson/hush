@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { isDashKind, isGitHubName } from '../../src/lib/shared/item-page';
 import type { SlackMentionsPageDTO, SlackStatusDTO } from '../../src/lib/shared/types';
 import { randomToken } from '../crypto';
-import { poller, query, routes, type AppEnv } from '../app';
+import { workspace, query, routes, type AppEnv } from '../app';
 import {
 	SLACK_AUTHORIZE_URL,
 	SLACK_BOT_SCOPES,
@@ -121,12 +121,12 @@ const app = routes()
 		const install = await exchangeSlackCode(c.env, code);
 		if ('error' in install) return fail(install.error);
 		await saveSlackInstall(c.env, c.get('user').id, install);
-		await poller(c.env, c.get('user').id).alertChannelsChanged();
+		await workspace(c.env, c.get('user').id).alertChannelsChanged();
 		return c.redirect(settingsUrl(c, { slack: 'connected' }));
 	})
 	.delete('/api/slack', async (c) => {
 		await removeSlackConnection(c.env, c.get('user').id);
-		await poller(c.env, c.get('user').id).alertChannelsChanged();
+		await workspace(c.env, c.get('user').id).alertChannelsChanged();
 		return c.json({ ok: true });
 	})
 	.post('/api/slack/test', async (c) => {
@@ -230,7 +230,7 @@ const app = routes()
 		if (outcome.kind === 'workspace-removed') {
 			const userIds = await removeSlackWorkspace(c.env, outcome.teamId);
 			c.executionCtx.waitUntil(
-				Promise.allSettled(userIds.map((id) => poller(c.env, id).alertChannelsChanged()))
+				Promise.allSettled(userIds.map((id) => workspace(c.env, id).alertChannelsChanged()))
 			);
 		}
 		return c.json({ ok: true });

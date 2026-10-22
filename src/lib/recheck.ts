@@ -43,7 +43,7 @@ async function checkReturned() {
 			)
 		)
 	);
-	await refetchUnlessLive(keys.dashAll);
+	await refetchUnlessLive(keys.items);
 }
 
 export function refreshItemDetails(repo: string, number: number) {

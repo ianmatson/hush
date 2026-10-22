@@ -5,7 +5,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
 	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
-	import { dashQuery, meQuery, peekQuery } from '$lib/queries';
+	import { itemsQuery, meQuery, peekQuery } from '$lib/queries';
 	import { noteOpened } from '$lib/recheck';
 	import { clearNotificationsFor } from '$lib/notification-clear';
 	import { itemCommands, type ItemActionContext } from '$lib/dash-actions';
@@ -66,8 +66,8 @@
 	const conversationPath = $derived(itemPagePath(repo, number, kind));
 	const filesPath = $derived(`${conversationPath}/${FILES_TAB}`);
 
-	const dash = createQuery(() => dashQuery(kind));
-	const dashItem = $derived(dash.data?.items.find((i) => i.id === itemKey));
+	const items = createQuery(itemsQuery);
+	const dashItem = $derived(items.data?.rows.find((i) => i.id === itemKey));
 	let helpOpen = $state(false);
 
 	$effect(() => {

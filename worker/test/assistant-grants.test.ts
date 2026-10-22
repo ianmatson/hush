@@ -1,7 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fingerprintView, type SavedViewGrant } from '../assistant/grant';
 import { createSavedViewTools } from '../assistant/tools';
+import type { Env } from '../db';
 import { assistantFixture, NOW, VIEW } from './assistant-fixtures';
+
+vi.mock('cloudflare:workers', () => ({
+	DurableObject: class {
+		constructor(
+			public ctx: DurableObjectState,
+			public env: Env
+		) {}
+	}
+}));
+
+beforeEach(() => {
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(NOW);
+});
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+});
 
 function success<T>(result: { ok: true; data: T } | { ok: false; error: unknown }): T {
 	if (!result.ok) throw new Error(JSON.stringify(result.error));
@@ -22,7 +41,7 @@ async function fixture() {
 		userId: 1,
 		views: [{ id: VIEW.id, fingerprint: await fingerprintView(f.settings.views[0]) }]
 	};
-	return { ...f, grant, tools: createSavedViewTools(() => f.reader(NOW), grant) };
+	return { ...f, grant, tools: createSavedViewTools(() => f.reader(), grant) };
 }
 
 describe('saved view grants', () => {
@@ -76,7 +95,7 @@ describe('saved view grants', () => {
 
 	it('denies a capability from another account', async () => {
 		const f = await fixture();
-		const tools = createSavedViewTools(() => f.reader(NOW), { ...f.grant, userId: 2 });
+		const tools = createSavedViewTools(() => f.reader(), { ...f.grant, userId: 2 });
 		expect(await tools.list_views()).toEqual({
 			ok: false,
 			error: { code: 'snapshot_unavailable' }
@@ -90,7 +109,7 @@ describe('saved view grants', () => {
 	it('binds cursors to the grant identity and its effective view scope', async () => {
 		const f = await fixture();
 		const first = success(await f.tools.get_view({ view_id: 'mine', limit: 1 }));
-		const otherGrant = createSavedViewTools(() => f.reader(NOW), { ...f.grant, id: 'grant-two' });
+		const otherGrant = createSavedViewTools(() => f.reader(), { ...f.grant, id: 'grant-two' });
 		expect(await otherGrant.get_view({ view_id: 'mine', cursor: first.nextCursor! })).toEqual({
 			ok: false,
 			error: { code: 'snapshot_changed' }
@@ -105,38 +124,24 @@ describe('saved view grants', () => {
 		});
 	});
 
-	it('scrubs membership, unselected category and project data, stacks, errors, counts, and unknown fields', async () => {
+	it('scrubs membership, unselected category and project data, stacks, errors, and unknown fields', async () => {
 		const f = await fixture();
-		const allowed = f.pr.items[0];
-		const otherAllowed = f.pr.items[1];
-		const excluded = f.pr.items[2];
-		otherAllowed.url = 'https://github.com/sandbox/web/pull/2';
-		excluded.url = 'https://github.com/sandbox/web/pull/4';
-		allowed.sections.push('private-view');
-		allowed.keptSections = ['mine', 'private-view'];
-		allowed.categories = ['excluded-category'];
-		allowed.pinnedCategories = ['excluded-category'];
-		allowed.projectStatus = { 'secret/7': 'Excluded status' };
-		allowed.projectStatusUnknown = true;
-		allowed.stackBelowNearestFirst = [otherAllowed, excluded].map((member) => ({
-			number: member.number,
-			title: member.title,
-			url: member.url,
-			author: member.author,
-			draft: member.draft
-		}));
-		Object.assign(allowed, { futureSecret: 'excluded-field' });
-		Object.assign(allowed.labels[0] ?? (allowed.labels[0] = { name: 'safe', color: 'fff' }), {
-			futureSecret: 'excluded-label-field'
+		f.settings.categoryGroups.push({
+			id: 'excluded-group',
+			name: 'Excluded group',
+			categories: [
+				{
+					id: 'excluded-category',
+					name: 'Excluded category',
+					color: 'gray',
+					icon: 'lucide:box',
+					rule: '',
+					description: ''
+				}
+			]
 		});
-		f.pr.errors = ['secret/repo search failed'];
-		f.pr.sections.push({
-			id: 'private-view',
-			name: 'Excluded view',
-			count: 1234,
-			skipped: 'Excluded skip'
-		});
-		f.pr.projects = [
+		f.settings.views[1].searches.push('is:pr team-review-requested:@team');
+		f.config.projects = [
 			{
 				key: 'secret/7',
 				title: 'Excluded project',
@@ -144,12 +149,56 @@ describe('saved view grants', () => {
 				statuses: []
 			}
 		];
-		const page = success(await f.tools.get_view({ view_id: 'mine' }));
-		const item = page.groups
-			.flatMap((group) => group.items)
-			.find((item) => item.id === allowed.id)!;
-		expect(item.sections).toEqual(['mine']);
-		expect(item.keptSections).toEqual(['mine']);
+		f.saveSettings();
+		const link = (id: string) => {
+			const { number, title, url, author, draft } = f.items.get(id)!.facts;
+			return { number, title, url, author, draft };
+		};
+		f.updateItem('PR_1', (item) => {
+			item.attention.pins = ['excluded-category'];
+			item.project = { state: 'known', statuses: { 'secret/7': 'Excluded status' }, stale: false };
+			item.facts.stackBelowNearestFirst = [link('PR_2'), link('PR_4')];
+			item.facts.labels = [
+				{ name: 'safe', color: 'fff', futureSecret: 'excluded-label-field' } as never
+			];
+		});
+		f.updateFacts('PR_2', { state: 'merged', closedAt: new Date(NOW).toISOString() });
+		f.updateView('mine', (state) => (state.retained = ['PR_2']));
+		f.updateView('private-view', (state) => (state.retained = ['PR_2']));
+		f.updateSource('pr', (source) => {
+			source.failedSince = NOW;
+			source.error = 'secret/repo search failed';
+		});
+		const read = async () => {
+			const snapshot = await f.reader();
+			Object.assign(
+				snapshot.items.rows.find((row) => row.itemId === 'PR_1')!,
+				{
+					futureSecret: 'excluded-field'
+				}
+			);
+			return snapshot;
+		};
+		const ungranted = await read();
+		expect(ungranted.items.rows.find((row) => row.itemId === 'PR_1')).toMatchObject({
+			views: ['mine', 'private-view'],
+			categories: ['excluded-category'],
+			projectStatus: { 'secret/7': 'Excluded status' }
+		});
+		expect(ungranted.items.rows.find((row) => row.itemId === 'PR_2')).toMatchObject({
+			views: ['private-view'],
+			retainedIn: ['mine']
+		});
+		const tools = createSavedViewTools(read, f.grant);
+		const page = success(await tools.get_view({ view_id: 'mine' }));
+		const items = page.groups.flatMap((group) => group.items);
+		const item = items.find((item) => item.itemId === 'PR_1')!;
+		expect(item.views).toEqual(['mine']);
+		expect(item.retainedIn).toEqual([]);
+		expect(items.find((item) => item.itemId === 'PR_2')).toMatchObject({
+			views: [],
+			retainedIn: ['mine']
+		});
 		expect(item.categories).toEqual([]);
 		expect(item.pinnedCategories).toEqual([]);
 		expect(item.projectStatus).toBeUndefined();
@@ -157,7 +206,7 @@ describe('saved view grants', () => {
 		expect(item.stackBelowNearestFirst?.map((link) => link.number)).toEqual([2]);
 		expect(page.categoryGroups).toEqual([]);
 		expect(page.totalItems).toBe(3);
-		expect(page.freshness[0].errors).toEqual([]);
+		expect(page.freshness).toMatchObject({ stale: true, errors: [], skipped: null });
 		expect(page.complete).toBe(false);
 		const serialized = JSON.stringify(page);
 		for (const secret of [
@@ -165,7 +214,7 @@ describe('saved view grants', () => {
 			'excluded-category',
 			'secret/7',
 			'secret/repo',
-			'1234',
+			'tracked team',
 			'futureSecret',
 			'sourceFilters',
 			'sourceQueries'
@@ -175,15 +224,19 @@ describe('saved view grants', () => {
 
 	it('returns only the grouping category display fields and its pins', async () => {
 		const f = await fixture();
-		const group = f.settings.categoryGroups[0];
+		const [group, other] = f.settings.categoryGroups;
 		const category = group.categories[0];
 		f.settings.views[0].groupBy = `category:${group.id}`;
 		f.grant.views[0].fingerprint = await fingerprintView(f.settings.views[0]);
-		f.pr.items[0].categories = [category.id, 'excluded-category'];
-		f.pr.items[0].pinnedCategories = [category.id, 'excluded-category'];
+		f.updateItem('PR_1', (item) => (item.attention.pins = [category.id, other.categories[0].id]));
 		category.rule = 'repo:excluded/rules';
 		category.description = 'Excluded description';
 		f.saveSettings();
+		const ungranted = await f.reader();
+		expect(ungranted.items.rows.find((row) => row.itemId === 'PR_1')?.pinnedCategories).toEqual([
+			category.id,
+			other.categories[0].id
+		]);
 		const page = success(await f.tools.get_view({ view_id: 'mine' }));
 		expect(page.categoryGroups.map((group) => group.id)).toEqual([group.id]);
 		expect(page.groups[0].items[0].categories).toEqual([category.id]);

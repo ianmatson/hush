@@ -1,8 +1,8 @@
 import { CUSTOM_GROUP_BY, EVERYTHING_ELSE_SECTION, groupByOk } from './grouping';
 import { queryError, resolveToday, splitSearch } from './query';
-import { queryMatches } from './rules';
+
 import { viewSortError } from './sorting';
-import type { DashKind, DashSection, ItemView, RuleFacts } from './types';
+import type { DashKind, DashSection, ItemView } from './types';
 
 export const MAX_VIEWS = 12;
 export const MAX_VIEW_SEARCHES = 5;
@@ -58,7 +58,7 @@ export function viewKinds(view: Pick<ItemView, 'searches'>): DashKind[] {
 	return DASH_KINDS.filter((kind) => view.searches.some((q) => searchKinds(q).includes(kind)));
 }
 
-const withKind = (kind: DashKind, query: string) =>
+export const withKind = (kind: DashKind, query: string) =>
 	NAMES_A_KIND.test(query) ? query : `is:${kind} ${query}`.trim();
 
 export function sectionsFor(kind: DashKind, views: ItemView[], now = Date.now()): DashSection[] {
@@ -75,15 +75,6 @@ export function sectionsFor(kind: DashKind, views: ItemView[], now = Date.now())
 				};
 			})
 	);
-}
-
-export function viewsPassingFilters(
-	viewIds: string[],
-	filtersByView: Map<string, Set<string>>,
-	facts: RuleFacts
-): Set<string> {
-	const passes = (filter: string) => !filter || queryMatches(filter, facts);
-	return new Set(viewIds.filter((id) => [...(filtersByView.get(id) ?? [''])].some(passes)));
 }
 
 function sectionsError(v: Partial<ItemView>, checkRules: boolean): string | null {

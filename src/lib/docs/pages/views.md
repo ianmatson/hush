@@ -73,7 +73,7 @@ Hush tracks the pull requests and issues that your views find. Your GitHub notif
 - Hush checks your notifications every few minutes. A notification about an item that no view finds is ignored.
 - A notification about an item that Hush does not track yet runs the searches of your views again, at most every 5 minutes. If a search finds the item now, Hush tracks it.
 - Some changes come with no notification, such as CI results or your own review. The next search of your views finds them, within about 15 minutes.
-- When the searches of all your views stop finding an item (for example, it was merged or closed, or a review request ended), Hush tracks it for 14 days more.
+- When the searches of all your views stop finding an item (for example, a review request ended), it leaves your views, and Hush stops watching it. A merged or closed item first stays in [Merged and closed](/docs/pull-requests-and-issues#merged-and-closed).
 - When you change your views, Hush stops at once to track the items that no view finds now.
 
 Hush never changes your notifications on GitHub: it does not mark them as read or done, and it does not unsubscribe you.
@@ -83,7 +83,7 @@ Hush never changes your notifications on GitHub: it does not mark them as read o
 In **Settings → Views**:
 
 - Change a view's name and searches.
-- Turn on **Push new items** to get a push when a pull request or issue shows up in the view for the first time. See [What gets pushed](/docs/notifications#what-gets-pushed).
+- Turn on **Push new items** to get a push when a pull request or issue comes into the view, also when it comes back after it left. See [What gets pushed](/docs/notifications#what-gets-pushed).
 - Move a view up or down. The top bar shows the views in this order.
 - Delete a view with the trash button. You keep at least one view.
 - **Defaults** puts back the Mine view and removes the others. Nothing changes until you choose **Save**.

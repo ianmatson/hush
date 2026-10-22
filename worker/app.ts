@@ -12,8 +12,8 @@ export type Ctx = Context<AppEnv>;
 /** A route group; index.ts mounts each one on the main app, after the middleware. */
 export const routes = () => new Hono<AppEnv>();
 
-export const poller = (env: Env, userId: number) =>
-	env.POLLER.get(env.POLLER.idFromName(String(userId)));
+export const workspace = (env: Env, userId: number) =>
+	env.WORKSPACE.get(env.WORKSPACE.idFromName(String(userId)));
 
 /** Approximate, per-location limits against floods. Missing bindings (tests, old config) skip. */
 export async function overLimit(limiter: RateLimit | undefined, key: string): Promise<boolean> {

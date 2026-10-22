@@ -27,7 +27,8 @@
 			"migrations_dir": "migrations"
 		}
 	],
-	// One Poller per user, SQLite-backed (available on the Workers Free plan).
+	// One Workspace per user, SQLite-backed (available on the Workers Free plan). Poller is the old
+	// class: it only hands its saved settings to a new Workspace.
 	"durable_objects": {
 		"bindings": [
 			{
@@ -37,6 +38,10 @@
 			{
 				"name": "MCP_AUTH",
 				"class_name": "McpAuthorization"
+			},
+			{
+				"name": "WORKSPACE",
+				"class_name": "Workspace"
 			}
 		]
 	},
@@ -48,6 +53,10 @@
 		{
 			"tag": "v2-mcp-authorization",
 			"new_sqlite_classes": ["McpAuthorization"]
+		},
+		{
+			"tag": "v3-workspace",
+			"new_sqlite_classes": ["Workspace"]
 		}
 	],
 	// The app and its API; the public site (hush-gh.com) is wrangler.site.jsonc.

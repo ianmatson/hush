@@ -66,17 +66,6 @@ export function limitRoom(settings: DeliverySettings, now: number, state: Delive
 	return Math.max(0, settings.pushLimit.count - used);
 }
 
-export function digestWindowIsOver(
-	settings: DeliverySettings,
-	now: number,
-	state: DeliveryState
-): boolean {
-	return (
-		settings.pushDigestMinutes !== null &&
-		now - state.lastDigestAt >= settings.pushDigestMinutes * MINUTE_MS
-	);
-}
-
 export function holdReason(
 	settings: DeliverySettings,
 	now: number,
@@ -88,13 +77,6 @@ export function holdReason(
 	if (settings.pushDigestMinutes !== null) return 'digest';
 	if (limitRoom(settings, now, state) === 0) return 'limit';
 	return null;
-}
-
-export function heldAreDue(settings: DeliverySettings, now: number, state: DeliveryState): boolean {
-	if (inQuietHours(settings.quietHours, now)) return false;
-	if (settings.pushDigestMinutes !== null && !digestWindowIsOver(settings, now, state))
-		return false;
-	return limitRoom(settings, now, state) > 0;
 }
 
 export function keptSends(recentSends: number[], now: number, limit: PushLimit | null): number[] {
