@@ -30,11 +30,10 @@ function started() {
 	return { ...h, workspace };
 }
 
-const answerSearch = (ids: string[]) => (specs: { id: string }[]) => ({
-	reads: new Map(
+const answerSearch = (ids: string[]) => (specs: { id: string }[]) =>
+	new Map(
 		specs.map((spec) => [spec.id, { outcome: 'ok' as const, window: windowOf(ids, NOW - HOUR_MS) }])
-	)
-});
+	);
 
 describe('Workspace', () => {
 	it('searches, reads what it found, and fills the view on the first run', async () => {
@@ -679,11 +678,10 @@ describe('Workspace step 3 fixes', () => {
 				]
 			})
 		);
-		h.readers.sourceResults.push((specs) => ({
-			reads: new Map(
-				specs.map((spec) => [spec.id, { outcome: 'failed' as const, error: 'timeout' }])
-			)
-		}));
+		h.readers.sourceResults.push(
+			(specs) =>
+				new Map(specs.map((spec) => [spec.id, { outcome: 'failed' as const, error: 'timeout' }]))
+		);
 		await h.workspace.run(h.clock);
 		h.advance(SOURCE_EVERY_MS);
 		h.readers.sourceResults.push(answerSearch(['PR_1']));
@@ -705,14 +703,15 @@ describe('Workspace step 3 fixes', () => {
 		});
 		h.readers.facts.set('PR_1', requested);
 		h.workspace.touch(h.clock());
-		h.readers.sourceResults.push((specs) => ({
-			reads: new Map(
-				specs.map((spec) => [
-					spec.id,
-					{ outcome: 'ok' as const, window: windowOf(['PR_1'], h.clock()) }
-				])
-			)
-		}));
+		h.readers.sourceResults.push(
+			(specs) =>
+				new Map(
+					specs.map((spec) => [
+						spec.id,
+						{ outcome: 'ok' as const, window: windowOf(['PR_1'], h.clock()) }
+					])
+				)
+		);
 		await h.workspace.run(h.clock);
 		expect(h.workspace.snapshot.items.get('PR_1')?.facts.reviewRequests).toHaveLength(1);
 		expect(h.sender.sent).toEqual([]);

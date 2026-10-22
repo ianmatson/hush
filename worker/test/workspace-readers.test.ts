@@ -40,15 +40,15 @@ describe('readSources', () => {
 				board: async () => answer([hit('c', 'PR_2')])
 			}
 		);
-		expect(result.reads.get('a')).toEqual({
+		expect(result.get('a')).toEqual({
 			outcome: 'ok',
 			window: {
 				candidates: [{ id: 'PR_1', updatedAt: '2026-10-22T11:00:00Z' }],
 				truncated: false
 			}
 		});
-		expect(result.reads.get('b')).toEqual({ outcome: 'failed', error: 'Search timed out' });
-		expect(result.reads.get('c')).toMatchObject({
+		expect(result.get('b')).toEqual({ outcome: 'failed', error: 'Search timed out' });
+		expect(result.get('c')).toMatchObject({
 			outcome: 'ok',
 			window: { candidates: [{ id: 'PR_2' }] }
 		});
@@ -60,7 +60,7 @@ describe('readSources', () => {
 			search: async () => answer(hits),
 			board: async () => answer([])
 		});
-		expect(result.reads.get('a')).toMatchObject({ window: { truncated: true } });
+		expect(result.get('a')).toMatchObject({ window: { truncated: true } });
 	});
 });
 
@@ -200,7 +200,7 @@ describe('board sources', () => {
 			search: async () => answer([]),
 			board: async () => ({ ...answer([], ['b']), errors: ['Could not resolve'] })
 		});
-		expect(result.reads.get('b')).toEqual({ outcome: 'gone', error: 'Could not resolve' });
+		expect(result.get('b')).toEqual({ outcome: 'gone', error: 'Could not resolve' });
 		const retryable = await readSources('t', [board], new CallBudget(10), {
 			search: async () => answer([]),
 			board: async () => ({
@@ -208,7 +208,7 @@ describe('board sources', () => {
 				failedQueries: [{ section: 'b', q: board.query }]
 			})
 		});
-		expect(retryable.reads.get('b')).toMatchObject({ outcome: 'failed' });
+		expect(retryable.get('b')).toMatchObject({ outcome: 'failed' });
 	});
 
 	it('takes truncation from the board page, not from the filtered rows', async () => {
@@ -216,7 +216,7 @@ describe('board sources', () => {
 			search: async () => answer([]),
 			board: async () => ({ ...answer([hit('b', 'PR_1')]), truncatedSections: new Set(['b']) })
 		});
-		expect(result.reads.get('b')).toMatchObject({ window: { truncated: true } });
+		expect(result.get('b')).toMatchObject({ window: { truncated: true } });
 	});
 });
 

@@ -15,7 +15,7 @@ import {
 import { decide, decisionsAvailable, type DecisionEnv } from '../decide';
 import { boardShort, itemStatuses } from '../projects';
 import type { NotificationCursor } from './work';
-import type { NotificationsResult, Readers, SourcesResult } from './engine';
+import type { NotificationsResult, Readers } from './engine';
 
 const SECOND_MS = 1000;
 
@@ -43,7 +43,7 @@ export async function readSources(
 	specs: SourceSpec[],
 	budget: CallBudget,
 	run: { search: ShortReader; board: ShortReader }
-): Promise<SourcesResult> {
+): Promise<Map<string, SourceRead>> {
 	const queries = (adapter: SourceSpec['adapter']): ExpandedQuery[] =>
 		specs
 			.filter((spec) => spec.adapter === adapter)
@@ -64,7 +64,7 @@ export async function readSources(
 			found.set(hit.id, { id: hit.id, updatedAt: hit.updatedAt });
 		candidates.set(hit.query.section, found);
 	}
-	const reads = new Map<string, SourceRead>(
+	return new Map<string, SourceRead>(
 		specs.map((spec): [string, SourceRead] => {
 			const error = errors[0] ?? 'GitHub did not return this search.';
 			if (failed.has(spec.id))
@@ -87,7 +87,6 @@ export async function readSources(
 			];
 		})
 	);
-	return { reads };
 }
 
 export async function readNotifications(
@@ -143,12 +142,11 @@ export function githubReaders(credential: () => Promise<Credential>): Readers {
 		},
 		async items(ids, budget) {
 			const { token, me } = await credential();
-			const { read, inaccessible, failed } = await fetchItems(token, me, ids, budget).catch(() => ({
+			return fetchItems(token, me, ids, budget).catch(() => ({
 				read: [],
 				inaccessible: [],
 				failed: ids
 			}));
-			return { read, inaccessible, failed };
 		},
 		async teams(budget) {
 			const { token, me } = await credential();

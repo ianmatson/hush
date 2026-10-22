@@ -13,14 +13,14 @@ import {
 	mergeAnalysis,
 	type AnalysisRequest
 } from '../../src/lib/model/analysis';
-import { attentionState } from '../../src/lib/model/evaluate';
+import { holdsAlerts } from '../../src/lib/model/evaluate';
 import type { SourceRead } from '../../src/lib/model/sources';
 import type { ItemId, ProjectFacet, SourceSpec } from '../../src/lib/model/types';
 import { CallBudget } from '../github';
 import type { PushMessage } from '../webpush';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
 import { planDelivery, type Outgoing } from './deliver';
-import type { AlertDelivery, ChannelOutcome, WorkspaceStore } from './store';
+import type { AlertDelivery, ChannelOutcome, StoredAlert, WorkspaceStore } from './store';
 import {
 	analysisSpent,
 	analysisUsed,
@@ -95,10 +95,6 @@ export interface ItemsResult {
 	failed: ItemId[];
 }
 
-export interface SourcesResult {
-	reads: Map<string, SourceRead>;
-}
-
 export interface Analyzed {
 	answers: DecisionAnswers;
 	tokens: number;
@@ -112,7 +108,7 @@ export interface ProjectStatuses {
 
 export interface Readers {
 	notifications(cursor: NotificationCursor, budget: CallBudget): Promise<NotificationsResult>;
-	sources(specs: SourceSpec[], budget: CallBudget): Promise<SourcesResult>;
+	sources(specs: SourceSpec[], budget: CallBudget): Promise<Map<string, SourceRead>>;
 	items(ids: ItemId[], budget: CallBudget): Promise<ItemsResult>;
 	teams(budget: CallBudget): Promise<TeamDTO[] | null>;
 	projects(ids: ItemId[], budget: CallBudget): Promise<ProjectStatuses>;
@@ -161,8 +157,7 @@ function retriedDelivery(
 
 export class WorkspaceEngine {
 	private interest: Interest = { ids: new Set(), ciRunning: new Set() };
-	private storageFailed = false;
-	private closed = false;
+	private unusable: string | null = null;
 
 	private constructor(
 		private readonly deps: WorkspaceDeps,
@@ -194,20 +189,19 @@ export class WorkspaceEngine {
 	}
 
 	get broken(): boolean {
-		return this.storageFailed;
+		return this.unusable !== null;
 	}
 
 	close() {
-		this.closed = true;
+		this.unusable ??= 'This workspace was closed.';
 	}
 
 	private persist(write: () => void) {
-		if (this.closed) throw new Error('This workspace was closed.');
-		if (this.storageFailed) throw new Error('This workspace failed to save. Open it again.');
+		if (this.unusable) throw new Error(this.unusable);
 		try {
 			write();
 		} catch (error) {
-			this.storageFailed = true;
+			this.unusable = 'This workspace failed to save. Open it again.';
 			throw error;
 		}
 	}
@@ -292,10 +286,6 @@ export class WorkspaceEngine {
 		if (this.sync.hasPush !== hasPush) this.saveSync({ ...this.sync, hasPush });
 	}
 
-	itemAt(repo: string, number: number): ItemId | null {
-		return this.itemIdAt(repo, number);
-	}
-
 	refreshBoards(now: number) {
 		const boards = [...this.data.sources.values()].filter((s) => s.spec.adapter === 'board');
 		const sourcesDue = { ...this.sync.sourcesDue };
@@ -327,10 +317,7 @@ export class WorkspaceEngine {
 
 	private stillCurrent(generation: number) {
 		return (
-			!this.storageFailed &&
-			!this.closed &&
-			this.sync.generation === generation &&
-			this.sync.lifecycle === 'active'
+			!this.unusable && this.sync.generation === generation && this.sync.lifecycle === 'active'
 		);
 	}
 
@@ -367,10 +354,10 @@ export class WorkspaceEngine {
 		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(run.generation))
 			await this.deliver(run);
 		if (plan.cleanup && this.stillCurrent(run.generation)) this.cleanup(clock());
-		if (!this.storageFailed && !this.closed) this.saveSync();
+		if (!this.unusable) this.saveSync();
 	}
 
-	private itemIdAt(repo: string, number: number): ItemId | null {
+	itemAt(repo: string, number: number): ItemId | null {
 		const wanted = locatorOf(repo, number);
 		for (const item of this.data.items.values())
 			if (locatorOf(item.facts.repo, item.facts.number) === wanted) return item.id;
@@ -411,7 +398,7 @@ export class WorkspaceEngine {
 		const known: ItemId[] = [];
 		let unknown = false;
 		for (const thread of fresh) {
-			const id = this.itemIdAt(thread.repo, thread.number);
+			const id = this.itemAt(thread.repo, thread.number);
 			if (id && this.interest.ids.has(id)) known.push(id);
 			else unknown = true;
 		}
@@ -446,10 +433,10 @@ export class WorkspaceEngine {
 
 	private async refreshSources(ids: string[], run: Run) {
 		const specs = ids.flatMap((id) => this.data.sources.get(id)?.spec ?? []);
-		const result = await this.deps.readers.sources(specs, run.budget);
+		const reads = await this.deps.readers.sources(specs, run.budget);
 		if (!this.stillCurrent(run.generation)) return;
 		this.noteBudget(run);
-		const departed = this.departedOpenMembers(result.reads);
+		const departed = this.departedOpenMembers(reads);
 		const claims = claimReads(this.sync, departed);
 		const probe =
 			departed.length && this.mayCallGithub(run)
@@ -458,17 +445,17 @@ export class WorkspaceEngine {
 		if (!this.stillCurrent(run.generation)) return;
 		const now = run.clock();
 		this.noteBudget(run);
-		const inputs: Input[] = [...result.reads].map(([sourceId, read]) => ({
+		const inputs: Input[] = [...reads].map(([sourceId, read]) => ({
 			kind: 'source',
 			sourceId,
 			read
 		}));
-		this.sync = sourcesRan(this.sync, result.reads.keys(), now);
+		this.sync = sourcesRan(this.sync, reads.keys(), now);
 		if (probe) {
 			inputs.push(this.itemsInput(probe));
 			this.sync = this.afterItemReads(claims, probe, now);
 		}
-		const hydrate = [...result.reads.values()].flatMap((read) =>
+		const hydrate = [...reads.values()].flatMap((read) =>
 			read.outcome === 'ok'
 				? read.window.candidates.filter((c) => this.needsRead(c, now)).map((c) => c.id)
 				: []
@@ -515,16 +502,6 @@ export class WorkspaceEngine {
 		this.apply(input, now);
 	}
 
-	private heldByAttention(id: ItemId, now: number) {
-		const item = this.data.items.get(id);
-		if (!item) return true;
-		const state = attentionState(item.attention, item.facts, this.data.config.me, now);
-		return (
-			state.kind === 'muted' ||
-			(state.kind === 'snoozed' && (!!state.choice.event || state.choice.until !== undefined))
-		);
-	}
-
 	private urgent(id: ItemId) {
 		const item = this.data.items.get(id);
 		if (!item) return false;
@@ -533,9 +510,9 @@ export class WorkspaceEngine {
 			.decisions.urgent;
 	}
 
-	private deliveryPlan(channels: Channel[], now: number) {
+	private deliveryPlan(pending: StoredAlert[], channels: Channel[], now: number) {
 		const lastPushes = this.deps.store.lastPushes();
-		return planDelivery(this.deps.store.pendingAlerts(), {
+		return planDelivery(pending, {
 			settings: this.data.config.settings,
 			now,
 			origin: this.deps.origin,
@@ -544,7 +521,10 @@ export class WorkspaceEngine {
 			appSeenAt: this.sync.appSeenAt,
 			state: this.sync.delivery,
 			lastPushOf: (id) => lastPushes.get(id) ?? null,
-			heldByAttention: (id) => this.heldByAttention(id, now),
+			heldByAttention: (id) => {
+				const item = this.data.items.get(id);
+				return !item || holdsAlerts(item, this.data.config.me, now);
+			},
 			urgent: (id) => this.urgent(id),
 			tagOf: (id) => {
 				const facts = this.data.items.get(id)?.facts;
@@ -575,12 +555,14 @@ export class WorkspaceEngine {
 
 	private async deliver(run: Run) {
 		for (;;) {
-			const channels = this.deps.store.pendingAlerts().length
-				? await this.deps.sender.channels()
-				: [];
+			if (!this.deps.store.pendingAlerts().length) {
+				this.sync = { ...this.sync, deliveryDue: null };
+				return;
+			}
+			const channels = await this.deps.sender.channels();
 			if (!this.stillCurrent(run.generation)) return;
 			const now = run.clock();
-			const plan = this.deliveryPlan(channels, now);
+			const plan = this.deliveryPlan(this.deps.store.pendingAlerts(), channels, now);
 			this.persist(() => {
 				for (const { alertId, reason } of plan.skip)
 					this.deps.store.setDelivery(alertId, { status: 'skipped', reason });
@@ -592,7 +574,7 @@ export class WorkspaceEngine {
 				return;
 			}
 			const outcomes = await this.deps.sender.send(outgoing.message, channels);
-			if (this.closed) return;
+			if (this.unusable) return;
 			this.delivered(outgoing, outcomes, run.clock());
 			this.deps.announceAlerts();
 		}

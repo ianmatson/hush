@@ -24,7 +24,6 @@ function resultWith(alerts: CommitResult['alerts']): CommitResult {
 		},
 		alerts,
 		changedViews: [],
-		departed: [],
 		interest: new Set(),
 		nextBoundary: null
 	};

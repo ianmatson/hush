@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../shared/durations';
-import { transitionView, interestOf } from './transition';
+import { transitionView } from './transition';
 import { NOW, answeredEffort, facts, item, view, world, type World } from './testing';
 import type { ViewState } from './types';
 
@@ -89,7 +89,6 @@ describe('new in view', () => {
 			settled.state
 		);
 		expect(refreshing.state.members).toEqual([a.id]);
-		expect(refreshing.departed).toEqual([]);
 		expect(refreshing.admitted).toEqual([]);
 	});
 
@@ -102,7 +101,7 @@ describe('new in view', () => {
 		});
 		const seeded = step(w([a.id]), null);
 		const left = step(w([]), seeded.state);
-		expect(left.departed).toEqual([a.id]);
+		expect(left.state.members).toEqual([]);
 		expect(step(w([a.id]), left.state).admitted).toEqual([a.id]);
 	});
 
@@ -197,7 +196,6 @@ describe('closed items', () => {
 			[a.id]
 		);
 		expect(closed.state).toMatchObject({ members: [], retained: [a.id] });
-		expect(closed.departed).toEqual([a.id]);
 		const rows = closed.built.evaluator.evaluate(closed.built.compiled.views[0], closed.state).rows;
 		expect(rows).toMatchObject([{ itemId: a.id, retained: true }]);
 		const later = step(
@@ -274,22 +272,6 @@ describe('closed items', () => {
 		const search = [view('v', ['is:pr is:merged repo:PostHog/posthog'], { keepClosed: false })];
 		const result = step({ views: search, items: [item(done)], results: { 0: [done.id] } }, null);
 		expect(result.state.members).toEqual([done.id]);
-	});
-});
-
-describe('interest', () => {
-	it('covers members, retained items, and hidden candidates, and nothing that left', () => {
-		const shown = facts(1);
-		const hidden = facts(2, { additions: 900, deletions: 900 });
-		const small = [view('v', ['is:pr is:open repo:PostHog/posthog size:<50'])];
-		const result = step(
-			{ views: small, items: [item(shown), item(hidden)], results: { 0: [shown.id, hidden.id] } },
-			null
-		);
-		const state = { ...result.state, retained: ['PR_closed'] };
-		expect([...interestOf([state], [result.found])].sort()).toEqual(
-			[shown.id, hidden.id, 'PR_closed'].sort()
-		);
 	});
 });
 

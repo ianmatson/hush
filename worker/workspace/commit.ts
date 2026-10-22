@@ -8,7 +8,12 @@ import { snoozeOutcome } from '../../src/lib/shared/snooze';
 import { enrichmentOf, type SubjectFacts } from '../../src/lib/shared/subject';
 import type { DashProject, Settings, TeamDTO } from '../../src/lib/shared/types';
 import { compileViews } from '../../src/lib/model/compile';
-import { attentionState, createEvaluator, snoozeIsOver } from '../../src/lib/model/evaluate';
+import {
+	createEvaluator,
+	holdsAlerts,
+	snoozeIsOver,
+	type EvaluationContext
+} from '../../src/lib/model/evaluate';
 import { applySourceRead, withSpec, type SourceRead } from '../../src/lib/model/sources';
 import { transitionView, type TransitionCause } from '../../src/lib/model/transition';
 import type {
@@ -96,7 +101,6 @@ export interface CommitResult {
 	changes: Changes;
 	alerts: AlertCause[];
 	changedViews: string[];
-	departed: ItemId[];
 	interest: Set<ItemId>;
 	nextBoundary: number | null;
 }
@@ -308,16 +312,25 @@ function applyInput(draft: Draft, input: Input, now: number) {
 	}
 }
 
-function compileAndReconcile(draft: Draft, now: number): CompiledView[] {
-	const { settings, teams, analysisVersion } = draft.config;
-	const compiled = compileViews(settings.views, {
-		dash: settings.dash,
-		categoryGroups: settings.categoryGroups,
-		smartDecisions: settings.smartDecisions,
-		teams,
-		analysisVersion,
-		now
-	});
+export const evaluationOf = (
+	config: Config,
+	items: ReadonlyMap<ItemId, Item>,
+	sources: ReadonlyMap<string, Source>,
+	now: number
+): EvaluationContext => ({
+	me: config.me,
+	dash: config.settings.dash,
+	categoryGroups: config.settings.categoryGroups,
+	smartDecisions: config.settings.smartDecisions,
+	teams: config.teams,
+	analysisVersion: config.analysisVersion,
+	now,
+	items,
+	sources
+});
+
+function compileAndReconcile(draft: Draft, evaluation: EvaluationContext): CompiledView[] {
+	const compiled = compileViews(draft.config.settings.views, evaluation);
 	const wanted = new Set(compiled.sources.map((spec) => spec.id));
 	for (const spec of compiled.sources) {
 		const source = draft.sources.get(spec.id);
@@ -353,14 +366,6 @@ function consumeFinishedSnoozes(draft: Draft, now: number): SnoozeWake[] {
 	}
 	return wakes;
 }
-
-const holdsAlerts = (item: Item, me: string, now: number) => {
-	const state = attentionState(item.attention, item.facts, me, now);
-	return (
-		state.kind === 'muted' ||
-		(state.kind === 'snoozed' && (!!state.choice.event || state.choice.until !== undefined))
-	);
-};
 
 interface Admission {
 	itemId: ItemId;
@@ -416,20 +421,9 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 	const inputs = Array.isArray(input) ? input : [input];
 	const draft = new Draft(before);
 	for (const each of inputs) applyInput(draft, each, now);
-	const views = compileAndReconcile(draft, now);
+	const evaluation = evaluationOf(draft.config, draft.items, draft.sources, now);
+	const views = compileAndReconcile(draft, evaluation);
 	const wakes = consumeFinishedSnoozes(draft, now);
-	const { me, settings, teams, analysisVersion } = draft.config;
-	const evaluation = {
-		me,
-		dash: settings.dash,
-		categoryGroups: settings.categoryGroups,
-		smartDecisions: settings.smartDecisions,
-		teams,
-		analysisVersion,
-		now,
-		items: draft.items,
-		sources: draft.sources
-	};
 	const evaluator = createEvaluator(evaluation);
 	const timePassed = inputs.some((each) => each.kind === 'time');
 	const freshSources = new Set(
@@ -443,7 +437,6 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 	const nextViews = new Map<string, ViewState>();
 	const alertable = new Set<ItemId>();
 	const admissions: Admission[] = [];
-	const departed = new Set<ItemId>();
 	const interest = new Set<ItemId>();
 	const changedViews: string[] = [];
 	let nextBoundary: number | null = null;
@@ -469,7 +462,6 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		nextViews.set(view.view.id, transition.state);
 		if (!sameJson(kept, transition.state)) draft.changes.views.add(view.view.id);
 		for (const id of transition.alertable) if (!transition.quiet.has(id)) alertable.add(id);
-		for (const id of transition.departed) departed.add(id);
 		for (const id of [...found.candidates, ...transition.state.retained]) interest.add(id);
 		if (view.view.pushNew)
 			for (const itemId of transition.admitted)
@@ -490,7 +482,7 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 			draft.changes.config
 		)
 			changedViews.push(view.view.id);
-		const boundary = evaluator.evaluate(view, transition.state).nextBoundary;
+		const boundary = evaluator.evaluate(view, transition.state, found).nextBoundary;
 		if (boundary !== null && (nextBoundary === null || boundary < nextBoundary))
 			nextBoundary = boundary;
 	}
@@ -520,7 +512,6 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 		changes: draft.changes,
 		alerts,
 		changedViews,
-		departed: [...departed],
 		interest,
 		nextBoundary
 	};

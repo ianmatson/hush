@@ -16,7 +16,6 @@ export interface ViewTransition {
 	state: ViewState;
 	quiet: Set<ItemId>;
 	admitted: ItemId[];
-	departed: ItemId[];
 	alertable: Set<ItemId>;
 }
 
@@ -95,13 +94,6 @@ export function transitionView(
 		},
 		admitted,
 		quiet: new Set([...baseline, ...awaitingOnly]),
-		departed: [...before].filter((id) => !members.has(id)),
 		alertable: new Set([...before, ...members, ...retained])
 	};
 }
-
-export const interestOf = (states: Iterable<ViewState>, memberships: Iterable<Membership>) =>
-	new Set<ItemId>([
-		...[...states].flatMap((state) => [...state.members, ...state.retained]),
-		...[...memberships].flatMap((membership) => [...membership.candidates])
-	]);

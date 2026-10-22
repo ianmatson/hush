@@ -182,7 +182,6 @@ export function assistantFixture(userId = 1) {
 			},
 			alerts: [],
 			changedViews: [],
-			departed: [],
 			interest: new Set(),
 			nextBoundary: null
 		};

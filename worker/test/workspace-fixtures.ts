@@ -19,7 +19,6 @@ import type {
 	Readers,
 	Channel,
 	Sender,
-	SourcesResult,
 	WorkspaceDeps
 } from '../workspace/engine';
 
@@ -78,7 +77,7 @@ export const windowOf = (ids: ItemId[], at = NOW): SourceWindow => ({
 
 export class FakeReaders implements Readers {
 	notificationResults: NotificationsResult[] = [];
-	sourceResults: ((specs: SourceSpec[]) => SourcesResult)[] = [];
+	sourceResults: ((specs: SourceSpec[]) => Map<string, SourceRead>)[] = [];
 	facts = new Map<ItemId, SubjectFacts>();
 	itemCalls: ItemId[][] = [];
 	beforeItemsAnswer: (() => void) | null = null;
@@ -90,10 +89,10 @@ export class FakeReaders implements Readers {
 
 	sourceCalls = 0;
 
-	async sources(specs: SourceSpec[]): Promise<SourcesResult> {
+	async sources(specs: SourceSpec[]): Promise<Map<string, SourceRead>> {
 		this.sourceCalls++;
 		const next = this.sourceResults.shift();
-		return next ? next(specs) : { reads: new Map() };
+		return next ? next(specs) : new Map();
 	}
 
 	teamsResult: TeamDTO[] | null = [];

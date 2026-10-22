@@ -91,6 +91,14 @@ export function attentionState(
 	return { kind: 'snoozed', choice: choiceOf(attention.snooze) };
 }
 
+export function holdsAlerts(item: Item, me: string, now: number) {
+	const state = attentionState(item.attention, item.facts, me, now);
+	return (
+		state.kind === 'muted' ||
+		(state.kind === 'snoozed' && (!!state.choice.event || state.choice.until !== undefined))
+	);
+}
+
 const passesTeams = (clause: Clause, facts: SubjectFacts, me: string) =>
 	!clause.teams ||
 	facts.reviewRequests.some(
@@ -141,12 +149,13 @@ export function createEvaluator(ctx: EvaluationContext) {
 		const ruleFacts = { ...subjectRuleFacts(facts, ctx.me, analysis.decisions), now: ctx.now };
 		const place = (certainty: Certainty) =>
 			placeGroups(ctx.categoryGroups, ruleFacts, attention.pins, analysis[certainty]);
+		const strict = place('strict');
 		const derived: Derived = {
 			facts: dashFactsOf(facts, ctx.me, teamSlugs, analysis.decisions),
 			ruleFacts,
 			analysis,
-			strict: place('strict'),
-			lenient: place('lenient'),
+			strict,
+			lenient: analysis.lenient === analysis.strict ? strict : place('lenient'),
 			pinnedCategories: attention.pins.filter((id) => categoryIds.has(id))
 		};
 		derivedById.set(item.id, derived);
@@ -276,8 +285,11 @@ export function createEvaluator(ctx: EvaluationContext) {
 		);
 	}
 
-	function evaluate(view: CompiledView, state: ViewState | null): ViewEvaluation {
-		const found = membership(view);
+	function evaluate(
+		view: CompiledView,
+		state: ViewState | null,
+		found = membership(view)
+	): ViewEvaluation {
 		const retained = retainedIn(view, state, found.members);
 		const rows = sortItems([
 			...[...found.members].map((id) => rowOf(ctx.items.get(id)!, false)),

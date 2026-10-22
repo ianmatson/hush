@@ -267,11 +267,4 @@ export class WorkspaceStore {
 	forgetAlertsBefore(cutoff: number) {
 		this.run('DELETE FROM alerts WHERE created_at < ?', cutoff);
 	}
-
-	wipe() {
-		this.storage.transactionSync(() => {
-			for (const table of ['items', 'sources', 'view_state', 'state', 'alerts'])
-				this.run(`DELETE FROM ${table}`);
-		});
-	}
 }

@@ -54,7 +54,7 @@ import { sendSlackAlerts } from '../slack-alerts';
 import { slackConnection } from '../slack-store';
 import { slackIsConfigured } from '../slack';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
-import type { Command, Config, WorkspaceData } from './commit';
+import { evaluationOf, type Command, type Config, type WorkspaceData } from './commit';
 import {
 	SLACK_REQUESTS_PER_MESSAGE,
 	SYNC_KEY,
@@ -399,30 +399,15 @@ export class Workspace extends DurableObject<Env> {
 	}
 
 	private present(data: WorkspaceData, now: number): ItemsResponse {
-		const { config } = data;
-		const ctx = {
-			dash: config.settings.dash,
-			categoryGroups: config.settings.categoryGroups,
-			smartDecisions: config.settings.smartDecisions,
-			teams: config.teams,
-			analysisVersion: config.analysisVersion,
-			now
-		};
-		const views = compileViews(config.settings.views, ctx).views;
-		const evaluator = createEvaluator({
-			...ctx,
-			me: config.me,
-			items: data.items,
-			sources: data.sources
-		});
+		const ctx = evaluationOf(data.config, data.items, data.sources, now);
 		return presentItems({
 			revision: data.revision,
 			now,
-			views,
+			views: compileViews(data.config.settings.views, ctx).views,
 			states: data.views,
-			evaluator,
-			projects: config.projects,
-			teams: config.teams
+			evaluator: createEvaluator(ctx),
+			projects: data.config.projects,
+			teams: data.config.teams
 		});
 	}
 

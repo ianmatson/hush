@@ -346,7 +346,6 @@ describe('commit: views and sources', () => {
 			}
 		]);
 		expect(result.data.views.get('v')).toMatchObject({ members: [], retained: ['PR_1'] });
-		expect(result.departed).toEqual(['PR_1']);
 	});
 
 	it('drops sources and view state that settings no longer use, and starts edited views quietly', () => {
