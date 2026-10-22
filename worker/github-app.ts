@@ -70,6 +70,7 @@ export async function allPages<T>(token: string, path: string): Promise<T[]> {
 		rows.push(...((await res.json()) as T[]));
 		url = res.headers.get('Link')?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
 	}
+	if (url) throw new Error(`GitHub has more than ${MAX_PAGES} pages for ${path}.`);
 	return rows;
 }
 

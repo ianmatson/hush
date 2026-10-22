@@ -115,6 +115,30 @@ describe('allPages', () => {
 	});
 });
 
+describe('allPages limit', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('refuses a list that goes on past the last page it reads', async () => {
+		forgetInstallations();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response('[]', {
+						status: 200,
+						headers: { Link: '<https://api.github.com/app/installations?page=99>; rel="next"' }
+					})
+			)
+		);
+		await expect(appInstallations(appEnv(), NOW)).rejects.toThrow(/more than 10 pages/);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('[]', { status: 200 }))
+		);
+		expect(await appInstallations(appEnv(), NOW)).toEqual([]);
+	});
+});
+
 describe('GET /api/account/webhooks', () => {
 	beforeEach(() => forgetInstallations());
 	afterEach(() => vi.unstubAllGlobals());
