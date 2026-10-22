@@ -28,6 +28,7 @@
 		open = $bindable(false),
 		ontoggle,
 		triggerClass,
+		triggerLabel,
 		trigger
 	}: {
 		label: string;
@@ -42,6 +43,7 @@
 		open?: boolean;
 		ontoggle: (option: FieldOption, on: boolean) => void;
 		triggerClass: string;
+		triggerLabel?: string;
 		trigger: Snippet;
 	} = $props();
 
@@ -100,7 +102,7 @@
 <Popover.Root bind:open={() => open, setOpen}>
 	<Tip text={tip}>
 		{#snippet children(props)}
-			<Popover.Trigger {...props} class={triggerClass} aria-label={tip}
+			<Popover.Trigger {...props} class={triggerClass} aria-label={triggerLabel ?? tip}
 				>{@render trigger()}</Popover.Trigger
 			>
 		{/snippet}

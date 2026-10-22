@@ -24,3 +24,13 @@ export function fitItems(widths: number[], room: number, options: FitOptions): n
 	}
 	return shown;
 }
+
+export function fitWithTrailingControl(
+	widths: number[],
+	room: number,
+	{ gap, moreWidth, controlWidth }: { gap: number; moreWidth: number; controlWidth: number }
+): number {
+	const total = widths.reduce((sum, w) => sum + w + gap, controlWidth);
+	if (total <= room) return widths.length;
+	return Math.min(fitItems(widths, room, { gap, moreWidth }).length, widths.length - 1);
+}
