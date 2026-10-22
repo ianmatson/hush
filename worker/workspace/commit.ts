@@ -43,7 +43,13 @@ export interface WorkspaceData {
 }
 
 export type Observation =
-	| { kind: 'items'; read: SubjectFacts[]; inaccessible: ItemId[]; quiet: boolean }
+	| {
+			kind: 'items';
+			read: SubjectFacts[];
+			inaccessible: ItemId[];
+			quiet: boolean;
+			quietIds?: ItemId[];
+	  }
 	| { kind: 'projects'; facets: [ItemId, ProjectFacet][]; definitions: DashProject[] }
 	| { kind: 'analysis'; itemId: ItemId; analysis: Analysis }
 	| { kind: 'source'; sourceId: string; read: SourceRead };
@@ -57,6 +63,9 @@ export type Command =
 	| { kind: 'pin'; itemIds: ItemId[]; pin: CategoryPin }
 	| { kind: 'settings'; settings: Settings }
 	| { kind: 'teams'; teams: TeamDTO[] }
+	| { kind: 'account'; me: string; projectAccess: ProjectAccess }
+	| { kind: 'forget-analysis' }
+	| { kind: 'reseed' }
 	| { kind: 'forget'; itemIds: ItemId[] };
 
 export type Input = Observation | Command | { kind: 'time' };
@@ -101,6 +110,9 @@ const COMMAND_KINDS = new Set<Input['kind']>([
 	'pin',
 	'settings',
 	'teams',
+	'account',
+	'forget-analysis',
+	'reseed',
 	'forget'
 ]);
 
@@ -135,6 +147,7 @@ class Draft {
 	};
 	readonly factsChanged = new Map<ItemId, SubjectFacts | null>();
 	readonly quietItems = new Set<ItemId>();
+	reseed = false;
 	readonly closedNow = new Set<ItemId>();
 
 	constructor(readonly before: WorkspaceData) {
@@ -196,7 +209,9 @@ function applyFacts(draft: Draft, read: SubjectFacts[], inaccessible: ItemId[], 
 function applyInput(draft: Draft, input: Input, now: number) {
 	switch (input.kind) {
 		case 'items':
-			return applyFacts(draft, input.read, input.inaccessible, input.quiet);
+			applyFacts(draft, input.read, input.inaccessible, input.quiet);
+			for (const id of input.quietIds ?? []) draft.quietItems.add(id);
+			return;
 		case 'projects': {
 			for (const [id, project] of input.facets) {
 				const item = draft.items.get(id);
@@ -268,6 +283,19 @@ function applyInput(draft: Draft, input: Input, now: number) {
 			return;
 		case 'forget':
 			for (const id of input.itemIds) draft.removeItem(id);
+			return;
+		case 'account':
+			if (input.me === draft.config.me && input.projectAccess === draft.config.projectAccess)
+				return;
+			draft.config = { ...draft.config, me: input.me, projectAccess: input.projectAccess };
+			draft.changes.config = true;
+			return;
+		case 'reseed':
+			draft.reseed = true;
+			return;
+		case 'forget-analysis':
+			for (const item of [...draft.items.values()])
+				if (item.analysis) draft.putItem({ ...item, analysis: null });
 			return;
 		case 'time':
 			return;
@@ -409,7 +437,8 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 	const changedViews: string[] = [];
 	let nextBoundary: number | null = null;
 	for (const view of views) {
-		const stored = before.views.get(view.view.id) ?? null;
+		const kept = before.views.get(view.view.id) ?? null;
+		const stored = kept && draft.reseed ? { ...kept, seededBindings: [], baseline: [] } : kept;
 		const found = evaluator.membership(view);
 		const transition = transitionView(
 			view,
@@ -419,9 +448,10 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 			cause
 		);
 		nextViews.set(view.view.id, transition.state);
-		if (!sameJson(stored, transition.state)) draft.changes.views.add(view.view.id);
+		if (!sameJson(kept, transition.state)) draft.changes.views.add(view.view.id);
 		for (const id of transition.alertable) alertable.add(id);
 		for (const id of transition.departed) departed.add(id);
+		for (const id of transition.quiet) draft.quietItems.add(id);
 		for (const id of [...found.candidates, ...transition.state.retained]) interest.add(id);
 		if (view.view.pushNew)
 			for (const itemId of transition.admitted)

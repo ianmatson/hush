@@ -56,8 +56,8 @@ export interface Sync {
 	hasPush: boolean;
 	notifications: NotificationCursor;
 	sourcesDue: Record<string, number>;
-	settled: boolean;
 	projectReadAt: Record<ItemId, number>;
+	quietReads: ItemId[];
 	projectsDue: number;
 	teamsDue: number;
 	discoveryAt: number;
@@ -108,8 +108,8 @@ export function initialSync(now: number): Sync {
 			versions: {}
 		},
 		sourcesDue: {},
-		settled: false,
 		projectReadAt: {},
+		quietReads: [],
 		projectsDue: now,
 		teamsDue: now,
 		discoveryAt: 0,
@@ -261,7 +261,8 @@ export function readsDone(sync: Sync, claims: ReadClaims, now: number): Sync {
 		readAt[id] = now;
 		if ((reads[id]?.version ?? 0) === version) delete reads[id];
 	}
-	return { ...sync, reads, readAt };
+	const quietReads = sync.quietReads.filter((id) => !(id in claims));
+	return { ...sync, reads, readAt, quietReads };
 }
 
 export const readRetryDelay = (attempts: number) =>
@@ -349,7 +350,6 @@ export function touched(sync: Sync, now: number): Sync {
 		...sync,
 		lifecycle: 'active',
 		generation: resumed ? sync.generation + 1 : sync.generation,
-		settled: resumed ? false : sync.settled,
 		lastActive: now,
 		notifications: {
 			...sync.notifications,

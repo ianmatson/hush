@@ -230,3 +230,25 @@ describe('githubReaders', () => {
 		expect(await readers.teams(new CallBudget(5))).toBeNull();
 	});
 });
+
+describe('GraphQL rate limits in a 200 answer', () => {
+	it('stops at a RATE_LIMITED error or an empty quota', async () => {
+		const reset = Math.floor(Date.now() / 1000) + 600;
+		const calls = vi.fn(async () =>
+			Response.json(
+				{ data: null, errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }] },
+				{ headers: { 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(reset) } }
+			)
+		);
+		vi.stubGlobal('fetch', calls);
+		const budget = new CallBudget(10);
+		await fetchItems(
+			't',
+			'ian',
+			Array.from({ length: 60 }, (_, i) => `I_${i}`),
+			budget
+		);
+		expect(calls.mock.calls).toHaveLength(1);
+		expect(budget.retryAt).toBe(reset * 1000);
+	});
+});

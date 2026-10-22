@@ -106,6 +106,8 @@ export interface GraphqlResult<T> {
 }
 
 export const NO_CALL_LEFT = 0;
+const RATE_LIMITED = 'RATE_LIMITED';
+const RATE_LIMITED_WAIT_MS = 60_000;
 
 export class CallBudget {
 	retryAt: number | null = null;
@@ -123,9 +125,14 @@ export class CallBudget {
 	}
 
 	noteLimit(res: Response) {
-		if (res.status !== 403 && res.status !== 429) return;
 		const at = rateLimitRetryAt(res.headers);
-		if (at !== undefined) this.retryAt = Math.max(this.retryAt ?? 0, at);
+		const refused = res.status === 403 || res.status === 429;
+		if (at !== undefined && (refused || res.headers.get('X-RateLimit-Remaining') === '0'))
+			this.limitUntil(at);
+	}
+
+	limitUntil(at: number) {
+		this.retryAt = Math.max(this.retryAt ?? 0, at);
 	}
 }
 
@@ -148,6 +155,8 @@ export async function graphql<T = Node>(
 		errors?: GraphqlError[];
 	} | null;
 	if (!answer && res.ok) throw new GitHubError(502, GITHUB_GAVE_NO_ANSWER);
+	if (budget && answer?.errors?.some((error) => error.type === RATE_LIMITED))
+		budget.limitUntil(rateLimitRetryAt(res.headers) ?? Date.now() + RATE_LIMITED_WAIT_MS);
 	return {
 		ok: res.ok,
 		status: res.status,

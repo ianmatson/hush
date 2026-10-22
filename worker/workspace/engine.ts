@@ -244,7 +244,10 @@ export class WorkspaceEngine {
 	}
 
 	touch(now: number) {
-		this.saveSync(touched(this.sync, now));
+		const resumed = this.sync.lifecycle === 'paused';
+		const next = touched(this.sync, now);
+		this.saveSync(resumed ? { ...next, quietReads: [...this.interest.ids] } : next);
+		if (resumed) this.apply({ kind: 'reseed' }, now);
 	}
 
 	requestRead(ids: ItemId[], priority: ReadPriority, now: number) {
@@ -253,6 +256,25 @@ export class WorkspaceEngine {
 
 	stop(reason: string) {
 		this.saveSync(stopped(this.sync, reason));
+	}
+
+	itemAt(repo: string, number: number): ItemId | null {
+		return this.itemIdAt(repo, number);
+	}
+
+	refreshBoards(now: number) {
+		const boards = [...this.data.sources.values()].filter((s) => s.spec.adapter === 'board');
+		const sourcesDue = { ...this.sync.sourcesDue };
+		for (const board of boards) sourcesDue[board.spec.id] = now;
+		this.saveSync({ ...this.sync, sourcesDue, projectsDue: now });
+	}
+
+	refreshTeamsSoon(now: number) {
+		this.saveSync({ ...this.sync, teamsDue: now });
+	}
+
+	deliverSoon(now: number) {
+		this.saveSync({ ...this.sync, deliveryDue: now });
 	}
 
 	appFocused(focusedUntil: number, now: number) {
@@ -301,16 +323,7 @@ export class WorkspaceEngine {
 		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(run.generation))
 			await this.deliver(clock);
 		if (plan.cleanup && this.stillCurrent(run.generation)) this.cleanup(clock());
-		if (this.storageFailed) return;
-		this.sync = { ...this.sync, settled: this.sync.settled || this.hydrated() };
-		this.saveSync();
-	}
-
-	private hydrated() {
-		const everySourceRan = [...this.data.sources.values()].every(
-			(source) => source.window !== null || source.failedSince !== null || source.error !== null
-		);
-		return everySourceRan && Object.keys(this.sync.reads).length === 0;
+		if (!this.storageFailed) this.saveSync();
 	}
 
 	private itemIdAt(repo: string, number: number): ItemId | null {
@@ -421,11 +434,13 @@ export class WorkspaceEngine {
 	}
 
 	private itemsInput(result: ItemsResult): Input {
+		const quiet = new Set(this.sync.quietReads);
 		return {
 			kind: 'items',
 			read: result.read,
 			inaccessible: result.inaccessible,
-			quiet: !this.sync.settled
+			quiet: false,
+			quietIds: result.read.map((facts) => facts.id).filter((id) => quiet.has(id))
 		};
 	}
 
@@ -451,8 +466,9 @@ export class WorkspaceEngine {
 		if (!this.stillCurrent(run.generation)) return;
 		const now = run.clock();
 		this.noteBudget(run);
+		const input = this.itemsInput(result);
 		this.sync = this.afterItemReads(claims, result, now);
-		this.apply(this.itemsInput(result), now);
+		this.apply(input, now);
 	}
 
 	private heldByAttention(id: ItemId, now: number) {

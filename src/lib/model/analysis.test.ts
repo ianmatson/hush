@@ -94,3 +94,36 @@ describe('mergeAnalysis', () => {
 		expect(mergeAnalysis(null, ANALYSIS_VERSION, reply, {})).toBeNull();
 	});
 });
+
+describe('mergeAnalysis with a changed identity', () => {
+	it('keeps the old answers until every new identity answer is in', () => {
+		const [identity] = analysisRequests(
+			null,
+			commented,
+			ME,
+			[EFFORT, BY_TOPIC],
+			ANALYSIS_VERSION,
+			NOW
+		);
+		const full = Object.fromEntries([
+			...Object.keys(identity.aboutIds).map((key) => [key, { type: 'noul', noul: 0.9 }] as const),
+			...Object.keys(identity.choiceKeys).map(
+				(key) => [key, { type: 'choice', choice: 'low', confidence: 0.9 }] as const
+			)
+		]);
+		const stored = mergeAnalysis(null, ANALYSIS_VERSION, identity, full)!;
+		const renamed = { ...commented, title: 'Renamed' };
+		const [again] = analysisRequests(
+			stored,
+			renamed,
+			ME,
+			[EFFORT, BY_TOPIC],
+			ANALYSIS_VERSION,
+			NOW
+		);
+		const onlyAbout = Object.fromEntries(
+			Object.keys(again.aboutIds).map((key) => [key, { type: 'noul', noul: 0.1 }] as const)
+		);
+		expect(mergeAnalysis(stored, ANALYSIS_VERSION, again, onlyAbout)).toBeNull();
+	});
+});

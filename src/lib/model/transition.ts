@@ -13,6 +13,7 @@ export interface TransitionContext {
 
 export interface ViewTransition {
 	state: ViewState;
+	quiet: Set<ItemId>;
 	admitted: ItemId[];
 	departed: ItemId[];
 	alertable: Set<ItemId>;
@@ -75,6 +76,7 @@ export function transitionView(
 			baseline: [...baseline].filter((id) => found.candidates.has(id) && found.unsettled.has(id))
 		},
 		admitted,
+		quiet: baseline,
 		departed: [...before].filter((id) => !members.has(id)),
 		alertable: new Set([...before, ...members, ...retained])
 	};

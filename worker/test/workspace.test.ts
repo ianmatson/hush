@@ -557,7 +557,56 @@ describe('Workspace step 3 fixes', () => {
 		h.readers.sourceResults.push(answerSearch(['PR_1']));
 		await h.workspace.run(h.clock);
 		expect(h.sender.sent).toEqual([]);
-		expect(h.workspace.schedule.settled).toBe(true);
+	});
+
+	it('stays quiet while it fills after a first search that failed', async () => {
+		const h = started();
+		h.readers.facts.set(
+			'PR_1',
+			facts(1, {
+				reviewRequests: [{ name: ME, team: false }],
+				requestEvents: [
+					{ at: new Date(h.clock() - MINUTE_MS).toISOString(), team: false, name: ME }
+				]
+			})
+		);
+		h.readers.sourceResults.push((specs) => ({
+			reads: new Map(
+				specs.map((spec) => [spec.id, { outcome: 'failed' as const, error: 'timeout' }])
+			)
+		}));
+		await h.workspace.run(h.clock);
+		h.advance(SOURCE_EVERY_MS);
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.views.get('v')?.members).toEqual(['PR_1']);
+		expect(h.sender.sent).toEqual([]);
+	});
+
+	it('fills quietly again after a pause', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		h.advance(PAUSE_AFTER_NO_PUSH_MS + DAY_MS);
+		await h.workspace.run(h.clock);
+		const requested = facts(1, {
+			updatedAt: new Date(h.clock()).toISOString(),
+			reviewRequests: [{ name: ME, team: false }]
+		});
+		h.readers.facts.set('PR_1', requested);
+		h.workspace.touch(h.clock());
+		h.readers.sourceResults.push((specs) => ({
+			reads: new Map(
+				specs.map((spec) => [
+					spec.id,
+					{ outcome: 'ok' as const, window: windowOf(['PR_1'], h.clock()) }
+				])
+			)
+		}));
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.items.get('PR_1')?.facts.reviewRequests).toHaveLength(1);
+		expect(h.sender.sent).toEqual([]);
 	});
 
 	it('reads project status for every member over time, not only the first 200', async () => {

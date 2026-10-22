@@ -240,8 +240,12 @@ export function mergeAnalysis(
 		const choice = choiceOf(answers[key]);
 		if (choice) choices[choiceKey] = choice.id;
 	}
-	if (!Object.keys(about).length && !Object.keys(choices).length) return null;
 	const same = base.identityInput === asked.input;
+	const answeredAll =
+		Object.keys(about).length === Object.keys(asked.aboutIds).length &&
+		Object.keys(choices).length === Object.keys(asked.choiceKeys).length;
+	if (!Object.keys(about).length && !Object.keys(choices).length) return null;
+	if (!same && base.identityInput !== null && !answeredAll) return null;
 	return {
 		...base,
 		identityInput: asked.input,
