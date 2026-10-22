@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	DEFAULT_PUSH_FACTS,
-	factEvents,
-	itemPush,
-	knownPushFacts,
-	validatePushFacts,
-	type PushFact
-} from './push-facts';
-import { eventSnoozeDeadline, MUTED_AT, type ItemMark } from './item-snooze';
+import { DEFAULT_PUSH_FACTS, factEvents, knownPushFacts, validatePushFacts } from './push-facts';
 import type { SubjectFacts } from './subject';
 
 const ME = 'ian';
@@ -197,58 +189,6 @@ describe('push facts', () => {
 	it('pushes when you are assigned', () => {
 		const issue = facts({ kind: 'issue' });
 		expect(titles(issue, { ...issue, assignees: ['ian'] })).toEqual(['assigned: Assigned to you']);
-	});
-});
-
-describe('item pushes', () => {
-	const wanted = new Set<PushFact>(DEFAULT_PUSH_FACTS);
-	const mark = (over: Partial<ItemMark>): ItemMark => ({
-		updatedAt: LONG_AGO,
-		snoozedUntil: null,
-		snoozeEvent: null,
-		snoozedAt: NOW - 1000,
-		...over
-	});
-	const mine = facts({ author: ME });
-	const failed = { ...mine, ci: 'FAILURE' as const };
-	const push = (m: ItemMark | undefined, before = mine, after: SubjectFacts = failed, w = wanted) =>
-		itemPush(before, after, m, w, ME, TEAMS, SINCE, NOW);
-
-	it('pushes the facts that you chose, as one push for each item', () => {
-		expect(push(undefined)).toEqual({ reason: 'ci-failed', title: 'CI failed' });
-		expect(push(undefined, mine, failed, new Set(['approved']))).toBeNull();
-		expect(
-			push(undefined, mine, {
-				...failed,
-				latestReview: { author: 'bob', at: JUST_NOW, state: 'APPROVED' }
-			})
-		).toEqual({ reason: 'approved', title: 'Approved by bob · CI failed' });
-	});
-
-	it('never pushes a muted item, nor one that sleeps until a time', () => {
-		expect(push(mark({ updatedAt: MUTED_AT }))).toBeNull();
-		expect(push(mark({ snoozedUntil: NOW + 3600_000 }))).toBeNull();
-		expect(push(mark({ snoozedUntil: NOW - 1 }))).toEqual({
-			reason: 'ci-failed',
-			title: 'CI failed'
-		});
-	});
-
-	it('still pushes an item that sleeps until new activity', () => {
-		expect(push(mark({ updatedAt: mine.updatedAt }))).toEqual({
-			reason: 'ci-failed',
-			title: 'CI failed'
-		});
-	});
-
-	it('pushes once when a snooze until something happens ends', () => {
-		const snoozed = mark({
-			snoozeEvent: 'ci_done',
-			snoozedUntil: eventSnoozeDeadline(NOW - 1000)
-		});
-		expect(push(snoozed)).toEqual({ reason: 'snooze-over', title: 'Snooze over: CI finished' });
-		expect(push(snoozed, failed, failed)).toBeNull();
-		expect(push(snoozed, mine, { ...mine, lastComment: comment('bob') })).toBeNull();
 	});
 });
 

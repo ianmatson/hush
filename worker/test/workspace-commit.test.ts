@@ -4,7 +4,15 @@ import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 import { DEFAULT_SETTINGS } from '../../src/lib/shared/settings';
 import type { ItemView, Settings } from '../../src/lib/shared/types';
 import { compileViews } from '../../src/lib/model/compile';
-import { ANALYSIS_VERSION, EFFORT, ME, NOW, facts } from '../../src/lib/model/testing';
+import { replyInputOf } from '../../src/lib/model/analysis';
+import {
+	ANALYSIS_VERSION,
+	EFFORT,
+	ME,
+	NOW,
+	answeredEffort,
+	facts
+} from '../../src/lib/model/testing';
 import type { ItemId, SourceWindow } from '../../src/lib/model/types';
 import { commit, type Input, type WorkspaceData } from '../workspace/commit';
 
@@ -215,6 +223,92 @@ describe('commit: alerts', () => {
 		expect(run(merged.data, { kind: 'time' }, NOW + MINUTE_MS).alerts).toEqual([]);
 	});
 
+	it('alerts only the facts you chose, as one alert for each item', () => {
+		const alertsWith = (pushFacts: Settings['pushFacts']) => {
+			const base = seeded(views, ['PR_1'], { pushFacts });
+			const mine = run(base.data, {
+				kind: 'items',
+				read: [facts(1, { author: ME })],
+				inaccessible: [],
+				quiet: true
+			});
+			const failedAndApproved = facts(1, {
+				author: ME,
+				ci: 'FAILURE',
+				latestReview: { author: 'bob', at: new Date(NOW).toISOString(), state: 'APPROVED' }
+			});
+			return run(mine.data, {
+				kind: 'items',
+				read: [failedAndApproved],
+				inaccessible: [],
+				quiet: false
+			}).alerts;
+		};
+		expect(alertsWith(['approved', 'ci-failed'])).toEqual([
+			expect.objectContaining({
+				itemId: 'PR_1',
+				reasons: ['approved', 'ci-failed'],
+				title: 'Approved by bob · CI failed'
+			})
+		]);
+		expect(alertsWith(['review-requested'])).toEqual([]);
+	});
+
+	it('holds alerts while an item sleeps until a time, and alerts again after it', () => {
+		const base = seeded(views, ['PR_1']);
+		const snoozed = run(base.data, {
+			kind: 'snooze',
+			itemIds: ['PR_1'],
+			snooze: { kind: 'time', id: 's3', at: NOW, until: NOW + HOUR_MS }
+		});
+		const read: Input = { kind: 'items', read: [requested], inaccessible: [], quiet: false };
+		expect(run(snoozed.data, read).alerts).toEqual([]);
+		expect(run(snoozed.data, read, NOW + HOUR_MS).alerts.map((a) => a.reasons)).toEqual([
+			['review-requested']
+		]);
+	});
+
+	it('still alerts an item that sleeps until new activity', () => {
+		const base = seeded(views, ['PR_1']);
+		const snoozed = run(base.data, {
+			kind: 'snooze',
+			itemIds: ['PR_1'],
+			snooze: { kind: 'activity', id: 's4', at: NOW, activityAt: facts(1).updatedAt }
+		});
+		const read = run(snoozed.data, {
+			kind: 'items',
+			read: [requested],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(read.alerts.map((a) => a.reasons)).toEqual([['review-requested']]);
+	});
+
+	it('holds other alerts during an event snooze, and names the event when it ends', () => {
+		const base = seeded(views, ['PR_1']);
+		const snoozed = run(base.data, {
+			kind: 'snooze',
+			itemIds: ['PR_1'],
+			snooze: { kind: 'event', id: 's5', at: NOW - HOUR_MS, event: 'approved', until: NOW + DAY_MS }
+		});
+		const held = run(snoozed.data, {
+			kind: 'items',
+			read: [requested],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(held.alerts).toEqual([]);
+		const approved = run(held.data, {
+			kind: 'items',
+			read: [{ ...requested, reviewDecision: 'APPROVED' }],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(approved.alerts).toEqual([
+			expect.objectContaining({ reasons: ['snooze-over'], title: 'Snooze over: Approved' })
+		]);
+	});
+
 	it('ends a time snooze without an alert', () => {
 		const base = seeded(views, ['PR_1']);
 		const snoozed = run(base.data, {
@@ -397,5 +491,24 @@ describe('commit: quiet per view', () => {
 			quiet: false
 		});
 		expect(read.alerts.map((a) => a.reasons)).toEqual([['review-requested']]);
+	});
+});
+
+describe('commit: analysis', () => {
+	it('forgets every stored answer for a re-evaluation', () => {
+		const views: ItemView[] = [{ id: 'v', name: 'v', searches: [open], groupBy: 'none' }];
+		const base = seeded(views, ['PR_1']);
+		const answered = run(base.data, {
+			kind: 'analysis',
+			itemId: 'PR_1',
+			analysis: {
+				...answeredEffort(facts(1), 'low'),
+				replyInput: replyInputOf(facts(1), ME),
+				reply: 0.1
+			}
+		});
+		expect(answered.data.items.get('PR_1')?.analysis).not.toBeNull();
+		const forgotten = run(answered.data, { kind: 'forget-analysis' });
+		expect(forgotten.data.items.get('PR_1')?.analysis).toBeNull();
 	});
 });

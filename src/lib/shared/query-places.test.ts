@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { queryMatches } from './rules';
 import { dateMatches, queryError, resolveToday, splitSearch, suggest } from './query';
-import { sectionsFor, validateViews, viewsPassingFilters } from './item-views';
+import { sectionsFor, validateViews } from './item-views';
 import { parseSettings } from './settings';
 import type { Enrichment, ItemView, RuleFacts } from './types';
 
@@ -155,29 +155,9 @@ describe('views with Hush words', () => {
 			}
 		]);
 	});
-	it('keep a view only when one of its searches finds the item and its filter passes', () => {
-		const filters = new Map([
-			['quick', new Set(['size:<20'])],
-			['mine', new Set([''])],
-			['both', new Set(['size:<20', 'label:bug'])]
-		]);
-		expect([...viewsPassingFilters(['quick', 'mine', 'both'], filters, item())]).toEqual([
-			'mine',
-			'both'
-		]);
-	});
-	it('keep an item whose label matches a label wildcard of the search', () => {
+	it('keep a label wildcard of the search as a filter for Hush', () => {
 		const [section] = sectionsFor('pr', [{ ...view, searches: ['is:open label:area/*'] }], NOW);
 		expect(section.filter).toBe('label:area/*');
-		const passing = (labels: string[]) => [
-			...viewsPassingFilters(
-				['quick'],
-				new Map([['quick', new Set([section.filter!])]]),
-				item({ labels })
-			)
-		];
-		expect(passing(['area/api'])).toEqual(['quick']);
-		expect(passing(['bug'])).toEqual([]);
 	});
 	it('keep an item that a bot or the named author opened, for author:name,bots', () => {
 		const { github, hush } = splitSearch('is:pr author:alice,bots');

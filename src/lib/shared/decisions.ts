@@ -1,4 +1,3 @@
-import { replyFromOthers } from './activity';
 import { requestedByName, sameLogin } from './logins';
 import { aboutTexts } from './query';
 import type { SubjectFacts } from './subject';
@@ -21,15 +20,6 @@ export const REPLY = 'reply';
 export const URGENCY = 'urgency';
 export const ABOUT_PREFIX = 'about_';
 export const CHOICE_PREFIX = 'choice_';
-
-export interface StoredDecisions {
-	contentHash: string;
-	reply?: number;
-	urgency?: number;
-	identityHash?: string;
-	about?: Record<string, number>;
-	choices?: Record<string, { id: string; confidence: number }>;
-}
 
 export interface SubjectDecisions {
 	commentsNeedMe: boolean | null;
@@ -122,21 +112,6 @@ export function newCommentsForYou(s: SubjectFacts, me: string): LastComment[] {
 	return recent.slice(afterMine).filter((c) => !c.authorIsBot);
 }
 
-export function contentHash(s: SubjectFacts): string {
-	return cyrb53(
-		JSON.stringify([
-			s.title,
-			s.labels.map((l) => l.name),
-			s.body ?? '',
-			recentComments(s).map((c) => [c.author, c.authorIsBot, c.body])
-		])
-	);
-}
-
-export function identityHash(s: SubjectFacts): string {
-	return cyrb53(JSON.stringify([s.title, s.labels.map((l) => l.name), s.body ?? '']));
-}
-
 export function rolesOf(s: SubjectFacts, me: string): string[] {
 	const roles: string[] = [];
 	if (sameLogin(s.author, me)) roles.push('author');
@@ -196,53 +171,6 @@ export function choiceQuestion(options: Record<string, string>): DecisionQuestio
 	};
 }
 
-export interface DecisionPlan {
-	request: DecisionRequest;
-	contentHash: string;
-	identityHash: string | null;
-	aboutIds: Record<string, string>;
-	choiceKeys: Record<string, string>;
-}
-
-export function planDecisions(
-	s: SubjectFacts,
-	me: string,
-	stored: StoredDecisions | null | undefined,
-	conditions: SmartCondition[],
-	choices: DecisionChoice[] = []
-): DecisionPlan | null {
-	const hash = contentHash(s);
-	const idHash = identityHash(s);
-	const content = stored?.contentHash === hash ? stored : null;
-	const identityKnown = stored?.identityHash === idHash;
-	const questions: Record<string, DecisionQuestion> = {};
-	if (content?.reply === undefined && replyFromOthers(s, me)) questions[REPLY] = replyQuestion(me);
-	if (content?.urgency === undefined) questions[URGENCY] = URGENCY_QUESTION;
-	const identity = identityKnown ? stored : null;
-	const aboutIds: Record<string, string> = {};
-	for (const c of conditions) {
-		if (identity?.about?.[c.id] !== undefined) continue;
-		const key = `${ABOUT_PREFIX}${c.id}`;
-		questions[key] = aboutQuestion(c.text);
-		aboutIds[key] = c.id;
-	}
-	const choiceKeys: Record<string, string> = {};
-	for (const choice of choices) {
-		if (identity?.choices?.[choice.key] !== undefined) continue;
-		const key = `${CHOICE_PREFIX}${choice.key}`;
-		questions[key] = choiceQuestion(choice.options);
-		choiceKeys[key] = choice.key;
-	}
-	if (!Object.keys(questions).length) return null;
-	return {
-		request: { state: decisionState(s, me), questions },
-		contentHash: hash,
-		identityHash: identityKnown ? null : idHash,
-		aboutIds,
-		choiceKeys
-	};
-}
-
 export function estimateTokens(request: DecisionRequest): number {
 	return Math.ceil(JSON.stringify(request).length / CHARS_PER_TOKEN);
 }
@@ -257,74 +185,9 @@ export const choiceOf = (a: DecisionAnswers[string] | undefined) =>
 		? { id: a.choice, confidence: a.confidence }
 		: undefined;
 
-export function mergeDecisions(
-	stored: StoredDecisions | null | undefined,
-	plan: DecisionPlan,
-	answers: DecisionAnswers
-): StoredDecisions {
-	const sameContent = stored?.contentHash === plan.contentHash;
-	const base: StoredDecisions = {
-		contentHash: plan.contentHash,
-		...(sameContent ? { reply: stored?.reply, urgency: stored?.urgency } : {}),
-		...(plan.identityHash
-			? { identityHash: plan.identityHash }
-			: { identityHash: stored?.identityHash, about: stored?.about, choices: stored?.choices })
-	};
-	const reply = noulOf(answers[REPLY]);
-	if (reply !== undefined) base.reply = reply;
-	const urgency = scoreOf(answers[URGENCY]);
-	if (urgency !== undefined) base.urgency = urgency;
-	for (const [key, id] of Object.entries(plan.aboutIds)) {
-		const p = noulOf(answers[key]);
-		if (p !== undefined) base.about = { ...base.about, [id]: p };
-	}
-	for (const [key, choiceKey] of Object.entries(plan.choiceKeys)) {
-		const choice = choiceOf(answers[key]);
-		if (choice) base.choices = { ...base.choices, [choiceKey]: choice };
-	}
-	return Object.fromEntries(
-		Object.entries(base).filter(([, v]) => v !== undefined)
-	) as unknown as StoredDecisions;
-}
-
-export function forgetIdentityAnswers(stored: StoredDecisions): StoredDecisions {
-	const { identityHash: _id, about: _about, choices: _choices, ...kept } = stored;
-	return kept;
-}
-
 export function yesOrNo(probability: number | undefined): boolean | null {
 	if (probability === undefined) return null;
 	if (probability >= YES_AT) return true;
 	if (probability <= NO_AT) return false;
 	return null;
-}
-
-export function readDecisions(
-	stored: StoredDecisions | null | undefined,
-	s: SubjectFacts
-): SubjectDecisions {
-	if (!stored) return NO_DECISIONS;
-	const content = stored.contentHash === contentHash(s);
-	const identity = stored.identityHash === identityHash(s);
-	return {
-		commentsNeedMe: content ? yesOrNo(stored.reply) : null,
-		urgent: content && (stored.urgency ?? 0) >= URGENT_SCORE,
-		smart: identity
-			? Object.entries(stored.about ?? {})
-					.filter(([, p]) => yesOrNo(p) === true)
-					.map(([id]) => id)
-			: [],
-		choices: identity
-			? Object.fromEntries(Object.entries(stored.choices ?? {}).map(([key, c]) => [key, c.id]))
-			: {}
-	};
-}
-
-export function parseStoredDecisions(json: string | null | undefined): StoredDecisions | null {
-	if (!json) return null;
-	try {
-		return JSON.parse(json) as StoredDecisions;
-	} catch {
-		return null;
-	}
 }

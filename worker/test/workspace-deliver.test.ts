@@ -116,4 +116,43 @@ describe('planDelivery', () => {
 		expect(plan.send).toEqual([]);
 		expect(plan.waitUntil).toBe(NOW + 8 * MINUTE_MS);
 	});
+
+	it('sends again when the older sends leave the limit window', () => {
+		const settings = { pushLimit: { count: 2, minutes: 30 } };
+		const state = { recentSends: [NOW - 40 * MINUTE_MS, NOW - MINUTE_MS], lastDigestAt: 0 };
+		expect(sentIds(planDelivery([alert(1)], context({ settings, state })))).toEqual([alert(1).id]);
+	});
+
+	it('holds digest alerts until the digest interval is over', () => {
+		const settings = { pushDigestMinutes: 30 };
+		const early = planDelivery(
+			[alert(1)],
+			context({ settings, state: { recentSends: [], lastDigestAt: NOW - 20 * MINUTE_MS } })
+		);
+		expect(early.send).toEqual([]);
+		expect(early.waitUntil).toBe(NOW + 10 * MINUTE_MS);
+		const due = planDelivery(
+			[alert(1)],
+			context({ settings, state: { recentSends: [], lastDigestAt: NOW - 30 * MINUTE_MS } })
+		);
+		expect(sentIds(due)).toEqual([alert(1).id]);
+	});
+
+	it('holds a due digest until the limit has room again', () => {
+		const settings = { pushDigestMinutes: 5, pushLimit: { count: 1, minutes: 60 } };
+		const lastDigestAt = NOW - 10 * MINUTE_MS;
+		const full = planDelivery(
+			[alert(1), alert(2)],
+			context({ settings, state: { recentSends: [NOW - MINUTE_MS], lastDigestAt } })
+		);
+		expect(full.send).toEqual([]);
+		expect(full.waitUntil).toBe(NOW - MINUTE_MS + 60 * MINUTE_MS);
+		const room = planDelivery(
+			[alert(1), alert(2)],
+			context({ settings, state: { recentSends: [NOW - 61 * MINUTE_MS], lastDigestAt } })
+		);
+		expect(room.send).toEqual([
+			expect.objectContaining({ digest: true, alertIds: [alert(1).id, alert(2).id] })
+		]);
+	});
 });

@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { snapshotOf } from '../shared/changes';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../shared/durations';
 import { conditionId } from '../shared/decisions';
-import type { CategoryGroup } from '../shared/types';
+import { SNOOZE_EVENT_MAX_MS } from '../shared/snooze';
+import type { SubjectFacts } from '../shared/subject';
+import type { CategoryGroup, ItemView } from '../shared/types';
 import { analysisView, identityInput, identityInputOf, replyInputOf } from './analysis';
+import { attentionState, snoozeIsOver } from './evaluate';
+import type { Attention, Snooze } from './types';
 import {
 	BY_TOPIC,
 	EFFORT,
@@ -89,6 +93,110 @@ describe('membership', () => {
 		};
 		expect(membersWith(30)).toMatchObject({ members: 1, health: { stale: true } });
 		expect(membersWith(61)).toMatchObject({ members: 0, health: { unknown: true } });
+	});
+});
+
+describe('search filters', () => {
+	const foundBy = (ids: string[]) => () => ({
+		window: {
+			candidates: ids.map((id) => ({ id, updatedAt: new Date(NOW).toISOString() })),
+			truncated: false
+		}
+	});
+	const viewsWith = (views: ItemView[], subject: SubjectFacts) => {
+		const w = world({
+			views,
+			items: [item(subject)],
+			results: {},
+			sources: foundBy([subject.id])
+		});
+		return w.compiled.views
+			.filter((v) => w.evaluator.membership(v).members.has(subject.id))
+			.map((v) => v.view.id);
+	};
+
+	it('keep a view only when one of its searches finds the item and its filter passes', () => {
+		const bug = facts(32, {
+			labels: [{ name: 'bug', color: 'red' }],
+			additions: 20,
+			deletions: 10
+		});
+		const views = [
+			view('quick', ['is:pr is:open size:<20']),
+			view('mine', ['is:pr is:open']),
+			view('both', ['is:pr is:open size:<20', 'is:pr is:open label:bug*'])
+		];
+		expect(viewsWith(views, bug)).toEqual(['mine', 'both']);
+	});
+
+	it('keep an item whose label matches a label wildcard of the search', () => {
+		const views = [view('quick', ['is:pr is:open label:area/*'])];
+		const labeled = (name: string) => facts(33, { labels: [{ name, color: 'blue' }] });
+		expect(viewsWith(views, labeled('area/api'))).toEqual(['quick']);
+		expect(viewsWith(views, labeled('bug'))).toEqual([]);
+	});
+});
+
+describe('attentionState', () => {
+	const at = NOW - HOUR_MS;
+	const pending = facts(34, { ci: 'PENDING' });
+	const active = { ...pending, updatedAt: new Date(NOW).toISOString() };
+	const stateOf = (attention: Partial<Attention>, subject = pending, now = NOW) =>
+		attentionState({ ...noAttention(), ...attention }, subject, ME, now);
+
+	it('keeps an item awake without a snooze or a mute', () => {
+		expect(stateOf({})).toEqual({ kind: 'awake' });
+	});
+
+	it('snoozes until new activity: the item comes back when it changes', () => {
+		const snooze: Snooze = { kind: 'activity', id: 's', at, activityAt: pending.updatedAt };
+		expect(stateOf({ snooze })).toEqual({ kind: 'snoozed', choice: {} });
+		expect(stateOf({ snooze }, active)).toEqual({ kind: 'awake' });
+	});
+
+	it('snoozes until a time, also through new activity', () => {
+		const until = NOW + 2 * HOUR_MS;
+		const snooze: Snooze = { kind: 'time', id: 's', at, until };
+		expect(stateOf({ snooze }, active)).toEqual({ kind: 'snoozed', choice: { until } });
+		expect(stateOf({ snooze }, pending, until)).toEqual({ kind: 'awake' });
+	});
+
+	it('snoozes until something happens, or until the deadline', () => {
+		const until = at + SNOOZE_EVENT_MAX_MS;
+		const snooze: Snooze = { kind: 'event', id: 's', at, event: 'ci_pass', until };
+		expect(stateOf({ snooze })).toEqual({ kind: 'snoozed', choice: { event: 'ci_pass' } });
+		expect(stateOf({ snooze }, { ...pending, ci: 'SUCCESS' })).toEqual({ kind: 'awake' });
+		expect(stateOf({ snooze }, { ...pending, state: 'merged' })).toEqual({ kind: 'awake' });
+		expect(stateOf({ snooze }, pending, until)).toEqual({ kind: 'awake' });
+		expect(snoozeIsOver(snooze, pending, ME, until - 1)).toBe(false);
+	});
+
+	it('does not wake for your own reply', () => {
+		const snooze: Snooze = {
+			kind: 'event',
+			id: 's',
+			at,
+			event: 'reply',
+			until: at + SNOOZE_EVENT_MAX_MS
+		};
+		const reply = (author: string) => ({
+			...pending,
+			lastComment: {
+				author,
+				authorIsBot: false,
+				body: 'ok',
+				url: 'https://github.com/PostHog/posthog/pull/34#c',
+				createdAt: new Date(NOW - MINUTE_MS).toISOString()
+			}
+		});
+		expect(stateOf({ snooze }, reply(ME)).kind).toBe('snoozed');
+		expect(stateOf({ snooze }, reply('bob')).kind).toBe('awake');
+	});
+
+	it('mutes until you unmute it, through new activity and over a snooze', () => {
+		const snooze: Snooze = { kind: 'time', id: 's', at, until: NOW + HOUR_MS };
+		expect(stateOf({ muted: true }, active, NOW + 365 * DAY_MS)).toEqual({ kind: 'muted' });
+		expect(stateOf({ muted: true, snooze })).toEqual({ kind: 'muted' });
 	});
 });
 

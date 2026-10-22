@@ -90,13 +90,6 @@ export function holdReason(
 	return null;
 }
 
-export function heldAreDue(settings: DeliverySettings, now: number, state: DeliveryState): boolean {
-	if (inQuietHours(settings.quietHours, now)) return false;
-	if (settings.pushDigestMinutes !== null && !digestWindowIsOver(settings, now, state))
-		return false;
-	return limitRoom(settings, now, state) > 0;
-}
-
 export function keptSends(recentSends: number[], now: number, limit: PushLimit | null): number[] {
 	if (!limit) return [];
 	const windowStart = now - limit.minutes * MINUTE_MS;

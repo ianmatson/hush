@@ -1,9 +1,8 @@
 import { isAfter, replyFromOthers, reviewFromOthers } from './activity';
 import { ciFailing, ciPassing } from './ci';
 import { requestedByName, sameLogin } from './logins';
-import { enrichmentOf, type SubjectFacts } from './subject';
-import { markState, type ItemMark, type MarkState } from './item-snooze';
-import { snoozeOutcome } from './snooze';
+import { type SubjectFacts } from './subject';
+
 import { DEFAULT_PUSH_FACTS, PUSH_FACTS, type PushFact } from './push-fact-list';
 
 export { DEFAULT_PUSH_FACTS, PUSH_FACTS, type PushFact };
@@ -87,41 +86,4 @@ export function factEvents(
 		events.push({ fact: 'replied', title: `${review.author} reviewed` });
 
 	return events;
-}
-
-export interface ItemPush {
-	reason: PushFact;
-	title: string;
-}
-
-const holdsPushes = (state: MarkState) =>
-	state.kind === 'muted' ||
-	(state.kind === 'snoozed' && (!!state.snooze.event || state.snooze.until !== undefined));
-
-export function itemPush(
-	before: SubjectFacts | null,
-	after: SubjectFacts,
-	mark: ItemMark | undefined,
-	wanted: ReadonlySet<PushFact>,
-	me: string,
-	myTeams: Set<string>,
-	since: number,
-	now: number
-): ItemPush | null {
-	if (holdsPushes(markState(mark, after.updatedAt, after, me, now))) return null;
-	if (
-		mark?.snoozeEvent &&
-		before &&
-		markState(mark, before.updatedAt, before, me, now).kind === 'snoozed'
-	) {
-		if (!wanted.has('snooze-over')) return null;
-		const outcome = snoozeOutcome(mark.snoozeEvent, enrichmentOf(after), mark.snoozedAt ?? 0, me);
-		return {
-			reason: 'snooze-over',
-			title: outcome.wake ? `Snooze over: ${outcome.reason}` : 'Snooze over'
-		};
-	}
-	const events = factEvents(before, after, me, myTeams, since).filter((e) => wanted.has(e.fact));
-	if (!events.length) return null;
-	return { reason: events[0].fact, title: events.map((e) => e.title).join(' · ') };
 }
