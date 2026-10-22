@@ -14,7 +14,7 @@
 	import { taskCheckboxes, type SavedTaskText } from '$lib/task-checkboxes';
 	import { keys } from '$lib/queries';
 	import { api } from '$lib/api';
-	import { hiddenOlderCount, PEEK_TIMELINE_PAGE, withOlderPage } from '$lib/shared/peek-timeline';
+	import { hiddenOlderCount, showOlderLabel, withOlderPage } from '$lib/shared/peek-timeline';
 	import { setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
 	import { threadsByReview } from '$lib/shared/diff';
@@ -122,18 +122,18 @@
 	let prependingOlder = $state(false);
 	let activity = $state<HTMLElement | null>(null);
 	let olderError = $state<{ subject: string; message: string } | null>(null);
-	async function loadOlder(p: PeekDTO) {
-		const before = p.timeline.before;
-		const subject = subjectKey(p.repo, p.number);
+	async function loadOlder(before: string | null) {
+		const subject = shownSubject;
+		const queryKey = keys.peek(repo, number);
 		if (!before || olderLoadingFor === subject) return;
 		olderLoadingFor = subject;
 		olderError = null;
 		try {
-			const page = await api.peekOlder(p.repo, p.number, before);
+			const page = await api.peekOlder(repo, number, before);
 			prependingOlder = true;
 			await keepInPlace(activity?.querySelector('[data-peek-entry]') ?? null, () =>
 				queryClient.setQueryData<PeekDTO>(
-					keys.peek(p.repo, p.number),
+					queryKey,
 					(old) => old && withOlderPage(old, before, page)
 				)
 			);
@@ -383,20 +383,14 @@
 		<section class="grid" bind:this={activity}>
 			<h3 class="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
 				<MessageSquare class="size-3.5" />Activity
-				{#if hiddenOlder && p.timeline.before}
+				{#if p.timeline.before}
 					<button
 						type="button"
 						class="ml-auto font-normal underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
 						disabled={olderLoadingFor === shownSubject}
-						onclick={() => loadOlder(p)}
+						onclick={() => loadOlder(p.timeline.before)}
 					>
-						{#if olderLoadingFor === shownSubject}
-							Loading…
-						{:else if hiddenOlder > PEEK_TIMELINE_PAGE}
-							Show {PEEK_TIMELINE_PAGE} older of {hiddenOlder}
-						{:else}
-							Show {hiddenOlder} older
-						{/if}
+						{olderLoadingFor === shownSubject ? 'Loading…' : showOlderLabel(p)}
 					</button>
 				{:else if hiddenOlder}
 					<a

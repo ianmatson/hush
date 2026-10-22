@@ -5,6 +5,13 @@ export const PEEK_TIMELINE_PAGE = 25;
 export const hiddenOlderCount = (p: PeekDTO) =>
 	Math.max(0, p.timeline.total - p.timeline.items.length);
 
+export function showOlderLabel(p: PeekDTO): string | null {
+	if (p.timeline.before === null) return null;
+	const hidden = hiddenOlderCount(p);
+	if (hidden > PEEK_TIMELINE_PAGE) return `Show ${PEEK_TIMELINE_PAGE} older of ${hidden}`;
+	return hidden ? `Show ${hidden} older` : 'Show older';
+}
+
 export function keepLoadedOlder(cached: PeekDTO | undefined, fresh: PeekDTO): PeekDTO {
 	const freshOldest = fresh.timeline.items[0];
 	if (!cached || !freshOldest || fresh.timeline.before === null) return fresh;

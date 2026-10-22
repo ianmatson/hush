@@ -294,11 +294,10 @@ export const pullViewedQuery = (repo: string, number: number) =>
 export const peekQuery = (repo: string, number: number) =>
 	queryOptions({
 		queryKey: keys.peek(repo, number),
-		queryFn: async () =>
-			keepLoadedOlder(
-				queryClient.getQueryData<PeekDTO>(keys.peek(repo, number)),
-				await api.peek(repo, number)
-			),
+		queryFn: async () => {
+			const fresh = await api.peek(repo, number);
+			return keepLoadedOlder(queryClient.getQueryData<PeekDTO>(keys.peek(repo, number)), fresh);
+		},
 		staleTime: 2 * MINUTE_MS,
 		gcTime: 10 * MINUTE_MS,
 		refetchOnWindowFocus: false
