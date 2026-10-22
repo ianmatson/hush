@@ -55,7 +55,14 @@ import { slackConnection } from '../slack-store';
 import { slackIsConfigured } from '../slack';
 import { sendPush, vapidFromEnv, type PushMessage } from '../webpush';
 import type { Command, Config, WorkspaceData } from './commit';
-import { SYNC_KEY, WorkspaceEngine, type Channel, type Sender, type WorkspaceDeps } from './engine';
+import {
+	SLACK_REQUESTS_PER_MESSAGE,
+	SYNC_KEY,
+	WorkspaceEngine,
+	type Channel,
+	type Sender,
+	type WorkspaceDeps
+} from './engine';
 import type { Sync } from './work';
 import { githubReaders, modelAnalyzer, type Credential } from './readers';
 import { WorkspaceStore, type ChannelOutcome, type SqlStorage } from './store';
@@ -147,7 +154,7 @@ export class Workspace extends DurableObject<Env> {
 		return {
 			requestsPerMessage: (channels) =>
 				(channels.includes('push') ? this.devices().length : 0) +
-				(channels.includes('slack') ? 1 : 0),
+				(channels.includes('slack') ? SLACK_REQUESTS_PER_MESSAGE : 0),
 			channels: async () => {
 				const settings = this.engine?.snapshot.config.settings;
 				const userId = this.account()?.userId;

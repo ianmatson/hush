@@ -3,7 +3,7 @@ import type { DecisionAnswers, DecisionRequest } from '../../src/lib/shared/deci
 import { DAY_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { readsBoard } from '../../src/lib/shared/projects';
-import { keptSends } from '../../src/lib/shared/push-policy';
+import { keptSends, MAX_PUSH_DEVICES } from '../../src/lib/shared/push-policy';
 import { subjectKey, type SubjectFacts } from '../../src/lib/shared/subject';
 import type { DashKind, DashProject, TeamDTO } from '../../src/lib/shared/types';
 import {
@@ -62,8 +62,10 @@ export const SYNC_KEY = 'sync';
 export const FORGET_AFTER_MS = 30 * DAY_MS;
 export const MAX_DEPARTURE_READS = 50;
 export const MAX_PROJECT_READS = 200;
-export const RUN_CALL_BUDGET = 40;
-export const RUN_SEND_BUDGET = 10;
+export const WORKER_SUBREQUEST_LIMIT = 50;
+export const SLACK_REQUESTS_PER_MESSAGE = 2;
+export const RUN_SEND_BUDGET = MAX_PUSH_DEVICES + SLACK_REQUESTS_PER_MESSAGE;
+export const RUN_CALL_BUDGET = WORKER_SUBREQUEST_LIMIT - RUN_SEND_BUDGET;
 export const MAX_DELIVERY_ATTEMPTS = 3;
 export const DELIVERY_RETRY_MS = 5 * MINUTE_MS;
 
