@@ -10,6 +10,8 @@
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import TextSkeleton from './text-skeleton.svelte';
 	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -63,7 +65,7 @@
 	});
 </script>
 
-{#if slack.data?.available || mentions?.available}
+{#if slack.data?.available || mentions?.available || slack.isPending || slack.isError}
 	<Card.Root id="slack">
 		<Card.Header>
 			<Card.Title>Slack</Card.Title>
@@ -73,6 +75,23 @@
 			>
 		</Card.Header>
 		<Card.Content class="grid gap-4">
+			{#if slack.isPending}
+				<div
+					role="status"
+					aria-label="Loading Slack"
+					class="flex items-center justify-between gap-4"
+				>
+					<div class="grid">
+						<TextSkeleton class="w-28" />
+						<TextSkeleton line="xs" class="w-52 max-w-full" />
+					</div>
+					<Skeleton class="h-7 w-24 shrink-0" />
+				</div>
+			{:else if slack.isError}
+				<p role="alert" class="text-xs text-destructive">
+					Could not load Slack: {slack.error.message}
+				</p>
+			{/if}
 			{#if slack.data?.available}
 				<div class="flex items-center justify-between gap-4">
 					<div>

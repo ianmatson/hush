@@ -18,6 +18,7 @@
 	import { openOrgNote } from '$lib/org-note.svelte';
 	import { setKeyChanges } from '$lib/keys.svelte';
 	import OrgNote from './org-note.svelte';
+	import NavigationProgress from './navigation-progress.svelte';
 	import { peek } from '$lib/peek.svelte';
 	import { cn } from '$lib/utils';
 
@@ -90,6 +91,7 @@
 <!-- Links load their page's code as soon as they are on screen (not on hover), so a first
      visit opens at once, also from a shortcut or the palette. -->
 <div class="min-h-dvh" data-sveltekit-preload-code="eager">
+	<NavigationProgress />
 	{#if ready}
 		{#if me.data && !signedOut && !onLogin}
 			<AppHeader />

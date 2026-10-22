@@ -18,6 +18,8 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import TextSkeleton from '$lib/components/app/settings/text-skeleton.svelte';
 	import ViewCard from '$lib/components/app/view-card.svelte';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import UnsavedChangesBar from '$lib/components/app/settings/unsaved-changes-bar.svelte';
@@ -29,6 +31,7 @@
 
 	const me = createQuery(meQuery);
 	const teams = createQuery(teamsQuery);
+	const TEAM_SKELETON_ROWS = [0, 1, 2, 3];
 	const feeds = createQuery(feedsQuery);
 
 	interface ViewsDraft {
@@ -177,7 +180,14 @@
 					>
 				{/if}
 				{#if teams.isPending}
-					<p class="text-sm text-muted-foreground">Loading your teams…</p>
+					<ul role="status" aria-label="Loading your teams" class="grid gap-1 sm:grid-cols-2">
+						{#each TEAM_SKELETON_ROWS as row (row)}
+							<li class="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+								<TextSkeleton class="w-2/3" />
+								<Skeleton class="h-[18.4px] w-8 rounded-full" />
+							</li>
+						{/each}
+					</ul>
 				{:else if !teams.data?.teams.length}
 					<p class="text-sm text-muted-foreground">
 						GitHub reports no teams for you. The token needs the <code>read:org</code> scope, and SAML

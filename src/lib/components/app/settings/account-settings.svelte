@@ -13,6 +13,8 @@
 	import * as Alert from '$lib/components/ui/alert';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import ListSkeleton from './list-skeleton.svelte';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import { projectAccessOf } from '$lib/shared/projects';
 
@@ -43,6 +45,7 @@
 	// The orgs your sign-in can see: loaded when this page opens, unless this browser said
 	// "Don't show again" (then only on request). GitHub omits orgs that have not approved Hush.
 	const access = $derived(orgNote.access);
+	const ORG_SKELETON_WIDTHS = ['w-16', 'w-20', 'w-14'];
 	let loading = $state(false);
 	let loadError = $state<string | null>(null);
 	async function showOrgs() {
@@ -173,7 +176,7 @@
 						</div>
 					{/if}
 				{:else if sessions.isPending}
-					<p class="text-xs text-muted-foreground">Loading…</p>
+					<ListSkeleton label="Loading sessions" />
 				{/if}
 			</Card.Content>
 		</Card.Root>
@@ -280,6 +283,26 @@
 				{/if}
 				<div class="grid gap-2 border-t pt-4">
 					<span class="text-xs font-medium">Orgs your GitHub sign-in can see</span>
+					{#snippet missingOrgHelp(approveUrl?: string)}
+						<p class="text-xs leading-relaxed text-muted-foreground">
+							Missing an org? GitHub hides every org that has not approved Hush, so Hush cannot list
+							those.
+							{#if approveUrl}<a
+									class="underline underline-offset-2 hover:text-foreground"
+									href={approveUrl}
+									target="_blank"
+									rel="noreferrer">Request approval</a
+								>{:else}<span>Request approval</span>{/if}{#if custom}. Your custom token can read
+								it until then.{:else}, or use a custom token until then.{/if}
+							{#if orgNote.off}
+								<button
+									type="button"
+									class="underline underline-offset-2 hover:text-foreground"
+									onclick={() => setOrgNoteOff(false)}>Show the note after sign-in again</button
+								>
+							{/if}
+						</p>
+					{/snippet}
 					{#if !access && orgNote.off && !loading}
 						<p class="text-xs text-muted-foreground">
 							<button
@@ -289,7 +312,12 @@
 							>
 						</p>
 					{:else if loading && !access}
-						<p class="text-xs text-muted-foreground">Loading…</p>
+						<div role="status" aria-label="Loading orgs" class="flex flex-wrap gap-1.5">
+							{#each ORG_SKELETON_WIDTHS as width (width)}
+								<Skeleton class="h-5 rounded-full {width}" />
+							{/each}
+						</div>
+						{@render missingOrgHelp()}
 					{:else if loadError}
 						<p class="text-xs text-destructive">{loadError}</p>
 					{:else if access && !access.available}
@@ -304,24 +332,7 @@
 						{:else}
 							<p class="text-xs text-muted-foreground">None: only your own repositories.</p>
 						{/if}
-						<p class="text-xs leading-relaxed text-muted-foreground">
-							Missing an org? GitHub hides every org that has not approved Hush, so Hush cannot list
-							those.
-							<a
-								class="underline underline-offset-2 hover:text-foreground"
-								href={access.approveUrl}
-								target="_blank"
-								rel="noreferrer">Request approval</a
-							>{#if custom}. Your custom token can read it until then.{:else}, or use a custom token
-								until then.{/if}
-							{#if orgNote.off}
-								<button
-									type="button"
-									class="underline underline-offset-2 hover:text-foreground"
-									onclick={() => setOrgNoteOff(false)}>Show the note after sign-in again</button
-								>
-							{/if}
-						</p>
+						{@render missingOrgHelp(access.approveUrl)}
 					{/if}
 				</div>
 				<details class="text-xs text-muted-foreground">

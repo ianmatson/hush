@@ -10,6 +10,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import TextSkeleton from './text-skeleton.svelte';
 	import SavedSwitch from '$lib/components/app/settings/saved-switch.svelte';
 	import SettingRow from '$lib/components/app/setting-row.svelte';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -156,6 +158,20 @@
 						</span>
 					</li>
 				{/each}
+			</ul>
+		{:else if devices.isPending && thisDevice}
+			<ul
+				role="status"
+				aria-label="Loading devices"
+				class="grid gap-1 rounded-lg border p-1 text-sm"
+			>
+				<li class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5">
+					<TextSkeleton class="w-36" />
+					<span class="flex items-center gap-2">
+						<TextSkeleton line="xs" class="w-16" />
+						<Skeleton class="size-6" />
+					</span>
+				</li>
 			</ul>
 		{/if}
 	</Card.Content>

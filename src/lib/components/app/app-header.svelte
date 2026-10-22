@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { keysOf } from '$lib/keys.svelte';
-	import { goto } from '$app/navigation';
+	import { goto, preloadCode } from '$app/navigation';
+	import { SETTINGS_SECTIONS } from '$lib/shared/settings-schema';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { alertsQuery, itemsQuery, meQuery, signOut } from '$lib/queries';
@@ -28,6 +29,12 @@
 
 	const me = createQuery(meQuery);
 	const touchOnly = new MediaQuery('pointer: coarse');
+
+	const preloadAccountMenuPages = () =>
+		Promise.all([
+			preloadCode(SETTINGS_SECTIONS.general.href),
+			preloadCode(SETTINGS_SECTIONS.keys.href)
+		]).catch(() => {});
 	const items = createQuery(itemsQuery);
 	const unreadIn = (viewId: string) =>
 		(items.data?.rows ?? []).filter((i) => countsAsUnread(i) && i.views.includes(viewId)).length;
@@ -211,7 +218,7 @@
 				{/snippet}
 			</Tip>
 			{#if me.data}
-				<DropdownMenu.Root>
+				<DropdownMenu.Root onOpenChange={(open) => open && preloadAccountMenuPages()}>
 					<DropdownMenu.Trigger
 						aria-label="Account menu"
 						class="cursor-pointer rounded-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
@@ -227,20 +234,30 @@
 							<div class="text-xs font-normal text-muted-foreground">@{me.data.login}</div>
 						</DropdownMenu.Label>
 						{#if me.data.tokenSource === 'own'}
-							<DropdownMenu.Item onclick={() => goto('/settings/general#token')}
-								><KeyRound class="text-signal-warn" /> Using a custom token</DropdownMenu.Item
-							>
+							<DropdownMenu.Item>
+								{#snippet child({ props })}
+									<a {...props} href="{SETTINGS_SECTIONS.general.href}#token"
+										><KeyRound class="text-signal-warn" /> Using a custom token</a
+									>
+								{/snippet}
+							</DropdownMenu.Item>
 						{/if}
 						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => goto('/settings')}
-							><Settings /> Settings</DropdownMenu.Item
-						>
+						<DropdownMenu.Item>
+							{#snippet child({ props })}
+								<a {...props} href={SETTINGS_SECTIONS.general.href}><Settings /> Settings</a>
+							{/snippet}
+						</DropdownMenu.Item>
 						{#if !touchOnly.current}
-							<DropdownMenu.Item onclick={() => goto('/settings/keys')}
-								><Keyboard /> Keyboard shortcuts<DropdownMenu.Shortcut
-									>{keysOf('list.help')[0] ?? ''}</DropdownMenu.Shortcut
-								></DropdownMenu.Item
-							>
+							<DropdownMenu.Item>
+								{#snippet child({ props })}
+									<a {...props} href={SETTINGS_SECTIONS.keys.href}
+										><Keyboard /> Keyboard shortcuts<DropdownMenu.Shortcut
+											>{keysOf('list.help')[0] ?? ''}</DropdownMenu.Shortcut
+										></a
+									>
+								{/snippet}
+							</DropdownMenu.Item>
 						{/if}
 						<DropdownMenu.Item>
 							{#snippet child({ props })}
