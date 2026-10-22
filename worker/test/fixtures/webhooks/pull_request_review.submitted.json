@@ -1,0 +1,17 @@
+{
+	"action": "submitted",
+	"installation": {
+		"id": 101
+	},
+	"repository": {
+		"id": 555,
+		"full_name": "ianmatson/hush-sandbox"
+	},
+	"pull_request": {
+		"number": 16,
+		"node_id": "PR_kwDOsandbox16"
+	},
+	"review": {
+		"state": "approved"
+	}
+}

@@ -1,0 +1,19 @@
+{
+	"action": "created",
+	"installation": {
+		"id": 101
+	},
+	"repository": {
+		"id": 555,
+		"full_name": "ianmatson/hush-sandbox"
+	},
+	"issue": {
+		"number": 16,
+		"pull_request": {
+			"url": "https://api.github.com/repos/ianmatson/hush-sandbox/pulls/16"
+		}
+	},
+	"comment": {
+		"id": 1
+	}
+}

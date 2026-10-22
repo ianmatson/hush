@@ -60,6 +60,8 @@ import {
 } from './engine';
 import type { Sync } from './work';
 import { githubReaders, modelAnalyzer, type Credential } from './readers';
+import { d1RouteTable } from './routes';
+import { webhooksEnabled } from '../webhooks';
 import { WorkspaceStore, type ChannelOutcome, type SqlStorage } from './store';
 
 export const ANALYSIS_VERSION = 'questions-v1';
@@ -201,8 +203,14 @@ export class Workspace extends DurableObject<Env> {
 		return accepted > 0;
 	}
 
+	private routeTable() {
+		const userId = this.account()?.userId;
+		return userId && webhooksEnabled(this.env) ? d1RouteTable(this.env.DB, userId) : undefined;
+	}
+
 	private deps(): WorkspaceDeps {
 		return {
+			routes: this.routeTable(),
 			store: this.store,
 			readers: { ...githubReaders(() => this.credential()), analyze: modelAnalyzer(this.env) },
 			sender: this.sender(),
@@ -346,9 +354,27 @@ export class Workspace extends DurableObject<Env> {
 		const userId = this.account()?.userId ?? Number(this.ctx.id.name);
 		this.engine?.close();
 		this.engine = null;
+		await this.routeTable()
+			?.clear()
+			.catch((error: Error) => console.error('route delete failed', error.message));
 		await this.ctx.storage.deleteAlarm();
 		await this.ctx.storage.deleteAll();
 		if (Number.isInteger(userId)) await this.legacy(userId).forget();
+	}
+
+	private existing(): WorkspaceEngine | null {
+		if (this.engine && !this.engine.broken) return this.engine;
+		try {
+			this.engine = WorkspaceEngine.open(this.deps(), Date.now());
+		} catch {
+			return null;
+		}
+		return this.engine;
+	}
+
+	async invalidate(routes: string[]): Promise<void> {
+		this.existing()?.invalidate(routes, Date.now());
+		await this.settle();
 	}
 
 	async touch(): Promise<void> {
