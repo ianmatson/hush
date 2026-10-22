@@ -1,6 +1,6 @@
 # Webhook updates from a GitHub App
 
-Status: agreed, 2026-10-22. Five review rounds with Codex Astra (GPT-6-Astra). Runtime checks are still open: DO RPC cancellation, `check_suite` delivery, and the cost figures.
+Status: parked, 2026-10-22. Redo on top of plans/core-model.md. Runtime checks are still open: DO RPC cancellation, `check_suite` delivery, and the cost figures.
 
 ## Goal
 
