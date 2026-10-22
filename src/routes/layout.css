@@ -144,6 +144,18 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+@theme {
+	--animate-navigation-progress: navigation-progress 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+	@keyframes navigation-progress {
+		from {
+			transform: translateX(-100%);
+		}
+		to {
+			transform: translateX(300%);
+		}
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;
