@@ -1,22 +1,16 @@
-import { categoryQueryName, groupChoice, itemCategoriesIn, placeItem } from '../shared/categories';
+import { allCategories } from '../shared/categories';
 import { changesSince } from '../shared/changes';
 import { stillKept, KEEP_CLOSED_MS, closedTimeOf } from '../shared/closed-items';
 import { finishItem, keepItem, sortItems } from '../shared/dashboard';
-import {
-	identityHash,
-	NO_DECISIONS,
-	readDecisions,
-	type SubjectDecisions
-} from '../shared/decisions';
 import { DAY_MS } from '../shared/durations';
 import { isUnread, type SnoozeChoice } from '../shared/item-snooze';
 import { requestedByName, sameLogin } from '../shared/logins';
-import { queryMatches } from '../shared/rules';
 import { snoozeOutcome } from '../shared/snooze';
 import { dashFactsOf, enrichmentOf, subjectRuleFacts, type SubjectFacts } from '../shared/subject';
 import type { CategoryGroup, DashSettings, RuleFacts, TeamDTO } from '../shared/types';
 import type { DashFacts } from '../shared/dashboard';
-import { filtersByCategory } from './compile';
+import { analysisView, type AnalysisView } from './analysis';
+import { placeGroups, queryTri, type GroupPlacement, type Tri } from './eligibility';
 import { sourceHealth, staleUntil, usableWindow } from './sources';
 import type {
 	Attention,
@@ -50,35 +44,18 @@ export type AttentionState =
 interface Derived {
 	facts: DashFacts;
 	ruleFacts: RuleFacts;
-	categories: string[];
+	analysis: AnalysisView;
+	strict: GroupPlacement[];
+	lenient: GroupPlacement[];
 	pinnedCategories: string[];
-	categoriesUnknown: boolean;
-	analysisStale: boolean;
 }
+
+type Certainty = 'strict' | 'lenient';
 
 export interface ViewEvaluation {
 	membership: Membership;
 	rows: Row[];
 	nextBoundary: number | null;
-}
-
-interface UsableAnalysis {
-	decisions: SubjectDecisions;
-	known: boolean;
-	stale: boolean;
-}
-
-export function usableAnalysis(item: Item, version: string): UsableAnalysis {
-	const { analysis, facts } = item;
-	if (!analysis || analysis.version !== version)
-		return { decisions: NO_DECISIONS, known: false, stale: false };
-	const known = analysis.answers.identityHash !== undefined;
-	const currentIdentity = identityHash(facts);
-	return {
-		decisions: readDecisions({ ...analysis.answers, identityHash: currentIdentity }, facts),
-		known,
-		stale: known && analysis.answers.identityHash !== currentIdentity
-	};
 }
 
 export function snoozeIsOver(snooze: Snooze, facts: SubjectFacts, me: string, now: number) {
@@ -122,6 +99,13 @@ function projectFields(project: ProjectFacet): Pick<Row, 'projectStatus' | 'proj
 	return {};
 }
 
+const RELATIVE_DAY = /@today/i;
+
+const nextDayStart = (now: number) => Math.floor(now / DAY_MS) * DAY_MS + DAY_MS;
+
+const knownCategories = (placements: GroupPlacement[]) =>
+	placements.flatMap((p) => (p.known && p.categoryId ? [p.categoryId] : []));
+
 const minimum = (values: (number | null)[], after: number) =>
 	values.reduce<number | null>(
 		(soonest, value) =>
@@ -131,45 +115,51 @@ const minimum = (values: (number | null)[], after: number) =>
 
 export function createEvaluator(ctx: EvaluationContext) {
 	const teamSlugs = new Set(ctx.teams.map((team) => team.slug));
-	const jevGroups = ctx.smartDecisions
-		? ctx.categoryGroups.filter((group) => groupChoice(group))
-		: [];
+	const categoryIds = new Set(allCategories(ctx.categoryGroups).map((category) => category.id));
+	const rulesUseRelativeDays = allCategories(ctx.categoryGroups).some((category) =>
+		RELATIVE_DAY.test(category.rule)
+	);
 	const derivedById = new Map<ItemId, Derived>();
 
 	function derive(item: Item): Derived {
 		const cached = derivedById.get(item.id);
 		if (cached) return cached;
-		const analysis = usableAnalysis(item, ctx.analysisVersion);
-		const base = subjectRuleFacts(item.facts, ctx.me, analysis.decisions);
-		const placement = placeItem(base, item.attention.pins, ctx.categoryGroups);
-		const leftToJev = jevGroups.some(
-			(group) => !group.categories.some((category) => placement.categories.includes(category.id))
+		const { facts, attention } = item;
+		const analysis = analysisView(
+			item.analysis,
+			facts,
+			ctx.me,
+			ctx.smartDecisions,
+			ctx.analysisVersion
 		);
+		const ruleFacts = { ...subjectRuleFacts(facts, ctx.me, analysis.decisions), now: ctx.now };
+		const place = (certainty: Certainty) =>
+			placeGroups(ctx.categoryGroups, ruleFacts, attention.pins, analysis[certainty]);
 		const derived: Derived = {
-			facts: dashFactsOf(item.facts, ctx.me, teamSlugs, analysis.decisions),
-			ruleFacts: {
-				...base,
-				categories: itemCategoriesIn(ctx.categoryGroups, placement.categories).map(
-					({ group, category }) => categoryQueryName(group, category)
-				),
-				now: ctx.now
-			},
-			categories: placement.categories,
-			pinnedCategories: placement.pinned,
-			categoriesUnknown: leftToJev && !analysis.known,
-			analysisStale: jevGroups.length > 0 && analysis.stale
+			facts: dashFactsOf(facts, ctx.me, teamSlugs, analysis.decisions),
+			ruleFacts,
+			analysis,
+			strict: place('strict'),
+			lenient: place('lenient'),
+			pinnedCategories: attention.pins.filter((id) => categoryIds.has(id))
 		};
 		derivedById.set(item.id, derived);
 		return derived;
 	}
 
-	function clausePasses(clause: Clause, item: Item, derived: Derived) {
+	function clauseTri(clause: Clause, item: Item, certainty: Certainty): Tri {
 		const { facts } = item;
+		const derived = derive(item);
 		if (facts.kind !== clause.kind) return false;
 		if (clause.openOnly && facts.state !== 'open') return false;
 		if (!passesTeams(clause, facts, ctx.me)) return false;
 		if (!clause.onBoard && !keepItem(derived.facts, ctx.me, ctx.dash)) return false;
-		return !clause.local || queryMatches(clause.local, derived.ruleFacts);
+		return queryTri(
+			clause.local,
+			derived.ruleFacts,
+			derived.analysis[certainty],
+			derived[certainty]
+		);
 	}
 
 	function membership(view: CompiledView): Membership {
@@ -182,21 +172,21 @@ export function createEvaluator(ctx: EvaluationContext) {
 			const window = usableWindow(ctx.sources.get(clause.sourceId), ctx.now);
 			if (!window) continue;
 			validBindings.add(clause.binding);
-			for (const candidate of window.candidates) {
-				candidates.add(candidate.id);
-				const item = ctx.items.get(candidate.id);
+			for (const { id } of window.candidates) {
+				candidates.add(id);
+				const item = ctx.items.get(id);
 				if (!item) {
-					waiting.add(candidate.id);
+					waiting.add(id);
 					continue;
 				}
-				const derived = derive(item);
-				const dependsOnAnalysis =
-					filtersByCategory(clause.local) && (derived.categoriesUnknown || derived.analysisStale);
-				if (dependsOnAnalysis) waiting.add(item.id);
-				if (derived.categoriesUnknown && dependsOnAnalysis) continue;
-				if (!clausePasses(clause, item, derived)) continue;
-				members.add(item.id);
-				if (!dependsOnAnalysis) settledMembers.add(item.id);
+				const strict = clauseTri(clause, item, 'strict');
+				if (strict === true) {
+					members.add(id);
+					settledMembers.add(id);
+				} else if (strict === null) {
+					waiting.add(id);
+					if (clauseTri(clause, item, 'lenient') === true) members.add(id);
+				}
 			}
 		}
 		const unsettled = new Set([...waiting].filter((id) => !settledMembers.has(id)));
@@ -232,8 +222,8 @@ export function createEvaluator(ctx: EvaluationContext) {
 			...projectFields(item.project),
 			itemId: item.id,
 			retained,
-			analysisStale: derived.analysisStale,
-			categories: derived.categories,
+			analysisStale: derived.analysis.stale,
+			categories: knownCategories(derived.lenient),
 			pinnedCategories: derived.pinnedCategories,
 			dismissed: state.kind !== 'awake',
 			muted: state.kind === 'muted',
@@ -257,10 +247,13 @@ export function createEvaluator(ctx: EvaluationContext) {
 			const source = ctx.sources.get(clause.sourceId);
 			return source ? staleUntil(source) : null;
 		});
+		const usesRelativeDays =
+			rulesUseRelativeDays || view.clauses.some((clause) => RELATIVE_DAY.test(clause.local));
 		return minimum(
 			[
 				...rows.flatMap((row) => [stalesAt(row), snoozeEnds(row), retentionEnds(row)]),
-				...sourceStaleEnds
+				...sourceStaleEnds,
+				usesRelativeDays ? nextDayStart(ctx.now) : null
 			],
 			ctx.now
 		);
@@ -276,5 +269,5 @@ export function createEvaluator(ctx: EvaluationContext) {
 		return { membership: found, rows, nextBoundary: nextBoundary(view, rows) };
 	}
 
-	return { membership, evaluate, derive, clausePasses };
+	return { membership, evaluate, derive };
 }

@@ -12,6 +12,7 @@ const CATEGORY_WORD = /(?:^|\s)-?category:/i;
 export interface CompileContext {
 	dash: DashSettings;
 	categoryGroups: CategoryGroup[];
+	smartDecisions: boolean;
 	teams: TeamDTO[];
 	analysisVersion: string;
 	now: number;
@@ -35,7 +36,7 @@ export function viewScope(view: ItemView, ctx: Omit<CompileContext, 'teams' | 'n
 			hideBots,
 			hideOthersDrafts,
 			[...excludedTeams].sort(),
-			usesCategories(view) ? [ctx.categoryGroups, ctx.analysisVersion] : null
+			usesCategories(view) ? [ctx.categoryGroups, ctx.smartDecisions, ctx.analysisVersion] : null
 		])
 	);
 }

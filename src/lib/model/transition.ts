@@ -7,6 +7,7 @@ export type TransitionCause = 'observation' | 'command';
 export interface TransitionContext {
 	items: ReadonlyMap<ItemId, Item>;
 	sources: ReadonlyMap<string, Source>;
+	closedNow: ReadonlySet<ItemId>;
 	now: number;
 }
 
@@ -41,20 +42,14 @@ function seed(view: CompiledView, previous: ViewState, found: Membership, ctx: T
 	return { seeded, baseline };
 }
 
-function retain(
-	view: CompiledView,
-	previous: ViewState,
-	members: Set<ItemId>,
-	ctx: TransitionContext
-): ItemId[] {
+function retain(view: CompiledView, previous: ViewState, ctx: TransitionContext): ItemId[] {
 	if (view.view.keepClosed === false) return [];
 	const closedAndKept = (id: ItemId) => {
 		const item = ctx.items.get(id);
 		return !!item && item.facts.state !== 'open' && stillKept(item.facts, ctx.now);
 	};
-	return [...new Set([...previous.retained, ...previous.members])].filter(
-		(id) => !members.has(id) && closedAndKept(id)
-	);
+	const justClosed = previous.members.filter((id) => ctx.closedNow.has(id));
+	return [...new Set([...previous.retained, ...justClosed])].filter(closedAndKept);
 }
 
 export function transitionView(
@@ -70,7 +65,7 @@ export function transitionView(
 	const members = found.members;
 	const admitted =
 		cause === 'command' ? [] : [...members].filter((id) => !before.has(id) && !baseline.has(id));
-	const retained = retain(view, previous, members, ctx);
+	const retained = retain(view, previous, ctx);
 	return {
 		state: {
 			scope: view.scope,

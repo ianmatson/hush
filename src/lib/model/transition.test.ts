@@ -7,12 +7,14 @@ import type { ViewState } from './types';
 function step(
 	w: World,
 	previous: ViewState | null,
-	cause: 'observation' | 'command' = 'observation'
+	cause: 'observation' | 'command' = 'observation',
+	closedNow: string[] = []
 ) {
 	const built = world(w);
 	const compiled = built.compiled.views[0];
 	const found = built.evaluator.membership(compiled);
-	const transition = transitionView(compiled, previous, found, built.evaluation, cause);
+	const context = { ...built.evaluation, closedNow: new Set(closedNow) };
+	const transition = transitionView(compiled, previous, found, context, cause);
 	return { ...transition, found, built };
 }
 
@@ -185,7 +187,9 @@ describe('closed items', () => {
 		);
 		const closed = step(
 			{ views: [view('v', open)], items: [item(merged(5))], results: { 0: [a.id] } },
-			member.state
+			member.state,
+			'observation',
+			[a.id]
 		);
 		expect(closed.state).toMatchObject({ members: [], retained: [a.id] });
 		expect(closed.departed).toEqual([a.id]);
@@ -202,10 +206,13 @@ describe('closed items', () => {
 		const a = facts(1);
 		const noKeep = [view('v', open, { keepClosed: false })];
 		const member = step({ views: noKeep, items: [item(a)], results: { 0: [a.id] } }, null);
-		expect(
-			step({ views: noKeep, items: [item(merged(5))], results: { 0: [] } }, member.state).state
-				.retained
-		).toEqual([]);
+		const closed = step(
+			{ views: noKeep, items: [item(merged(5))], results: { 0: [] } },
+			member.state,
+			'observation',
+			[a.id]
+		);
+		expect(closed.state.retained).toEqual([]);
 	});
 
 	it('ends retention when the item reopens', () => {
@@ -219,6 +226,42 @@ describe('closed items', () => {
 			retained
 		);
 		expect(reopened.state.retained).toEqual([]);
+	});
+
+	it('does not keep an item that Hush never saw open when it leaves a merged-item search', () => {
+		const done = merged(5);
+		const mergedSearch = [view('v', ['is:pr is:merged repo:PostHog/posthog'])];
+		const found = step(
+			{ views: mergedSearch, items: [item(done)], results: { 0: [done.id] } },
+			null
+		);
+		const left = step(
+			{ views: mergedSearch, items: [item(done)], results: { 0: [] } },
+			found.state
+		);
+		expect(left.state.retained).toEqual([]);
+	});
+
+	it('keeps retention while the item is also an ordinary member, and shows it once', () => {
+		const a = facts(1);
+		const both = [
+			view('v', ['is:pr is:open repo:PostHog/posthog', 'is:pr is:merged repo:PostHog/posthog'])
+		];
+		const member = step({ views: both, items: [item(a)], results: { 0: [a.id], 1: [] } }, null);
+		const closed = step(
+			{ views: both, items: [item(merged(5))], results: { 0: [], 1: [a.id] } },
+			member.state,
+			'observation',
+			[a.id]
+		);
+		expect(closed.state).toMatchObject({ members: [a.id], retained: [a.id] });
+		const rows = closed.built.evaluator.evaluate(closed.built.compiled.views[0], closed.state).rows;
+		expect(rows).toMatchObject([{ itemId: a.id, retained: false }]);
+		const leftSearch = step(
+			{ views: both, items: [item(merged(5))], results: { 0: [], 1: [] } },
+			closed.state
+		);
+		expect(leftSearch.state.retained).toEqual([a.id]);
 	});
 
 	it('lists closed items of a closed-item search as ordinary members, also with retention off', () => {

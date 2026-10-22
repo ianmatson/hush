@@ -6,7 +6,7 @@ import type { LastComment } from './types';
 
 export const YES_AT = 0.8;
 const NO_AT = 0.2;
-const URGENT_SCORE = 1.5;
+export const URGENT_SCORE = 1.5;
 export const BODY_EXCERPT_CHARS = 500;
 export const MAX_SMART_CONDITIONS = 30;
 const CHARS_PER_TOKEN = 4;
@@ -137,7 +137,7 @@ export function identityHash(s: SubjectFacts): string {
 	return cyrb53(JSON.stringify([s.title, s.labels.map((l) => l.name), s.body ?? '']));
 }
 
-function rolesOf(s: SubjectFacts, me: string): string[] {
+export function rolesOf(s: SubjectFacts, me: string): string[] {
 	const roles: string[] = [];
 	if (sameLogin(s.author, me)) roles.push('author');
 	if (s.assignees.some((a) => sameLogin(a, me))) roles.push('assignee');

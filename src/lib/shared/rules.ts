@@ -14,7 +14,10 @@ function globToRegExp(glob: string): RegExp {
 	return new RegExp(`^${src}$`, 'i');
 }
 
-function matchGlobs(value: string | undefined, globs: string | string[] | undefined): boolean {
+export function matchGlobs(
+	value: string | undefined,
+	globs: string | string[] | undefined
+): boolean {
 	if (globs === undefined) return true;
 	if (!value) return false;
 	const list = Array.isArray(globs) ? globs : [globs];

@@ -1,5 +1,4 @@
 import type { Snapshot } from '../shared/changes';
-import type { StoredDecisions } from '../shared/decisions';
 import type { SnoozeEvent } from '../shared/snooze';
 import type { SubjectFacts } from '../shared/subject';
 import type { DashItem, DashKind, ItemView } from '../shared/types';
@@ -13,7 +12,12 @@ export type ProjectFacet =
 
 export interface Analysis {
 	version: string;
-	answers: StoredDecisions;
+	replyInput: string | null;
+	identityInput: string | null;
+	reply?: number;
+	urgency?: number;
+	about: Record<string, number>;
+	choices: Record<string, string>;
 }
 
 export type Snooze =

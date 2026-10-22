@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { snapshotOf } from '../shared/changes';
-import { HOUR_MS, MINUTE_MS } from '../shared/durations';
-import { usableAnalysis } from './evaluate';
+import { DAY_MS, HOUR_MS, MINUTE_MS } from '../shared/durations';
+import { conditionId } from '../shared/decisions';
+import type { CategoryGroup } from '../shared/types';
+import { analysisView } from './analysis';
 import {
+	BY_TOPIC,
+	EFFORT,
+	IMPACT,
 	ANALYSIS_VERSION,
 	ME,
 	NOW,
@@ -149,33 +154,138 @@ describe('categories in view searches', () => {
 	});
 });
 
-describe('analysis', () => {
-	it('never uses a reply or urgency answer about older content', () => {
-		const pr = facts(11, {
-			lastComment: {
-				author: 'bob',
-				authorIsBot: false,
-				body: 'Can you look?',
-				url: 'https://github.com/c/1',
-				createdAt: new Date(NOW).toISOString()
-			}
+describe('unknown answers', () => {
+	it('keeps an about: rule unknown until it is answered, also when negated', () => {
+		const pr = facts(20);
+		const topicView = [view('v', ['is:pr is:open category:topic/other'])];
+		const w = world({
+			views: topicView,
+			items: [item(pr)],
+			results: { 0: [pr.id] },
+			compile: { categoryGroups: [BY_TOPIC] }
 		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.size).toBe(0);
+		expect(found.unsettled.has(pr.id)).toBe(true);
 		const answered = item(pr, {
 			analysis: {
-				version: ANALYSIS_VERSION,
-				answers: { contentHash: 'older', reply: 0.99, urgency: 99 }
+				...answeredEffort(pr, 'low'),
+				choices: {},
+				about: { [conditionId('database migrations')]: 0.01 }
 			}
 		});
-		expect(usableAnalysis(answered, ANALYSIS_VERSION).decisions).toMatchObject({
-			commentsNeedMe: null,
-			urgent: false
+		const after = world({
+			views: topicView,
+			items: [answered],
+			results: { 0: [pr.id] },
+			compile: { categoryGroups: [BY_TOPIC] }
 		});
+		const settled = after.evaluator.membership(after.compiled.views[0]);
+		expect(settled.members.has(pr.id)).toBe(true);
+		expect(settled.unsettled.size).toBe(0);
+	});
+
+	it('does not treat an answer set without this group as an answer for it', () => {
+		const pr = facts(21);
+		const otherGroupOnly = item(pr, { analysis: { ...answeredEffort(pr, 'low'), choices: {} } });
+		const w = world({
+			views: [view('v', ['is:pr is:open -category:effort/low'])],
+			items: [otherGroupOnly],
+			results: { 0: [pr.id] }
+		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.size).toBe(0);
+		expect(found.unsettled.has(pr.id)).toBe(true);
+	});
+
+	it('settles with a pin, whatever other groups still wait for', () => {
+		const pr = facts(22);
+		const w = world({
+			views: [view('v', ['is:pr is:open category:effort/low'])],
+			items: [item(pr, { attention: { ...noAttention(), pins: ['low'] } })],
+			results: { 0: [pr.id] },
+			compile: { categoryGroups: [EFFORT, IMPACT] }
+		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.has(pr.id)).toBe(true);
+		expect(found.unsettled.size).toBe(0);
+	});
+
+	it('settles a rejection from known facts without waiting for answers', () => {
+		const big = facts(23, { additions: 500, deletions: 500 });
+		const w = world({
+			views: [view('v', ['is:pr is:open size:<50 category:effort/low'])],
+			items: [item(big)],
+			results: { 0: [big.id] }
+		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.size).toBe(0);
+		expect(found.unsettled.size).toBe(0);
+	});
+
+	it('ignores stored answers while smart decisions are off', () => {
+		const pr = facts(24);
+		const w = world({
+			views: [view('v', ['is:pr is:open category:effort/low'])],
+			items: [item(pr, { analysis: answeredEffort(pr, 'low') })],
+			results: { 0: [pr.id] },
+			smartDecisions: false
+		});
+		expect(w.evaluator.membership(w.compiled.views[0]).members.size).toBe(0);
+	});
+});
+
+describe('time', () => {
+	it('evaluates category rules at the given time, not the wall clock', () => {
+		const pr = facts(25, { updatedAt: new Date(NOW - 36 * HOUR_MS).toISOString() });
+		const fresh: CategoryGroup = {
+			id: 'age',
+			name: 'Age',
+			categories: [
+				{
+					id: 'fresh',
+					name: 'Fresh',
+					color: 'green',
+					icon: 'lucide:leaf',
+					rule: 'updated:>=@today-1d',
+					description: ''
+				}
+			]
+		};
+		const membersAt = (now: number) => {
+			const w = world({
+				views: [view('v', ['is:pr is:open category:age/fresh'])],
+				items: [item(pr)],
+				results: { 0: [pr.id] },
+				now,
+				compile: { categoryGroups: [fresh] }
+			});
+			const result = w.evaluator.evaluate(w.compiled.views[0], null);
+			return { size: result.membership.members.size, boundary: result.nextBoundary };
+		};
+		const today = membersAt(NOW);
+		expect(today.size).toBe(1);
+		expect(today.boundary).toBe(Date.parse('2026-10-23T00:00:00Z'));
+		expect(membersAt(NOW + 2 * DAY_MS).size).toBe(0);
+	});
+});
+
+describe('analysis', () => {
+	it('never uses a reply or urgency answer about other content or other roles', () => {
+		const requested = facts(11, { reviewRequests: [{ name: ME, team: false }] });
+		const answered = { ...answeredEffort(requested, 'low'), reply: 0.99, urgency: 99 };
+		const current = analysisView(answered, requested, ME, true, ANALYSIS_VERSION).decisions;
+		expect(current).toMatchObject({ commentsNeedMe: true, urgent: true });
+		const noLongerRequested = { ...requested, reviewRequests: [] };
+		expect(
+			analysisView(answered, noLongerRequested, ME, true, ANALYSIS_VERSION).decisions
+		).toMatchObject({ commentsNeedMe: null, urgent: false });
 	});
 
 	it('ignores answers from another question-set version', () => {
 		const pr = facts(12);
-		expect(usableAnalysis(item(pr, { analysis: answeredEffort(pr, 'low') }), 'v2').known).toBe(
-			false
+		expect(analysisView(answeredEffort(pr, 'low'), pr, ME, true, 'v2').lenient.choices.size).toBe(
+			0
 		);
 	});
 });

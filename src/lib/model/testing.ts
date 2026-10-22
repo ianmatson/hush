@@ -1,12 +1,12 @@
 import { groupChoice } from '../shared/categories';
-import { contentHash, identityHash } from '../shared/decisions';
 import { DEFAULT_DASH } from '../shared/dashboard';
 import type { SubjectFacts } from '../shared/subject';
 import type { CategoryGroup, ItemView, TeamDTO } from '../shared/types';
+import { identityInputOf, replyInputOf } from './analysis';
 import { compileViews, type CompileContext } from './compile';
 import { createEvaluator, type EvaluationContext } from './evaluate';
 import { newSource } from './sources';
-import type { Attention, Item, ProjectFacet, Source, SourceSpec } from './types';
+import type { Analysis, Attention, Item, ProjectFacet, Source, SourceSpec } from './types';
 
 export const ME = 'ian';
 export const NOW = Date.parse('2026-10-22T12:00:00Z');
@@ -25,6 +25,52 @@ export const EFFORT: CategoryGroup = {
 			description: 'minutes'
 		},
 		{ id: 'high', name: 'High', color: 'red', icon: 'lucide:clock', rule: '', description: 'hours' }
+	]
+};
+
+export const IMPACT: CategoryGroup = {
+	id: 'impact',
+	name: 'Impact',
+	categories: [
+		{
+			id: 'small',
+			name: 'Small',
+			color: 'green',
+			icon: 'lucide:dot',
+			rule: '',
+			description: 'tiny'
+		},
+		{
+			id: 'large',
+			name: 'Large',
+			color: 'red',
+			icon: 'lucide:circle',
+			rule: '',
+			description: 'huge'
+		}
+	]
+};
+
+export const BY_TOPIC: CategoryGroup = {
+	id: 'topic',
+	name: 'Topic',
+	categories: [
+		{
+			id: 'db',
+			name: 'Database',
+			color: 'blue',
+			icon: 'lucide:database',
+			rule: 'about:"database migrations"',
+			description: ''
+		},
+		{
+			id: 'other',
+			name: 'Other',
+			color: 'gray',
+			icon: 'lucide:box',
+			rule: '-about:"database migrations"',
+			description: ''
+		}
 	]
 };
 
@@ -84,14 +130,17 @@ export function item(subject: SubjectFacts, over: Partial<Omit<Item, 'facts' | '
 	};
 }
 
-export function answeredEffort(subject: SubjectFacts, categoryId: string, staleIdentity = false) {
+export function answeredEffort(
+	subject: SubjectFacts,
+	categoryId: string,
+	staleIdentity = false
+): Analysis {
 	return {
 		version: ANALYSIS_VERSION,
-		answers: {
-			contentHash: contentHash(subject),
-			identityHash: staleIdentity ? 'old-identity' : identityHash(subject),
-			choices: { [groupChoice(EFFORT)!.key]: { id: categoryId, confidence: 0.9 } }
-		}
+		replyInput: replyInputOf(subject, ME),
+		identityInput: staleIdentity ? 'old-identity' : identityInputOf(subject),
+		about: {},
+		choices: { [groupChoice(EFFORT)!.key]: categoryId }
 	};
 }
 
@@ -107,6 +156,7 @@ export function compileContext(over: Partial<CompileContext> = {}): CompileConte
 	return {
 		dash: DEFAULT_DASH,
 		categoryGroups: [EFFORT],
+		smartDecisions: true,
 		teams: [],
 		analysisVersion: ANALYSIS_VERSION,
 		now: NOW,
@@ -139,7 +189,11 @@ export interface World {
 }
 
 export function world(w: World) {
-	const ctx = compileContext({ ...w.compile, now: w.now ?? NOW });
+	const ctx = compileContext({
+		...w.compile,
+		smartDecisions: w.smartDecisions ?? true,
+		now: w.now ?? NOW
+	});
 	const compiled = compileViews(w.views, ctx);
 	const sources = new Map(
 		compiled.sources.map((spec, index) => [
@@ -151,7 +205,7 @@ export function world(w: World) {
 		me: ME,
 		dash: ctx.dash,
 		categoryGroups: ctx.categoryGroups,
-		smartDecisions: w.smartDecisions ?? true,
+		smartDecisions: ctx.smartDecisions,
 		teams: ctx.teams,
 		analysisVersion: ANALYSIS_VERSION,
 		now: ctx.now,
