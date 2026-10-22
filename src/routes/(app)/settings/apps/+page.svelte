@@ -7,6 +7,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import TextSkeleton from '$lib/components/app/settings/text-skeleton.svelte';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import Plug from '@lucide/svelte/icons/plug';
 
@@ -86,6 +88,23 @@
 		</Card.Content>
 	</Card.Root>
 	<p role="status" class="text-sm text-muted-foreground empty:hidden">{notice}</p>
+	{#snippet mcpServerCard(resource?: string)}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>MCP server</Card.Title>
+				<Card.Description
+					>Use this address in an app that supports MCP authorization.</Card.Description
+				>
+			</Card.Header>
+			<Card.Content>
+				{#if resource}
+					<code class="block text-xs break-all select-all">{resource}</code>
+				{:else}
+					<TextSkeleton line="xs" class="w-64 max-w-full" />
+				{/if}
+			</Card.Content>
+		</Card.Root>
+	{/snippet}
 	{#if error}
 		<Alert.Root variant="destructive">
 			<Alert.Title>Could not load authorized apps</Alert.Title>
@@ -95,19 +114,19 @@
 			</div>
 		</Alert.Root>
 	{:else if loading}
-		<p role="status" class="text-sm text-muted-foreground">Loading authorized apps…</p>
-	{:else if data}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>MCP server</Card.Title>
-				<Card.Description
-					>Use this address in an app that supports MCP authorization.</Card.Description
-				>
-			</Card.Header>
-			<Card.Content
-				><code class="block text-xs break-all select-all">{data.resource}</code></Card.Content
-			>
+		{@render mcpServerCard()}
+		<Card.Root role="status" aria-label="Loading authorized apps">
+			<Card.Content class="grid justify-items-center gap-2 py-6">
+				<Skeleton class="size-6" />
+				<TextSkeleton class="w-40" />
+				<span class="grid w-full max-w-sm justify-items-center">
+					<TextSkeleton class="w-72 max-w-full" />
+					<TextSkeleton class="w-48 max-w-full" />
+				</span>
+			</Card.Content>
 		</Card.Root>
+	{:else if data}
+		{@render mcpServerCard(data.resource)}
 		{#if !data.grants.length}
 			<Card.Root>
 				<Card.Content class="grid justify-items-center gap-2 py-6 text-center">

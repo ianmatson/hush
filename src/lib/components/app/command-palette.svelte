@@ -12,6 +12,7 @@
 	import { palette, type PaletteCommand, type PeekRequest } from '$lib/palette.svelte';
 	import { openOnGitHub } from '$lib/recheck';
 	import { inSavedView } from '$lib/shared/view-projection';
+	import { itemPagePath } from '$lib/shared/item-page';
 	import { ALL_THEMES, setTheme, theme } from '$lib/theme.svelte';
 	import Palette from '@lucide/svelte/icons/palette';
 	import * as Command from '$lib/components/ui/command';
@@ -37,7 +38,7 @@
 	};
 
 	/**
-	 * ⌘K / Ctrl+K: find a PR or issue (Enter peeks, ⌘Enter opens GitHub), run an action on the
+	 * ⌘K / Ctrl+K: find a PR or issue (Enter peeks it or opens its full page, ⌘Enter opens GitHub), run an action on the
 	 * current row, go to a page, or run a command. Searches only data Hush already has.
 	 */
 	interface Entry extends PaletteCommand {
@@ -53,6 +54,8 @@
 
 	let search = $state('');
 	let highlighted = $state('');
+
+	const opensFullPage = $derived(me.data?.settings.openItems === 'page');
 
 	function peek(req: PeekRequest, href: string) {
 		palette.peekRequest = req;
@@ -76,7 +79,10 @@
 				keywords: [i.repo, `#${i.number}`, i.author, i.turnReason, ...i.labels.map((l) => l.name)],
 				url: i.url,
 				where: `${home.name} · ${i.kind === 'pr' ? 'PR' : 'Issue'} · ${i.state === 'open' ? turn[i.turn] : i.turnReason}`,
-				run: () => peek({ page: 'view', view: home.id, kind: i.kind, id: i.id }, `/v/${home.id}`)
+				run: () =>
+					opensFullPage
+						? goto(itemPagePath(i.repo, i.number, i.kind))
+						: peek({ page: 'view', view: home.id, kind: i.kind, id: i.id }, `/v/${home.id}`)
 			}));
 	});
 

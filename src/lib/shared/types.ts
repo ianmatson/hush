@@ -163,6 +163,7 @@ export interface Settings {
 	swipe: import('./swipe').SwipeSettings;
 	rows: import('./row-parts').RowSettings;
 	rowLayout: import('./row-layout').RowLayout;
+	openItems: import('./open-items').OpenItems;
 	tableColumns: import('./row-layout').TableColumn[];
 }
 
@@ -493,7 +494,7 @@ export interface PeekDTO {
 	/** The description's reactions. */
 	reactions?: Reactions;
 	labels: { name: string; color: string }[];
-	assignees: string[];
+	assignees: PeekPerson[];
 	pr?: {
 		base: string;
 		head: string;

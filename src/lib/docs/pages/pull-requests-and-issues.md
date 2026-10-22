@@ -7,7 +7,7 @@ Each [view](/docs/views) lists its open pull requests and issues, also when GitH
 
 ## Row layout
 
-Each item is a card by default: its title, then its repository, author, and size, then badges for whose turn it is, CI, reviews, and categories. **Settings → General → Row layout** changes all lists to a **table**: one line for each item, with its facts in columns. The table has no action button: click a row to open it in the [peek](/docs/peek). On a narrow screen, the table shows only the title and the time.
+Each item is a card by default: its title, then its repository, author, and size, then badges for whose turn it is, CI, reviews, and categories. **Settings → General → Row layout** changes all lists to a **table**: one line for each item, with its facts in columns. The table has no action button: click a row to open it in the [peek](/docs/peek), or on its [full page](/docs/peek#full-page) when **Click opens** is **Full page**. On a narrow screen, the table shows only the title and the time.
 
 The settings under the layout are for the layout you use. With cards, **Row contents** chooses the parts of each card. With the table, **Table columns** chooses the columns: the turn, the repository, the author, the category icons or names, CI, the size, the comment count, and the time. See [`rowLayout`](/docs/settings#rowlayout) and [`tableColumns`](/docs/settings#tablecolumns).
 

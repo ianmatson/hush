@@ -12,6 +12,7 @@ import { MENUS_VERSION, validateMenus } from './menus';
 import { validateSwipe } from './swipe';
 import { validateRows } from './row-parts';
 import { TABLE_COLUMNS, validateRowLayout, validateTableColumns } from './row-layout';
+import { validateOpenItems } from './open-items';
 import { validateKeys } from './keymap';
 import { validateQuietHours } from './quiet';
 import { PUSH_FACTS, validatePushFacts } from './push-facts';
@@ -211,6 +212,12 @@ export const SETTINGS_DOCS: SettingInfo[] = [
 			'How lists show each PR and issue: "cards" (several lines, with badges) or "table" (one line, in columns).'
 	},
 	{
+		key: 'openItems',
+		page: 'general',
+		description:
+			'What a click on a PR or issue in a list opens: "peek" (a panel next to the list) or "page" (a full page). Space always opens the peek, and F the full page.'
+	},
+	{
 		key: 'tableColumns',
 		page: 'general',
 		description: `The columns of the table layout, such as ["reason", "time"]. Columns: ${TABLE_COLUMNS.map((c) => c.id).join(', ')}.`
@@ -326,6 +333,7 @@ const CHECKS: Record<keyof Settings, (v: unknown) => string | null> = {
 	swipe: validateSwipe,
 	rows: validateRows,
 	rowLayout: validateRowLayout,
+	openItems: validateOpenItems,
 	tableColumns: validateTableColumns
 };
 

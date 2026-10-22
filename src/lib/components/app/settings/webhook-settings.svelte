@@ -9,6 +9,7 @@
 	import { ago } from '$lib/time';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import ListSkeleton from './list-skeleton.svelte';
 
 	const INSTALLED_PARAM = 'installed';
 	const CARD_ID = 'github-access';
@@ -23,6 +24,7 @@
 		suspended: 'Suspended by an owner',
 		missing: 'Not installed'
 	};
+	const LIKELY_ACCOUNT_COUNT = 2;
 	const SELECTION_LABELS = { all: 'all repositories', selected: 'selected repositories' };
 
 	const detailOf = (account: WebhookAccount) =>
@@ -41,7 +43,7 @@
 	});
 </script>
 
-{#if access}
+{#if access || webhooks.isPending || webhooks.isError}
 	<Card.Root id={CARD_ID} class="scroll-mt-20">
 		<Card.Header>
 			<Card.Title>Webhook updates</Card.Title>
@@ -51,27 +53,35 @@
 			>
 		</Card.Header>
 		<Card.Content class="grid gap-3 text-sm">
-			<ul class="divide-y rounded-md border" aria-label="Accounts">
-				{#each access.accounts as account (account.login)}
-					<li class="flex items-center justify-between gap-3 px-3 py-2">
-						<span class="min-w-0">
-							<span class="block truncate"
-								>{account.login}
-								{#if account.kind === 'user'}<span class="text-muted-foreground">(you)</span
-									>{/if}</span
+			{#if access}
+				<ul class="divide-y rounded-md border" aria-label="Accounts">
+					{#each access.accounts as account (account.login)}
+						<li class="flex items-center justify-between gap-3 px-3 py-2">
+							<span class="min-w-0">
+								<span class="block truncate"
+									>{account.login}
+									{#if account.kind === 'user'}<span class="text-muted-foreground">(you)</span
+										>{/if}</span
+								>
+								<span class="text-xs text-muted-foreground">{detailOf(account)}</span>
+							</span>
+							<Button
+								variant={account.state === 'missing' ? 'outline' : 'ghost'}
+								size="sm"
+								href={account.url}
+								target="_blank"
+								rel="noreferrer">{account.state === 'missing' ? 'Install…' : 'Manage'}</Button
 							>
-							<span class="text-xs text-muted-foreground">{detailOf(account)}</span>
-						</span>
-						<Button
-							variant={account.state === 'missing' ? 'outline' : 'ghost'}
-							size="sm"
-							href={account.url}
-							target="_blank"
-							rel="noreferrer">{account.state === 'missing' ? 'Install…' : 'Manage'}</Button
-						>
-					</li>
-				{/each}
-			</ul>
+						</li>
+					{/each}
+				</ul>
+			{:else if webhooks.isError}
+				<p role="alert" class="text-xs text-destructive">
+					Could not load the accounts: {webhooks.error.message}
+				</p>
+			{:else}
+				<ListSkeleton rows={LIKELY_ACCOUNT_COUNT} label="Loading accounts" />
+			{/if}
 			<p class="text-xs leading-relaxed text-muted-foreground">
 				{#if lastWebhookAt}Last webhook received {ago(lastWebhookAt)}.{/if}
 				GitHub shows <b class="font-medium text-foreground">Request</b> to members who are not

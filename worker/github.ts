@@ -851,6 +851,7 @@ export const forTeams = (q: ExpandedQuery, s: SubjectFacts, me: string) =>
 // Peek: one PR or issue with its description, checks, and latest comments. About 1 point.
 
 const PEEK_TIMELINE_PAGE = 25;
+const PEEK_LABELS = 100;
 
 const PERSON = `login avatarUrl(size: 48) __typename`;
 
@@ -891,8 +892,8 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
       repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed deleteBranchOnMerge }
       author { ${PERSON} }
-      labels(first: 10) { nodes { name color } }
-      assignees(first: 10) { nodes { login } }
+      peekLabels: labels(first: ${PEEK_LABELS}) { nodes { name color } }
+      assignees(first: 10) { nodes { ${PERSON} } }
       latestOpinionatedReviews(first: 20) { nodes { state author { ${PERSON} } } }
       viewerLatestReview { submittedAt commit { oid } }
       reviewThreads(first: 50) { nodes { isResolved } }
@@ -912,8 +913,8 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate
       repository { nameWithOwner viewerPermission }
       author { ${PERSON} }
-      labels(first: 10) { nodes { name color } }
-      assignees(first: 10) { nodes { login } }
+      peekLabels: labels(first: ${PEEK_LABELS}) { nodes { name color } }
+      assignees(first: 10) { nodes { ${PERSON} } }
       ${peekTimeline(ISSUE_TIMELINE)}
     }
   } }
@@ -1078,8 +1079,8 @@ export async function fetchPeek(
 		body: n.body ?? '',
 		html: n.bodyHTML ?? '',
 		reactions: reactionsOf(n),
-		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
-		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
+		labels: (n.peekLabels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
+		assignees: (n.assignees?.nodes ?? []).map(person),
 		timeline: { total: n.timelineItems?.totalCount ?? page.items.length, ...page },
 		can: {
 			id: n.id,

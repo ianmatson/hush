@@ -7,6 +7,7 @@ import type { CategoryPin } from '$lib/shared/categories';
 import type { DashKind, MergeMethod, ReactionContent, Settings } from '$lib/shared/types';
 import type { GhActionId } from '$lib/shared/actions';
 import type { ProjectEdit } from '$lib/shared/projects';
+import type { ItemFieldEdit } from '$lib/shared/item-fields';
 import type { SettingsPatch } from '$lib/shared/settings-schema';
 import type {
 	CommentTarget,
@@ -54,9 +55,13 @@ async function ok<R extends ClientResponse<unknown, number, string>>(
 	return data as Success<R>;
 }
 
-function itemParam(repo: string, number: number) {
+function repoParam(repo: string) {
 	const [owner, name] = repo.split('/');
-	return { owner, repo: name, number: String(number) };
+	return { owner, repo: name };
+}
+
+function itemParam(repo: string, number: number) {
+	return { ...repoParam(repo), number: String(number) };
 }
 
 export const api = {
@@ -220,6 +225,21 @@ export const api = {
 	projects: (repo: string, number: number) =>
 		ok(client.api.projects[':owner'][':repo'][':number'].$get({ param: itemParam(repo, number) })),
 	editProject: (edit: ProjectEdit) => ok(client.api.projects.item.$post({ json: edit })),
+	repoLabels: (repo: string, q: string) =>
+		ok(
+			client.api['item-fields'][':owner'][':repo'].labels.$get({
+				param: repoParam(repo),
+				query: { q }
+			})
+		),
+	assignableUsers: (repo: string, q: string) =>
+		ok(
+			client.api['item-fields'][':owner'][':repo'].assignees.$get({
+				param: repoParam(repo),
+				query: { q }
+			})
+		),
+	editItemField: (edit: ItemFieldEdit) => ok(client.api['item-fields'].$post({ json: edit })),
 	alerts: () => ok(client.api.alerts.$get()),
 	feeds: () => ok(client.api.feeds.$get()),
 	/** Turn on a feed: 'v:<view id>' or 'c:<category id>'. */
