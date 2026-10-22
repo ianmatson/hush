@@ -261,6 +261,7 @@ export interface TurnedItem {
 	kind: DashKind;
 	number: number;
 	title: string;
+	body: string;
 	url: string;
 	repo: string;
 	author: string;
@@ -449,6 +450,7 @@ export interface PeekEntry {
 	reactions?: Reactions;
 	body?: string;
 	canEdit?: boolean;
+	canUpdate?: boolean;
 	author: PeekPerson;
 	at: string;
 	url: string;

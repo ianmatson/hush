@@ -9,6 +9,7 @@ const PREVIEW_ITEM: DashItem = {
 	kind: 'pr',
 	number: 128,
 	title: 'Add rate limits to the public API',
+	body: 'Adds a token bucket per API key, so one client cannot slow the API for everyone. Limits come from the plan of the key.',
 	url: 'https://github.com/acme/web/pull/128',
 	repo: 'acme/web',
 	author: 'octocat',

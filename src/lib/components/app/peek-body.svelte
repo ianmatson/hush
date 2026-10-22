@@ -4,7 +4,14 @@
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { followWhileGrowing, revealEntry } from '$lib/reveal';
-	import { meQuery, peekQuery, queryClient, reviewThreadsQuery } from '$lib/queries';
+	import {
+		meQuery,
+		peekQuery,
+		queryClient,
+		refetchUnlessLive,
+		reviewThreadsQuery
+	} from '$lib/queries';
+	import { taskCheckboxes, type SavedTaskText } from '$lib/task-checkboxes';
 	import { keys } from '$lib/queries';
 	import { setAttachTarget } from '$lib/attachments.svelte';
 	import { canAttach } from '$lib/shared/attachments';
@@ -14,6 +21,7 @@
 	import { rowShows } from '$lib/shared/row-parts';
 	import { subjectKey } from '$lib/shared/subject';
 	import { sanitize } from '$lib/html';
+	import { STATE, shownStateOf, stateIcon } from '$lib/item-state';
 	import { ago } from '$lib/time';
 	import { cn } from '$lib/utils';
 	import type { CheckState, PeekDTO, PeekEntry } from '$lib/shared/types';
@@ -29,11 +37,6 @@
 	import { branchUrl, labelUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
 	import { FILES_TAB, itemPagePath } from '$lib/shared/item-page';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
-	import GitPullRequestDraft from '@lucide/svelte/icons/git-pull-request-draft';
-	import GitMerge from '@lucide/svelte/icons/git-merge';
-	import GitPullRequestClosed from '@lucide/svelte/icons/git-pull-request-closed';
-	import CircleDot from '@lucide/svelte/icons/circle-dot';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import CircleX from '@lucide/svelte/icons/circle-x';
 	import CircleDashed from '@lucide/svelte/icons/circle-dashed';
@@ -81,6 +84,30 @@
 		shownEntryCount = count;
 		if (entryAdded && composerEnd) untrack(() => followWhileGrowing(composerEnd!));
 	});
+	function updatePeek(change: (old: PeekDTO) => PeekDTO) {
+		queryClient.setQueryData<PeekDTO>(keys.peek(repo, number), (old) => old && change(old));
+		refetchUnlessLive(keys.items);
+	}
+	const reloadPeek = () => queryClient.invalidateQueries({ queryKey: keys.peek(repo, number) });
+	const descriptionTasks = (id: string) =>
+		taskCheckboxes({
+			id,
+			onsaved: ({ html }: SavedTaskText) => updatePeek((old) => ({ ...old, html })),
+			onconflict: reloadPeek
+		});
+	const entryTasks = (id: string) =>
+		taskCheckboxes({
+			id,
+			onsaved: (saved: SavedTaskText) =>
+				updatePeek((old) => ({
+					...old,
+					timeline: {
+						...old.timeline,
+						items: old.timeline.items.map((item) => (item.id === id ? { ...item, ...saved } : item))
+					}
+				})),
+			onconflict: reloadPeek
+		});
 	let allChecks = $state(false);
 	let editingId = $state<string | null>(null);
 	let editTrigger: HTMLButtonElement | null = null;
@@ -88,25 +115,6 @@
 		editingId = null;
 		void tick().then(() => editTrigger?.focus());
 	}
-
-	const STATE = {
-		open: { label: 'Open', tone: 'bg-signal-merge/12 text-signal-merge' },
-		draft: { label: 'Draft', tone: 'bg-muted text-muted-foreground' },
-		merged: { label: 'Merged', tone: 'bg-signal-reply/12 text-signal-reply' },
-		closed: { label: 'Closed', tone: 'bg-signal-fail/12 text-signal-fail' }
-	};
-	const stateOf = (p: PeekDTO) => (p.state === 'open' && p.draft ? 'draft' : p.state);
-	const stateIcon = (p: PeekDTO) => {
-		const s = stateOf(p);
-		if (p.kind === 'issue') return s === 'closed' ? CircleCheck : CircleDot;
-		return s === 'merged'
-			? GitMerge
-			: s === 'closed'
-				? GitPullRequestClosed
-				: s === 'draft'
-					? GitPullRequestDraft
-					: GitPullRequest;
-	};
 
 	const CHECK: Record<CheckState, { icon: typeof CircleCheck; tone: string; label: string }> = {
 		failure: { icon: CircleX, tone: 'text-signal-fail', label: 'failed' },
@@ -152,7 +160,7 @@
 	</div>
 {:else if q.data}
 	{@const p = q.data}
-	{@const st = STATE[stateOf(p)]}
+	{@const st = STATE[shownStateOf(p)]}
 	{@const Icon = stateIcon(p)}
 	<article class="grid gap-5 p-4 pb-6" data-item-ready={subjectKey(repo, number)}>
 		<header class="grid gap-2">
@@ -323,7 +331,13 @@
 
 		<section>
 			{#if p.html.trim()}
-				<div class="gh-html">{@html sanitize(p.html)}</div>
+				{#if p.can.update}
+					<div class="gh-html" {@attach descriptionTasks(p.can.id)}>
+						{@html sanitize(p.html, { editableTasks: true })}
+					</div>
+				{:else}
+					<div class="gh-html">{@html sanitize(p.html)}</div>
+				{/if}
 			{:else}
 				<p class="text-sm text-muted-foreground italic">No description.</p>
 			{/if}
@@ -390,8 +404,11 @@
 					{#if editingId === e.id}
 						<CommentEditor entry={e} repo={p.repo} number={p.number} onclose={closeEditor} />
 					{:else if e.html.trim()}
-						<div class="gh-html ml-7 rounded-lg bg-muted/50 px-3 py-2">
-							{@html sanitize(e.html)}
+						<div
+							class="gh-html ml-7 rounded-lg bg-muted/50 px-3 py-2"
+							{@attach e.canUpdate ? entryTasks(e.id) : undefined}
+						>
+							{@html sanitize(e.html, { editableTasks: !!e.canUpdate })}
 						</div>
 					{/if}
 					{#if showReactions || canEdit}

@@ -74,6 +74,8 @@ export const api = {
 	}) => ok(client.api.actions.$post({ json: a })),
 	editComment: (id: string, body: string) =>
 		ok(client.api.comments.edit.$post({ json: { id, body } })),
+	toggleTask: (id: string, index: number, count: number, checked: boolean) =>
+		ok(client.api.tasks.toggle.$post({ json: { id, index, count, checked } })),
 	suggest: (repo: string, kind: 'user' | 'ref', q: string, from: string) =>
 		ok(client.api.suggest.$get({ query: { repo, kind, q, from } })),
 	react: (id: string, content: ReactionContent, add: boolean) =>

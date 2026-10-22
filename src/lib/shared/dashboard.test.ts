@@ -15,6 +15,7 @@ const base = (over: Partial<DashFacts> = {}): DashFacts => ({
 	kind: 'pr',
 	number: 1,
 	title: 'Add thing',
+	body: '',
 	url: 'https://github.com/o/r/pull/1',
 	repo: 'o/r',
 	author: 'alice',
