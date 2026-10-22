@@ -27,6 +27,17 @@ A webhook says "item `<repository id>#<number>` changed". Every user whose Works
 - Bursts share reads: a review with ten comments gives ten invalidations, but the versioned read request (`requestReads`) keeps one pending read per item. An invalidation that arrives after a read started requests one more read, because that read can be older than the change.
 - The Workspace bounds each run: at most `MAX_PENDING_READS` pending reads, `READ_BATCH` per run, and the run's call budget. These do not bound the number of runs or deliveries in a day; see "Admission and budget".
 
+### Why not use the payload
+
+A payload has real data, but it is not a good source of facts for Hush:
+
+- **It is partial.** One item in Hush has CI rollup, review decision, mergeability, verdicts, review requests with times, threads, the last comments, and labels. Each event carries only a part: `issue_comment` has the comment but no CI, and `check_suite` has the CI of a commit but not the review state. Facts from payloads need merge rules for each event: a second fact path, which is what #92 removed.
+- **It can be wrong for the user.** The app receives every event of the org. A read with the user's own token proves that the user can still see the item.
+- **It can be old.** GitHub can send deliveries out of order, two times, or not at all. A read gets the current state, so a late delivery cannot move facts back.
+- **The read is cheap.** One GraphQL request serves the whole burst, about one second later.
+
+The Worker reads only the routing fields from a payload: the event, the action, `repository.id`, and the item numbers.
+
 ## Architecture
 
 ```
