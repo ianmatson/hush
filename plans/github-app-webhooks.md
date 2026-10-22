@@ -47,15 +47,15 @@ The RPC only records work and sets the alarm. It does no GitHub read. So the Wor
 
 App permissions, all **read**: Metadata, Pull requests, Issues, Checks. No installation events are needed.
 
-| Event                         | Actions                         | Route                                         |
-| ----------------------------- | ------------------------------- | --------------------------------------------- |
-| `pull_request`                | all                             | `repository.id`, `pull_request.number`        |
-| `pull_request_review`         | submitted, edited, dismissed    | `repository.id`, `pull_request.number`        |
-| `pull_request_review_comment` | created, edited, deleted        | `repository.id`, `pull_request.number`        |
-| `pull_request_review_thread`  | resolved, unresolved            | `repository.id`, `pull_request.number`        |
-| `issues`                      | all                             | `repository.id`, `issue.number`               |
-| `issue_comment`               | created, edited, deleted        | `repository.id`, `issue.number`               |
-| `check_suite`                 | completed                       | `repository.id`, each `pull_requests[].number` |
+| Event                         | Actions                      | Route                                          |
+| ----------------------------- | ---------------------------- | ---------------------------------------------- |
+| `pull_request`                | all                          | `repository.id`, `pull_request.number`         |
+| `pull_request_review`         | submitted, edited, dismissed | `repository.id`, `pull_request.number`         |
+| `pull_request_review_comment` | created, edited, deleted     | `repository.id`, `pull_request.number`         |
+| `pull_request_review_thread`  | resolved, unresolved         | `repository.id`, `pull_request.number`         |
+| `issues`                      | all                          | `repository.id`, `issue.number`                |
+| `issue_comment`               | created, edited, deleted     | `repository.id`, `issue.number`                |
+| `check_suite`                 | completed                    | `repository.id`, each `pull_requests[].number` |
 
 Not in v1, on purpose:
 
