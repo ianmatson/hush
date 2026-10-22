@@ -17,10 +17,10 @@ const URGENCY_LEVELS = [
 	'Blocking: it blocks a release, other work, or users, or it is about an incident or an outage'
 ];
 
-const REPLY = 'reply';
-const URGENCY = 'urgency';
-const ABOUT_PREFIX = 'about_';
-const CHOICE_PREFIX = 'choice_';
+export const REPLY = 'reply';
+export const URGENCY = 'urgency';
+export const ABOUT_PREFIX = 'about_';
+export const CHOICE_PREFIX = 'choice_';
 
 export interface StoredDecisions {
 	contentHash: string;
@@ -163,7 +163,7 @@ export function decisionState(s: SubjectFacts, me: string): DecisionState {
 	};
 }
 
-function replyQuestion(me: string): DecisionQuestion {
+export function replyQuestion(me: string): DecisionQuestion {
 	return {
 		type: 'noul',
 		instructions: `Do the comments in \`newCommentsForYou\` ask @${me} a question, ask @${me} to do something, or wait for an answer from @${me}?`,
@@ -174,21 +174,21 @@ function replyQuestion(me: string): DecisionQuestion {
 	};
 }
 
-const URGENCY_QUESTION: DecisionQuestion = {
+export const URGENCY_QUESTION: DecisionQuestion = {
 	type: 'score',
 	instructions:
 		'How urgent is this, from its title, labels, body, and comments? Judge only what the text says.',
 	criteria: URGENCY_LEVELS
 };
 
-function aboutQuestion(text: string): DecisionQuestion {
+export function aboutQuestion(text: string): DecisionQuestion {
 	return {
 		type: 'noul',
 		instructions: `Is this pull request or issue about the following? ${text}`
 	};
 }
 
-function choiceQuestion(options: Record<string, string>): DecisionQuestion {
+export function choiceQuestion(options: Record<string, string>): DecisionQuestion {
 	return {
 		type: 'choice',
 		instructions: 'Which category fits this pull request or issue best?',
@@ -247,12 +247,12 @@ export function estimateTokens(request: DecisionRequest): number {
 	return Math.ceil(JSON.stringify(request).length / CHARS_PER_TOKEN);
 }
 
-const noulOf = (a: DecisionAnswers[string] | undefined) =>
+export const noulOf = (a: DecisionAnswers[string] | undefined) =>
 	a && 'noul' in a && typeof a.noul === 'number' ? a.noul : undefined;
-const scoreOf = (a: DecisionAnswers[string] | undefined) =>
+export const scoreOf = (a: DecisionAnswers[string] | undefined) =>
 	a && 'score' in a && typeof a.score === 'number' ? a.score : undefined;
 
-const choiceOf = (a: DecisionAnswers[string] | undefined) =>
+export const choiceOf = (a: DecisionAnswers[string] | undefined) =>
 	a && 'choice' in a && typeof a.choice === 'string' && typeof a.confidence === 'number'
 		? { id: a.choice, confidence: a.confidence }
 		: undefined;

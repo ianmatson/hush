@@ -16,6 +16,9 @@ export const READ_BATCH = 40;
 export const SOURCE_BATCH = 10;
 export const MAX_PENDING_READS = 500;
 export const MAX_NOTIFICATION_VERSIONS = 1000;
+export const MAX_ANALYSIS_QUEUE = 200;
+export const ANALYSIS_BATCH = 12;
+export const ANALYSIS_RETRY_MS = 5 * MINUTE_MS;
 
 export type Lifecycle = 'active' | 'paused' | 'stopped';
 export type ReadPriority = 'interactive' | 'background';
@@ -44,6 +47,7 @@ export interface Sync {
 	boundaryAt: number | null;
 	cleanupAt: number;
 	retryAt: Record<Resource, number>;
+	analysisUsage: { day: string; tokens: number };
 	lastError: string | null;
 }
 
@@ -83,6 +87,7 @@ export function initialSync(now: number): Sync {
 		boundaryAt: null,
 		cleanupAt: now + CLEANUP_EVERY_MS,
 		retryAt: { github: 0, ai: 0 },
+		analysisUsage: { day: '', tokens: 0 },
 		lastError: null
 	};
 }
@@ -157,7 +162,7 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 					.map(([id]) => id)
 			: [],
 		reads: github ? [...interactive, ...background, ...safety].slice(0, READ_BATCH) : [],
-		analysis: now >= sync.retryAt.ai ? sync.analysis.slice(0, READ_BATCH) : [],
+		analysis: now >= sync.retryAt.ai ? sync.analysis.slice(0, ANALYSIS_BATCH) : [],
 		boundary: sync.boundaryAt !== null && sync.boundaryAt <= now,
 		cleanup: sync.cleanupAt <= now
 	};
@@ -272,3 +277,18 @@ export const cleanedUp = (sync: Sync, now: number): Sync => ({
 	...sync,
 	cleanupAt: now + CLEANUP_EVERY_MS
 });
+
+export const utcDay = (now: number) => new Date(now).toISOString().slice(0, 10);
+
+export const nextUtcDay = (now: number) => Math.floor(now / DAY_MS) * DAY_MS + DAY_MS;
+
+export function analysisSpent(sync: Sync, now: number): number {
+	return sync.analysisUsage.day === utcDay(now) ? sync.analysisUsage.tokens : 0;
+}
+
+export function analysisUsed(sync: Sync, tokens: number, now: number): Sync {
+	return {
+		...sync,
+		analysisUsage: { day: utcDay(now), tokens: analysisSpent(sync, now) + tokens }
+	};
+}

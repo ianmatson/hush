@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 import type { ItemView } from '../../src/lib/shared/types';
 import { ME, facts } from '../../src/lib/model/testing';
-import { Workspace } from '../workspace/workspace';
+import type { DecisionRequest } from '../../src/lib/shared/decisions';
+import { Workspace, type Analyzed } from '../workspace/workspace';
 import { PAUSE_AFTER_NO_PUSH_MS, SOURCE_EVERY_MS } from '../workspace/work';
 import { configWith, harness, settingsWith, windowOf } from './workspace-fixtures';
 
@@ -193,5 +194,77 @@ describe('Workspace', () => {
 		);
 		expect(h.workspace.schedule.boundaryAt).toBe(until);
 		expect(h.alarms.at(-1)).toBeLessThanOrEqual(until);
+	});
+});
+
+describe('Workspace analysis', () => {
+	const categoryViews: ItemView[] = [
+		{
+			id: 'low',
+			name: 'Low',
+			searches: ['is:pr is:open repo:PostHog/posthog category:effort/low'],
+			groupBy: 'none'
+		}
+	];
+
+	function withModel(answer: (request: DecisionRequest) => Analyzed | null) {
+		const h = harness();
+		const asked: DecisionRequest[] = [];
+		h.readers.analyze = async (request) => {
+			asked.push(request);
+			return answer(request);
+		};
+		const workspace = Workspace.create(h.deps, configWith(settingsWith(categoryViews)), h.clock());
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		return { ...h, workspace, asked };
+	}
+
+	const choose =
+		(category: string) =>
+		(request: DecisionRequest): Analyzed => ({
+			tokens: 100,
+			answers: Object.fromEntries(
+				Object.keys(request.questions).map((key) => [
+					key,
+					key.startsWith('choice_')
+						? { type: 'choice', choice: category, confidence: 0.9 }
+						: { type: 'score', score: 0 }
+				])
+			)
+		});
+
+	it('asks the model about items it found, and fills a category view quietly', async () => {
+		const h = withModel(choose('low'));
+		await h.workspace.run(h.clock);
+		expect(h.asked.length).toBeGreaterThan(0);
+		expect(h.workspace.snapshot.views.get('low')?.members).toEqual(['PR_1']);
+		expect(h.store.pendingAlerts()).toEqual([]);
+		expect(h.workspace.schedule.analysis).toEqual([]);
+	});
+
+	it('pauses analysis for the day when the token budget is spent', async () => {
+		const h = withModel(choose('low'));
+		h.deps.analysisBudget = 0;
+		await h.workspace.run(h.clock);
+		expect(h.asked).toEqual([]);
+		expect(h.workspace.schedule.retryAt.ai).toBe(Date.parse('2026-10-23T00:00:00Z'));
+	});
+
+	it('drops an answer about facts that changed while the model worked', async () => {
+		const h = withModel((request) => {
+			h.workspace.apply(
+				{
+					kind: 'items',
+					read: [facts(1, { title: 'Renamed', updatedAt: new Date(h.clock() + 1).toISOString() })],
+					inaccessible: [],
+					quiet: true
+				},
+				h.clock()
+			);
+			return choose('low')(request);
+		});
+		await h.workspace.run(h.clock);
+		expect(h.workspace.snapshot.items.get('PR_1')?.analysis?.choices ?? {}).toEqual({});
 	});
 });

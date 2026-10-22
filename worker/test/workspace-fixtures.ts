@@ -73,6 +73,7 @@ export class FakeReaders implements Readers {
 	facts = new Map<ItemId, SubjectFacts>();
 	itemCalls: ItemId[][] = [];
 	beforeItemsAnswer: (() => void) | null = null;
+	analyze?: Readers['analyze'];
 
 	async notifications(): Promise<NotificationsResult> {
 		return this.notificationResults.shift() ?? { status: 'not-modified', pollIntervalMs: 60_000 };
@@ -106,6 +107,7 @@ export function harness() {
 	const deps: WorkspaceDeps = {
 		store,
 		readers,
+		analysisBudget: 1_000_000,
 		setAlarm: (at) => void alarms.push(at),
 		announce: (revision, viewIds) => void announced.push({ revision, viewIds }),
 		credentialRejected: () => void rejected++

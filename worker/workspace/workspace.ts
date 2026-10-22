@@ -1,13 +1,20 @@
 import { ciRunning } from '../../src/lib/shared/ci';
 import { DAY_MS } from '../../src/lib/shared/durations';
+import type { DecisionAnswers, DecisionRequest } from '../../src/lib/shared/decisions';
 import type { DashKind } from '../../src/lib/shared/types';
+import { analysisRequests, currentInputOf, mergeAnalysis } from '../../src/lib/model/analysis';
 import type { SourceRead } from '../../src/lib/model/sources';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
 import type { ItemId, SourceSpec } from '../../src/lib/model/types';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
 import type { WorkspaceStore } from './store';
 import {
+	analysisSpent,
+	analysisUsed,
+	ANALYSIS_RETRY_MS,
 	bringDiscoveryForward,
+	MAX_ANALYSIS_QUEUE,
+	nextUtcDay,
 	cleanedUp,
 	forgetReads,
 	initialSync,
@@ -65,15 +72,22 @@ export interface SourcesResult {
 	retryAt?: number;
 }
 
+export interface Analyzed {
+	answers: DecisionAnswers;
+	tokens: number;
+}
+
 export interface Readers {
 	notifications(cursor: NotificationCursor): Promise<NotificationsResult>;
 	sources(specs: SourceSpec[]): Promise<SourcesResult>;
 	items(ids: ItemId[]): Promise<ItemsResult>;
+	analyze?(request: DecisionRequest): Promise<Analyzed | null>;
 }
 
 export interface WorkspaceDeps {
 	store: WorkspaceStore;
 	readers: Readers;
+	analysisBudget: number;
 	setAlarm(at: number | null): void;
 	announce(revision: number, viewIds: string[]): void;
 	credentialRejected(): void;
@@ -124,12 +138,38 @@ export class Workspace {
 		};
 		this.sync = {
 			...forgetReads(withSources(this.sync, this.data.sources.keys(), now), this.knownIds()),
-			boundaryAt: result.nextBoundary
+			boundaryAt: result.nextBoundary,
+			analysis: this.analysisQueue(now)
 		};
 		this.deps.store.save(result, now, { [SYNC_KEY]: this.sync });
 		if (result.changedViews.length) this.deps.announce(this.data.revision, result.changedViews);
 		this.reschedule();
 		return result;
+	}
+
+	private analysisWanted() {
+		return this.data.config.settings.smartDecisions && !!this.deps.readers.analyze;
+	}
+
+	private requestsFor(id: ItemId, now: number) {
+		const item = this.data.items.get(id);
+		if (!item) return [];
+		const { me, settings, analysisVersion } = this.data.config;
+		return analysisRequests(
+			item.analysis,
+			item.facts,
+			me,
+			settings.categoryGroups,
+			analysisVersion,
+			now
+		);
+	}
+
+	private analysisQueue(now: number): ItemId[] {
+		if (!this.analysisWanted()) return [];
+		return [...this.interest.ids]
+			.filter((id) => this.requestsFor(id, now).length > 0)
+			.slice(0, MAX_ANALYSIS_QUEUE);
 	}
 
 	private knownIds() {
@@ -174,6 +214,9 @@ export class Workspace {
 		const reads = planRun(this.sync, this.interest, clock()).reads;
 		if (reads.length && this.stillCurrent(generation))
 			await this.readItems(reads, generation, clock);
+		const analysis = planRun(this.sync, this.interest, clock()).analysis;
+		if (analysis.length && this.stillCurrent(generation))
+			await this.runAnalysis(analysis, generation, clock);
 		if (plan.boundary && this.stillCurrent(generation)) this.apply({ kind: 'time' }, clock());
 		if (plan.cleanup && this.stillCurrent(generation)) this.cleanup(clock());
 		this.saveSync();
@@ -309,6 +352,52 @@ export class Workspace {
 			},
 			now
 		);
+	}
+
+	private async runAnalysis(ids: ItemId[], generation: number, clock: () => number) {
+		const analyze = this.deps.readers.analyze;
+		if (!analyze) return;
+		const { me, analysisVersion } = this.data.config;
+		const inputs: Input[] = [];
+		for (const id of ids) {
+			if (analysisSpent(this.sync, clock()) >= this.deps.analysisBudget) {
+				this.sync = rateLimited(
+					this.sync,
+					'ai',
+					nextUtcDay(clock()),
+					'Smart decisions paused for today.'
+				);
+				break;
+			}
+			for (const asked of this.requestsFor(id, clock())) {
+				const analyzed = await analyze(asked.request);
+				if (!this.stillCurrent(generation)) return;
+				if (!analyzed) {
+					this.sync = rateLimited(
+						this.sync,
+						'ai',
+						clock() + ANALYSIS_RETRY_MS,
+						'Smart decisions did not answer.'
+					);
+					break;
+				}
+				this.sync = analysisUsed(this.sync, analyzed.tokens, clock());
+				const item = this.data.items.get(id);
+				if (!item || currentInputOf(asked.family, item.facts, me) !== asked.input) continue;
+				const pending = inputs.findLast(
+					(input): input is Extract<Input, { kind: 'analysis' }> =>
+						input.kind === 'analysis' && input.itemId === id
+				);
+				const previous = pending?.analysis ?? item.analysis;
+				inputs.push({
+					kind: 'analysis',
+					itemId: id,
+					analysis: mergeAnalysis(previous, analysisVersion, asked, analyzed.answers)
+				});
+			}
+			if (clock() < this.sync.retryAt.ai) break;
+		}
+		if (inputs.length) this.apply(inputs, clock());
 	}
 
 	private cleanup(now: number) {
