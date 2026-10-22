@@ -6,6 +6,7 @@ import type { DecisionRequest } from '../../src/lib/shared/decisions';
 import {
 	DELIVERY_RETRY_MS,
 	MAX_DELIVERY_ATTEMPTS,
+	RUN_SEND_BUDGET,
 	WorkspaceEngine,
 	type Analyzed
 } from '../workspace/engine';
@@ -541,6 +542,28 @@ describe('Workspace delivery', () => {
 		}
 		expect(h.sender.sent).toHaveLength(MAX_DELIVERY_ATTEMPTS);
 		expect(h.store.alertHistory(1)[0].delivery.status).toBe('failed');
+	});
+
+	it('counts each device request against the send budget, and leaves the rest pending', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.facts.set('PR_2', facts(2));
+		h.readers.sourceResults.push(answerSearch(['PR_1', 'PR_2']));
+		await h.workspace.run(h.clock);
+		const requested = (n: number) =>
+			facts(n, {
+				updatedAt: new Date(h.clock()).toISOString(),
+				reviewRequests: [{ name: ME, team: false }]
+			});
+		h.workspace.apply(
+			{ kind: 'items', read: [requested(1), requested(2)], inaccessible: [], quiet: false },
+			h.clock()
+		);
+		h.sender.requestsPerMessage = () => RUN_SEND_BUDGET;
+		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toHaveLength(1);
+		expect(h.store.pendingAlerts()).toHaveLength(1);
+		expect(h.workspace.schedule.deliveryDue).toBe(h.clock());
 	});
 
 	it('checks the alert again before each send', async () => {

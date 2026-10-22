@@ -135,6 +135,10 @@ export class FakeSender implements Sender {
 		return this.open;
 	}
 
+	requestsPerMessage(channels: Channel[]) {
+		return channels.length;
+	}
+
 	async send(message: PushMessage, channels: Channel[]) {
 		this.sent.push(message);
 		return Object.fromEntries(channels.map((channel) => [channel, this.outcome])) as Record<

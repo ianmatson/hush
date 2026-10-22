@@ -145,6 +145,9 @@ export class Workspace extends DurableObject<Env> {
 
 	private sender(): Sender {
 		return {
+			requestsPerMessage: (channels) =>
+				(channels.includes('push') ? this.devices().length : 0) +
+				(channels.includes('slack') ? 1 : 0),
 			channels: async () => {
 				const settings = this.engine?.snapshot.config.settings;
 				const userId = this.account()?.userId;

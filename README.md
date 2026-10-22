@@ -147,12 +147,12 @@ Keep `TOKEN_ENC_KEY` stable: changing it makes stored tokens unreadable (users m
 
 ### Free-tier budget (per user, approx.)
 
-| Resource                | Free limit | Per user                               |
-| ----------------------- | ---------- | -------------------------------------- |
-| Worker requests         | 100k/day   | ~1.5k                                  |
-| Durable Object requests | 100k/day   | ~0.3–1k (one alarm for each due check) |
-| DO rows written         | 100k/day   | only on change                         |
-| KV / Queues             | not used   | —                                      |
+| Resource                | Free limit | Per user                                 |
+| ----------------------- | ---------- | ---------------------------------------- |
+| Worker requests         | 100k/day   | ~1.5k                                    |
+| Durable Object requests | 100k/day   | ~0.3–1k (one alarm for each due check)   |
+| DO rows written         | 100k/day   | changed records and schedule checkpoints |
+| KV / Queues             | not used   | —                                        |
 
 The Workspace sets its alarm for the next due check only: notifications every 5 minutes (15 when you are idle and have no alert channel), the searches of your views every 15 minutes, and item reads when something changed. Open tabs get changes over their WebSocket, so they do not poll.
 

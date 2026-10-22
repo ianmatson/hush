@@ -128,6 +128,7 @@ export type Channel = 'push' | 'slack';
 
 export interface Sender {
 	channels(): Promise<Channel[]>;
+	requestsPerMessage(channels: Channel[]): number;
 	send(message: PushMessage, channels: Channel[]): Promise<Record<Channel, ChannelOutcome>>;
 }
 
@@ -584,7 +585,7 @@ export class WorkspaceEngine {
 			});
 			if (plan.skip.length) this.deps.announceAlerts();
 			const [outgoing] = plan.send;
-			if (!outgoing || !run.sends.take()) {
+			if (!outgoing || !run.sends.take(this.deps.sender.requestsPerMessage(channels))) {
 				this.sync = { ...this.sync, deliveryDue: outgoing ? now : plan.waitUntil };
 				return;
 			}

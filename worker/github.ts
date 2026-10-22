@@ -118,9 +118,9 @@ export class CallBudget {
 		return this.retryAt === null && this.remaining > 0;
 	}
 
-	take(): boolean {
-		if (!this.open) return false;
-		this.remaining--;
+	take(count = 1): boolean {
+		if (!this.open || count > this.remaining) return false;
+		this.remaining -= count;
 		return true;
 	}
 
