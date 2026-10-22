@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../src/lib/shared/durations';
 import type { ItemView } from '../../src/lib/shared/types';
-import { ME, facts } from '../../src/lib/model/testing';
+import { ME, NOW, facts } from '../../src/lib/model/testing';
 import type { DecisionRequest } from '../../src/lib/shared/decisions';
-import { Workspace, type Analyzed } from '../workspace/workspace';
+import { WorkspaceEngine, type Analyzed } from '../workspace/engine';
 import type { Input } from '../workspace/commit';
 import { PAUSE_AFTER_NO_PUSH_MS, SOURCE_EVERY_MS } from '../workspace/work';
 import { configWith, harness, settingsWith, windowOf } from './workspace-fixtures';
@@ -20,12 +20,14 @@ const views: ItemView[] = [
 
 function started() {
 	const h = harness();
-	const workspace = Workspace.create(h.deps, configWith(settingsWith(views)), h.clock());
+	const workspace = WorkspaceEngine.create(h.deps, configWith(settingsWith(views)), h.clock());
 	return { ...h, workspace };
 }
 
 const answerSearch = (ids: string[]) => (specs: { id: string }[]) => ({
-	reads: new Map(specs.map((spec) => [spec.id, { outcome: 'ok' as const, window: windowOf(ids) }]))
+	reads: new Map(
+		specs.map((spec) => [spec.id, { outcome: 'ok' as const, window: windowOf(ids, NOW - HOUR_MS) }])
+	)
 });
 
 describe('Workspace', () => {
@@ -45,7 +47,7 @@ describe('Workspace', () => {
 		h.readers.facts.set('PR_1', facts(1));
 		h.readers.sourceResults.push(answerSearch(['PR_1']));
 		await h.workspace.run(h.clock);
-		const reopened = Workspace.open(h.deps, h.clock())!;
+		const reopened = WorkspaceEngine.open(h.deps, h.clock())!;
 		expect(reopened.snapshot.views.get('v')?.members).toEqual(['PR_1']);
 		expect(reopened.snapshot.items.get('PR_1')?.facts.title).toBe('Change 1');
 		expect(reopened.schedule.sourcesDue).toEqual(h.workspace.schedule.sourcesDue);
@@ -217,7 +219,11 @@ describe('Workspace analysis', () => {
 			asked.push(request);
 			return answer(request);
 		};
-		const workspace = Workspace.create(h.deps, configWith(settingsWith(categoryViews)), h.clock());
+		const workspace = WorkspaceEngine.create(
+			h.deps,
+			configWith(settingsWith(categoryViews)),
+			h.clock()
+		);
 		h.readers.facts.set('PR_1', facts(1));
 		h.readers.sourceResults.push(answerSearch(['PR_1']));
 		return { ...h, workspace, asked };
@@ -291,7 +297,7 @@ describe('Workspace projects and teams', () => {
 	function projectHarness() {
 		const h = harness();
 		const config = { ...configWith(settingsWith(projectViews)), projectAccess: 'read' as const };
-		const workspace = Workspace.create(h.deps, config, h.clock());
+		const workspace = WorkspaceEngine.create(h.deps, config, h.clock());
 		h.readers.facts.set('PR_1', facts(1));
 		h.readers.sourceResults.push(answerSearch(['PR_1']));
 		return { ...h, workspace };
@@ -398,7 +404,7 @@ describe('Workspace failures', () => {
 		expect(h.workspace.broken).toBe(true);
 		expect(h.workspace.snapshot.items.has('PR_1')).toBe(false);
 		h.store.save = save;
-		const reopened = Workspace.open(h.deps, h.clock())!;
+		const reopened = WorkspaceEngine.open(h.deps, h.clock())!;
 		reopened.apply({ kind: 'items', read: [facts(1)], inaccessible: [], quiet: false }, h.clock());
 		expect(h.store.load()?.items.has('PR_1')).toBe(true);
 	});
@@ -517,7 +523,7 @@ describe('Workspace storage and retries', () => {
 		await h.workspace.run(h.clock);
 		h.advance(HOUR_MS + MINUTE_MS);
 		const writeState = h.store.writeState.bind(h.store);
-		let reopened: Workspace | null = null;
+		let reopened: WorkspaceEngine | null = null;
 		h.readers.beforeItemsAnswer = () => {
 			h.readers.beforeItemsAnswer = null;
 			h.store.writeState = () => {
@@ -525,11 +531,105 @@ describe('Workspace storage and retries', () => {
 			};
 			expect(() => h.workspace.touch(h.clock())).toThrow('disk full');
 			h.store.writeState = writeState;
-			reopened = Workspace.open(h.deps, h.clock())!;
+			reopened = WorkspaceEngine.open(h.deps, h.clock())!;
 			reopened.apply({ kind: 'mute', itemIds: ['PR_1'], muted: true }, h.clock());
 		};
 		await h.workspace.run(h.clock);
 		expect(h.store.load()?.items.get('PR_1')?.attention.muted).toBe(true);
 		expect(reopened).not.toBeNull();
+	});
+});
+
+describe('Workspace step 3 fixes', () => {
+	it('stays quiet while it first fills, even after the first notification poll', async () => {
+		const h = started();
+		const requested = facts(1, {
+			reviewRequests: [{ name: ME, team: false }],
+			requestEvents: [{ at: new Date(h.clock() - MINUTE_MS).toISOString(), team: false, name: ME }]
+		});
+		h.readers.facts.set('PR_1', requested);
+		h.readers.notificationResults.push({
+			status: 'ok',
+			threads: [],
+			lastModified: 'x',
+			pollIntervalMs: 60_000
+		});
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toEqual([]);
+		expect(h.workspace.schedule.settled).toBe(true);
+	});
+
+	it('reads project status for every member over time, not only the first 200', async () => {
+		const h = harness();
+		const ids = Array.from({ length: 201 }, (_, i) => `PR_${i + 1}`);
+		const projectView: ItemView[] = [
+			{
+				id: 'p',
+				name: 'Board',
+				searches: ['is:pr is:open repo:PostHog/posthog'],
+				groupBy: 'project:PostHog/7'
+			}
+		];
+		const workspace = WorkspaceEngine.create(
+			h.deps,
+			{ ...configWith(settingsWith(projectView)), projectAccess: 'read' },
+			h.clock()
+		);
+		for (const id of ids) h.readers.facts.set(id, facts(Number(id.slice(3))));
+		h.readers.sourceResults.push(answerSearch(ids));
+		for (let run = 0; run < 12; run++) {
+			await workspace.run(h.clock);
+			h.advance(SOURCE_EVERY_MS);
+			h.readers.sourceResults.push(answerSearch(ids));
+		}
+		const asked = new Set(h.readers.projectCalls.flat());
+		expect(asked.size).toBe(201);
+	});
+
+	it('keeps stale category answers when the model gives no answer, and waits before asking again', async () => {
+		const h = harness();
+		h.readers.analyze = async () => ({ answers: {}, tokens: 10 });
+		const workspace = WorkspaceEngine.create(h.deps, configWith(settingsWith(views)), h.clock());
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await workspace.run(h.clock);
+		expect(workspace.snapshot.items.get('PR_1')?.analysis).toBeNull();
+		expect(workspace.schedule.retryAt.ai).toBeGreaterThan(h.clock());
+	});
+
+	it('checks the token budget before each model request', async () => {
+		const h = harness();
+		let calls = 0;
+		h.readers.analyze = async (request) => {
+			calls++;
+			return {
+				tokens: 100,
+				answers: Object.fromEntries(
+					Object.keys(request.questions).map((key) => [key, { type: 'score', score: 0 }])
+				)
+			};
+		};
+		h.deps.analysisBudget = 100;
+		const workspace = WorkspaceEngine.create(h.deps, configWith(settingsWith(views)), h.clock());
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await workspace.run(h.clock);
+		expect(calls).toBe(1);
+	});
+
+	it('does not read an item with running CI again within five minutes', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1, { ci: 'PENDING' }));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		const calls = h.readers.itemCalls.length;
+		h.advance(MINUTE_MS);
+		h.workspace.apply({ kind: 'time' }, h.clock());
+		await h.workspace.run(h.clock);
+		expect(h.readers.itemCalls.length).toBe(calls);
+		h.advance(5 * MINUTE_MS);
+		await h.workspace.run(h.clock);
+		expect(h.readers.itemCalls.length).toBe(calls + 1);
 	});
 });

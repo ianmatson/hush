@@ -15,6 +15,7 @@ import type { DashProject } from '../src/lib/shared/types';
 import {
 	githubStatusMessage,
 	graphql,
+	type CallBudget,
 	hasGraphqlErrorAt,
 	type GraphqlError,
 	type SearchHit
@@ -33,9 +34,10 @@ const GITHUB_DID_NOT_ANSWER = 'GitHub did not answer. Hush tries again later.';
 async function projectGraphql(
 	token: string,
 	query: string,
-	variables: Record<string, unknown>
+	variables: Record<string, unknown>,
+	budget?: CallBudget
 ): Promise<GraphqlAnswer> {
-	const result = await graphql(token, query, variables).catch(() => null);
+	const result = await graphql(token, query, variables, budget).catch(() => null);
 	if (!result) return { data: null, errors: [GITHUB_DID_NOT_ANSWER], graphqlErrors: [] };
 	const errors = result.errors.map((e) => e.message);
 	if (!result.ok && !errors.length) errors.push(githubStatusMessage(result.status));
@@ -64,27 +66,30 @@ const notFound = (board: BoardQuery) =>
 
 export async function boardShort(
 	token: string,
-	queries: ExpandedQuery[]
+	queries: ExpandedQuery[],
+	budget?: CallBudget
 ): Promise<{
 	hits: SearchHit[];
 	errors: string[];
 	failedSections: Set<string>;
 	failedQueries: ExpandedQuery[];
+	truncatedSections: Set<string>;
 }> {
 	const hits: SearchHit[] = [];
 	const errors: string[] = [];
 	const failedSections = new Set<string>();
 	const failedQueries: ExpandedQuery[] = [];
+	const truncatedSections = new Set<string>();
 	await Promise.all(
 		queries.map(async (query) => {
 			const board = boardQueryOf(query.q);
 			if (!board) return;
-			const answer = await projectGraphql(token, BOARD_ITEMS, {
-				o: board.owner,
-				n: board.number,
-				f: board.filter,
-				first: SOURCE_RESULTS_MAX
-			});
+			const answer = await projectGraphql(
+				token,
+				BOARD_ITEMS,
+				{ o: board.owner, n: board.number, f: board.filter, first: SOURCE_RESULTS_MAX },
+				budget
+			);
 			errors.push(...friendly(answer.errors));
 			const project = boardOf(answer.data);
 			if (answer.errors.length || !project) {
@@ -101,6 +106,8 @@ export async function boardShort(
 				if (!answer.errors.length) errors.push(notFound(board));
 				return;
 			}
+			if ((project.items?.totalCount ?? 0) > (project.items?.nodes?.length ?? 0))
+				truncatedSections.add(query.section);
 			for (const item of project.items?.nodes ?? []) {
 				const n = item?.content;
 				if (n?.id && n.repository?.nameWithOwner)
@@ -113,7 +120,13 @@ export async function boardShort(
 			}
 		})
 	);
-	return { hits, errors: [...new Set(errors)].slice(0, 3), failedSections, failedQueries };
+	return {
+		hits,
+		errors: [...new Set(errors)].slice(0, 3),
+		failedSections,
+		failedQueries,
+		truncatedSections
+	};
 }
 
 export async function boardCount(token: string, query: string): Promise<number | null> {
@@ -201,17 +214,22 @@ export function readItemStatuses(nodes: (Node | null)[]): ItemStatuses {
 	return { projects: [...projects.values()], statusOf, incomplete };
 }
 
+const MAX_STATUS_PAGES = 5;
+
 export async function itemStatuses(
 	token: string,
-	ids: string[]
+	ids: string[],
+	budget?: CallBudget
 ): Promise<ItemStatuses & { errors: string[] }> {
 	const nodes: (Node | null)[] = [];
 	const errors: string[] = [];
 	for (let i = 0; i < ids.length; i += STATUSES_CHUNK) {
-		const answer = await projectGraphql(token, ITEM_STATUSES, {
-			ids: ids.slice(i, i + STATUSES_CHUNK),
-			after: null
-		});
+		const answer = await projectGraphql(
+			token,
+			ITEM_STATUSES,
+			{ ids: ids.slice(i, i + STATUSES_CHUNK), after: null },
+			budget
+		);
 		errors.push(...friendly(answer.errors));
 		const pageNodes = (answer.data?.nodes as (Node | null)[] | undefined) ?? [];
 		const completeNodes = await Promise.all(
@@ -223,15 +241,17 @@ export async function itemStatuses(
 				const cursors = new Set<string>();
 				while (pageInfo?.hasNextPage) {
 					const cursor = pageInfo.endCursor;
-					if (!cursor || cursors.has(cursor)) {
+					if (!cursor || cursors.has(cursor) || cursors.size >= MAX_STATUS_PAGES) {
 						errors.push('GitHub did not return all project memberships. Hush tries again later.');
 						return null;
 					}
 					cursors.add(cursor);
-					const next = await projectGraphql(token, ITEM_STATUSES, {
-						ids: [node.id],
-						after: cursor
-					});
+					const next = await projectGraphql(
+						token,
+						ITEM_STATUSES,
+						{ ids: [node.id], after: cursor },
+						budget
+					);
 					errors.push(...friendly(next.errors));
 					const nextNode = next.data?.nodes?.[0];
 					if (

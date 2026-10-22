@@ -1,51 +1,57 @@
 import { ciRunning } from '../../src/lib/shared/ci';
-import { DAY_MS } from '../../src/lib/shared/durations';
 import type { DecisionAnswers, DecisionRequest } from '../../src/lib/shared/decisions';
+import { DAY_MS } from '../../src/lib/shared/durations';
 import { projectKeyOf } from '../../src/lib/shared/grouping';
 import { readsBoard } from '../../src/lib/shared/projects';
-import type { DashKind, DashProject, TeamDTO } from '../../src/lib/shared/types';
-import { analysisRequests, currentInputOf, mergeAnalysis } from '../../src/lib/model/analysis';
-import type { SourceRead } from '../../src/lib/model/sources';
+import { keptSends } from '../../src/lib/shared/push-policy';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
+import type { DashKind, DashProject, TeamDTO } from '../../src/lib/shared/types';
+import {
+	analysisRequests,
+	analysisView,
+	currentInputOf,
+	mergeAnalysis,
+	type AnalysisRequest
+} from '../../src/lib/model/analysis';
+import { attentionState } from '../../src/lib/model/evaluate';
+import type { SourceRead } from '../../src/lib/model/sources';
 import type { ItemId, ProjectFacet, SourceSpec } from '../../src/lib/model/types';
+import { CallBudget } from '../github';
+import type { PushMessage } from '../webpush';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
 import { planDelivery } from './deliver';
 import type { ChannelOutcome, WorkspaceStore } from './store';
-import type { PushMessage } from '../webpush';
-import { keptSends } from '../../src/lib/shared/push-policy';
-import { attentionState } from '../../src/lib/model/evaluate';
-import { analysisView } from '../../src/lib/model/analysis';
 import {
 	analysisSpent,
 	analysisUsed,
 	ANALYSIS_RETRY_MS,
 	bringDiscoveryForward,
 	claimReads,
-	githubOpen,
-	readsFailed,
-	type ReadClaims,
-	MAX_ANALYSIS_QUEUE,
-	nextUtcDay,
-	SAFETY_READ_EVERY_MS,
-	PROJECTS_EVERY_MS,
-	TEAMS_EVERY_MS,
-	TEAMS_RETRY_MS,
 	cleanedUp,
 	forgetReads,
+	githubOpen,
 	initialSync,
+	MAX_ANALYSIS_QUEUE,
+	nextUtcDay,
 	nextWake,
 	notificationsPolled,
 	pausedIfIdle,
 	planRun,
+	PROJECTS_EVERY_MS,
 	rateLimited,
 	readsDone,
+	readsFailed,
 	requestReads,
+	SAFETY_READ_EVERY_MS,
 	sourcesRan,
 	stopped,
+	TEAMS_EVERY_MS,
+	TEAMS_RETRY_MS,
 	touched,
 	withSources,
 	type Interest,
 	type NotificationCursor,
+	type ReadClaims,
 	type ReadPriority,
 	type Sync
 } from './work';
@@ -55,6 +61,7 @@ export const FORGET_AFTER_MS = 30 * DAY_MS;
 export const ALERT_HISTORY_MS = 30 * DAY_MS;
 export const MAX_DEPARTURE_READS = 50;
 export const MAX_PROJECT_READS = 200;
+export const RUN_CALL_BUDGET = 40;
 
 export interface NotificationThread {
 	id: string;
@@ -80,12 +87,10 @@ export interface ItemsResult {
 	read: SubjectFacts[];
 	inaccessible: ItemId[];
 	failed: ItemId[];
-	retryAt?: number;
 }
 
 export interface SourcesResult {
 	reads: Map<string, SourceRead>;
-	retryAt?: number;
 }
 
 export interface Analyzed {
@@ -100,12 +105,18 @@ export interface ProjectStatuses {
 }
 
 export interface Readers {
-	notifications(cursor: NotificationCursor): Promise<NotificationsResult>;
-	sources(specs: SourceSpec[]): Promise<SourcesResult>;
-	items(ids: ItemId[]): Promise<ItemsResult>;
-	teams(): Promise<TeamDTO[] | null>;
-	projects(ids: ItemId[]): Promise<ProjectStatuses>;
+	notifications(cursor: NotificationCursor, budget: CallBudget): Promise<NotificationsResult>;
+	sources(specs: SourceSpec[], budget: CallBudget): Promise<SourcesResult>;
+	items(ids: ItemId[], budget: CallBudget): Promise<ItemsResult>;
+	teams(budget: CallBudget): Promise<TeamDTO[] | null>;
+	projects(ids: ItemId[], budget: CallBudget): Promise<ProjectStatuses>;
 	analyze?(request: DecisionRequest): Promise<Analyzed | null>;
+}
+
+interface Run {
+	generation: number;
+	clock: () => number;
+	budget: CallBudget;
 }
 
 export type Channel = 'push' | 'slack';
@@ -129,7 +140,7 @@ export interface WorkspaceDeps {
 
 const locatorOf = (repo: string, number: number) => `${repo.toLowerCase()}#${number}`;
 
-export class Workspace {
+export class WorkspaceEngine {
 	private interest: Interest = { ids: new Set(), ciRunning: new Set() };
 	private storageFailed = false;
 
@@ -139,17 +150,17 @@ export class Workspace {
 		private sync: Sync
 	) {}
 
-	static open(deps: WorkspaceDeps, now: number): Workspace | null {
+	static open(deps: WorkspaceDeps, now: number): WorkspaceEngine | null {
 		const data = deps.store.load();
 		if (!data) return null;
 		const sync = deps.store.readState<Sync>(SYNC_KEY) ?? initialSync(now);
-		const workspace = new Workspace(deps, data, sync);
+		const workspace = new WorkspaceEngine(deps, data, sync);
 		workspace.apply([], now);
 		return workspace;
 	}
 
-	static create(deps: WorkspaceDeps, config: Config, now: number): Workspace {
-		const workspace = new Workspace(deps, deps.store.create(config), initialSync(now));
+	static create(deps: WorkspaceDeps, config: Config, now: number): WorkspaceEngine {
+		const workspace = new WorkspaceEngine(deps, deps.store.create(config), initialSync(now));
 		workspace.apply({ kind: 'settings', settings: config.settings }, now);
 		return workspace;
 	}
@@ -258,32 +269,48 @@ export class Workspace {
 		);
 	}
 
-	private mayCallGithub(generation: number, now: number) {
-		return this.stillCurrent(generation) && githubOpen(this.sync, now);
+	private mayCallGithub(run: Run) {
+		return (
+			this.stillCurrent(run.generation) && run.budget.open && githubOpen(this.sync, run.clock())
+		);
+	}
+
+	private noteBudget(run: Run) {
+		if (run.budget.retryAt !== null)
+			this.sync = rateLimited(this.sync, 'github', run.budget.retryAt, 'GitHub rate limit.');
 	}
 
 	async run(clock: () => number): Promise<void> {
 		this.sync = pausedIfIdle(this.sync, clock());
-		const generation = this.sync.generation;
+		const run: Run = {
+			generation: this.sync.generation,
+			clock,
+			budget: new CallBudget(RUN_CALL_BUDGET)
+		};
 		const plan = planRun(this.sync, this.interest, clock());
-		if (plan.teams) await this.refreshTeams(generation, clock);
-		if (plan.notifications && this.mayCallGithub(generation, clock()))
-			await this.pollNotifications(generation, clock);
-		if (plan.sources.length && this.mayCallGithub(generation, clock()))
-			await this.refreshSources(plan.sources, generation, clock);
+		if (plan.teams && this.mayCallGithub(run)) await this.refreshTeams(run);
+		if (plan.notifications && this.mayCallGithub(run)) await this.pollNotifications(run);
+		if (plan.sources.length && this.mayCallGithub(run))
+			await this.refreshSources(plan.sources, run);
 		const reads = planRun(this.sync, this.interest, clock()).reads;
-		if (reads.length && this.mayCallGithub(generation, clock()))
-			await this.readItems(reads, generation, clock);
-		if (plan.projects && this.mayCallGithub(generation, clock()))
-			await this.refreshProjects(generation, clock);
+		if (reads.length && this.mayCallGithub(run)) await this.readItems(reads, run);
+		if (plan.projects && this.mayCallGithub(run)) await this.refreshProjects(run);
 		const analysis = planRun(this.sync, this.interest, clock()).analysis;
-		if (analysis.length && this.stillCurrent(generation))
-			await this.runAnalysis(analysis, generation, clock);
-		if (plan.boundary && this.stillCurrent(generation)) this.apply({ kind: 'time' }, clock());
-		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(generation))
+		if (analysis.length && this.stillCurrent(run.generation)) await this.runAnalysis(analysis, run);
+		if (plan.boundary && this.stillCurrent(run.generation)) this.apply({ kind: 'time' }, clock());
+		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(run.generation))
 			await this.deliver(clock);
-		if (plan.cleanup && this.stillCurrent(generation)) this.cleanup(clock());
-		if (!this.storageFailed) this.saveSync();
+		if (plan.cleanup && this.stillCurrent(run.generation)) this.cleanup(clock());
+		if (this.storageFailed) return;
+		this.sync = { ...this.sync, settled: this.sync.settled || this.hydrated() };
+		this.saveSync();
+	}
+
+	private hydrated() {
+		const everySourceRan = [...this.data.sources.values()].every(
+			(source) => source.window !== null || source.failedSince !== null || source.error !== null
+		);
+		return everySourceRan && Object.keys(this.sync.reads).length === 0;
 	}
 
 	private itemIdAt(repo: string, number: number): ItemId | null {
@@ -299,10 +326,11 @@ export class Workspace {
 			.map((source) => source.spec.id);
 	}
 
-	private async pollNotifications(generation: number, clock: () => number) {
-		const result = await this.deps.readers.notifications(this.sync.notifications);
-		if (!this.stillCurrent(generation)) return;
-		const now = clock();
+	private async pollNotifications(run: Run) {
+		const result = await this.deps.readers.notifications(this.sync.notifications, run.budget);
+		if (!this.stillCurrent(run.generation)) return;
+		const now = run.clock();
+		this.noteBudget(run);
 		if (result.status === 'rate-limited') {
 			this.sync = rateLimited(this.sync, 'github', result.retryAt, 'GitHub rate limit.');
 			return;
@@ -359,20 +387,20 @@ export class Workspace {
 		return now - (this.sync.readAt[candidate.id] ?? 0) >= SAFETY_READ_EVERY_MS;
 	}
 
-	private async refreshSources(ids: string[], generation: number, clock: () => number) {
+	private async refreshSources(ids: string[], run: Run) {
 		const specs = ids.flatMap((id) => this.data.sources.get(id)?.spec ?? []);
-		const result = await this.deps.readers.sources(specs);
-		if (!this.stillCurrent(generation)) return;
-		if (result.retryAt)
-			this.sync = rateLimited(this.sync, 'github', result.retryAt, 'GitHub rate limit.');
+		const result = await this.deps.readers.sources(specs, run.budget);
+		if (!this.stillCurrent(run.generation)) return;
+		this.noteBudget(run);
 		const departed = this.departedOpenMembers(result.reads);
 		const claims = claimReads(this.sync, departed);
 		const probe =
-			departed.length && this.mayCallGithub(generation, clock())
-				? await this.deps.readers.items(departed)
+			departed.length && this.mayCallGithub(run)
+				? await this.deps.readers.items(departed, run.budget)
 				: null;
-		if (!this.stillCurrent(generation)) return;
-		const now = clock();
+		if (!this.stillCurrent(run.generation)) return;
+		const now = run.clock();
+		this.noteBudget(run);
 		const inputs: Input[] = [...result.reads].map(([sourceId, read]) => ({
 			kind: 'source',
 			sourceId,
@@ -397,7 +425,7 @@ export class Workspace {
 			kind: 'items',
 			read: result.read,
 			inaccessible: result.inaccessible,
-			quiet: !this.sync.notifications.initialized
+			quiet: !this.sync.settled
 		};
 	}
 
@@ -405,26 +433,24 @@ export class Workspace {
 		const failed = new Set(result.failed);
 		const pick = (keep: (id: ItemId) => boolean) =>
 			Object.fromEntries(Object.entries(claims).filter(([id]) => keep(id)));
-		let sync = readsDone(
+		const done = readsDone(
 			this.sync,
 			pick((id) => !failed.has(id)),
 			now
 		);
-		sync = readsFailed(
-			sync,
+		return readsFailed(
+			done,
 			pick((id) => failed.has(id)),
 			now
 		);
-		return result.retryAt
-			? rateLimited(sync, 'github', result.retryAt, 'GitHub rate limit.')
-			: sync;
 	}
 
-	private async readItems(ids: ItemId[], generation: number, clock: () => number) {
+	private async readItems(ids: ItemId[], run: Run) {
 		const claims = claimReads(this.sync, ids);
-		const result = await this.deps.readers.items(ids);
-		if (!this.stillCurrent(generation)) return;
-		const now = clock();
+		const result = await this.deps.readers.items(ids, run.budget);
+		if (!this.stillCurrent(run.generation)) return;
+		const now = run.clock();
+		this.noteBudget(run);
 		this.sync = this.afterItemReads(claims, result, now);
 		this.apply(this.itemsInput(result), now);
 	}
@@ -488,10 +514,11 @@ export class Workspace {
 		this.sync = { ...this.sync, delivery, deliveryDue: plan.waitUntil };
 	}
 
-	private async refreshTeams(generation: number, clock: () => number) {
-		const teams = await this.deps.readers.teams();
-		if (!this.stillCurrent(generation)) return;
-		const now = clock();
+	private async refreshTeams(run: Run) {
+		const teams = await this.deps.readers.teams(run.budget);
+		if (!this.stillCurrent(run.generation)) return;
+		const now = run.clock();
+		this.noteBudget(run);
 		this.sync = { ...this.sync, teamsDue: now + (teams ? TEAMS_EVERY_MS : TEAMS_RETRY_MS) };
 		if (teams) this.apply({ kind: 'teams', teams }, now);
 	}
@@ -502,11 +529,14 @@ export class Workspace {
 		const wanted = settings.views.filter(
 			(view) => projectKeyOf(view.groupBy) || view.searches.some(readsBoard)
 		);
-		const ids = wanted.flatMap((view) => {
-			const state = this.data.views.get(view.id);
-			return state ? [...state.members, ...state.retained] : [];
-		});
-		return [...new Set(ids)].slice(0, MAX_PROJECT_READS);
+		const ids = new Set(
+			wanted.flatMap((view) => {
+				const state = this.data.views.get(view.id);
+				return state ? [...state.members, ...state.retained] : [];
+			})
+		);
+		const readAt = (id: ItemId) => this.sync.projectReadAt[id] ?? 0;
+		return [...ids].sort((a, b) => readAt(a) - readAt(b)).slice(0, MAX_PROJECT_READS);
 	}
 
 	private facetAfter(id: ItemId, statuses: ProjectStatuses): ProjectFacet {
@@ -517,66 +547,74 @@ export class Workspace {
 		return previous?.state === 'known' ? { ...previous, stale: true } : { state: 'unknown' };
 	}
 
-	private async refreshProjects(generation: number, clock: () => number) {
+	private async refreshProjects(run: Run) {
 		const ids = this.projectItemIds();
-		this.sync = { ...this.sync, projectsDue: clock() + PROJECTS_EVERY_MS };
+		const startedAt = run.clock();
+		this.sync = { ...this.sync, projectsDue: startedAt + PROJECTS_EVERY_MS };
 		if (!ids.length) return;
-		const statuses = await this.deps.readers.projects(ids);
-		if (!this.stillCurrent(generation)) return;
+		const statuses = await this.deps.readers.projects(ids, run.budget);
+		if (!this.stillCurrent(run.generation)) return;
+		this.noteBudget(run);
+		const projectReadAt = Object.fromEntries(
+			Object.entries(this.sync.projectReadAt).filter(([id]) => this.data.items.has(id))
+		);
+		for (const id of ids) projectReadAt[id] = startedAt;
+		this.sync = { ...this.sync, projectReadAt };
 		this.apply(
 			{
 				kind: 'projects',
 				facets: ids.map((id) => [id, this.facetAfter(id, statuses)]),
 				definitions: statuses.definitions
 			},
-			clock()
+			run.clock()
 		);
 	}
 
-	private async runAnalysis(ids: ItemId[], generation: number, clock: () => number) {
+	private analysisPaused(now: number) {
+		if (now < this.sync.retryAt.ai) return true;
+		if (analysisSpent(this.sync, now) < this.deps.analysisBudget) return false;
+		this.sync = rateLimited(this.sync, 'ai', nextUtcDay(now), 'Smart decisions paused for today.');
+		return true;
+	}
+
+	private acceptAnswer(id: ItemId, asked: AnalysisRequest, answers: DecisionAnswers, now: number) {
+		const item = this.data.items.get(id);
+		const { me, analysisVersion } = this.data.config;
+		if (!item || currentInputOf(asked.family, item.facts, me) !== asked.input) return;
+		const analysis = mergeAnalysis(item.analysis, analysisVersion, asked, answers);
+		if (!analysis) {
+			this.sync = rateLimited(
+				this.sync,
+				'ai',
+				now + ANALYSIS_RETRY_MS,
+				'Smart decisions gave no answer.'
+			);
+			return;
+		}
+		this.apply({ kind: 'analysis', itemId: id, analysis }, now);
+	}
+
+	private async runAnalysis(ids: ItemId[], run: Run) {
 		const analyze = this.deps.readers.analyze;
 		if (!analyze) return;
-		const { me, analysisVersion } = this.data.config;
-		const inputs: Input[] = [];
-		for (const id of ids) {
-			if (analysisSpent(this.sync, clock()) >= this.deps.analysisBudget) {
-				this.sync = rateLimited(
-					this.sync,
-					'ai',
-					nextUtcDay(clock()),
-					'Smart decisions paused for today.'
-				);
-				break;
-			}
-			for (const asked of this.requestsFor(id, clock())) {
+		for (const id of ids)
+			for (const asked of this.requestsFor(id, run.clock())) {
+				if (this.analysisPaused(run.clock())) return;
 				const analyzed = await analyze(asked.request);
-				if (!this.stillCurrent(generation)) return;
+				if (!this.stillCurrent(run.generation)) return;
+				const now = run.clock();
 				if (!analyzed) {
 					this.sync = rateLimited(
 						this.sync,
 						'ai',
-						clock() + ANALYSIS_RETRY_MS,
+						now + ANALYSIS_RETRY_MS,
 						'Smart decisions did not answer.'
 					);
-					break;
+					return;
 				}
-				this.sync = analysisUsed(this.sync, analyzed.tokens, clock());
-				const item = this.data.items.get(id);
-				if (!item || currentInputOf(asked.family, item.facts, me) !== asked.input) continue;
-				const pending = inputs.findLast(
-					(input): input is Extract<Input, { kind: 'analysis' }> =>
-						input.kind === 'analysis' && input.itemId === id
-				);
-				const previous = pending?.analysis ?? item.analysis;
-				inputs.push({
-					kind: 'analysis',
-					itemId: id,
-					analysis: mergeAnalysis(previous, analysisVersion, asked, analyzed.answers)
-				});
+				this.sync = analysisUsed(this.sync, analyzed.tokens, now);
+				this.acceptAnswer(id, asked, analyzed.answers, now);
 			}
-			if (clock() < this.sync.retryAt.ai) break;
-		}
-		if (inputs.length) this.apply(inputs, clock());
 	}
 
 	private cleanup(now: number) {

@@ -105,17 +105,44 @@ export interface GraphqlResult<T> {
 	errors: GraphqlError[];
 }
 
+export const NO_CALL_LEFT = 0;
+
+export class CallBudget {
+	retryAt: number | null = null;
+
+	constructor(private remaining: number) {}
+
+	get open(): boolean {
+		return this.retryAt === null && this.remaining > 0;
+	}
+
+	take(): boolean {
+		if (!this.open) return false;
+		this.remaining--;
+		return true;
+	}
+
+	noteLimit(res: Response) {
+		if (res.status !== 403 && res.status !== 429) return;
+		const at = rateLimitRetryAt(res.headers);
+		if (at !== undefined) this.retryAt = Math.max(this.retryAt ?? 0, at);
+	}
+}
+
 const GITHUB_GAVE_NO_ANSWER = 'GitHub did not answer.';
 
 export async function graphql<T = Node>(
 	token: string,
 	query: string,
-	variables: Record<string, unknown>
+	variables: Record<string, unknown>,
+	budget?: CallBudget
 ): Promise<GraphqlResult<T>> {
+	if (budget && !budget.take()) return { ok: false, status: NO_CALL_LEFT, errors: [] };
 	const res = await gh(token, '/graphql', {
 		method: 'POST',
 		body: JSON.stringify({ query, variables })
 	});
+	budget?.noteLimit(res);
 	const answer = (await res.json().catch(() => null)) as {
 		data?: T | null;
 		errors?: GraphqlError[];
@@ -239,17 +266,20 @@ const MAX_NOTIFICATION_PAGES = 2;
  */
 export async function listNotifications(
 	token: string,
-	opts: { ifModifiedSince?: string | null }
+	opts: { ifModifiedSince?: string | null },
+	budget?: CallBudget
 ): Promise<NotificationsPage> {
 	let url: string | null = '/notifications?per_page=50';
 	const items: GhNotification[] = [];
 	let first: Response | null = null;
 	let laterFailure: Response | null = null;
 	for (let page = 0; url && page < MAX_NOTIFICATION_PAGES; page++) {
+		if (budget && !budget.take()) break;
 		const res = await gh(token, url, {
 			headers:
 				page === 0 && opts.ifModifiedSince ? { 'If-Modified-Since': opts.ifModifiedSince } : {}
 		});
+		budget?.noteLimit(res);
 		first ??= res;
 		if (res.status !== 200) {
 			if (page > 0) laterFailure = res;
@@ -534,12 +564,13 @@ export async function fetchSubjects(
 
 export async function fetchTeams(
 	token: string,
-	login: string
+	login: string,
+	budget?: CallBudget
 ): Promise<{ teams: TeamDTO[]; error?: string }> {
 	const query = `query($login: String!) {
   viewer { organizations(first: 50) { nodes { login teams(first: 100, userLogins: [$login]) { nodes { combinedSlug name } } } } }
 }`;
-	const result = await graphql(token, query, { login });
+	const result = await graphql(token, query, { login }, budget);
 	if (!result.ok) return { teams: [], error: `GitHub returned ${result.status} for your teams.` };
 	const teams: TeamDTO[] = [];
 	for (const org of result.data?.viewer?.organizations?.nodes ?? []) {
@@ -567,20 +598,26 @@ async function inRequests<T>(
 	build: (chunk: T[]) => { query: string; variables: Record<string, unknown> },
 	use: (chunk: T[], data: Record<string, Node | null> | undefined, errors: GraphqlError[]) => void,
 	errors: string[],
-	failed: (chunk: T[]) => void = () => {}
+	failed: (chunk: T[]) => void = () => {},
+	budget?: CallBudget
 ): Promise<void> {
 	async function ask(chunk: T[]): Promise<void> {
 		const { query, variables } = build(chunk);
-		const result = await graphql<Record<string, Node | null>>(token, query, variables).catch(
-			() => null
-		);
+		const result = await graphql<Record<string, Node | null>>(
+			token,
+			query,
+			variables,
+			budget
+		).catch(() => null);
 		if (!result) {
 			failed(chunk);
 			return void errors.push('GitHub did not answer. Hush tries again on the next refresh.');
 		}
-		if (TIMED_OUT.has(result.status) && chunk.length > 1) {
+		if (result.status === NO_CALL_LEFT) return failed(chunk);
+		if (TIMED_OUT.has(result.status) && chunk.length > 1 && budget?.open !== false) {
 			const half = Math.ceil(chunk.length / 2);
-			await Promise.all([ask(chunk.slice(0, half)), ask(chunk.slice(half))]);
+			await ask(chunk.slice(0, half));
+			await ask(chunk.slice(half));
 			return;
 		}
 		if (!result.ok) {
@@ -596,7 +633,11 @@ async function inRequests<T>(
 	}
 	const chunks: T[][] = [];
 	for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-	await Promise.all(chunks.map(ask));
+	if (!budget) {
+		await Promise.all(chunks.map(ask));
+		return;
+	}
+	for (const chunk of chunks) await ask(chunk);
 }
 
 /** Results for each dashboard search (it asks for no more). */
@@ -626,7 +667,8 @@ const SHORT = `__typename
  */
 export async function searchShort(
 	token: string,
-	queries: ExpandedQuery[]
+	queries: ExpandedQuery[],
+	budget?: CallBudget
 ): Promise<{
 	hits: SearchHit[];
 	errors: string[];
@@ -673,7 +715,8 @@ export async function searchShort(
 			chunk.forEach((query) => {
 				failedSections.add(query.section);
 				failedQueries.push(query);
-			})
+			}),
+		budget
 	);
 	return { hits, errors: [...new Set(errors)].slice(0, 3), failedSections, failedQueries };
 }
@@ -725,7 +768,12 @@ export interface ItemReads {
 	errors: string[];
 }
 
-export async function fetchItems(token: string, me: string, ids: string[]): Promise<ItemReads> {
+export async function fetchItems(
+	token: string,
+	me: string,
+	ids: string[],
+	budget?: CallBudget
+): Promise<ItemReads> {
 	const read: SubjectFacts[] = [];
 	const inaccessible: string[] = [];
 	const failed = new Set<string>();
@@ -751,7 +799,8 @@ export async function fetchItems(token: string, me: string, ids: string[]): Prom
 			});
 		},
 		errors,
-		(chunk) => chunk.forEach((id) => failed.add(id))
+		(chunk) => chunk.forEach((id) => failed.add(id)),
+		budget
 	);
 	return { read, inaccessible, failed: [...failed], errors: [...new Set(errors)].slice(0, 3) };
 }

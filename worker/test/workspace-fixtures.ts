@@ -21,7 +21,7 @@ import type {
 	Sender,
 	SourcesResult,
 	WorkspaceDeps
-} from '../workspace/workspace';
+} from '../workspace/engine';
 
 export function memoryStorage(): SqlStorage & { db: DatabaseSync } {
 	const db = new DatabaseSync(':memory:');

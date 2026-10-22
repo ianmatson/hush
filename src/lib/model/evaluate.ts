@@ -1,5 +1,5 @@
 import { allCategories } from '../shared/categories';
-import { changesSince } from '../shared/changes';
+import { changesSince, snapshotOf } from '../shared/changes';
 import { stillKept, KEEP_CLOSED_MS, closedTimeOf } from '../shared/closed-items';
 import { finishItem, keepItem, sortItems } from '../shared/dashboard';
 import { DAY_MS } from '../shared/durations';
@@ -227,6 +227,8 @@ export function createEvaluator(ctx: EvaluationContext) {
 			...turned,
 			...projectFields(item.project),
 			itemId: item.id,
+			revision: item.revision,
+			baseline: snapshotOf(item.facts, ctx.me),
 			retained,
 			analysisStale: derived.analysis.stale,
 			categories: knownCategories(derived.lenient),

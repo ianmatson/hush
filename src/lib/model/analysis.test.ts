@@ -79,3 +79,18 @@ describe('analysisRequests', () => {
 		expect(requests.map((r) => r.family)).toEqual(['reply']);
 	});
 });
+
+describe('mergeAnalysis', () => {
+	it('returns nothing for an answer without any usable value, so stale answers stay', () => {
+		const [identity, reply] = analysisRequests(
+			null,
+			commented,
+			ME,
+			[EFFORT],
+			ANALYSIS_VERSION,
+			NOW
+		);
+		expect(mergeAnalysis(null, ANALYSIS_VERSION, identity, {})).toBeNull();
+		expect(mergeAnalysis(null, ANALYSIS_VERSION, reply, {})).toBeNull();
+	});
+});

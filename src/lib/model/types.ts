@@ -105,6 +105,8 @@ export type Row = Omit<
 	'sections' | 'sourceFilters' | 'sourceQueries' | 'keptAfterClose' | 'keptSections'
 > & {
 	itemId: ItemId;
+	revision: number;
+	baseline: Snapshot;
 	retained: boolean;
 	analysisStale: boolean;
 };

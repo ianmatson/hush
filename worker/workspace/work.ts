@@ -56,6 +56,8 @@ export interface Sync {
 	hasPush: boolean;
 	notifications: NotificationCursor;
 	sourcesDue: Record<string, number>;
+	settled: boolean;
+	projectReadAt: Record<ItemId, number>;
 	projectsDue: number;
 	teamsDue: number;
 	discoveryAt: number;
@@ -106,6 +108,8 @@ export function initialSync(now: number): Sync {
 			versions: {}
 		},
 		sourcesDue: {},
+		settled: false,
+		projectReadAt: {},
 		projectsDue: now,
 		teamsDue: now,
 		discoveryAt: 0,
@@ -199,7 +203,7 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 	const safety = [...interest.ids]
 		.filter((id) => !(id in sync.reads))
 		.map((id) => [id, safetyReadDue(sync, id, interest)] as const)
-		.filter(([, due]) => due <= now + SAFETY_READ_SLACK_MS)
+		.filter(([id, due]) => due <= now + (interest.ciRunning.has(id) ? 0 : SAFETY_READ_SLACK_MS))
 		.sort(([, a], [, b]) => a - b)
 		.map(([id]) => id);
 	return {
@@ -345,6 +349,7 @@ export function touched(sync: Sync, now: number): Sync {
 		...sync,
 		lifecycle: 'active',
 		generation: resumed ? sync.generation + 1 : sync.generation,
+		settled: resumed ? false : sync.settled,
 		lastActive: now,
 		notifications: {
 			...sync.notifications,

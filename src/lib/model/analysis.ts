@@ -215,18 +215,23 @@ export function mergeAnalysis(
 	version: string,
 	asked: AnalysisRequest,
 	answers: DecisionAnswers
-): Analysis {
+): Analysis | null {
 	const base = previous?.version === version ? previous : emptyAnalysis(version);
 	if (asked.family === 'reply') {
+		const reply = noulOf(answers[REPLY]);
+		const urgency = scoreOf(answers[URGENCY]);
+		if (reply === undefined && urgency === undefined) return null;
 		const kept =
 			base.replyInput === asked.input ? base : { ...base, reply: undefined, urgency: undefined };
-		const reply = noulOf(answers[REPLY]) ?? kept.reply;
-		const urgency = scoreOf(answers[URGENCY]) ?? kept.urgency;
-		return withoutUndefined({ ...kept, replyInput: asked.input, reply, urgency });
+		return withoutUndefined({
+			...kept,
+			replyInput: asked.input,
+			reply: reply ?? kept.reply,
+			urgency: urgency ?? kept.urgency
+		});
 	}
-	const same = base.identityInput === asked.input;
-	const about = { ...(same ? base.about : {}) };
-	const choices = { ...(same ? base.choices : {}) };
+	const about: Record<string, number> = {};
+	const choices: Record<string, string> = {};
 	for (const [key, id] of Object.entries(asked.aboutIds)) {
 		const p = noulOf(answers[key]);
 		if (p !== undefined) about[id] = p;
@@ -235,7 +240,14 @@ export function mergeAnalysis(
 		const choice = choiceOf(answers[key]);
 		if (choice) choices[choiceKey] = choice.id;
 	}
-	return { ...base, identityInput: asked.input, about, choices };
+	if (!Object.keys(about).length && !Object.keys(choices).length) return null;
+	const same = base.identityInput === asked.input;
+	return {
+		...base,
+		identityInput: asked.input,
+		about: { ...(same ? base.about : {}), ...about },
+		choices: { ...(same ? base.choices : {}), ...choices }
+	};
 }
 
 const withoutUndefined = (analysis: Analysis): Analysis =>

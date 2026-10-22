@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NOW } from '../../src/lib/model/testing';
 import type { SourceSpec } from '../../src/lib/model/types';
-import { fetchItems, type SearchHit } from '../github';
-import { readNotifications, readSources } from '../workspace/readers';
+import { CallBudget, fetchItems, type SearchHit } from '../github';
+import { githubReaders, readNotifications, readSources } from '../workspace/readers';
 import { initialSync } from '../workspace/work';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -30,11 +30,16 @@ const hit = (section: string, id: string, updatedAt = '2026-10-22T10:00:00Z'): S
 
 describe('readSources', () => {
 	it('gives each source its own window, and a failed search its own failure', async () => {
-		const result = await readSources('t', [spec('a'), spec('b'), spec('c', 'board')], {
-			search: async () =>
-				answer([hit('a', 'PR_1'), hit('a', 'PR_1', '2026-10-22T11:00:00Z')], ['b']),
-			board: async () => answer([hit('c', 'PR_2')])
-		});
+		const result = await readSources(
+			't',
+			[spec('a'), spec('b'), spec('c', 'board')],
+			new CallBudget(10),
+			{
+				search: async () =>
+					answer([hit('a', 'PR_1'), hit('a', 'PR_1', '2026-10-22T11:00:00Z')], ['b']),
+				board: async () => answer([hit('c', 'PR_2')])
+			}
+		);
 		expect(result.reads.get('a')).toEqual({
 			outcome: 'ok',
 			window: {
@@ -51,7 +56,7 @@ describe('readSources', () => {
 
 	it('marks a full page of results as truncated', async () => {
 		const hits = Array.from({ length: 100 }, (_, i) => hit('a', `PR_${i}`));
-		const result = await readSources('t', [spec('a')], {
+		const result = await readSources('t', [spec('a')], new CallBudget(10), {
 			search: async () => answer(hits),
 			board: async () => answer([])
 		});
@@ -162,5 +167,66 @@ describe('readNotifications', () => {
 				}
 			]
 		});
+	});
+});
+
+describe('call budget', () => {
+	it('stops at a rate limit and keeps its deadline', async () => {
+		const calls = vi.fn(
+			async () => new Response('slow down', { status: 429, headers: { 'Retry-After': '3600' } })
+		);
+		vi.stubGlobal('fetch', calls);
+		const budget = new CallBudget(10);
+		const ids = Array.from({ length: 60 }, (_, i) => `I_${i}`);
+		const result = await fetchItems('t', 'ian', ids, budget);
+		expect(result.failed).toHaveLength(60);
+		expect(budget.retryAt).toBeGreaterThan(Date.now());
+		expect(calls.mock.calls.length).toBeLessThan(3);
+	});
+
+	it('bounds retries of a request GitHub keeps timing out', async () => {
+		const calls = vi.fn(async () => new Response('bad gateway', { status: 502 }));
+		vi.stubGlobal('fetch', calls);
+		const ids = Array.from({ length: 40 }, (_, i) => `I_${i}`);
+		await fetchItems('t', 'ian', ids, new CallBudget(8));
+		expect(calls.mock.calls.length).toBeLessThanOrEqual(8);
+	});
+});
+
+describe('board sources', () => {
+	it('drops a board GitHub says is gone at once, and keeps a board that only failed', async () => {
+		const board = spec('b', 'board');
+		const result = await readSources('t', [board], new CallBudget(10), {
+			search: async () => answer([]),
+			board: async () => ({ ...answer([], ['b']), errors: ['Could not resolve'] })
+		});
+		expect(result.reads.get('b')).toEqual({ outcome: 'gone', error: 'Could not resolve' });
+		const retryable = await readSources('t', [board], new CallBudget(10), {
+			search: async () => answer([]),
+			board: async () => ({
+				...answer([], ['b']),
+				failedQueries: [{ section: 'b', q: board.query }]
+			})
+		});
+		expect(retryable.reads.get('b')).toMatchObject({ outcome: 'failed' });
+	});
+
+	it('takes truncation from the board page, not from the filtered rows', async () => {
+		const result = await readSources('t', [spec('b', 'board')], new CallBudget(10), {
+			search: async () => answer([]),
+			board: async () => ({ ...answer([hit('b', 'PR_1')]), truncatedSections: new Set(['b']) })
+		});
+		expect(result.reads.get('b')).toMatchObject({ window: { truncated: true } });
+	});
+});
+
+describe('githubReaders', () => {
+	it('reports no teams when the team request throws, so other work goes on', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Promise.reject(new Error('timeout')))
+		);
+		const readers = githubReaders(async () => ({ token: 't', me: 'ian' }));
+		expect(await readers.teams(new CallBudget(5))).toBeNull();
 	});
 });

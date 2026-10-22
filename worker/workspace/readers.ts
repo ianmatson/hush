@@ -8,31 +8,53 @@ import {
 	githubStatusMessage,
 	listNotifications,
 	searchShort,
-	subjectNumber
+	subjectNumber,
+	type CallBudget,
+	type SearchHit
 } from '../github';
 import { decide, decisionsAvailable, type DecisionEnv } from '../decide';
 import { boardShort, itemStatuses } from '../projects';
 import type { NotificationCursor } from './work';
-import type { NotificationsResult, Readers, SourcesResult } from './workspace';
+import type { NotificationsResult, Readers, SourcesResult } from './engine';
 
 const SECOND_MS = 1000;
 
-type ShortSearch = typeof searchShort;
+export interface Credential {
+	token: string;
+	me: string;
+}
+
+interface ShortResult {
+	hits: SearchHit[];
+	errors: string[];
+	failedSections: Set<string>;
+	failedQueries: ExpandedQuery[];
+	truncatedSections?: Set<string>;
+}
+
+type ShortReader = (
+	token: string,
+	queries: ExpandedQuery[],
+	budget?: CallBudget
+) => Promise<ShortResult>;
 
 export async function readSources(
 	token: string,
 	specs: SourceSpec[],
-	run: { search: ShortSearch; board: ShortSearch }
+	budget: CallBudget,
+	run: { search: ShortReader; board: ShortReader }
 ): Promise<SourcesResult> {
 	const queries = (adapter: SourceSpec['adapter']): ExpandedQuery[] =>
 		specs
 			.filter((spec) => spec.adapter === adapter)
 			.map((spec) => ({ section: spec.id, q: spec.query }));
-	const [searched, boards] = await Promise.all([
-		run.search(token, queries('search')),
-		run.board(token, queries('board'))
-	]);
+	const searched = await run.search(token, queries('search'), budget);
+	const boards = await run.board(token, queries('board'), budget);
 	const failed = new Set([...searched.failedSections, ...boards.failedSections]);
+	const retryable = new Set(
+		[...searched.failedQueries, ...boards.failedQueries].map((query) => query.section)
+	);
+	const truncated = new Set([...(boards.truncatedSections ?? [])]);
 	const errors = [...searched.errors, ...boards.errors];
 	const candidates = new Map<string, Map<string, SourceCandidate>>();
 	for (const hit of [...searched.hits, ...boards.hits]) {
@@ -43,18 +65,24 @@ export async function readSources(
 		candidates.set(hit.query.section, found);
 	}
 	const reads = new Map<string, SourceRead>(
-		specs.map((spec) => {
+		specs.map((spec): [string, SourceRead] => {
+			const error = errors[0] ?? 'GitHub did not return this search.';
 			if (failed.has(spec.id))
 				return [
 					spec.id,
-					{ outcome: 'failed', error: errors[0] ?? 'GitHub did not return this search.' }
+					spec.adapter === 'board' && !retryable.has(spec.id)
+						? { outcome: 'gone', error }
+						: { outcome: 'failed', error }
 				];
 			const found = [...(candidates.get(spec.id)?.values() ?? [])];
 			return [
 				spec.id,
 				{
 					outcome: 'ok',
-					window: { candidates: found, truncated: found.length >= SOURCE_RESULTS_MAX }
+					window: {
+						candidates: found,
+						truncated: truncated.has(spec.id) || found.length >= SOURCE_RESULTS_MAX
+					}
 				}
 			];
 		})
@@ -64,13 +92,16 @@ export async function readSources(
 
 export async function readNotifications(
 	token: string,
-	cursor: NotificationCursor
+	cursor: NotificationCursor,
+	budget?: CallBudget
 ): Promise<NotificationsResult> {
 	let page;
 	try {
-		page = await listNotifications(token, {
-			ifModifiedSince: cursor.initialized ? cursor.lastModified : null
-		});
+		page = await listNotifications(
+			token,
+			{ ifModifiedSince: cursor.initialized ? cursor.lastModified : null },
+			budget
+		);
 	} catch (error) {
 		return { status: 'failed', error: `Network error: ${(error as Error).message}` };
 	}
@@ -100,20 +131,33 @@ export async function readNotifications(
 	};
 }
 
-export function githubReaders(token: string, me: string): Readers {
+export function githubReaders(credential: () => Promise<Credential>): Readers {
 	return {
-		notifications: (cursor) => readNotifications(token, cursor),
-		sources: (specs) => readSources(token, specs, { search: searchShort, board: boardShort }),
-		async items(ids) {
-			const { read, inaccessible, failed } = await fetchItems(token, me, ids);
+		async notifications(cursor, budget) {
+			const { token } = await credential();
+			return readNotifications(token, cursor, budget);
+		},
+		async sources(specs, budget) {
+			const { token } = await credential();
+			return readSources(token, specs, budget, { search: searchShort, board: boardShort });
+		},
+		async items(ids, budget) {
+			const { token, me } = await credential();
+			const { read, inaccessible, failed } = await fetchItems(token, me, ids, budget).catch(() => ({
+				read: [],
+				inaccessible: [],
+				failed: ids
+			}));
 			return { read, inaccessible, failed };
 		},
-		async teams() {
-			const { teams, error } = await fetchTeams(token, me);
-			return error ? null : teams;
+		async teams(budget) {
+			const { token, me } = await credential();
+			const result = await fetchTeams(token, me, budget).catch(() => null);
+			return result && !result.error ? result.teams : null;
 		},
-		async projects(ids) {
-			const result = await itemStatuses(token, ids).catch(() => null);
+		async projects(ids, budget) {
+			const { token } = await credential();
+			const result = await itemStatuses(token, ids, budget).catch(() => null);
 			if (!result) return { statusOf: new Map(), incomplete: new Set(ids), definitions: [] };
 			const missing = ids.filter((id) => !result.statusOf.has(id));
 			return {
