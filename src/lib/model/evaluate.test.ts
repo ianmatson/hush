@@ -3,7 +3,7 @@ import { snapshotOf } from '../shared/changes';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../shared/durations';
 import { conditionId } from '../shared/decisions';
 import type { CategoryGroup } from '../shared/types';
-import { analysisView } from './analysis';
+import { analysisView, identityInput, identityInputOf, replyInputOf } from './analysis';
 import {
 	BY_TOPIC,
 	EFFORT,
@@ -232,6 +232,76 @@ describe('unknown answers', () => {
 			smartDecisions: false
 		});
 		expect(w.evaluator.membership(w.compiled.views[0]).members.size).toBe(0);
+	});
+});
+
+describe('uncertain and ordered answers', () => {
+	const topicView = [view('v', ['is:pr is:open category:topic/other'])];
+
+	it('keeps an uncertain about: answer unknown, also when negated', () => {
+		const pr = facts(26);
+		const uncertain = item(pr, {
+			analysis: {
+				...answeredEffort(pr, 'low'),
+				choices: {},
+				about: { [conditionId('database migrations')]: 0.5 }
+			}
+		});
+		const w = world({
+			views: topicView,
+			items: [uncertain],
+			results: { 0: [pr.id] },
+			compile: { categoryGroups: [BY_TOPIC] }
+		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.size).toBe(0);
+		expect(found.unsettled.has(pr.id)).toBe(true);
+	});
+
+	it('rejects a category that an earlier rule already ruled out, while a later rule waits', () => {
+		const sized: CategoryGroup = {
+			id: 'sized',
+			name: 'Sized',
+			categories: [
+				{
+					id: 'low',
+					name: 'Low',
+					color: 'green',
+					icon: 'lucide:dot',
+					rule: 'size:<50',
+					description: ''
+				},
+				{
+					id: 'db',
+					name: 'Db',
+					color: 'red',
+					icon: 'lucide:database',
+					rule: 'about:"database migrations"',
+					description: ''
+				}
+			]
+		};
+		const big = facts(27, { additions: 500, deletions: 500 });
+		const w = world({
+			views: [view('v', ['is:pr is:open category:sized/low'])],
+			items: [item(big)],
+			results: { 0: [big.id] },
+			compile: { categoryGroups: [sized] }
+		});
+		const found = w.evaluator.membership(w.compiled.views[0]);
+		expect(found.members.size).toBe(0);
+		expect(found.unsettled.size).toBe(0);
+	});
+});
+
+describe('analysis inputs', () => {
+	it('gives category questions only identity fields, so roles cannot make their answers stale', () => {
+		const requested = facts(28, { reviewRequests: [{ name: ME, team: false }] });
+		const notRequested = { ...requested, reviewRequests: [] };
+		expect(identityInput(requested)).not.toHaveProperty('you');
+		expect(identityInput(requested)).not.toHaveProperty('comments');
+		expect(identityInputOf(notRequested)).toBe(identityInputOf(requested));
+		expect(replyInputOf(notRequested, ME)).not.toBe(replyInputOf(requested, ME));
 	});
 });
 

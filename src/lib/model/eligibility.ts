@@ -8,15 +8,17 @@ export type Tri = boolean | null;
 
 export interface Knowledge {
 	smartOn: boolean;
-	about: ReadonlyMap<string, boolean>;
+	about: ReadonlyMap<string, boolean | null>;
 	choices: ReadonlyMap<string, string>;
 }
 
 export interface GroupPlacement {
 	group: CategoryGroup;
-	categoryId: string | null;
-	known: boolean;
+	possible: (string | null)[];
 }
+
+export const placedCategory = (placement: GroupPlacement) =>
+	placement.possible.length === 1 ? placement.possible[0] : null;
 
 const all = (values: Tri[]): Tri =>
 	values.includes(false) ? false : values.includes(null) ? null : true;
@@ -41,21 +43,20 @@ export function exprTri(expr: QueryExpr, leaf: (when: RuleMatch) => Tri): Tri {
 
 function aboutTri(texts: string[], knowledge: Knowledge): Tri {
 	if (!knowledge.smartOn) return false;
-	const answers = texts.map((text) => knowledge.about.get(conditionId(text)));
-	if (answers.includes(true)) return true;
-	return answers.includes(undefined) ? null : false;
+	return any(texts.map((text) => knowledge.about.get(conditionId(text)) ?? null));
 }
 
 function categoryTri(globs: string[], placements: GroupPlacement[]): Tri {
-	const nameOf = (placement: GroupPlacement, categoryId: string | null) => {
-		const category = placement.group.categories.find((c) => c.id === categoryId);
-		return category ? categoryQueryName(placement.group, category) : undefined;
+	const matches = (group: CategoryGroup, categoryId: string | null) => {
+		const category = group.categories.find((c) => c.id === categoryId);
+		return !!category && matchGlobs(categoryQueryName(group, category), globs);
 	};
-	const matches = (name: string | undefined) => !!name && matchGlobs(name, globs);
-	if (placements.some((p) => p.known && matches(nameOf(p, p.categoryId)))) return true;
-	const couldMatch = (p: GroupPlacement) =>
-		!p.known && p.group.categories.some((c) => matches(nameOf(p, c.id)));
-	return placements.some(couldMatch) ? null : false;
+	return any(
+		placements.map((placement) => {
+			const outcomes = placement.possible.map((id) => matches(placement.group, id));
+			return outcomes.every(Boolean) ? true : outcomes.some(Boolean) ? null : false;
+		})
+	);
 }
 
 function leafTri(
@@ -91,19 +92,25 @@ function placeGroup(
 	knowledge: Knowledge
 ): GroupPlacement {
 	const pinned = group.categories.find((category) => pins.includes(category.id));
-	if (pinned) return { group, categoryId: pinned.id, known: true };
+	if (pinned) return { group, possible: [pinned.id] };
+	const possible = new Set<string | null>();
 	for (const category of group.categories) {
 		if (!usableRule(category.rule)) continue;
 		const value = queryTri(category.rule, facts, knowledge, []);
-		if (value === null) return { group, categoryId: null, known: false };
-		if (value) return { group, categoryId: category.id, known: true };
+		if (value === false) continue;
+		possible.add(category.id);
+		if (value) return { group, possible: [...possible] };
 	}
+	for (const outcome of fallbackOutcomes(group, knowledge)) possible.add(outcome);
+	return { group, possible: [...possible] };
+}
+
+function fallbackOutcomes(group: CategoryGroup, knowledge: Knowledge): (string | null)[] {
 	const choice = knowledge.smartOn ? groupChoice(group) : null;
-	if (!choice) return { group, categoryId: null, known: true };
-	if (!knowledge.choices.has(choice.key)) return { group, categoryId: null, known: false };
+	if (!choice) return [null];
+	if (!knowledge.choices.has(choice.key)) return [...group.categories.map((c) => c.id), null];
 	const chosen = knowledge.choices.get(choice.key);
-	const valid = group.categories.some((category) => category.id === chosen);
-	return { group, categoryId: valid ? chosen! : null, known: true };
+	return [group.categories.some((category) => category.id === chosen) ? chosen! : null];
 }
 
 export const placeGroups = (

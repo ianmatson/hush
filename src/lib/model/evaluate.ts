@@ -10,7 +10,13 @@ import { dashFactsOf, enrichmentOf, subjectRuleFacts, type SubjectFacts } from '
 import type { CategoryGroup, DashSettings, RuleFacts, TeamDTO } from '../shared/types';
 import type { DashFacts } from '../shared/dashboard';
 import { analysisView, type AnalysisView } from './analysis';
-import { placeGroups, queryTri, type GroupPlacement, type Tri } from './eligibility';
+import {
+	placeGroups,
+	placedCategory,
+	queryTri,
+	type GroupPlacement,
+	type Tri
+} from './eligibility';
 import { sourceHealth, staleUntil, usableWindow } from './sources';
 import type {
 	Attention,
@@ -104,7 +110,7 @@ const RELATIVE_DAY = /@today/i;
 const nextDayStart = (now: number) => Math.floor(now / DAY_MS) * DAY_MS + DAY_MS;
 
 const knownCategories = (placements: GroupPlacement[]) =>
-	placements.flatMap((p) => (p.known && p.categoryId ? [p.categoryId] : []));
+	placements.flatMap((placement) => placedCategory(placement) ?? []);
 
 const minimum = (values: (number | null)[], after: number) =>
 	values.reduce<number | null>(

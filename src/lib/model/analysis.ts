@@ -1,21 +1,34 @@
 import {
-	contentHash,
 	cyrb53,
-	identityHash,
+	decisionState,
 	NO_DECISIONS,
-	rolesOf,
 	URGENT_SCORE,
 	yesOrNo,
+	type DecisionState,
 	type SubjectDecisions
 } from '../shared/decisions';
 import type { SubjectFacts } from '../shared/subject';
 import type { Knowledge } from './eligibility';
 import type { Analysis } from './types';
 
-export const replyInputOf = (facts: SubjectFacts, me: string) =>
-	cyrb53(JSON.stringify([contentHash(facts), rolesOf(facts, me)]));
+export type IdentityInput = Pick<
+	DecisionState,
+	'title' | 'repo' | 'kind' | 'author' | 'labels' | 'body'
+>;
 
-export const identityInputOf = (facts: SubjectFacts) => identityHash(facts);
+export const replyInput = (facts: SubjectFacts, me: string): DecisionState =>
+	decisionState(facts, me);
+
+export function identityInput(facts: SubjectFacts): IdentityInput {
+	const { title, repo, kind, author, labels, body } = decisionState(facts, '');
+	return { title, repo, kind, author, labels, body };
+}
+
+const inputHash = (input: DecisionState | IdentityInput) => cyrb53(JSON.stringify(input));
+
+export const replyInputOf = (facts: SubjectFacts, me: string) => inputHash(replyInput(facts, me));
+
+export const identityInputOf = (facts: SubjectFacts) => inputHash(identityInput(facts));
 
 export interface AnalysisView {
 	decisions: SubjectDecisions;
@@ -33,7 +46,7 @@ const NOTHING_KNOWN = (smartOn: boolean): Knowledge => ({
 function knowledgeOf(analysis: Analysis): Knowledge {
 	return {
 		smartOn: true,
-		about: new Map(Object.entries(analysis.about).map(([id, p]) => [id, yesOrNo(p) === true])),
+		about: new Map(Object.entries(analysis.about).map(([id, p]) => [id, yesOrNo(p)])),
 		choices: new Map(Object.entries(analysis.choices))
 	};
 }

@@ -145,7 +145,7 @@ export function rolesOf(s: SubjectFacts, me: string): string[] {
 	return roles;
 }
 
-function decisionState(s: SubjectFacts, me: string): DecisionState {
+export function decisionState(s: SubjectFacts, me: string): DecisionState {
 	return {
 		title: s.title,
 		repo: s.repo,
