@@ -45,6 +45,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Tip from '$lib/components/app/tip.svelte';
+	import ScrollToBottom from '$lib/components/app/scroll-to-bottom.svelte';
 
 	const SEEN_AFTER_MS = 1500;
 	const PAGE_KEY_SCOPES: KeyScope[] = ['list', 'item', 'page'];
@@ -69,6 +70,7 @@
 	const items = createQuery(itemsQuery);
 	const dashItem = $derived(items.data?.rows.find((i) => i.id === itemKey));
 	let helpOpen = $state(false);
+	let pageContent = $state<HTMLElement | null>(null);
 
 	$effect(() => {
 		ui.itemDockOpen = true;
@@ -230,6 +232,7 @@
 <svelte:document onvisibilitychange={() => (pageVisible = isPageVisible())} />
 
 <div
+	bind:this={pageContent}
 	data-item-page
 	data-wide-page={onFilesTab ? '' : undefined}
 	data-item-ready={onFilesTab && pr ? itemKey : undefined}
@@ -321,5 +324,11 @@
 		<GhActions {repo} {number} need={null} moreAsIcon />
 	</div>
 </div>
+
+<ScrollToBottom
+	scroller={window}
+	content={pageContent}
+	class="fixed right-4 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)] lg:bottom-[max(1rem,env(safe-area-inset-bottom))]"
+/>
 
 <ShortcutsDialog bind:open={helpOpen} shortcuts={helpShortcuts} />
