@@ -145,6 +145,13 @@ export const api = {
 		ok(client.api.recheck.$post({ json: { repo, number } })),
 	peek: (repo: string, number: number) =>
 		ok(client.api.peek[':owner'][':repo'][':number'].$get({ param: itemParam(repo, number) })),
+	peekOlder: (repo: string, number: number, before: string) =>
+		ok(
+			client.api.peek[':owner'][':repo'][':number'].older.$get({
+				param: itemParam(repo, number),
+				query: { before }
+			})
+		),
 	pullFilesPage: async (repo: string, number: number, head: string, page: number) => {
 		const files: unknown = await ok(
 			client.api.diff[':owner'][':repo'][':number'].$get({

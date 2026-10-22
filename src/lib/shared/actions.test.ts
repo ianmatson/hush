@@ -17,7 +17,7 @@ const pr = (over: Partial<PeekDTO> = {}, can: Partial<PeekDTO['can']['pr']> = {}
 		html: '',
 		labels: [],
 		assignees: [],
-		timeline: { total: 0, items: [] },
+		timeline: { total: 0, items: [], before: null },
 		can: {
 			id: 'PR_1',
 			author: false,

@@ -11,9 +11,10 @@ import { live } from '$lib/live-state.svelte';
 import { DRAFTS_KEY } from '$lib/drafts';
 import { MINUTE_MS } from '$lib/shared/durations';
 import { pullFilePageCount } from '$lib/shared/diff';
+import { keepLoadedOlder } from '$lib/shared/peek-timeline';
 import { api, ApiError } from '$lib/api';
 import { withUnsavedSettings } from '$lib/unsaved-settings';
-import type { DashKind, MeDTO, Settings } from '$lib/shared/types';
+import type { DashKind, MeDTO, PeekDTO, Settings } from '$lib/shared/types';
 import type { ItemsResponse } from '$lib/model/present';
 
 export const queryClient = new QueryClient({
@@ -293,7 +294,11 @@ export const pullViewedQuery = (repo: string, number: number) =>
 export const peekQuery = (repo: string, number: number) =>
 	queryOptions({
 		queryKey: keys.peek(repo, number),
-		queryFn: () => api.peek(repo, number),
+		queryFn: async () =>
+			keepLoadedOlder(
+				queryClient.getQueryData<PeekDTO>(keys.peek(repo, number)),
+				await api.peek(repo, number)
+			),
 		staleTime: 2 * MINUTE_MS,
 		gcTime: 10 * MINUTE_MS,
 		refetchOnWindowFocus: false

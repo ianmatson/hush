@@ -59,7 +59,11 @@ function appendToPeekTimeline(repo: string, number: number, entry: PeekEntry) {
 		if (!old || old.timeline.items.some((e) => e.url === entry.url)) return old;
 		return {
 			...old,
-			timeline: { total: old.timeline.total + 1, items: [...old.timeline.items, entry] }
+			timeline: {
+				...old.timeline,
+				total: old.timeline.total + 1,
+				items: [...old.timeline.items, entry]
+			}
 		};
 	});
 }
