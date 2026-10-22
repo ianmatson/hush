@@ -1,18 +1,23 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { MERGE_LABEL } from '$lib/shared/actions';
 	import type { MergeMethod, PeekDTO } from '$lib/shared/types';
 
 	let {
 		open = $bindable(false),
 		method = $bindable(),
+		deleteBranch = $bindable(false),
+		canDeleteBranch,
 		p,
 		notice,
 		onconfirm
 	}: {
 		open?: boolean;
 		method: MergeMethod;
+		deleteBranch?: boolean;
+		canDeleteBranch: boolean;
 		p: PeekDTO;
 		notice: string | null;
 		onconfirm: () => void;
@@ -56,6 +61,12 @@
 					>
 				{/each}
 			</div>
+		{/if}
+		{#if canDeleteBranch && p.pr}
+			<label for="merge-delete-branch" class="flex cursor-pointer items-center gap-2 text-sm">
+				<Checkbox id="merge-delete-branch" bind:checked={deleteBranch} />
+				<span>Delete <span class="font-mono text-xs">{p.pr.head}</span> after the merge</span>
+			</label>
 		{/if}
 		{#if notice}<p class="text-muted-foreground">{notice}</p>{/if}
 		<div class="flex justify-end gap-2">

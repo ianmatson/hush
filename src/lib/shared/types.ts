@@ -540,6 +540,7 @@ export interface PeekCan {
 		mergeState: string;
 		methods: MergeMethod[];
 		mergeAsAdmin: boolean;
+		headBranchDeletable: boolean;
 		autoMerge: { on: boolean; method: MergeMethod | null; canEnable: boolean; canDisable: boolean };
 		/** Workflow runs with a failed job, for "Re-run failed jobs". */
 		failedRuns: number[];

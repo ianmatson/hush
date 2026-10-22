@@ -20,6 +20,11 @@ export interface PrRefs {
 	defaultBranch: string;
 }
 
+export interface MergeRefs extends PrRefs {
+	headRepo: string | null;
+	repoDeletesHeadBranches: boolean;
+}
+
 type GitHubStack = {
 	number: number;
 	pull_requests: { number: number; state: string; merged_at: string | null }[];
@@ -32,16 +37,21 @@ const json = (payload: unknown): RequestInit => ({
 	body: JSON.stringify(payload)
 });
 
-export async function readPrRefs(token: string, repo: string, number: number): Promise<PrRefs> {
+export async function readPrRefs(token: string, repo: string, number: number): Promise<MergeRefs> {
 	const [owner, name] = repo.split('/');
 	const data = await graphqlData<{
 		repository: {
 			defaultBranchRef: { name: string } | null;
-			pullRequest: { headRefName: string; baseRefName: string } | null;
+			deleteBranchOnMerge: boolean;
+			pullRequest: {
+				headRefName: string;
+				baseRefName: string;
+				headRepository: { nameWithOwner: string } | null;
+			} | null;
 		} | null;
 	}>(
 		token,
-		'query($o: String!, $r: String!, $n: Int!) { repository(owner: $o, name: $r) { defaultBranchRef { name } pullRequest(number: $n) { headRefName baseRefName } } }',
+		'query($o: String!, $r: String!, $n: Int!) { repository(owner: $o, name: $r) { defaultBranchRef { name } deleteBranchOnMerge pullRequest(number: $n) { headRefName baseRefName headRepository { nameWithOwner } } } }',
 		{ o: owner, r: name, n: number }
 	);
 	const pr = data.repository?.pullRequest;
@@ -50,7 +60,9 @@ export async function readPrRefs(token: string, repo: string, number: number): P
 		number,
 		head: pr.headRefName,
 		base: pr.baseRefName,
-		defaultBranch: data.repository?.defaultBranchRef?.name ?? ''
+		defaultBranch: data.repository?.defaultBranchRef?.name ?? '',
+		headRepo: pr.headRepository?.nameWithOwner ?? null,
+		repoDeletesHeadBranches: !!data.repository?.deleteBranchOnMerge
 	};
 }
 

@@ -12,11 +12,13 @@ import type { MergeMethod, PeekDTO, PeekEntry } from '$lib/shared/types';
 export const acting = $state<{ id: GhActionId | null }>({ id: null });
 
 const STILL_MERGING = 'GitHub is still merging';
+const MERGED_AND_DELETED = 'Merged, and deleted the branch';
+const BRANCH_KEPT = 'Merged, but GitHub kept the branch';
 
 export async function sendAction(
 	p: PeekDTO,
 	id: GhActionId,
-	opts: { body?: string; method?: MergeMethod } = {}
+	opts: { body?: string; method?: MergeMethod; deleteBranch?: boolean } = {}
 ): Promise<boolean> {
 	acting.id = id;
 	if (GH_ACTIONS[id].endsItem) releasePeekHold();
@@ -29,6 +31,7 @@ export async function sendAction(
 			action: id,
 			body: opts.body,
 			method: opts.method,
+			deleteBranch: opts.deleteBranch,
 			sha: p.can.pr?.headOid,
 			runs: p.can.pr?.failedRuns,
 			id: p.can.id
@@ -39,6 +42,9 @@ export async function sendAction(
 			queryClient.invalidateQueries({ queryKey: keys.peek(p.repo, p.number) });
 		refetchUnlessLive(keys.items);
 		if (res.stillMerging) progress.info(STILL_MERGING);
+		else if (res.branchError)
+			progress.info(BRANCH_KEPT, { description: `${p.pr?.head}: ${res.branchError}` });
+		else if (res.deletedBranch) progress.success(MERGED_AND_DELETED);
 		else progress.success(GH_ACTIONS[id].done, undoFor(p, id, opts));
 		return true;
 	} catch (err) {

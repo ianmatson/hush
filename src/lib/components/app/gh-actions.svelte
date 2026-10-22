@@ -7,7 +7,7 @@
 	import { palette } from '$lib/palette.svelte';
 	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import { acting, focusComposer, sendAction } from '$lib/gh-act.svelte';
-	import { preferMergeMethod, preferredMerge } from '$lib/merge-method.svelte';
+	import { preferDeleteBranch, preferMergeMethod, preferredMerge } from '$lib/merge-method.svelte';
 	import {
 		GH_ACTIONS,
 		MERGE_LABEL,
@@ -47,6 +47,7 @@
 
 	const stackPlan = $derived(p ? stackMergePlan(p.number, p.can.pr?.stack ?? NO_STACK) : null);
 	const stackNotice = $derived(stackPlan ? stackMergeNotice(stackPlan) : null);
+	const canDeleteBranch = $derived(!!p?.can.pr?.headBranchDeletable && stackPlan?.kind === 'plain');
 
 	let pickedHere = $state<{ pr: string; method: MergeMethod } | null>(null);
 	const method = $derived.by((): MergeMethod => {
@@ -78,7 +79,10 @@
 			mergeDialogOpen = true;
 			return;
 		}
-		void sendAction(p, id, { method });
+		void sendAction(p, id, {
+			method,
+			deleteBranch: canDeleteBranch && preferredMerge.deleteBranch
+		});
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -203,6 +207,8 @@
 	<MergeDialog
 		bind:open={mergeDialogOpen}
 		bind:method={() => method, chooseMethod}
+		bind:deleteBranch={() => preferredMerge.deleteBranch, preferDeleteBranch}
+		{canDeleteBranch}
 		{p}
 		notice={stackNotice}
 		onconfirm={() => run('merge', 'now')}
