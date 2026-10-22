@@ -3,7 +3,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
-	import { followWhileGrowing, revealEntry } from '$lib/reveal';
+	import { followWhileGrowing, keepInPlace, revealEntry } from '$lib/reveal';
 	import {
 		meQuery,
 		peekQuery,
@@ -119,6 +119,8 @@
 	const shownSubject = $derived(subjectKey(repo, number));
 	const hiddenOlder = $derived(q.data ? hiddenOlderCount(q.data) : 0);
 	let olderLoadingFor = $state<string | null>(null);
+	let prependingOlder = $state(false);
+	let activity = $state<HTMLElement | null>(null);
 	let olderError = $state<{ subject: string; message: string } | null>(null);
 	async function loadOlder(p: PeekDTO) {
 		const before = p.timeline.before;
@@ -128,14 +130,18 @@
 		olderError = null;
 		try {
 			const page = await api.peekOlder(p.repo, p.number, before);
-			queryClient.setQueryData<PeekDTO>(
-				keys.peek(p.repo, p.number),
-				(old) => old && withOlderPage(old, before, page)
+			prependingOlder = true;
+			await keepInPlace(activity?.querySelector('[data-peek-entry]') ?? null, () =>
+				queryClient.setQueryData<PeekDTO>(
+					keys.peek(p.repo, p.number),
+					(old) => old && withOlderPage(old, before, page)
+				)
 			);
 		} catch (err) {
 			olderError = { subject, message: (err as Error).message };
 		} finally {
 			olderLoadingFor = null;
+			prependingOlder = false;
 		}
 	}
 	let allChecks = $state(false);
@@ -374,7 +380,7 @@
 			{#if p.reactions}<ReactionBar r={p.reactions} class="mt-3" />{/if}
 		</section>
 
-		<section class="grid">
+		<section class="grid" bind:this={activity}>
 			<h3 class="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
 				<MessageSquare class="size-3.5" />Activity
 				{#if hiddenOlder && p.timeline.before}
@@ -421,7 +427,11 @@
 				{@const canEdit =
 					e.canEdit && typeof e.body === 'string' && (e.type !== 'review' || !!e.body.trim())}
 				{@const showReactions = e.reactions && (e.html.trim() || e.reactions.groups.length)}
-				<div class="grid gap-1.5 pb-3" in:revealEntry>
+				<div
+					class="grid gap-1.5 pb-3"
+					data-peek-entry
+					in:revealEntry={{ instant: prependingOlder }}
+				>
 					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
 						<GhLink
 							href={profileUrl(e.author.login, e.author.bot)}
