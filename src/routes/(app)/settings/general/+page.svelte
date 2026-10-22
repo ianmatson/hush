@@ -5,6 +5,7 @@
 	import SwipeSettings from '$lib/components/app/settings/swipe-settings.svelte';
 	import SettingsFile from '$lib/components/app/settings/settings-file.svelte';
 	import AccountSettings from '$lib/components/app/settings/account-settings.svelte';
+	import WebhookSettings from '$lib/components/app/settings/webhook-settings.svelte';
 </script>
 
 <svelte:head><title>General · Settings · Hush</title></svelte:head>
@@ -16,5 +17,6 @@
 	<MenuSettings />
 	<SwipeSettings />
 	<AccountSettings />
+	<WebhookSettings />
 	<SettingsFile />
 </div>

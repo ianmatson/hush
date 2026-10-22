@@ -80,6 +80,15 @@ Hush shows the first error under the box, and saves nothing until the file is va
 
 Hush shows only the actions that you can do now. Look in **More**: a blocked action is there with the reason, such as “It has merge conflicts.” or “You cannot merge in this repository.” See [Actions on GitHub](/docs/peek#actions-on-github).
 
+## An installed org sends no webhook updates
+
+If items of an org with the Hush GH app still update only every few minutes, check these:
+
+- **The org approved Hush.** The app sends changes, but Hush reads each item with your own access. See [When an org is missing](/docs/github-access#when-an-org-is-missing).
+- **The app has the repository.** An owner can install the app on selected repositories only. **Manage** in **Settings → General → Webhook updates** opens the list on GitHub.
+- **The app is not suspended.** An owner can suspend it; the card then shows **Suspended by an owner**.
+- **The change is one that webhooks cover.** CI of pull requests from forks, and new items, come from polling. See [Webhook updates](/docs/github-access#webhook-updates).
+
 ## Hush looks out of date
 
 An installed app can stay in the background for days. Each time Hush comes back to the screen, it checks for a new version and loads it. To load it at once, reload the page, or close the app and open it again.

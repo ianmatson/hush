@@ -5,7 +5,7 @@ description: What Hush stores about you, where it keeps it, who else sees it, an
 
 Hush is a small open-source app. It runs your GitHub searches and reads your GitHub notifications so that it can show your lists and push what changed, and that is all it uses your data for. It has no ads and no analytics, and it does not sell or share your data. Everything below is also in [the source code](https://github.com/ianmatson/hush).
 
-_Last updated: 12 October 2026._
+_Last updated: 22 October 2026._
 
 ## The short version
 
@@ -30,6 +30,7 @@ _Last updated: 12 October 2026._
 - The categories of your pull requests and issues, and the ones that you chose by hand.
 - The results of your searches, and the items that you snoozed or muted.
 - Your teams (their names), for team review requests.
+- If an org installed the [Hush GH app](/docs/github-access#webhook-updates): for each pull request and issue that you track, its repository id and number, so that GitHub's change events reach your lists. From each event, Hush reads only the event name, the repository id, and the item numbers. It does not store the events.
 
 The [peek](/docs/peek) shows a PR's whole description and all its comments when you open it, and its changed files when you open the **Files** tab. Hush gets them from GitHub at that moment and does not keep them. Hush reads no other code.
 
@@ -65,7 +66,7 @@ Hush deletes this when:
 
 ## Where it is kept
 
-Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your lists, settings, alerts, and devices are in a database of their own for your account (a Cloudflare Durable Object). Your account, sessions, and feeds are in one shared database (Cloudflare D1).
+Hush runs on [Cloudflare](https://www.cloudflare.com) Workers. Your lists, settings, alerts, and devices are in a database of their own for your account (a Cloudflare Durable Object). Your account, sessions, feeds, and the repository id and number of the items that you track for webhook updates are in one shared database (Cloudflare D1).
 
 ## Who else sees it
 

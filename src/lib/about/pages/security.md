@@ -22,6 +22,8 @@ When you approve Hush, each member who signs in to Hush can use it with their ow
 
 You can deny or revoke the approval at any time in your org's settings, under **Third-party access → OAuth app policy**. Members can revoke Hush for themselves in their own GitHub settings.
 
+You can also install the **Hush GH** app on your org, so that your members' lists update in seconds ([webhook updates](/docs/github-access#webhook-updates)). The app has read-only permissions (metadata, pull requests, issues, and checks), and Hush never uses it to read or write. GitHub sends its events to Hush; Hush checks the signature of each event, reads only the repository id and the item numbers from it, and stores no event. Then Hush reads the changed item again with the access of each member who tracks it. You can install the app on selected repositories only, and uninstall it at any time.
+
 ## How Hush protects your access
 
 - **Your token is encrypted** with AES-256-GCM before Hush stores it. The key is a secret of the server, not in the database. Each encrypted token is bound to your account, so it cannot be moved to another account and used there. Hush decrypts the token only on the server, to call GitHub, and never sends it to your browser.

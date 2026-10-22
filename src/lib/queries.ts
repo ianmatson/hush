@@ -74,6 +74,7 @@ export const keys = {
 	items: ['items'] as const,
 	feeds: ['feeds'] as const,
 	sessions: ['sessions'] as const,
+	webhooks: ['webhooks'] as const,
 	pushDevices: ['push-devices'] as const,
 	slack: ['slack'] as const,
 	slackMentions: (repo: string, number: number, kind: DashKind) =>
@@ -149,6 +150,8 @@ export const rowsOfKind = (data: ItemsResponse | undefined, kind: DashKind) =>
 export const feedsQuery = () =>
 	queryOptions({ queryKey: keys.feeds, queryFn: api.feeds, staleTime: 5 * MINUTE_MS });
 export const sessionsQuery = () => queryOptions({ queryKey: keys.sessions, queryFn: api.sessions });
+export const webhooksQuery = () =>
+	queryOptions({ queryKey: keys.webhooks, queryFn: () => api.webhooks() });
 export const pushDevicesQuery = () =>
 	queryOptions({ queryKey: keys.pushDevices, queryFn: api.subscriptions });
 export const slackQuery = () => queryOptions({ queryKey: keys.slack, queryFn: api.slack });
