@@ -89,15 +89,17 @@
 		refetchUnlessLive(keys.items);
 	}
 	const reloadPeek = () => queryClient.invalidateQueries({ queryKey: keys.peek(repo, number) });
-	const descriptionTasks = (id: string) =>
+	const descriptionTasks = (id: string, markdown: string) =>
 		taskCheckboxes({
 			id,
-			onsaved: ({ html }: SavedTaskText) => updatePeek((old) => ({ ...old, html })),
+			markdown,
+			onsaved: ({ body, html }: SavedTaskText) => updatePeek((old) => ({ ...old, body, html })),
 			onconflict: reloadPeek
 		});
-	const entryTasks = (id: string) =>
+	const entryTasks = (id: string, markdown: string) =>
 		taskCheckboxes({
 			id,
+			markdown,
 			onsaved: (saved: SavedTaskText) =>
 				updatePeek((old) => ({
 					...old,
@@ -332,7 +334,7 @@
 		<section>
 			{#if p.html.trim()}
 				{#if p.can.update}
-					<div class="gh-html" {@attach descriptionTasks(p.can.id)}>
+					<div class="gh-html" {@attach descriptionTasks(p.can.id, p.body)}>
 						{@html sanitize(p.html, { editableTasks: true })}
 					</div>
 				{:else}
@@ -406,7 +408,7 @@
 					{:else if e.html.trim()}
 						<div
 							class="gh-html ml-7 rounded-lg bg-muted/50 px-3 py-2"
-							{@attach e.canUpdate ? entryTasks(e.id) : undefined}
+							{@attach e.canUpdate ? entryTasks(e.id, e.body ?? '') : undefined}
 						>
 							{@html sanitize(e.html, { editableTasks: !!e.canUpdate })}
 						</div>

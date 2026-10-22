@@ -14,15 +14,16 @@
 	});
 
 	$effect(() => {
-		if (!shown) return;
 		const close = () => itemHover.close();
 		const stopListening = [
 			on(window, 'keydown', close),
 			on(window, 'blur', close),
+			on(window, 'pointerdown', close, { capture: true }),
 			on(window, 'scroll', close, { capture: true, passive: true })
 		];
 		return () => {
 			for (const stop of stopListening) stop();
+			close();
 		};
 	});
 </script>

@@ -47,16 +47,14 @@ class ItemHover {
 			return;
 		}
 		if (this.#pending?.zone === zone) return;
-		clearTimeout(this.#openTimer);
 		this.#pending = { zone, entry, pointerX };
-		this.#openTimer = setTimeout(() => {
-			const pending = this.#pending;
-			if (pending) this.#show(pending.zone, pending.entry, pending.pointerX);
-		}, HOVER_OPEN_DELAY_MS);
+		this.#openAfterRest();
 	}
 
 	follow(zone: HTMLElement, pointerX: number) {
-		if (this.#pending?.zone === zone) this.#pending.pointerX = pointerX;
+		if (this.#pending?.zone !== zone) return;
+		this.#pending.pointerX = pointerX;
+		this.#openAfterRest();
 	}
 
 	leave(zone: HTMLElement) {
@@ -79,6 +77,14 @@ class ItemHover {
 		clearTimeout(this.#closeTimer);
 		this.#pending = null;
 		this.shown = null;
+	}
+
+	#openAfterRest() {
+		clearTimeout(this.#openTimer);
+		this.#openTimer = setTimeout(() => {
+			const pending = this.#pending;
+			if (pending) this.#show(pending.zone, pending.entry, pending.pointerX);
+		}, HOVER_OPEN_DELAY_MS);
 	}
 
 	#show(zone: HTMLElement, entry: HoveredItem, pointerX: number) {
@@ -111,8 +117,7 @@ export function itemHoverZone(hovered: () => HoveredItem): Attachment<HTMLElemen
 		const stopListening = [
 			on(zone, 'pointerover', enter),
 			on(zone, 'pointermove', (e) => itemHover.follow(zone, e.clientX)),
-			on(zone, 'pointerleave', () => itemHover.leave(zone)),
-			on(zone, 'pointerdown', () => itemHover.close())
+			on(zone, 'pointerleave', () => itemHover.leave(zone))
 		];
 		return () => {
 			for (const stop of stopListening) stop();

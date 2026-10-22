@@ -483,6 +483,7 @@ export interface PeekDTO {
 	author: PeekPerson;
 	authorAssociation?: string | null;
 	createdAt: string;
+	body: string;
 	html: string;
 	/** The description's reactions. */
 	reactions?: Reactions;
