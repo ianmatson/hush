@@ -45,10 +45,13 @@ const CONFIG_KEY = 'config';
 const REVISION_KEY = 'revision';
 const TITLE_SEPARATOR = ' · ';
 
+export type ChannelOutcome = 'sent' | 'failed';
+
 export type AlertDelivery =
 	| { status: 'pending' }
 	| { status: 'superseded'; by: string }
-	| { status: 'done'; channels: Record<string, 'sent' | 'failed' | 'skipped'> };
+	| { status: 'skipped'; reason: string }
+	| { status: 'sent'; at: number; channels: Record<string, ChannelOutcome> };
 
 export interface StoredAlert extends AlertCause {
 	createdAt: number;
@@ -232,6 +235,16 @@ export class WorkspaceStore {
 		return this.rows<AlertRow>(
 			`SELECT * FROM alerts WHERE json_extract(delivery, '$.status') = 'pending' ORDER BY created_at`
 		).map(alertOf);
+	}
+
+	lastPushes(): Map<string, { pushedAt: number; reason: string }> {
+		const rows = this.rows<{ item_id: string; reasons: string; at: number }>(
+			`SELECT item_id, reasons, json_extract(delivery, '$.at') AS at FROM alerts
+       WHERE json_extract(delivery, '$.status') = 'sent' ORDER BY at`
+		);
+		return new Map(
+			rows.map((row) => [row.item_id, { pushedAt: row.at, reason: JSON.parse(row.reasons)[0] }])
+		);
 	}
 
 	alertHistory(limit: number): StoredAlert[] {

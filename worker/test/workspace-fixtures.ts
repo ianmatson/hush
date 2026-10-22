@@ -5,12 +5,20 @@ import type { ItemView, Settings, TeamDTO } from '../../src/lib/shared/types';
 import { ANALYSIS_VERSION, EFFORT, ME, NOW } from '../../src/lib/model/testing';
 import type { ItemId, SourceSpec, SourceWindow } from '../../src/lib/model/types';
 import type { Config } from '../workspace/commit';
-import { WorkspaceStore, type SqlStorage, type SqlValue } from '../workspace/store';
+import {
+	WorkspaceStore,
+	type ChannelOutcome,
+	type SqlStorage,
+	type SqlValue
+} from '../workspace/store';
+import type { PushMessage } from '../webpush';
 import type {
 	ItemsResult,
 	NotificationsResult,
 	ProjectStatuses,
 	Readers,
+	Channel,
+	Sender,
 	SourcesResult,
 	WorkspaceDeps
 } from '../workspace/workspace';
@@ -105,14 +113,34 @@ export class FakeReaders implements Readers {
 		return this.projectStatuses;
 	}
 
+	inaccessible = new Set<ItemId>();
+
 	async items(ids: ItemId[]): Promise<ItemsResult> {
 		this.itemCalls.push(ids);
 		this.beforeItemsAnswer?.();
 		return {
 			read: ids.flatMap((id) => this.facts.get(id) ?? []),
-			inaccessible: [],
-			failed: ids.filter((id) => !this.facts.has(id))
+			inaccessible: ids.filter((id) => this.inaccessible.has(id)),
+			failed: ids.filter((id) => !this.facts.has(id) && !this.inaccessible.has(id))
 		};
+	}
+}
+
+export class FakeSender implements Sender {
+	open: Channel[] = ['push'];
+	sent: PushMessage[] = [];
+	outcome: ChannelOutcome = 'sent';
+
+	async channels() {
+		return this.open;
+	}
+
+	async send(message: PushMessage, channels: Channel[]) {
+		this.sent.push(message);
+		return Object.fromEntries(channels.map((channel) => [channel, this.outcome])) as Record<
+			Channel,
+			ChannelOutcome
+		>;
 	}
 }
 
@@ -124,11 +152,16 @@ export function harness() {
 	const alarms: (number | null)[] = [];
 	const announced: { revision: number; viewIds: string[] }[] = [];
 	let rejected = 0;
+	let alertAnnouncements = 0;
+	const sender = new FakeSender();
 	let now = NOW;
 	const deps: WorkspaceDeps = {
 		store,
 		readers,
 		analysisBudget: 1_000_000,
+		origin: 'https://app.hush-gh.com',
+		sender,
+		announceAlerts: () => void alertAnnouncements++,
 		setAlarm: (at) => void alarms.push(at),
 		announce: (revision, viewIds) => void announced.push({ revision, viewIds }),
 		credentialRejected: () => void rejected++
@@ -141,6 +174,8 @@ export function harness() {
 		alarms,
 		announced,
 		rejectedCount: () => rejected,
+		sender,
+		alertAnnouncements: () => alertAnnouncements,
 		clock: () => now,
 		advance: (ms: number) => void (now += ms)
 	};

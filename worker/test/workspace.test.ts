@@ -4,6 +4,7 @@ import type { ItemView } from '../../src/lib/shared/types';
 import { ME, facts } from '../../src/lib/model/testing';
 import type { DecisionRequest } from '../../src/lib/shared/decisions';
 import { Workspace, type Analyzed } from '../workspace/workspace';
+import type { Input } from '../workspace/commit';
 import { PAUSE_AFTER_NO_PUSH_MS, SOURCE_EVERY_MS } from '../workspace/work';
 import { configWith, harness, settingsWith, windowOf } from './workspace-fixtures';
 
@@ -70,9 +71,11 @@ describe('Workspace', () => {
 			pollIntervalMs: 60_000
 		});
 		await h.workspace.run(h.clock);
-		expect(h.store.pendingAlerts().map((a) => [a.itemId, a.reasons])).toEqual([
-			['PR_1', ['review-requested']]
-		]);
+		expect(h.sender.sent.map((m) => [m.tag, m.title])).toEqual([['PR_1', 'Review requested']]);
+		expect(h.store.alertHistory(5)[0]).toMatchObject({
+			reasons: ['review-requested'],
+			delivery: { status: 'sent' }
+		});
 		h.advance(10 * MINUTE_MS);
 		h.readers.notificationResults.push({
 			status: 'ok',
@@ -85,7 +88,7 @@ describe('Workspace', () => {
 		const calls = h.readers.itemCalls.length;
 		await h.workspace.run(h.clock);
 		expect(h.readers.itemCalls.length).toBe(calls);
-		expect(h.store.pendingAlerts()).toHaveLength(1);
+		expect(h.sender.sent).toHaveLength(1);
 	});
 
 	it('brings searches forward for a notification about an item no view has, once per five minutes', async () => {
@@ -416,5 +419,117 @@ describe('Workspace failures', () => {
 		h.workspace.touch(h.clock());
 		await h.workspace.run(h.clock);
 		expect(h.workspace.snapshot.items.has('PR_1')).toBe(false);
+	});
+});
+
+describe('Workspace delivery', () => {
+	function withAlert() {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		return h;
+	}
+
+	const reviewRequest = (h: ReturnType<typeof started>): Input => ({
+		kind: 'items',
+		read: [
+			facts(1, {
+				updatedAt: new Date(h.clock()).toISOString(),
+				reviewRequests: [{ name: ME, team: false }]
+			})
+		],
+		inaccessible: [],
+		quiet: false
+	});
+
+	it('records an alert as skipped while Hush is open, and announces the history', async () => {
+		const h = withAlert();
+		await h.workspace.run(h.clock);
+		h.workspace.appFocused(h.clock() + MINUTE_MS, h.clock());
+		h.workspace.apply(reviewRequest(h), h.clock());
+		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toEqual([]);
+		expect(h.store.alertHistory(5)[0].delivery).toEqual({ status: 'skipped', reason: 'app-open' });
+		expect(h.alertAnnouncements()).toBeGreaterThan(0);
+	});
+
+	it('waits for the digest window and wakes for it', async () => {
+		const h = withAlert();
+		await h.workspace.run(h.clock);
+		h.workspace.apply(
+			{
+				kind: 'settings',
+				settings: settingsWith(views, { pushDigestMinutes: 30, pushRepeat: 'every' })
+			},
+			h.clock()
+		);
+		h.workspace.apply(reviewRequest(h), h.clock());
+		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toHaveLength(1);
+		const digestAt = h.clock();
+		h.advance(MINUTE_MS);
+		h.workspace.apply(
+			{
+				kind: 'items',
+				read: [facts(1, { updatedAt: new Date(h.clock()).toISOString() })],
+				inaccessible: [],
+				quiet: false
+			},
+			h.clock()
+		);
+		h.advance(MINUTE_MS);
+		h.workspace.apply(reviewRequest(h), h.clock());
+		await h.workspace.run(h.clock);
+		expect(h.sender.sent).toHaveLength(1);
+		expect(h.workspace.schedule.deliveryDue).toBe(digestAt + 30 * MINUTE_MS);
+		expect(h.alarms.at(-1)).toBeLessThanOrEqual(digestAt + 30 * MINUTE_MS);
+	});
+});
+
+describe('Workspace storage and retries', () => {
+	it('waits after exhausted reads of a candidate it cannot store', async () => {
+		const h = started();
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		for (const wait of [0, 1, 2, 4, 8]) {
+			h.advance(wait * MINUTE_MS);
+			await h.workspace.run(h.clock);
+		}
+		expect(h.readers.itemCalls).toHaveLength(5);
+		await h.workspace.run(h.clock);
+		h.advance(MINUTE_MS);
+		await h.workspace.run(h.clock);
+		expect(h.readers.itemCalls).toHaveLength(5);
+	});
+
+	it('waits after a candidate turns out to be inaccessible', async () => {
+		const h = started();
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		h.readers.inaccessible.add('PR_1');
+		await h.workspace.run(h.clock);
+		expect(h.readers.itemCalls).toHaveLength(1);
+		expect(h.alarms.at(-1)).toBeGreaterThan(h.clock() + MINUTE_MS);
+	});
+
+	it('never writes again from a broken instance after the workspace reopened', async () => {
+		const h = started();
+		h.readers.facts.set('PR_1', facts(1));
+		h.readers.sourceResults.push(answerSearch(['PR_1']));
+		await h.workspace.run(h.clock);
+		h.advance(HOUR_MS + MINUTE_MS);
+		const writeState = h.store.writeState.bind(h.store);
+		let reopened: Workspace | null = null;
+		h.readers.beforeItemsAnswer = () => {
+			h.readers.beforeItemsAnswer = null;
+			h.store.writeState = () => {
+				throw new Error('disk full');
+			};
+			expect(() => h.workspace.touch(h.clock())).toThrow('disk full');
+			h.store.writeState = writeState;
+			reopened = Workspace.open(h.deps, h.clock())!;
+			reopened.apply({ kind: 'mute', itemIds: ['PR_1'], muted: true }, h.clock());
+		};
+		await h.workspace.run(h.clock);
+		expect(h.store.load()?.items.get('PR_1')?.attention.muted).toBe(true);
+		expect(reopened).not.toBeNull();
 	});
 });

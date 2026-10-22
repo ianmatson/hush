@@ -1,4 +1,5 @@
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../src/lib/shared/durations';
+import type { DeliveryState } from '../../src/lib/shared/push-policy';
 import type { ItemId } from '../../src/lib/model/types';
 
 export const NOTIFICATIONS_ACTIVE_MS = 5 * MINUTE_MS;
@@ -65,11 +66,16 @@ export interface Sync {
 	boundaryAt: number | null;
 	cleanupAt: number;
 	retryAt: Record<Resource, number>;
+	deliveryDue: number | null;
+	delivery: DeliveryState;
+	appSeenAt: number;
+	focusedUntil: number;
 	analysisUsage: { day: string; tokens: number };
 	lastError: string | null;
 }
 
 export interface Plan {
+	delivery: boolean;
 	notifications: boolean;
 	teams: boolean;
 	projects: boolean;
@@ -110,6 +116,10 @@ export function initialSync(now: number): Sync {
 		boundaryAt: null,
 		cleanupAt: now + CLEANUP_EVERY_MS,
 		retryAt: { github: 0, ai: 0 },
+		deliveryDue: null,
+		delivery: { recentSends: [], lastDigestAt: 0 },
+		appSeenAt: 0,
+		focusedUntil: 0,
 		analysisUsage: { day: '', tokens: 0 },
 		lastError: null
 	};
@@ -157,11 +167,18 @@ function githubDue(sync: Sync, interest: Interest): number | null {
 export function nextWake(sync: Sync, interest: Interest): number | null {
 	if (sync.lifecycle !== 'active') return null;
 	const analysisDue = sync.analysis.length ? sync.retryAt.ai : null;
-	return earliest([githubDue(sync, interest), analysisDue, sync.boundaryAt, sync.cleanupAt]);
+	return earliest([
+		githubDue(sync, interest),
+		analysisDue,
+		sync.boundaryAt,
+		sync.cleanupAt,
+		sync.deliveryDue
+	]);
 }
 
 export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 	const none: Plan = {
+		delivery: false,
 		notifications: false,
 		teams: false,
 		projects: false,
@@ -186,6 +203,7 @@ export function planRun(sync: Sync, interest: Interest, now: number): Plan {
 		.sort(([, a], [, b]) => a - b)
 		.map(([id]) => id);
 	return {
+		delivery: sync.deliveryDue !== null && sync.deliveryDue <= now,
 		notifications: github && sync.notifications.dueAt <= now,
 		teams: github && sync.teamsDue <= now,
 		projects: github && sync.projectsDue <= now,

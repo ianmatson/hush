@@ -9,7 +9,12 @@ import type { SourceRead } from '../../src/lib/model/sources';
 import type { SubjectFacts } from '../../src/lib/shared/subject';
 import type { ItemId, ProjectFacet, SourceSpec } from '../../src/lib/model/types';
 import { commit, type CommitResult, type Config, type Input, type WorkspaceData } from './commit';
-import type { WorkspaceStore } from './store';
+import { planDelivery } from './deliver';
+import type { ChannelOutcome, WorkspaceStore } from './store';
+import type { PushMessage } from '../webpush';
+import { keptSends } from '../../src/lib/shared/push-policy';
+import { attentionState } from '../../src/lib/model/evaluate';
+import { analysisView } from '../../src/lib/model/analysis';
 import {
 	analysisSpent,
 	analysisUsed,
@@ -21,6 +26,7 @@ import {
 	type ReadClaims,
 	MAX_ANALYSIS_QUEUE,
 	nextUtcDay,
+	SAFETY_READ_EVERY_MS,
 	PROJECTS_EVERY_MS,
 	TEAMS_EVERY_MS,
 	TEAMS_RETRY_MS,
@@ -102,12 +108,22 @@ export interface Readers {
 	analyze?(request: DecisionRequest): Promise<Analyzed | null>;
 }
 
+export type Channel = 'push' | 'slack';
+
+export interface Sender {
+	channels(): Promise<Channel[]>;
+	send(message: PushMessage, channels: Channel[]): Promise<Record<Channel, ChannelOutcome>>;
+}
+
 export interface WorkspaceDeps {
 	store: WorkspaceStore;
 	readers: Readers;
+	sender: Sender;
+	origin: string;
 	analysisBudget: number;
 	setAlarm(at: number | null): void;
 	announce(revision: number, viewIds: string[]): void;
+	announceAlerts(): void;
 	credentialRejected(): void;
 }
 
@@ -151,6 +167,7 @@ export class Workspace {
 	}
 
 	private persist(write: () => void) {
+		if (this.storageFailed) throw new Error('This workspace failed to save. Open it again.');
 		try {
 			write();
 		} catch (error) {
@@ -168,11 +185,12 @@ export class Workspace {
 			)
 		};
 		const pending = new Set([...interest.ids, ...Object.keys(this.sync.reads)]);
-		const stored = new Set(result.data.items.keys());
+		const remembered = new Set([...result.data.items.keys(), ...pending]);
 		const sync: Sync = {
-			...forgetReads(withSources(this.sync, result.data.sources.keys(), now), pending, stored),
+			...forgetReads(withSources(this.sync, result.data.sources.keys(), now), pending, remembered),
 			boundaryAt: result.nextBoundary,
-			analysis: this.analysisQueue(result.data, interest, now)
+			analysis: this.analysisQueue(result.data, interest, now),
+			deliveryDue: result.alerts.length ? now : this.sync.deliveryDue
 		};
 		this.persist(() => this.deps.store.save(result, now, { [SYNC_KEY]: sync }));
 		this.data = result.data;
@@ -226,8 +244,18 @@ export class Workspace {
 		this.saveSync(stopped(this.sync, reason));
 	}
 
+	appFocused(focusedUntil: number, now: number) {
+		this.saveSync({ ...this.sync, focusedUntil, appSeenAt: now });
+	}
+
+	appBlurred(now: number) {
+		this.saveSync({ ...this.sync, focusedUntil: 0, appSeenAt: now });
+	}
+
 	private stillCurrent(generation: number) {
-		return this.sync.generation === generation && this.sync.lifecycle === 'active';
+		return (
+			!this.storageFailed && this.sync.generation === generation && this.sync.lifecycle === 'active'
+		);
 	}
 
 	private mayCallGithub(generation: number, now: number) {
@@ -252,8 +280,10 @@ export class Workspace {
 		if (analysis.length && this.stillCurrent(generation))
 			await this.runAnalysis(analysis, generation, clock);
 		if (plan.boundary && this.stillCurrent(generation)) this.apply({ kind: 'time' }, clock());
+		if ((plan.delivery || this.sync.deliveryDue !== null) && this.stillCurrent(generation))
+			await this.deliver(clock);
 		if (plan.cleanup && this.stillCurrent(generation)) this.cleanup(clock());
-		this.saveSync();
+		if (!this.storageFailed) this.saveSync();
 	}
 
 	private itemIdAt(repo: string, number: number): ItemId | null {
@@ -323,9 +353,10 @@ export class Workspace {
 			.slice(0, MAX_DEPARTURE_READS);
 	}
 
-	private needsRead(candidate: { id: ItemId; updatedAt: string }) {
+	private needsRead(candidate: { id: ItemId; updatedAt: string }, now: number) {
 		const stored = this.data.items.get(candidate.id);
-		return !stored || Date.parse(candidate.updatedAt) > Date.parse(stored.facts.updatedAt);
+		if (stored) return Date.parse(candidate.updatedAt) > Date.parse(stored.facts.updatedAt);
+		return now - (this.sync.readAt[candidate.id] ?? 0) >= SAFETY_READ_EVERY_MS;
 	}
 
 	private async refreshSources(ids: string[], generation: number, clock: () => number) {
@@ -354,7 +385,7 @@ export class Workspace {
 		}
 		const hydrate = [...result.reads.values()].flatMap((read) =>
 			read.outcome === 'ok'
-				? read.window.candidates.filter((c) => this.needsRead(c)).map((c) => c.id)
+				? read.window.candidates.filter((c) => this.needsRead(c, now)).map((c) => c.id)
 				: []
 		);
 		this.sync = requestReads(this.sync, hydrate, 'background', now);
@@ -396,6 +427,65 @@ export class Workspace {
 		const now = clock();
 		this.sync = this.afterItemReads(claims, result, now);
 		this.apply(this.itemsInput(result), now);
+	}
+
+	private heldByAttention(id: ItemId, now: number) {
+		const item = this.data.items.get(id);
+		if (!item) return true;
+		const state = attentionState(item.attention, item.facts, this.data.config.me, now);
+		return (
+			state.kind === 'muted' ||
+			(state.kind === 'snoozed' && (!!state.choice.event || state.choice.until !== undefined))
+		);
+	}
+
+	private urgent(id: ItemId) {
+		const item = this.data.items.get(id);
+		if (!item) return false;
+		const { me, settings, analysisVersion } = this.data.config;
+		return analysisView(item.analysis, item.facts, me, settings.smartDecisions, analysisVersion)
+			.decisions.urgent;
+	}
+
+	private async deliver(clock: () => number) {
+		const now = clock();
+		if (this.sync.deliveryDue === null || this.sync.deliveryDue > now) return;
+		const pending = this.deps.store.pendingAlerts();
+		const channels = pending.length ? await this.deps.sender.channels() : [];
+		const lastPushes = this.deps.store.lastPushes();
+		const { settings } = this.data.config;
+		const plan = planDelivery(pending, {
+			settings,
+			now,
+			origin: this.deps.origin,
+			hasChannel: channels.length > 0,
+			appInFocus: now < this.sync.focusedUntil,
+			appSeenAt: this.sync.appSeenAt,
+			state: this.sync.delivery,
+			lastPushOf: (id) => lastPushes.get(id) ?? null,
+			heldByAttention: (id) => this.heldByAttention(id, now),
+			urgent: (id) => this.urgent(id)
+		});
+		this.persist(() => {
+			for (const { alertId, reason } of plan.skip)
+				this.deps.store.setDelivery(alertId, { status: 'skipped', reason });
+		});
+		let delivery = this.sync.delivery;
+		for (const outgoing of plan.send) {
+			const outcomes = await this.deps.sender.send(outgoing.message, channels);
+			const sentAt = clock();
+			if (Object.values(outcomes).includes('sent'))
+				delivery = {
+					recentSends: keptSends([...delivery.recentSends, sentAt], sentAt, settings.pushLimit),
+					lastDigestAt: outgoing.digest ? sentAt : delivery.lastDigestAt
+				};
+			this.persist(() => {
+				for (const alertId of outgoing.alertIds)
+					this.deps.store.setDelivery(alertId, { status: 'sent', at: sentAt, channels: outcomes });
+			});
+		}
+		if (plan.skip.length || plan.send.length) this.deps.announceAlerts();
+		this.sync = { ...this.sync, delivery, deliveryDue: plan.waitUntil };
 	}
 
 	private async refreshTeams(generation: number, clock: () => number) {
