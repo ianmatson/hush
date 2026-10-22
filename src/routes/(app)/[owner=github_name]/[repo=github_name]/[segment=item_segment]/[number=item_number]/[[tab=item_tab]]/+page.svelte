@@ -109,6 +109,7 @@
 		const here = historyIndex();
 		if (listHistoryIndex !== null && here !== null && here > listHistoryIndex)
 			history.go(listHistoryIndex - here);
+		else if (me.data?.settings.openItems === 'page') goto(startListPath());
 		else goto(`${startListPath()}?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
 	}
 

@@ -32,11 +32,12 @@
 	import PeekSlack from './peek-slack.svelte';
 	import PeekProjects from './peek-projects.svelte';
 	import PeekFiles from './peek-files.svelte';
+	import PeekFields from './peek-fields.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import ReviewThread from './review-thread.svelte';
 	import ExternalBadge from './external-badge.svelte';
 	import GhLink from './gh-link.svelte';
-	import { branchUrl, labelUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
+	import { branchUrl, profileUrl, teamUrl } from '$lib/shared/github-links';
 	import { FILES_TAB, itemPagePath } from '$lib/shared/item-page';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
@@ -252,19 +253,7 @@
 					{/snippet}
 				</Tip>
 			{/if}
-			{#if p.labels.length}
-				<div class="flex flex-wrap gap-1">
-					{#each p.labels as l (l.name)}
-						<a
-							href={labelUrl(p.repo, l.name)}
-							target="_blank"
-							rel="noreferrer"
-							class="rounded-full border px-2 py-0.5 text-[0.7rem] hover:brightness-95 dark:hover:brightness-125"
-							style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
-						>
-					{/each}
-				</div>
-			{/if}
+			<PeekFields {p} />
 		</header>
 
 		{#if p.pr}

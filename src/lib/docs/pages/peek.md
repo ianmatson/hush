@@ -5,7 +5,7 @@ description: Read a pull request or issue without leaving Hush, and approve, com
 
 ## Open the peek
 
-The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. On a wide screen, the peek is a panel on the right that grows with the screen, the list stays visible, and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
+The peek shows one pull request or issue next to your list. Click a row, or press {{key:list.peek}}. To open the full page on a click, set **Settings → General → Row layout → Click opens** to **Full page**. On a wide screen, the peek is a panel on the right that grows with the screen, the list stays visible, and the peek follows the cursor as you move with {{key:list.next}} and {{key:list.prev}}. On a phone, the peek covers the list.
 
 - {{key:list.peek}} or {{key:list.escape}} closes it.
 - The peek stays open when you go to another view, and shows the same item until you move the cursor there. Settings does not show the peek.
@@ -23,6 +23,7 @@ The address follows the peek: when you open the peek or move it to another item,
 The full page shows the same pull request or issue as the peek, in a wider column, with the actions on GitHub in a bar at the bottom. For an item in your views, the bar also has **Snooze**.
 
 - Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
+- With **Click opens** set to **Full page** (in **Settings → General → Row layout**), a click on a row and Enter in {{key:palette}} open the full page. {{key:list.peek}} still opens the peek.
 - {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. The peek is still open on the same item there.
 - The keys for an item work here too: {{key:list.copy}} copies its GitHub link, {{key:dash.snooze}} snoozes it until new activity (or wakes it up), {{key:dash.mute}} mutes or unmutes it, and {{key:dash.read}} marks it as read or unread. Snooze, mute, and unread work only for items in your views. {{key:palette}} has the same actions, and the other snooze times.
 - {{key:list.help}} shows the keys of the full page.
@@ -100,7 +101,7 @@ The address of this view ends in `?since=review`.
 - For a PR: the branches, the size (click it to open the Files tab of the full page), the reviews (who approved and who requested changes), the review requests, and a warning when it has merge conflicts.
 - For a PR: **Files**, the changed files with their added and deleted lines. The part starts closed. Click a file to see its changes in the Files tab of the full page.
 - The checks: failed and running ones first. **Show all** lists every check.
-- The labels and the assignees.
+- The assignees and the labels. When you can triage in the repository (the Triage, Write, Maintain, or Admin role), the person button and the tag button change them on GitHub: search, then choose a person or a label to add it, or a checked one to remove it. A pull request or issue can have up to 10 assignees. GitHub does not assign people who cannot be assigned in the repository.
 - **Project status**: a chip for each GitHub project that has the item, with its Status (“This week”). Click the chip to see the project. There you can change the status, move the item to another project of the same owner, or remove it from the project. A move or a removal loses the item's other fields on that project. The chips need the `project` scope (see [project boards](/docs/github-access#project-boards)).
 - The description, then the comments and reviews, oldest first. Under each review are the threads that it started on the diff, as on GitHub: the file, the lines that the thread is about, and the comments with their replies. **Reply**, **Resolve**, and **Unresolve** work here too, and resolved threads start closed. Click the file to see the thread in the Files tab of the [full page](#the-files-tab).
 - The checkboxes of task lists in the description and in comments. When GitHub lets you change the text (you wrote it, or you can write to the repository), click a checkbox to check or uncheck it on GitHub. If the text changed on GitHub since the peek loaded it, Hush loads it again and does not save. If Hush cannot find the checkbox in the Markdown, change it on GitHub.

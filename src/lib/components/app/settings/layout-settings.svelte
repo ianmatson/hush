@@ -3,13 +3,17 @@
 	import { meQuery } from '$lib/queries';
 	import { saveSettings } from '$lib/save-settings';
 	import { DEFAULT_ROW_LAYOUT, ROW_LAYOUTS, type RowLayout } from '$lib/shared/row-layout';
+	import { DEFAULT_OPEN_ITEMS, OPEN_ITEMS, type OpenItems } from '$lib/shared/open-items';
 	import { cn } from '$lib/utils';
 	import * as Card from '$lib/components/ui/card';
 	import RowSettings from './row-settings.svelte';
 	import TableSettings from './table-settings.svelte';
+	import SettingSelect from './setting-select.svelte';
 
 	const me = createQuery(meQuery);
 	const layout = $derived(me.data?.settings.rowLayout ?? DEFAULT_ROW_LAYOUT);
+	const openItems = $derived(me.data?.settings.openItems ?? DEFAULT_OPEN_ITEMS);
+	const openItemsHint = $derived(OPEN_ITEMS.find((o) => o.id === openItems)?.description ?? '');
 
 	const CARD_SKETCH = [
 		[0.85, 0.55, 0.4],
@@ -19,6 +23,10 @@
 
 	function choose(next: RowLayout) {
 		if (next !== layout) saveSettings({ rowLayout: next });
+	}
+
+	function chooseOpenItems(next: OpenItems) {
+		if (next !== openItems) saveSettings({ openItems: next });
 	}
 </script>
 
@@ -85,6 +93,19 @@
 					</span>
 				</button>
 			{/each}
+		</div>
+		<div class="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+			<div class="grid gap-0.5">
+				<span class="text-sm font-medium">Click opens</span>
+				<span class="text-xs text-muted-foreground">{openItemsHint}</span>
+			</div>
+			<SettingSelect
+				value={openItems}
+				options={OPEN_ITEMS}
+				onchange={chooseOpenItems}
+				label="Click opens"
+				class="w-36"
+			/>
 		</div>
 	</Card.Content>
 </Card.Root>

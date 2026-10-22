@@ -108,7 +108,7 @@
 			...[...p.timeline.items].reverse().map((e) => u(e.author.login, e.author.avatar)),
 			...(p.pr?.reviews ?? []).map((r) => u(r.who.login, r.who.avatar)),
 			...(p.pr?.requested ?? []).filter((r) => !r.team).map((r) => u(r.name)),
-			...p.assignees.map((a) => u(a))
+			...p.assignees.map((a) => u(a.login, a.avatar))
 		].filter((x) => x.login !== 'ghost');
 	});
 

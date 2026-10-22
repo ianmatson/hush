@@ -891,7 +891,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }
       author { ${PERSON} }
       labels(first: 10) { nodes { name color } }
-      assignees(first: 10) { nodes { login } }
+      assignees(first: 10) { nodes { ${PERSON} } }
       latestOpinionatedReviews(first: 20) { nodes { state author { ${PERSON} } } }
       viewerLatestReview { submittedAt commit { oid } }
       reviewThreads(first: 50) { nodes { isResolved } }
@@ -912,7 +912,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       repository { nameWithOwner viewerPermission }
       author { ${PERSON} }
       labels(first: 10) { nodes { name color } }
-      assignees(first: 10) { nodes { login } }
+      assignees(first: 10) { nodes { ${PERSON} } }
       ${peekTimeline(ISSUE_TIMELINE)}
     }
   } }
@@ -1078,7 +1078,7 @@ export async function fetchPeek(
 		html: n.bodyHTML ?? '',
 		reactions: reactionsOf(n),
 		labels: (n.labels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
-		assignees: (n.assignees?.nodes ?? []).map((a: Node) => a.login),
+		assignees: (n.assignees?.nodes ?? []).map(person),
 		timeline: { total: n.timelineItems?.totalCount ?? page.items.length, ...page },
 		can: {
 			id: n.id,
