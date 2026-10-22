@@ -14,6 +14,7 @@ import {
 } from '../github';
 import { linkStack, mergeStackThrough, readPrRefs, readStack } from '../stacks';
 import { stackMergePlan } from '../../src/lib/shared/stack-merge';
+import { branchRefPath, hushCanDeleteHeadBranch } from '../../src/lib/shared/head-branch';
 import { REACTION_CONTENTS } from '../../src/lib/shared/reactions';
 import { routes, json } from '../app';
 import { refreshWrittenSubject } from '../subject-writes';
@@ -62,6 +63,7 @@ type ActionBody = {
 	/** The comment (required for comment and request changes). */
 	body?: string;
 	method?: MergeMethod;
+	deleteBranch?: boolean;
 	/** The head commit the peek showed: GitHub refuses the merge if the branch moved since. */
 	sha?: string;
 	/** Workflow runs to re-run (their failed jobs). */
@@ -107,6 +109,8 @@ const app = routes()
 		let failure: WriteFailure | null = null;
 		let entry: PeekEntry | null = null;
 		let stillMerging = false;
+		let deletedBranch = false;
+		let branchError: string | null = null;
 		switch (action) {
 			case 'approve':
 			case 'request_changes': {
@@ -148,12 +152,15 @@ const app = routes()
 			case 'merge': {
 				if (!b.method || !METHODS.has(b.method))
 					return c.json({ error: 'Choose a merge method.' }, 400);
-				const plan = await readPrRefs(token, repo, number)
-					.then((refs) => readStack(token, repo, refs))
-					.then((stack) => stackMergePlan(number, stack))
+				const read = await readPrRefs(token, repo, number)
+					.then(async (refs) => ({
+						refs,
+						plan: stackMergePlan(number, await readStack(token, repo, refs))
+					}))
 					.catch((e: Error) => e);
-				if (plan instanceof Error)
-					return c.json({ error: `Hush could not read the stack: ${plan.message}` }, 502);
+				if (read instanceof Error)
+					return c.json({ error: `Hush could not read the stack: ${read.message}` }, 502);
+				const { refs, plan } = read;
 				if (plan.kind === 'link') failure = await linkStack(token, repo, plan.chainBottomFirst);
 				if (failure) break;
 				if (plan.kind === 'link' || plan.kind === 'stack') {
@@ -166,7 +173,16 @@ const app = routes()
 					merge_method: b.method.toLowerCase(),
 					...(typeof b.sha === 'string' && /^[0-9a-f]{40}$/.test(b.sha) ? { sha: b.sha } : {})
 				});
-				if (!res?.ok) failure = await restWriteFailure(res);
+				if (!res?.ok) {
+					failure = await restWriteFailure(res);
+					break;
+				}
+				const deletable = plan.kind === 'plain' && hushCanDeleteHeadBranch({ ...refs, repo });
+				if (b.deleteBranch === true && deletable) {
+					const deleted = await call(branchRefPath(repo, refs.head), 'DELETE');
+					deletedBranch = !!deleted?.ok;
+					if (!deletedBranch) branchError = (await restWriteFailure(deleted)).error;
+				}
 				break;
 			}
 			case 'auto_merge':
@@ -194,9 +210,10 @@ const app = routes()
 			}
 		}
 		if (failure) return c.json({ error: failure.error }, failure.status);
-		if (noSubject) return c.json({ ok: true as const, entry, stillMerging });
+		const done = { ok: true as const, entry, stillMerging, deletedBranch, branchError };
+		if (noSubject) return c.json(done);
 		refreshWrittenSubject(c, { repo, number });
-		return c.json({ ok: true as const, entry, stillMerging });
+		return c.json(done);
 	})
 	.post('/api/comments/edit', json<{ id: string; body: string }>(), async (c) => {
 		const b = c.req.valid('json');

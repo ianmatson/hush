@@ -19,6 +19,7 @@ import { REACTION_FIELDS, reactionsOf } from '../src/lib/shared/reactions';
 import type { ExpandedQuery } from '../src/lib/shared/dashboard';
 import type { SubjectFacts, TeamMention } from '../src/lib/shared/subject';
 import { NO_STACK } from '../src/lib/shared/stack-merge';
+import { hushCanDeleteHeadBranch } from '../src/lib/shared/head-branch';
 import { hasWritePermission } from '../src/lib/shared/actions';
 import { HOUR_MS, SECOND_MS } from '../src/lib/shared/durations';
 import { readStack } from './stacks';
@@ -889,7 +890,7 @@ const PEEK_QUERY = `query($me: String!, $o: String!, $r: String!, $n: Int!) {
       ${REACTION_FIELDS}
       viewerDidAuthor viewerCanClose viewerCanReopen viewerCanUpdate viewerCanMergeAsAdmin
       viewerCanEnableAutoMerge viewerCanDisableAutoMerge autoMergeRequest { mergeMethod }
-      repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }
+      repository { nameWithOwner viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed deleteBranchOnMerge }
       author { ${PERSON} }
       peekLabels: labels(first: ${PEEK_LABELS}) { nodes { name color } }
       assignees(first: 10) { nodes { ${PERSON} } }
@@ -1114,6 +1115,15 @@ export async function fetchPeek(
 				.filter((id: unknown): id is number => typeof id === 'number')
 		)
 	];
+	const stack =
+		n.state === 'OPEN'
+			? await readStack(token, `${owner}/${repo}`, {
+					number: n.number,
+					head: n.headRefName,
+					base: n.baseRefName,
+					defaultBranch: r.defaultBranchRef?.name ?? ''
+				}).catch(() => null)
+			: NO_STACK;
 	base.can.pr = {
 		headOid: n.headRefOid,
 		mergeState: n.mergeStateStatus ?? 'UNKNOWN',
@@ -1123,6 +1133,15 @@ export async function fetchPeek(
 			...(r.rebaseMergeAllowed ? ['REBASE' as const] : [])
 		],
 		mergeAsAdmin: !!n.viewerCanMergeAsAdmin,
+		headBranchDeletable:
+			stack !== null &&
+			hushCanDeleteHeadBranch({
+				repo: r.nameWithOwner ?? `${owner}/${repo}`,
+				head: n.headRefName,
+				headRepo: n.headRepository?.nameWithOwner ?? null,
+				defaultBranch: r.defaultBranchRef?.name ?? '',
+				repoDeletesHeadBranches: !!r.deleteBranchOnMerge
+			}),
 		autoMerge: {
 			on: !!n.autoMergeRequest,
 			method: n.autoMergeRequest?.mergeMethod ?? null,
@@ -1130,15 +1149,7 @@ export async function fetchPeek(
 			canDisable: !!n.viewerCanDisableAutoMerge
 		},
 		failedRuns,
-		stack:
-			n.state === 'OPEN'
-				? await readStack(token, `${owner}/${repo}`, {
-						number: n.number,
-						head: n.headRefName,
-						base: n.baseRefName,
-						defaultBranch: r.defaultBranchRef?.name ?? ''
-					}).catch(() => NO_STACK)
-				: NO_STACK
+		stack: stack ?? NO_STACK
 	};
 	const peek: PeekDTO = {
 		...base,

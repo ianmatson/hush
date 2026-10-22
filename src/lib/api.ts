@@ -73,6 +73,7 @@ export const api = {
 		action: GhActionId;
 		body?: string;
 		method?: MergeMethod;
+		deleteBranch?: boolean;
 		sha?: string;
 		runs?: number[];
 		id?: string;

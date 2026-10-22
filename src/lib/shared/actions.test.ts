@@ -30,6 +30,7 @@ const pr = (over: Partial<PeekDTO> = {}, can: Partial<PeekDTO['can']['pr']> = {}
 				mergeState: 'CLEAN',
 				methods: ['SQUASH'],
 				mergeAsAdmin: false,
+				headBranchDeletable: false,
 				autoMerge: { on: false, method: null, canEnable: false, canDisable: false },
 				failedRuns: [],
 				stack: NO_STACK,

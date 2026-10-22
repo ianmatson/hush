@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { MediaQuery } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import { collapseSideways } from '$lib/reveal';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -7,7 +6,7 @@
 	import { palette } from '$lib/palette.svelte';
 	import { commandFor, ignoreKey, keysOf } from '$lib/keys.svelte';
 	import { acting, focusComposer, sendAction } from '$lib/gh-act.svelte';
-	import { preferMergeMethod, preferredMerge } from '$lib/merge-method.svelte';
+	import { preferDeleteBranch, preferMergeMethod, preferredMerge } from '$lib/merge-method.svelte';
 	import {
 		GH_ACTIONS,
 		MERGE_LABEL,
@@ -31,8 +30,6 @@
 		moreAsIcon = false
 	}: { repo: string; number: number; need: ActionKind | null; moreAsIcon?: boolean } = $props();
 
-	const noRoomForSubmenu = new MediaQuery('max-width: 639px');
-
 	const q = createQuery(() => peekQuery(repo, number));
 	const p = $derived(q.data);
 	const states = $derived(p ? ghActions(p) : []);
@@ -47,6 +44,7 @@
 
 	const stackPlan = $derived(p ? stackMergePlan(p.number, p.can.pr?.stack ?? NO_STACK) : null);
 	const stackNotice = $derived(stackPlan ? stackMergeNotice(stackPlan) : null);
+	const canDeleteBranch = $derived(!!p?.can.pr?.headBranchDeletable && stackPlan?.kind === 'plain');
 
 	let pickedHere = $state<{ pr: string; method: MergeMethod } | null>(null);
 	const method = $derived.by((): MergeMethod => {
@@ -78,7 +76,10 @@
 			mergeDialogOpen = true;
 			return;
 		}
-		void sendAction(p, id, { method });
+		void sendAction(p, id, {
+			method,
+			deleteBranch: canDeleteBranch && preferredMerge.deleteBranch
+		});
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -161,9 +162,7 @@
 						{#if s.blocked}
 							{@render blockedItem(s.id, s.blocked)}
 						{:else}
-							<DropdownMenu.Item
-								onSelect={() => run(s.id, s.id === 'merge' && stackNotice ? 'ask' : 'now')}
-							>
+							<DropdownMenu.Item onSelect={() => run(s.id)}>
 								{label(s.id)}
 								{@render keyHint(s.id)}
 							</DropdownMenu.Item>
@@ -173,25 +172,6 @@
 						<DropdownMenu.Item onSelect={() => focusComposer('approve')}
 							>Approve with a comment…</DropdownMenu.Item
 						>
-					{/if}
-					{#if methods.length > 1 && (has('merge') || has('auto_merge'))}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Sub>
-							<DropdownMenu.SubTrigger>Merge method</DropdownMenu.SubTrigger>
-							<DropdownMenu.SubContent
-								class="w-52"
-								side={noRoomForSubmenu.current ? 'top' : 'right'}
-								align={noRoomForSubmenu.current ? 'end' : 'start'}
-							>
-								<DropdownMenu.RadioGroup bind:value={() => method, chooseMethod}>
-									{#each methods as m (m)}
-										<DropdownMenu.RadioItem value={m} closeOnSelect={false}
-											>{MERGE_LABEL[m]}</DropdownMenu.RadioItem
-										>
-									{/each}
-								</DropdownMenu.RadioGroup>
-							</DropdownMenu.SubContent>
-						</DropdownMenu.Sub>
 					{/if}
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
@@ -203,6 +183,8 @@
 	<MergeDialog
 		bind:open={mergeDialogOpen}
 		bind:method={() => method, chooseMethod}
+		bind:deleteBranch={() => preferredMerge.deleteBranch, preferDeleteBranch}
+		{canDeleteBranch}
 		{p}
 		notice={stackNotice}
 		onconfirm={() => run('merge', 'now')}
