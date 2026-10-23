@@ -285,7 +285,7 @@
 			onclick={ontoggle}
 		>
 			<ChevronRight class={cn('size-3.5 shrink-0 transition-transform', !folded && 'rotate-90')} />
-			<Tip focusable={false} text={file.filename}>
+			<Tip focusable={false} onlyWhenTruncated text={file.filename}>
 				{#snippet children(props)}
 					<span {...props} class="flex min-w-0 font-mono">
 						<span class="min-w-0 truncate text-muted-foreground"

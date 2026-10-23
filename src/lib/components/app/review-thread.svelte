@@ -151,7 +151,7 @@
 			>
 				<ChevronRight class={cn('size-3.5 transition-transform', open && 'rotate-90')} />
 			</button>
-			<Tip focusable={false} text={thread.path}>
+			<Tip focusable={false} onlyWhenTruncated text={thread.path}>
 				{#snippet children(props)}
 					<a
 						{...props}
