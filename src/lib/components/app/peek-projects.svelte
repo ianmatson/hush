@@ -17,6 +17,7 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import SquareKanban from '@lucide/svelte/icons/square-kanban';
 	import Tip from './tip.svelte';
+	import ItemFieldPicker, { type FieldOption } from './item-field-picker.svelte';
 
 	let { repo, number }: { repo: string; number: number } = $props();
 
@@ -24,6 +25,23 @@
 	const editable = $derived(q.data?.access === 'edit');
 	const NO_STATUS = 'none';
 	let saving = $state(false);
+	let pickerOpen = $state(false);
+	let pickerSearch = $state('');
+
+	const ADD_BUTTON =
+		'flex h-[1.375rem] shrink-0 items-center gap-1 rounded-full px-1.5 text-[0.7rem] whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none data-[state=open]:bg-muted data-[state=open]:text-foreground';
+	const EMPTY_ADD_BUTTON = `${ADD_BUTTON} border border-dashed px-2`;
+	const asOption = (p: { id: string; title: string }): FieldOption => ({
+		value: p.id,
+		label: p.title
+	});
+	const inProjects = $derived(q.data?.items ?? []);
+	const chosenProjects = $derived(inProjects.map((item) => asOption(item.project)));
+	const otherProjects = $derived(
+		(q.data?.others ?? [])
+			.filter((p) => p.title.toLowerCase().includes(pickerSearch.trim().toLowerCase()))
+			.map(asOption)
+	);
 
 	async function edit(change: ProjectEdit, done: string) {
 		saving = true;
@@ -68,6 +86,22 @@
 			},
 			`Moved to ${target.title}`
 		);
+	}
+
+	function add(projectId: string) {
+		const target = q.data?.others.find((p) => p.id === projectId);
+		if (!target || !q.data?.contentId) return;
+		edit(
+			{ action: 'add', projectId: target.id, contentId: q.data.contentId },
+			`Added to ${target.title}`
+		);
+	}
+
+	function toggleProject(option: FieldOption, on: boolean) {
+		if (saving) return;
+		if (on) return add(option.value);
+		const item = inProjects.find((i) => i.project.id === option.value);
+		if (item) remove(item);
 	}
 
 	function remove(item: ProjectItemDTO) {
@@ -195,3 +229,22 @@
 		</Popover.Content>
 	</Popover.Root>
 {/each}
+{#if editable}
+	<ItemFieldPicker
+		label="Projects"
+		tip={inProjects.length ? 'Add to another project' : 'Add to a project'}
+		options={otherProjects}
+		selected={chosenProjects}
+		loading={q.isFetching && !q.data}
+		error={null}
+		bind:search={pickerSearch}
+		bind:open={pickerOpen}
+		ontoggle={toggleProject}
+		triggerClass={inProjects.length ? ADD_BUTTON : EMPTY_ADD_BUTTON}
+		triggerLabel={inProjects.length ? 'Add to another project' : 'Add to a project'}
+	>
+		{#snippet trigger()}
+			<SquareKanban class="size-3.5" />{#if !inProjects.length}Project{/if}
+		{/snippet}
+	</ItemFieldPicker>
+{/if}

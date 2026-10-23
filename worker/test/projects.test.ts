@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { boardShort, itemStatuses, readItemStatuses } from '../projects';
+import { boardShort, editProject, itemStatuses, readItemStatuses } from '../projects';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -197,5 +197,75 @@ describe('itemStatuses', () => {
 		const result = await itemStatuses('t', ['PR_1']);
 		expect(result.statusOf.has('PR_1')).toBe(false);
 		expect(result.errors).toEqual(['GitHub returned 502.']);
+	});
+});
+
+describe('editProject', () => {
+	const ADDED = { data: { addProjectV2ItemById: { item: { id: 'PVTI_new' } } } };
+	const REMOVED = { data: { deleteProjectV2Item: { deletedItemId: 'PVTI_old' } } };
+	const sentBodies = (fetchMock: ReturnType<typeof vi.fn>) =>
+		fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+
+	it('adds the item to the project that the user picked', async () => {
+		const fetchMock = vi.fn(async () => Response.json(ADDED));
+		vi.stubGlobal('fetch', fetchMock);
+		const error = await editProject('test', {
+			action: 'add',
+			projectId: 'PVT_board',
+			contentId: 'I_issue'
+		});
+		expect(error).toBeNull();
+		const [body] = sentBodies(fetchMock);
+		expect(body.query).toContain('addProjectV2ItemById');
+		expect(body.variables).toEqual({ p: 'PVT_board', c: 'I_issue' });
+	});
+
+	it('reports when GitHub does not add the item', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ data: { addProjectV2ItemById: null } }))
+		);
+		const error = await editProject('test', {
+			action: 'add',
+			projectId: 'PVT_board',
+			contentId: 'I_issue'
+		});
+		expect(error).toBe('GitHub did not add the item to the project.');
+	});
+
+	it('removes the old item only after a move adds the new one', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockImplementationOnce(async () => Response.json(ADDED))
+			.mockImplementationOnce(async () => Response.json(REMOVED));
+		vi.stubGlobal('fetch', fetchMock);
+		const error = await editProject('test', {
+			action: 'move',
+			projectId: 'PVT_old',
+			itemId: 'PVTI_old',
+			toProjectId: 'PVT_new',
+			contentId: 'I_issue'
+		});
+		expect(error).toBeNull();
+		expect(sentBodies(fetchMock).map((b) => b.variables)).toEqual([
+			{ p: 'PVT_new', c: 'I_issue' },
+			{ p: 'PVT_old', i: 'PVTI_old' }
+		]);
+	});
+
+	it('keeps the old item when a move cannot add the new one', async () => {
+		const fetchMock = vi.fn(async () =>
+			Response.json({ data: null, errors: [{ message: 'Project not found' }] })
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const error = await editProject('test', {
+			action: 'move',
+			projectId: 'PVT_old',
+			itemId: 'PVTI_old',
+			toProjectId: 'PVT_new',
+			contentId: 'I_issue'
+		});
+		expect(error).toBe('Project not found');
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 });

@@ -30,10 +30,8 @@
 	import CommentBox from './comment-box.svelte';
 	import CommentEditor from './comment-editor.svelte';
 	import PeekSlack from './peek-slack.svelte';
-	import PeekProjects from './peek-projects.svelte';
 	import PeekFiles from './peek-files.svelte';
-	import PeekAssignees from './peek-assignees.svelte';
-	import PeekLabels from './peek-labels.svelte';
+	import PeekFields from './peek-fields.svelte';
 	import ReactionBar from './reaction-bar.svelte';
 	import ReviewThread from './review-thread.svelte';
 	import ExternalBadge from './external-badge.svelte';
@@ -214,8 +212,6 @@
 					target="_blank"
 					rel="noreferrer">{p.repo}#{p.number}</a
 				>
-				<PeekProjects repo={p.repo} number={p.number} />
-				<PeekAssignees {p} />
 				{#if p.kind === 'pr' || p.kind === 'issue'}
 					<PeekSlack {repo} {number} kind={p.kind} class="ml-auto" />
 				{/if}
@@ -257,7 +253,7 @@
 					{/snippet}
 				</Tip>
 			{/if}
-			<PeekLabels {p} />
+			<PeekFields {p} />
 		</header>
 
 		{#if p.pr}
