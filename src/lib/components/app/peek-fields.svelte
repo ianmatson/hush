@@ -4,6 +4,7 @@
 	import { canEditFields, itemFieldEditor, shownFields } from '$lib/item-field-editor.svelte';
 	import { MAX_ASSIGNEES } from '$lib/shared/item-fields';
 	import { profileUrl } from '$lib/shared/github-links';
+	import { cn } from '$lib/utils';
 	import type { PeekDTO } from '$lib/shared/types';
 	import * as Popover from '$lib/components/ui/popover';
 	import ItemFieldPicker from './item-field-picker.svelte';
@@ -35,8 +36,8 @@
 	const showsLabels = $derived(editable || labels.length > 0);
 </script>
 
-{#snippet divider()}
-	<span class="mx-1 h-4 w-px shrink-0 bg-border"></span>
+{#snippet divider(className = '')}
+	<span class={cn('mx-1 h-4 w-px shrink-0 bg-border', className)}></span>
 {/snippet}
 
 {#snippet stack()}
@@ -63,66 +64,72 @@
 {/snippet}
 
 {#if showsProjects || showsAssignees || showsLabels}
-	<div
-		class="flex flex-wrap items-center gap-x-1 gap-y-1.5 border-y py-1.5 text-xs"
-		role="group"
-		aria-label="Project status, assignees, and labels"
-	>
-		{#if showsProjects}
-			<div
-				class="flex shrink-0 flex-wrap items-center gap-1 [&_button]:h-[1.375rem] [&_button]:text-[0.7rem]"
-			>
-				<PeekProjects repo={p.repo} number={p.number} />
-			</div>
-		{/if}
+	<div class="@container">
+		<div
+			class="flex flex-wrap items-center gap-x-1 gap-y-1.5 border-y py-1.5 text-xs"
+			role="group"
+			aria-label="Project status, assignees, and labels"
+		>
+			{#if showsProjects}
+				<div
+					class="flex shrink-0 flex-wrap items-center gap-1 [&_button]:h-[1.375rem] [&_button]:text-[0.7rem]"
+				>
+					<PeekProjects repo={p.repo} number={p.number} />
+				</div>
+			{/if}
 
-		{#if showsProjects && showsAssignees}
-			{@render divider()}
-		{/if}
-
-		{#if editable}
-			<ItemFieldPicker
-				label="Assignees"
-				tip={assignees.length ? 'Assignees' : 'Assign someone'}
-				options={editor.options}
-				selected={editor.chosen}
-				loading={editor.loading}
-				error={editor.error}
-				full={assignees.length >= MAX_ASSIGNEES}
-				fullReason="GitHub allows up to {MAX_ASSIGNEES} assignees."
-				bind:search={editor.search}
-				bind:open={editor.open}
-				ontoggle={editor.toggle}
-				triggerClass={assignees.length ? STACK : EMPTY_STACK}
-				triggerLabel={summary}
-			>
-				{#snippet trigger()}{@render stack()}{/snippet}
-			</ItemFieldPicker>
-		{:else if assignees.length}
-			<Popover.Root>
-				<Popover.Trigger class={STACK} aria-label={summary}>{@render stack()}</Popover.Trigger>
-				<Popover.Content align="start" class="grid w-60 gap-1 p-2 text-sm">
-					<p class="px-1 pb-1 text-xs font-medium text-muted-foreground">Assignees</p>
-					{#each assignees as a (a.login)}
-						<GhLink
-							href={profileUrl(a.login, a.bot)}
-							class="flex items-center gap-2 rounded-md px-1 py-1 no-underline! hover:bg-muted"
-						>
-							{#if a.avatar}<img src={a.avatar} alt="" class="size-5 rounded-full bg-muted" />{/if}
-							<span class="truncate">{a.login}</span>
-						</GhLink>
-					{/each}
-				</Popover.Content>
-			</Popover.Root>
-		{/if}
-
-		{#if showsLabels}
-			{#if showsProjects || showsAssignees}
+			{#if showsProjects && showsAssignees}
 				{@render divider()}
 			{/if}
-			<div class="min-w-40 flex-1">
-				<PeekLabels {p} />
-			</div>
-		{/if}
+
+			{#if editable}
+				<ItemFieldPicker
+					label="Assignees"
+					tip={assignees.length ? 'Assignees' : 'Assign someone'}
+					options={editor.options}
+					selected={editor.chosen}
+					loading={editor.loading}
+					error={editor.error}
+					full={assignees.length >= MAX_ASSIGNEES}
+					fullReason="GitHub allows up to {MAX_ASSIGNEES} assignees."
+					bind:search={editor.search}
+					bind:open={editor.open}
+					ontoggle={editor.toggle}
+					triggerClass={assignees.length ? STACK : EMPTY_STACK}
+					triggerLabel={summary}
+				>
+					{#snippet trigger()}{@render stack()}{/snippet}
+				</ItemFieldPicker>
+			{:else if assignees.length}
+				<Popover.Root>
+					<Popover.Trigger class={STACK} aria-label={summary}>{@render stack()}</Popover.Trigger>
+					<Popover.Content align="start" class="grid w-60 gap-1 p-2 text-sm">
+						<p class="px-1 pb-1 text-xs font-medium text-muted-foreground">Assignees</p>
+						{#each assignees as a (a.login)}
+							<GhLink
+								href={profileUrl(a.login, a.bot)}
+								class="flex items-center gap-2 rounded-md px-1 py-1 no-underline! hover:bg-muted"
+							>
+								{#if a.avatar}<img
+										src={a.avatar}
+										alt=""
+										class="size-5 rounded-full bg-muted"
+									/>{/if}
+								<span class="truncate">{a.login}</span>
+							</GhLink>
+						{/each}
+					</Popover.Content>
+				</Popover.Root>
+			{/if}
+
+			{#if showsLabels}
+				{#if showsProjects || showsAssignees}
+					{@render divider('hidden @md:block')}
+				{/if}
+				<div class="min-w-40 flex-1 basis-full @md:basis-0">
+					<PeekLabels {p} />
+				</div>
+			{/if}
+		</div>
 	</div>
 {/if}
