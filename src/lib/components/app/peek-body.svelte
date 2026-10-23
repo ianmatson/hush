@@ -249,7 +249,10 @@
 				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${head}` : head}
 				<Tip focusable={false} text="{base} ← {headLabel}">
 					{#snippet children(props)}
-						<p {...props} class="truncate font-mono text-[0.7rem] text-muted-foreground">
+						<p
+							{...props}
+							class="w-fit max-w-full truncate font-mono text-[0.7rem] text-muted-foreground"
+						>
 							<GhLink href={branchUrl(p.repo, base)}>{base}</GhLink> ←
 							{#if headRepo}<GhLink href={branchUrl(headRepo, head)}>{headLabel}</GhLink
 								>{:else}{headLabel}{/if}
