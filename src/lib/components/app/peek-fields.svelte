@@ -72,7 +72,7 @@
 		>
 			{#if showsProjects}
 				<div
-					class="flex shrink-0 flex-wrap items-center gap-1 [&_button]:h-[1.375rem] [&_button]:text-[0.7rem]"
+					class="flex max-w-full min-w-0 flex-wrap items-center gap-1 [&_button]:h-[1.375rem] [&_button]:text-[0.7rem]"
 				>
 					<PeekProjects repo={p.repo} number={p.number} />
 				</div>
