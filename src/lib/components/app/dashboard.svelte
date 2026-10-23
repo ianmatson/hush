@@ -107,6 +107,7 @@
 	} from '$lib/peek.svelte';
 	import { keepHeldRow } from '$lib/shared/held-row';
 	import ItemWhyLine from './item-why-line.svelte';
+	import { changesSinceOpening } from '$lib/changes-since-opening.svelte';
 	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -361,6 +362,7 @@
 	});
 	const peekCurrentKey = $derived(peekedOutsideMember?.key ?? peekItem?.id ?? null);
 	const peekStack = $derived(peekCurrentKey ? (stackOf.get(peekCurrentKey) ?? null) : null);
+	const peekChanges = changesSinceOpening(() => peekItem);
 	let readByPeek: string | null = null;
 	$effect(() => {
 		const i = peekItem;
@@ -1151,6 +1153,7 @@
 		<ItemWhyLine
 			item={i}
 			lead={i.muted ? 'Muted' : i.dismissed ? 'Snoozed' : sectionLabelOf(i.id)}
+			shown={peekChanges.current}
 		/>
 	{/if}
 {/snippet}

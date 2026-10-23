@@ -49,6 +49,7 @@
 	import ScrollToBottom from '$lib/components/app/scroll-to-bottom.svelte';
 	import StackStrip from '$lib/components/app/stack-strip.svelte';
 	import ItemWhyLine from '$lib/components/app/item-why-line.svelte';
+	import { changesSinceOpening } from '$lib/changes-since-opening.svelte';
 
 	const SEEN_AFTER_MS = 1500;
 	const PAGE_KEY_SCOPES: KeyScope[] = ['list', 'item', 'page'];
@@ -78,6 +79,7 @@
 	const viewNameOf = (i: DashItem) =>
 		me.data?.settings.views.find((v) => i.views.includes(v.id))?.name ?? 'In your views';
 	const whyLead = (i: DashItem) => (i.muted ? 'Muted' : i.dismissed ? 'Snoozed' : viewNameOf(i));
+	const changes = changesSinceOpening(() => dashItem);
 	let helpOpen = $state(false);
 	let pageContent = $state<HTMLElement | null>(null);
 
@@ -289,7 +291,7 @@
 						/>
 					{/if}
 					{#if dashItem}
-						<ItemWhyLine item={dashItem} lead={whyLead(dashItem)} />
+						<ItemWhyLine item={dashItem} lead={whyLead(dashItem)} shown={changes.current} />
 					{/if}
 				</div>
 			</div>

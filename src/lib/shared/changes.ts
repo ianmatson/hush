@@ -92,3 +92,29 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 		});
 	return out;
 }
+
+const KIND_ORDER: Change['kind'][] = [
+	'state',
+	'requested',
+	'review',
+	'commits',
+	'ci',
+	'comments',
+	'draft',
+	'labels'
+];
+const COUNTS_KEPT_FROM_OPENING = new Set<Change['kind']>(['commits', 'comments']);
+
+export function withChangesSinceOpening(atOpening: Change[], now: Change[]): Change[] {
+	const kindsNow = new Set(now.map((c) => c.kind));
+	const kindsAtOpening = new Set(atOpening.map((c) => c.kind));
+	const kept = atOpening.filter(
+		(c) => !kindsNow.has(c.kind) || COUNTS_KEPT_FROM_OPENING.has(c.kind)
+	);
+	const added = now.filter(
+		(c) => !kindsAtOpening.has(c.kind) || !COUNTS_KEPT_FROM_OPENING.has(c.kind)
+	);
+	return [...kept, ...added].sort(
+		(a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)
+	);
+}
