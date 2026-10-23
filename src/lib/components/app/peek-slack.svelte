@@ -131,14 +131,14 @@
 						</Tooltip.Trigger>
 						<Tooltip.Content>{label}</Tooltip.Content>
 					</Tooltip.Root>
-					<Popover.Content align="end" class="grid w-80 gap-2 p-2.5 text-sm">
+					<Popover.Content align="end" class="grid w-80 grid-cols-1 gap-2 p-2.5 text-sm">
 						<div class="flex items-center gap-1.5 px-0.5 text-xs font-medium text-muted-foreground">
 							<SlackLogo class="size-3" />Mentioned in Slack
 							<span class="ml-auto tabular-nums">{countLabel}</span>
 						</div>
 						<ul
 							bind:this={scroller}
-							class="-mx-1 grid max-h-96 gap-2 overflow-y-auto overscroll-contain px-1"
+							class="-mx-1 grid max-h-96 grid-cols-1 gap-2 overflow-y-auto overscroll-contain px-1"
 						>
 							{#each found as m (m.permalink)}
 								{@const appUrl = m.appUrl}
@@ -148,7 +148,7 @@
 										target={appUrl ? undefined : '_blank'}
 										rel="noreferrer"
 										onclick={appUrl ? (e) => openInSlackApp(e, appUrl) : undefined}
-										class="grid gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[0.8rem] transition-colors hover:bg-muted"
+										class="grid grid-cols-1 gap-1 rounded-lg bg-muted/50 px-3 py-2 text-[0.8rem] transition-colors hover:bg-muted"
 									>
 										<span class="flex items-center gap-2 text-xs">
 											<span class="truncate font-medium">{m.authorName}</span>
@@ -159,7 +159,8 @@
 												>{ago(m.at)}</span
 											>
 										</span>
-										<span class="line-clamp-4 break-words text-muted-foreground">{m.extract}</span>
+										<span class="line-clamp-4 wrap-anywhere text-muted-foreground">{m.extract}</span
+										>
 									</a>
 								</li>
 							{/each}
