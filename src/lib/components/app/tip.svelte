@@ -28,12 +28,22 @@
 
 	function trackTrigger(el: HTMLElement) {
 		trigger = el;
-		const observer = new ResizeObserver(() => {
+		const closeOnceItFits = () => {
 			if (open && !isTruncated(el)) open = false;
+		};
+		const resizes = new ResizeObserver(closeOnceItFits);
+		const observeParts = () => {
+			for (const part of [el, ...el.querySelectorAll('*')]) resizes.observe(part);
+		};
+		const mutations = new MutationObserver(() => {
+			observeParts();
+			closeOnceItFits();
 		});
-		observer.observe(el);
+		observeParts();
+		mutations.observe(el, { subtree: true, childList: true, characterData: true });
 		return () => {
-			observer.disconnect();
+			resizes.disconnect();
+			mutations.disconnect();
 			if (trigger === el) trigger = undefined;
 		};
 	}
