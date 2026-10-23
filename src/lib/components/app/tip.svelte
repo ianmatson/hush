@@ -16,26 +16,36 @@
 	} = $props();
 
 	const truncationKey = createAttachmentKey();
-	let truncated = $state(false);
+	let trigger: HTMLElement | undefined;
+	let open = $state(false);
 
 	const isEllipsized = (el: Element) =>
 		getComputedStyle(el).textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth;
 
-	function trackTruncation(el: HTMLElement) {
-		const parts = [el, ...el.querySelectorAll('*')];
-		const observer = new ResizeObserver(() => (truncated = parts.some(isEllipsized)));
-		for (const part of parts) observer.observe(part);
-		return () => observer.disconnect();
+	const isTruncated = (el: HTMLElement) => [el, ...el.querySelectorAll('*')].some(isEllipsized);
+
+	const mayOpen = () => !onlyWhenTruncated || (!!trigger && isTruncated(trigger));
+
+	function trackTrigger(el: HTMLElement) {
+		trigger = el;
+		const observer = new ResizeObserver(() => {
+			if (open && !isTruncated(el)) open = false;
+		});
+		observer.observe(el);
+		return () => {
+			observer.disconnect();
+			if (trigger === el) trigger = undefined;
+		};
 	}
 
 	function triggerProps(props: Record<string, unknown>) {
 		const withFocus = focusable ? props : { ...props, tabindex: undefined };
-		return onlyWhenTruncated ? { ...withFocus, [truncationKey]: trackTruncation } : withFocus;
+		return onlyWhenTruncated ? { ...withFocus, [truncationKey]: trackTrigger } : withFocus;
 	}
 </script>
 
 {#if text}
-	<Tooltip.Root disabled={onlyWhenTruncated && !truncated}>
+	<Tooltip.Root bind:open={() => open, (next) => (open = next && mayOpen())}>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
 				{@render children(triggerProps(props))}
