@@ -147,6 +147,7 @@ A pull request is on top of another one when its base branch is the head branch 
 
 - The row is in the section of the stack's most urgent pull request, and shows that pull request first. “2 of 4” is its place in the stack, from the base branch up. Click the row to peek it.
 - The [peek](/docs/peek) lists the whole stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack, and the row in the list turns to show the same pull request as the peek.
+- The [full page](/docs/peek#full-page) lists the stack at the top too, with the same keys.
 - A pull request that is in the stack but not in this view shows as “Not in this list”. You can peek it, but it has no actions in the list.
 
 Hush finds up to 3 open pull requests under each pull request in your list, in the same repository.
@@ -202,7 +203,7 @@ Snooze and Mute stay in Hush. They do not change your notifications on GitHub.
 
 ## Unread
 
-An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label alone does not count. An unread item has a dot on its avatar and a bold title. When a view fills for the first time (a new view, your first sign-in, or after Hush paused), the items that Hush did not know yet start as read: only items that come in after that are unread.
+An item is unread when you did not look at it in Hush yet, or when something new happened on it since you last looked. A new label or a change in CI alone does not count. An unread item has a dot on its avatar and a bold title. When a view fills for the first time (a new view, your first sign-in, or after Hush paused), the items that Hush did not know yet start as read: only items that come in after that are unread.
 
 You look at an item when you open it in the peek, open its full page, or open it on GitHub from Hush. If you opened one by mistake, press {{key:dash.read}} to make it unread again: the peek and the full page do not mark it as read again until you open it again. {{key:dash.read}} marks it as read or unread. To mark every item in the view as read, choose **Mark all as read** in {{key:palette}}.
 
