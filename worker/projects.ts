@@ -355,6 +355,13 @@ const ADD_ITEM = `mutation($p: ID!, $c: ID!) {
   addProjectV2ItemById(input: { projectId: $p, contentId: $c }) { item { id } }
 }`;
 
+async function addItem(token: string, projectId: string, contentId: string) {
+	const added = await projectGraphql(token, ADD_ITEM, { p: projectId, c: contentId });
+	if (added.errors.length || !added.data?.addProjectV2ItemById?.item?.id)
+		return friendly(added.errors)[0] ?? 'GitHub did not add the item to the project.';
+	return null;
+}
+
 export async function editProject(token: string, edit: ProjectEdit): Promise<string | null> {
 	const first = (answer: GraphqlAnswer) => friendly(answer.errors)[0] ?? null;
 	switch (edit.action) {
@@ -373,16 +380,14 @@ export async function editProject(token: string, edit: ProjectEdit): Promise<str
 							f: edit.fieldId
 						})
 			);
+		case 'add':
+			return addItem(token, edit.projectId, edit.contentId);
 		case 'remove':
 			return first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
-		case 'move': {
-			const added = await projectGraphql(token, ADD_ITEM, {
-				p: edit.toProjectId,
-				c: edit.contentId
-			});
-			if (added.errors.length || !added.data?.addProjectV2ItemById?.item?.id)
-				return first(added) ?? 'GitHub did not add the item to the project.';
-			return first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
-		}
+		case 'move':
+			return (
+				(await addItem(token, edit.toProjectId, edit.contentId)) ??
+				first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }))
+			);
 	}
 }

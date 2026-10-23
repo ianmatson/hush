@@ -6,6 +6,10 @@ import { routes, workspace, json } from '../app';
 import { writeBlockForProjects } from '../write-gate';
 
 function validEdit(b: Partial<ProjectEdit> & Record<string, unknown>): ProjectEdit | null {
+	if (b.action === 'add')
+		return isNodeId(b.projectId) && isNodeId(b.contentId)
+			? { action: 'add', projectId: b.projectId, contentId: b.contentId }
+			: null;
 	if (!isNodeId(b.projectId) || !isNodeId(b.itemId)) return null;
 	const at = { projectId: b.projectId, itemId: b.itemId };
 	switch (b.action) {
