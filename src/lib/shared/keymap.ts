@@ -82,8 +82,8 @@ export const COMMANDS: KeyCommand[] = [
 	{ id: 'dash.showSnoozed', label: 'Show snoozed and muted items', scope: 'dash', keys: ['h'] },
 	{ id: 'dash.mute', label: 'Mute (or unmute)', scope: 'item', keys: ['m'] },
 	{ id: 'dash.read', label: 'Mark as read / unread', scope: 'item', keys: ['u'] },
-	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'dash', keys: [']'] },
-	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'dash', keys: ['['] },
+	{ id: 'dash.stackUp', label: 'Stack: the PR above', scope: 'item', keys: [']'] },
+	{ id: 'dash.stackDown', label: 'Stack: the PR below', scope: 'item', keys: ['['] },
 	...range(1, 9).map((n) => ({
 		id: `dash.view.${n}`,
 		label: `View ${n}`,

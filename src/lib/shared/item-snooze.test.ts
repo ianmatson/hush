@@ -13,7 +13,7 @@ describe('item snoozes', () => {
 });
 
 describe('unread items', () => {
-	it('are new to you, or changed since you looked, not counting labels', () => {
+	it('are new to you, or changed since you looked, not counting labels or CI', () => {
 		expect(isUnread(null, [])).toBe(true);
 		expect(isUnread(SNOOZED_AT, [])).toBe(false);
 		expect(isUnread(SNOOZED_AT, [{ kind: 'comments', text: '1 new comment', tone: null }])).toBe(
@@ -22,5 +22,12 @@ describe('unread items', () => {
 		expect(
 			isUnread(SNOOZED_AT, [{ kind: 'labels', text: 'bug', tone: null, labels: ['bug'] }])
 		).toBe(false);
+		expect(isUnread(SNOOZED_AT, [{ kind: 'ci', text: 'CI fails', tone: 'bad' }])).toBe(false);
+		expect(
+			isUnread(SNOOZED_AT, [
+				{ kind: 'ci', text: 'CI passes now', tone: 'good' },
+				{ kind: 'commits', text: '+1 commit', tone: null }
+			])
+		).toBe(true);
 	});
 });

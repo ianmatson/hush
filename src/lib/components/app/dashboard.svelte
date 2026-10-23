@@ -106,9 +106,9 @@
 		releasePeekHoldUnlessOn
 	} from '$lib/peek.svelte';
 	import { keepHeldRow } from '$lib/shared/held-row';
-	import WhyLine from './why-line.svelte';
+	import ItemWhyLine from './item-why-line.svelte';
+	import { changesSinceOpening } from '$lib/changes-since-opening.svelte';
 	import SwipeRow, { type SwipeSide } from './swipe-row.svelte';
-	import { since } from '$lib/time';
 	import BulkBar from './bulk-bar.svelte';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -362,6 +362,7 @@
 	});
 	const peekCurrentKey = $derived(peekedOutsideMember?.key ?? peekItem?.id ?? null);
 	const peekStack = $derived(peekCurrentKey ? (stackOf.get(peekCurrentKey) ?? null) : null);
+	const peekChanges = changesSinceOpening(() => peekItem);
 	let readByPeek: string | null = null;
 	$effect(() => {
 		const i = peekItem;
@@ -1149,11 +1150,10 @@
 	{/if}
 	{#if peekItem}
 		{@const i = peekItem}
-		<WhyLine
+		<ItemWhyLine
+			item={i}
 			lead={i.muted ? 'Muted' : i.dismissed ? 'Snoozed' : sectionLabelOf(i.id)}
-			text={i.turn === 'none' ? i.turnReason : `${i.turnReason}, for ${since(i.waitingSince)}`}
-			changes={i.changes ?? []}
-			seenAt={i.seenAt ?? null}
+			shown={peekChanges.current}
 		/>
 	{/if}
 {/snippet}

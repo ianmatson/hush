@@ -10,10 +10,12 @@
 	let {
 		stack,
 		currentKey,
+		outsideLabel = 'not in this list',
 		onpick
 	}: {
 		stack: Stack;
 		currentKey: string;
+		outsideLabel?: string;
 		onpick: (m: StackMember) => void;
 	} = $props();
 
@@ -38,7 +40,7 @@
 			<kbd class="font-sans">{keysOf('dash.stackUp')[0] ?? ''}</kbd> to move</span
 		>
 	</div>
-	<ol class="grid">
+	<ol class="grid grid-cols-1">
 		{#each membersTopFirst as m (m.key)}
 			{@const current = m.key === currentKey}
 			{@const ci = ciBadge(m.itemInList?.ci)}
@@ -66,7 +68,7 @@
 					<span class="shrink-0 font-mono opacity-70">#{m.number}</span>
 					<span class="min-w-0 flex-1 truncate">{m.title}</span>
 					{#if !m.itemInList}
-						<span class="shrink-0 opacity-70">not in this list</span>
+						<span class="shrink-0 opacity-70">{outsideLabel}</span>
 					{:else if m.draft}
 						<span class="shrink-0 opacity-70">draft</span>
 					{/if}

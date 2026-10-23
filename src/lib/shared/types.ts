@@ -247,6 +247,7 @@ export interface Change {
 	tone: 'good' | 'bad' | null;
 	/** The labels added (kind "labels"), so a row that shows labels can mark them. */
 	labels?: string[];
+	reviewer?: string;
 }
 
 export interface StackLink {

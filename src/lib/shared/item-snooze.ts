@@ -7,7 +7,8 @@ export interface SnoozeChoice {
 	event?: SnoozeEvent;
 }
 
-const READ_WORTHY = (c: Change) => c.kind !== 'labels';
+const NOT_READ_WORTHY = new Set<Change['kind']>(['labels', 'ci']);
+const READ_WORTHY = (c: Change) => !NOT_READ_WORTHY.has(c.kind);
 
 export const isUnread = (seenAt: number | null | undefined, changes: Change[] | undefined) =>
 	seenAt == null || (changes ?? []).some(READ_WORTHY);

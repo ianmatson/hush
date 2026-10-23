@@ -34,6 +34,7 @@
 	} from '$lib/shared/item-page';
 	import { PEEK_PARAM, peekLinkParam } from '$lib/shared/peek-link';
 	import { subjectKey } from '$lib/shared/subject';
+	import { findStacks, stackByMember, type StackMember } from '$lib/shared/stacks';
 	import { Button } from '$lib/components/ui/button';
 	import PeekContent from '$lib/components/app/peek-content.svelte';
 	import GhActions from '$lib/components/app/gh-actions.svelte';
@@ -46,6 +47,9 @@
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Tip from '$lib/components/app/tip.svelte';
 	import ScrollToBottom from '$lib/components/app/scroll-to-bottom.svelte';
+	import StackStrip from '$lib/components/app/stack-strip.svelte';
+	import ItemWhyLine from '$lib/components/app/item-why-line.svelte';
+	import { changesSinceOpening } from '$lib/changes-since-opening.svelte';
 
 	const SEEN_AFTER_MS = 1500;
 	const PAGE_KEY_SCOPES: KeyScope[] = ['list', 'item', 'page'];
@@ -69,6 +73,13 @@
 
 	const items = createQuery(itemsQuery);
 	const dashItem = $derived(items.data?.rows.find((i) => i.id === itemKey));
+	const stack = $derived(
+		stackByMember(findStacks(items.data?.rows.filter((i) => i.kind === 'pr') ?? [])).get(itemKey)
+	);
+	const viewNameOf = (i: DashItem) =>
+		me.data?.settings.views.find((v) => i.views.includes(v.id))?.name ?? 'In your views';
+	const whyLead = (i: DashItem) => (i.muted ? 'Muted' : i.dismissed ? 'Snoozed' : viewNameOf(i));
+	const changes = changesSinceOpening(() => dashItem);
 	let helpOpen = $state(false);
 	let pageContent = $state<HTMLElement | null>(null);
 
@@ -84,6 +95,18 @@
 			noScroll: true,
 			keepFocus: true
 		});
+	}
+
+	function openStackMember(m: StackMember) {
+		const path = itemPagePath(m.repo, m.number, 'pr');
+		return goto(onFilesTab ? `${path}/${FILES_TAB}` : path, { replaceState: true });
+	}
+
+	function stepStack(direction: 1 | -1) {
+		if (!stack) return;
+		const at = stack.membersBottomFirst.findIndex((m) => m.key === itemKey);
+		const next = stack.membersBottomFirst[at + direction];
+		if (next) openStackMember(next);
 	}
 
 	const SVELTEKIT_HISTORY_INDEX = 'sveltekit:history';
@@ -215,6 +238,8 @@
 			'list.search': () => (palette.open = true),
 			'list.help': () => (helpOpen = true),
 			'list.copy': () => itemActions.copyLinks([itemKey]),
+			'dash.stackUp': () => stepStack(1),
+			'dash.stackDown': () => stepStack(-1),
 			'dash.snooze': ifInYourViews((i) =>
 				i.dismissed ? itemActions.unsnooze([i.id]) : itemActions.snooze([i.id], UNTIL_NEW_ACTIVITY)
 			),
@@ -254,6 +279,23 @@
 			deletions={pr.deletions}
 		/>
 	{:else if !onFilesTab}
+		{#if stack || dashItem}
+			<div class="border-b bg-muted/40">
+				<div class="mx-auto max-w-4xl [&>*]:border-b-0">
+					{#if stack}
+						<StackStrip
+							{stack}
+							currentKey={itemKey}
+							outsideLabel="not in your views"
+							onpick={openStackMember}
+						/>
+					{/if}
+					{#if dashItem}
+						<ItemWhyLine item={dashItem} lead={whyLead(dashItem)} shown={changes.current} />
+					{/if}
+				</div>
+			</div>
+		{/if}
 		<div class="mx-auto max-w-4xl">
 			<PeekContent {repo} {number} title={itemTitle} showFiles={false} />
 		</div>
