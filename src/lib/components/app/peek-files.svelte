@@ -52,7 +52,7 @@
 				{#each q.data ?? [] as file (file.filename)}
 					{@const path = splitPath(file.filename)}
 					<li>
-						<Tip text={file.filename}>
+						<Tip onlyWhenTruncated text={file.filename}>
 							{#snippet children(props)}
 								<a
 									{...props}

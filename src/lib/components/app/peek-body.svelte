@@ -247,7 +247,7 @@
 				{@const { base, head, headRepo } = p.pr}
 				{@const fromFork = !!headRepo && headRepo !== p.repo}
 				{@const headLabel = fromFork ? `${headRepo?.split('/')[0]}:${head}` : head}
-				<Tip focusable={false} text="{base} ← {headLabel}">
+				<Tip focusable={false} onlyWhenTruncated text="{base} ← {headLabel}">
 					{#snippet children(props)}
 						<p
 							{...props}
