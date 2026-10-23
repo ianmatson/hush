@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
 	import { on } from 'svelte/events';
-	import { rowMenus } from '$lib/row-menus.svelte';
+	import { rowMenu } from '$lib/row-menus.svelte';
 	import { itemHoverZone } from '$lib/item-hover.svelte';
 	import { ciBadge } from '$lib/ci-badge';
 	import { keysOf } from '$lib/keys.svelte';
@@ -53,11 +53,7 @@
 		stack
 	}: CardRowProps & { columns: TableColumn[]; hideColumnsToFit?: boolean } = $props();
 
-	let menuOpen = $state(false);
-	$effect(() => {
-		void rowMenus.epoch;
-		menuOpen = false;
-	});
+	const actionsMenu = rowMenu();
 
 	let row = $state<HTMLElement | null>(null);
 	$effect(() => {
@@ -266,7 +262,7 @@
 
 	{#if menu}
 		<div class="shrink-0 md:hidden">
-			<DropdownMenu.Root bind:open={menuOpen}>
+			<DropdownMenu.Root bind:open={actionsMenu.open}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button

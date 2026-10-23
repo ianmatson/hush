@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { rowMenus } from '$lib/row-menus.svelte';
+	import { rowMenu } from '$lib/row-menus.svelte';
 	import { itemHoverZone } from '$lib/item-hover.svelte';
 	import { ciBadge } from '$lib/ci-badge';
 	import { keysOf } from '$lib/keys.svelte';
@@ -71,12 +71,7 @@
 		stack?: { position: number; size: number };
 	} = $props();
 
-	// A click on any row closes this row's menus (see row-menus.svelte.ts).
-	let menuOpen = $state(false);
-	$effect(() => {
-		void rowMenus.epoch;
-		menuOpen = false;
-	});
+	const actionsMenu = rowMenu();
 
 	let row = $state<HTMLElement | null>(null);
 	$effect(() => {
@@ -332,7 +327,7 @@
 	<!-- Small screens: every action in one menu. -->
 	{#if menu}
 		<div class="shrink-0 self-center sm:hidden">
-			<DropdownMenu.Root bind:open={menuOpen}>
+			<DropdownMenu.Root bind:open={actionsMenu.open}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
 						<Button
