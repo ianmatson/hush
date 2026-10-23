@@ -867,7 +867,7 @@ const peekTimeline = (
 	timeline: { types: string; entries: string },
 	cursorArgument = ''
 ) => `timelineItems(last: ${PEEK_TIMELINE_PAGE}${cursorArgument}, itemTypes: [${timeline.types}]) {
-        totalCount
+        filteredCount
         pageInfo { hasPreviousPage startCursor }
         nodes { __typename ${timeline.entries} }
       }`;
@@ -1081,7 +1081,7 @@ export async function fetchPeek(
 		reactions: reactionsOf(n),
 		labels: (n.peekLabels?.nodes ?? []).map((l: Node) => ({ name: l.name, color: l.color })),
 		assignees: (n.assignees?.nodes ?? []).map(person),
-		timeline: { total: n.timelineItems?.totalCount ?? page.items.length, ...page },
+		timeline: { total: n.timelineItems?.filteredCount ?? page.items.length, ...page },
 		can: {
 			id: n.id,
 			author: !!n.viewerDidAuthor,

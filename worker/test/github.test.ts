@@ -419,12 +419,23 @@ describe('peek timeline pages', () => {
 						issueOrPullRequest: {
 							id: 'subject_1',
 							__typename: 'Issue',
-							timelineItems: { totalCount: 30, pageInfo, nodes: [comment('c_1')] }
+							timelineItems: {
+								totalCount: 84,
+								filteredCount: 30,
+								pageInfo,
+								nodes: [comment('c_1')]
+							}
 						}
 					}
 				}
 			})
 		);
+
+	it('counts only the comments and reviews, not every timeline event', async () => {
+		vi.stubGlobal('fetch', answer({ hasPreviousPage: true, startCursor: 'Y3Vyc29y' }));
+		const result = await fetchPeek('t', 'ian', 'o', 'r', 1);
+		expect(result?.peek.timeline.total).toBe(30);
+	});
 
 	it('gives the cursor of the page before the newest items', async () => {
 		vi.stubGlobal('fetch', answer({ hasPreviousPage: true, startCursor: 'Y3Vyc29y' }));
@@ -540,7 +551,7 @@ describe('peek comment editing permissions', () => {
 								issueOrPullRequest: {
 									id: 'subject_1',
 									__typename: 'PullRequest',
-									timelineItems: { nodes: entries, totalCount: entries.length }
+									timelineItems: { nodes: entries, filteredCount: entries.length }
 								}
 							}
 						}
@@ -582,7 +593,7 @@ describe('peek comment editing permissions', () => {
 								issueOrPullRequest: {
 									id: 'subject_1',
 									__typename: type,
-									timelineItems: { nodes: entries, totalCount: entries.length }
+									timelineItems: { nodes: entries, filteredCount: entries.length }
 								}
 							}
 						}
