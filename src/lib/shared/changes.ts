@@ -50,9 +50,10 @@ export function changesSince(before: Snapshot, now: SubjectFacts, me: string): C
 		out.push({ kind: 'requested', text: 'Your review is requested', tone: null });
 	for (const [by, state] of Object.entries(after.verdicts)) {
 		if (sameLogin(by, me) || before.verdicts[by] === state) continue;
-		if (state === 'APPROVED') out.push({ kind: 'review', text: `@${by} approved`, tone: 'good' });
+		if (state === 'APPROVED')
+			out.push({ kind: 'review', text: `@${by} approved`, tone: 'good', reviewer: by });
 		else if (state === 'CHANGES_REQUESTED')
-			out.push({ kind: 'review', text: `@${by} requested changes`, tone: 'bad' });
+			out.push({ kind: 'review', text: `@${by} requested changes`, tone: 'bad', reviewer: by });
 	}
 	// 0 is "not known" (a PR has at least one commit; facts from before the count existed).
 	if (before.commits > 0 && after.commits > before.commits)
@@ -105,14 +106,17 @@ const KIND_ORDER: Change['kind'][] = [
 ];
 const COUNTS_KEPT_FROM_OPENING = new Set<Change['kind']>(['commits', 'comments']);
 
+const sameSubject = (c: Change) =>
+	c.kind === 'review' ? `review:${(c.reviewer ?? c.text).toLowerCase()}` : c.kind;
+
 export function withChangesSinceOpening(atOpening: Change[], now: Change[]): Change[] {
-	const kindsNow = new Set(now.map((c) => c.kind));
-	const kindsAtOpening = new Set(atOpening.map((c) => c.kind));
+	const subjectsNow = new Set(now.map(sameSubject));
+	const subjectsAtOpening = new Set(atOpening.map(sameSubject));
 	const kept = atOpening.filter(
-		(c) => !kindsNow.has(c.kind) || COUNTS_KEPT_FROM_OPENING.has(c.kind)
+		(c) => !subjectsNow.has(sameSubject(c)) || COUNTS_KEPT_FROM_OPENING.has(c.kind)
 	);
 	const added = now.filter(
-		(c) => !kindsAtOpening.has(c.kind) || !COUNTS_KEPT_FROM_OPENING.has(c.kind)
+		(c) => !subjectsAtOpening.has(sameSubject(c)) || !COUNTS_KEPT_FROM_OPENING.has(c.kind)
 	);
 	return [...kept, ...added].sort(
 		(a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)

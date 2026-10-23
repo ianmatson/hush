@@ -100,6 +100,32 @@ describe('changes since opening', () => {
 		expect(withChangesSinceOpening([ciRunning, comments], [ciFails])).toEqual([ciFails, comments]);
 	});
 
+	it('keeps each reviewer apart, and shows the latest verdict of the same reviewer', () => {
+		const aliceApproved: Change = {
+			kind: 'review',
+			text: '@alice approved',
+			tone: 'good',
+			reviewer: 'alice'
+		};
+		const bobRequested: Change = {
+			kind: 'review',
+			text: '@bob requested changes',
+			tone: 'bad',
+			reviewer: 'bob'
+		};
+		const aliceRequested: Change = {
+			kind: 'review',
+			text: '@alice requested changes',
+			tone: 'bad',
+			reviewer: 'alice'
+		};
+		expect(withChangesSinceOpening([aliceApproved], [bobRequested])).toEqual([
+			aliceApproved,
+			bobRequested
+		]);
+		expect(withChangesSinceOpening([aliceApproved], [aliceRequested])).toEqual([aliceRequested]);
+	});
+
 	it('keeps the count from the opening when more of the same come', () => {
 		expect(withChangesSinceOpening([comments], [oneComment])).toEqual([comments]);
 	});
