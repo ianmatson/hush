@@ -4,9 +4,13 @@ import { prefersReducedMotion } from 'svelte/motion';
 const SLIDE_MS = 180;
 const EASE_OUT = 'cubic-bezier(0.33, 1, 0.68, 1)';
 
+const shownOffset = (element: HTMLElement) =>
+	new DOMMatrixReadOnly(getComputedStyle(element).transform).m41;
+
 export const slideChildren: Attachment<HTMLElement> = (row) => {
 	let shownLeft = new Map<Element, number>();
 	let shownRowWidth = row.clientWidth;
+	const slides = new Map<Element, Animation>();
 	const resizes = new ResizeObserver(() => slideToNewPlaces());
 	const childChanges = new MutationObserver(() => {
 		observeChildren();
@@ -23,6 +27,18 @@ export const slideChildren: Attachment<HTMLElement> = (row) => {
 		for (const child of children()) resizes.observe(child);
 	}
 
+	function slide(child: HTMLElement, from: number) {
+		const running = slides.get(child);
+		const offset = running ? shownOffset(child) : 0;
+		running?.cancel();
+		const animation = child.animate(
+			[{ transform: `translateX(${from + offset}px)` }, { transform: 'translateX(0)' }],
+			{ duration: SLIDE_MS, easing: EASE_OUT }
+		);
+		slides.set(child, animation);
+		animation.onfinish = () => slides.delete(child);
+	}
+
 	function slideToNewPlaces() {
 		const rowWidth = row.clientWidth;
 		const rowResized = rowWidth !== shownRowWidth;
@@ -34,10 +50,7 @@ export const slideChildren: Attachment<HTMLElement> = (row) => {
 			const before = shownLeft.get(child);
 			if (before === undefined || before === left || rowResized || prefersReducedMotion.current)
 				continue;
-			child.animate(
-				[{ transform: `translateX(${before - left}px)` }, { transform: 'translateX(0)' }],
-				{ duration: SLIDE_MS, easing: EASE_OUT }
-			);
+			slide(child, before - left);
 		}
 		shownLeft = nextLeft;
 	}
@@ -48,5 +61,7 @@ export const slideChildren: Attachment<HTMLElement> = (row) => {
 	return () => {
 		resizes.disconnect();
 		childChanges.disconnect();
+		for (const animation of slides.values()) animation.cancel();
+		slides.clear();
 	};
 };

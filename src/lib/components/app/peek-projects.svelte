@@ -228,6 +228,7 @@
 										<Command.Item
 											value={NO_STATUS}
 											data-checked={current === NO_STATUS}
+											aria-checked={current === NO_STATUS}
 											disabled={!editable || saving}
 											onSelect={() => setStatus(openItem, NO_STATUS)}
 										>
@@ -238,6 +239,7 @@
 										<Command.Item
 											value={o.id}
 											data-checked={current === o.id}
+											aria-checked={current === o.id}
 											disabled={!editable || saving}
 											onSelect={() => setStatus(openItem, o.id)}
 										>

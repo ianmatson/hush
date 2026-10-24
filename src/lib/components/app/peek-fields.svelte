@@ -133,7 +133,7 @@
 				{#if showsProjects || showsAssignees}
 					{@render divider()}
 				{/if}
-				<div class="min-w-0 flex-1">
+				<div class="min-w-[4.5rem] flex-1">
 					<PeekLabels {p} />
 				</div>
 			{/if}
