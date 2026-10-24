@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
@@ -36,6 +37,7 @@
 	let openItemId = $state<string | null>(null);
 	let saving = $state(false);
 	let searchInput = $state<HTMLInputElement | null>(null);
+	let highlighted = $state('');
 
 	const openItem = $derived(items.find((i) => i.id === openItemId) ?? null);
 	const words = $derived(search.trim().toLowerCase());
@@ -61,9 +63,11 @@
 	}
 
 	function show(itemId: string | null) {
+		const item = items.find((i) => i.id === itemId);
+		highlighted = item ? (item.status?.optionId ?? NO_STATUS) : (openItemId ?? '');
 		openItemId = itemId;
 		search = '';
-		searchInput?.focus({ preventScroll: true });
+		void tick().then(() => searchInput?.focus({ preventScroll: true }));
 	}
 
 	function backOnEmptySearch(e: KeyboardEvent) {
@@ -179,119 +183,127 @@
 		<Popover.Content
 			align="start"
 			onOpenAutoFocus={focusSearch}
-			class="w-72 gap-0 p-0"
+			class="w-80 gap-0 p-0"
 			data-project-picker
 		>
-			<Command.Root label="Projects" shouldFilter={false} disableInitialScroll>
-				{#if openItem}
-					<div class="flex items-center gap-1 border-b px-1 py-1 text-sm">
-						<button
-							type="button"
-							class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-							aria-label="All projects"
-							onclick={() => show(null)}><ChevronLeft class="size-4" /></button
-						>
-						<span class="truncate font-medium">{openItem.project.title}</span>
-						<a
-							href={openItem.project.url}
-							target="_blank"
-							rel="noreferrer"
-							class="ml-auto flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-							aria-label="Open {openItem.project.title} on GitHub"
-							><ExternalLink class="size-3.5" /></a
-						>
-					</div>
-				{/if}
-				<Command.Input
-					bind:ref={searchInput}
-					bind:value={search}
-					onkeydown={backOnEmptySearch}
-					placeholder={openItem ? 'Set status…' : 'Search projects…'}
-					aria-label={openItem ? 'Search statuses' : 'Search projects'}
-				/>
-				<Command.List class="max-h-72">
+			{#key openItemId}
+				<Command.Root
+					bind:value={highlighted}
+					label="Projects"
+					shouldFilter={false}
+					disableInitialScroll
+				>
 					{#if openItem}
-						{@const current = openItem.status?.optionId ?? NO_STATUS}
-						{#if openItem.status}
-							<Command.Group heading="Status" value="status">
-								{#if matches('No status')}
-									<Command.Item
-										value={NO_STATUS}
-										data-checked={current === NO_STATUS}
-										disabled={!editable || saving}
-										onSelect={() => setStatus(openItem, NO_STATUS)}
-									>
-										{@render dot(null)}No status
-									</Command.Item>
-								{/if}
-								{#each shownOptions as o (o.id)}
-									<Command.Item
-										value={o.id}
-										data-checked={current === o.id}
-										disabled={!editable || saving}
-										onSelect={() => setStatus(openItem, o.id)}
-									>
-										{@render dot(o)}<span class="truncate">{o.name}</span>
-									</Command.Item>
-								{/each}
-							</Command.Group>
-						{:else}
-							<p class="px-3 py-4 text-center text-sm text-muted-foreground">
-								This project has no Status field.
-							</p>
-						{/if}
-						{#if editable}
-							<Command.Group value="actions" class="border-t">
-								<Command.Item
-									value="remove"
-									class="text-destructive data-selected:text-destructive"
-									disabled={saving}
-									onSelect={() => remove(openItem)}>Remove from project</Command.Item
-								>
-							</Command.Group>
-						{/if}
-					{:else}
-						{#if shownItems.length}
-							<Command.Group heading="In projects" value="in">
-								{#each shownItems as item (item.id)}
-									{@const status = statusOf(item.status)}
-									<Command.Item value={item.id} onSelect={() => show(item.id)}>
-										<span class="truncate">{item.project.title}</span>
-										<span
-											class="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
-										>
-											{@render dot(status)}{status?.name ?? 'No status'}
-										</span>
-										<ChevronRight class="text-muted-foreground" />
-									</Command.Item>
-								{/each}
-							</Command.Group>
-						{/if}
-						{#if shownOthers.length}
-							<Command.Group heading="Add to a project" value="others">
-								{#each shownOthers as other (other.id)}
-									<Command.Item value={other.id} disabled={saving} onSelect={() => add(other.id)}>
-										<SquareKanban class="text-muted-foreground" />
-										<span class="truncate">{other.title}</span>
-									</Command.Item>
-								{/each}
-							</Command.Group>
-						{/if}
-						{#if !shownItems.length && !shownOthers.length}
-							<p class="px-2 py-4 text-center text-sm text-muted-foreground">
-								{words ? `Nothing matches “${search.trim()}”.` : 'No projects to add.'}
-							</p>
-						{/if}
+						<div class="flex items-center gap-1 border-b px-1 py-1 text-sm">
+							<button
+								type="button"
+								class="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+								aria-label="All projects"
+								onclick={() => show(null)}><ChevronLeft class="size-4" /></button
+							>
+							<span class="truncate font-medium">{openItem.project.title}</span>
+							<a
+								href={openItem.project.url}
+								target="_blank"
+								rel="noreferrer"
+								class="ml-auto flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+								aria-label="Open {openItem.project.title} on GitHub"
+								><ExternalLink class="size-3.5" /></a
+							>
+						</div>
 					{/if}
-				</Command.List>
-				{#if !editable}
-					<p class="border-t px-3 py-2 text-xs text-muted-foreground">
-						Your token can read these projects but cannot change them. See
-						<a class="underline underline-offset-2" href="/settings/general#token">GitHub access</a
-						>.
-					</p>
-				{/if}
-			</Command.Root>
+					<Command.Input
+						bind:ref={searchInput}
+						bind:value={search}
+						onkeydown={backOnEmptySearch}
+						placeholder={openItem ? 'Set status…' : 'Search projects…'}
+						aria-label={openItem ? 'Search statuses' : 'Search projects'}
+					/>
+					<Command.List class="max-h-72">
+						{#if openItem}
+							{@const current = openItem.status?.optionId ?? NO_STATUS}
+							{#if openItem.status}
+								<Command.Group heading="Status" value="status">
+									{#if matches('No status')}
+										<Command.Item
+											value={NO_STATUS}
+											data-checked={current === NO_STATUS}
+											disabled={!editable || saving}
+											onSelect={() => setStatus(openItem, NO_STATUS)}
+										>
+											{@render dot(null)}No status
+										</Command.Item>
+									{/if}
+									{#each shownOptions as o (o.id)}
+										<Command.Item
+											value={o.id}
+											data-checked={current === o.id}
+											disabled={!editable || saving}
+											onSelect={() => setStatus(openItem, o.id)}
+										>
+											{@render dot(o)}<span class="truncate">{o.name}</span>
+										</Command.Item>
+									{/each}
+								</Command.Group>
+							{:else}
+								<p class="px-3 py-4 text-center text-sm text-muted-foreground">
+									This project has no Status field.
+								</p>
+							{/if}
+							{#if editable}
+								<Command.Group value="actions" class="border-t">
+									<Command.Item
+										value="remove"
+										class="text-destructive data-selected:text-destructive"
+										disabled={saving}
+										onSelect={() => remove(openItem)}>Remove from project</Command.Item
+									>
+								</Command.Group>
+							{/if}
+						{:else}
+							{#if shownItems.length}
+								<Command.Group heading="In projects" value="in">
+									{#each shownItems as item (item.id)}
+										{@const status = statusOf(item.status)}
+										<Command.Item value={item.id} onSelect={() => show(item.id)}>
+											<span class="min-w-0 flex-1 truncate">{item.project.title}</span>
+											<span
+												class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+											>
+												{@render dot(status)}{status?.name ?? 'No status'}
+											</span>
+											<ChevronRight class="text-muted-foreground" />
+										</Command.Item>
+									{/each}
+								</Command.Group>
+							{/if}
+							{#if shownOthers.length}
+								<Command.Group heading="Add to a project" value="others">
+									{#each shownOthers as other (other.id)}
+										<Command.Item value={other.id} disabled={saving} onSelect={() => add(other.id)}>
+											<SquareKanban class="text-muted-foreground" />
+											<span class="truncate">{other.title}</span>
+										</Command.Item>
+									{/each}
+								</Command.Group>
+							{/if}
+							{#if !shownItems.length && !shownOthers.length}
+								<p class="px-2 py-4 text-center text-sm text-muted-foreground">
+									{words ? `Nothing matches “${search.trim()}”.` : 'No projects to add.'}
+								</p>
+							{/if}
+						{/if}
+					</Command.List>
+					{#if !editable}
+						<p class="border-t px-3 py-2 text-xs text-muted-foreground">
+							Your token can read these projects but cannot change them. See
+							<a class="underline underline-offset-2" href="/settings/general#token"
+								>GitHub access</a
+							>.
+						</p>
+					{/if}
+				</Command.Root>
+			{/key}
 		</Popover.Content>
 	</Popover.Root>
 {/if}
