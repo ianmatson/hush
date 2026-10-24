@@ -94,5 +94,4 @@ export type ProjectEdit =
 			optionId: string | null;
 	  }
 	| { action: 'add'; projectId: string; contentId: string }
-	| { action: 'remove'; projectId: string; itemId: string }
-	| { action: 'move'; projectId: string; itemId: string; toProjectId: string; contentId: string };
+	| { action: 'remove'; projectId: string; itemId: string };

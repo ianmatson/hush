@@ -3,22 +3,24 @@
 	import { fitWithTrailingControl } from '$lib/fit';
 	import { canEditFields, itemFieldEditor, shownFields } from '$lib/item-field-editor.svelte';
 	import { labelUrl } from '$lib/shared/github-links';
+	import { cn } from '$lib/utils';
 	import type { PeekDTO } from '$lib/shared/types';
 	import * as Popover from '$lib/components/ui/popover';
 	import ItemFieldPicker from './item-field-picker.svelte';
 	import Tag from '@lucide/svelte/icons/tag';
+	import { EMPTY_FIELD_BADGE } from './field-badge';
 
 	let { p }: { p: PeekDTO } = $props();
 
 	const GAP = 4;
-	const CHIP_LOOK =
-		'rounded-full border px-2 py-0.5 text-[0.7rem] hover:brightness-95 dark:hover:brightness-125';
-	const CHIP = `${CHIP_LOOK} shrink-0 whitespace-nowrap`;
-	const LISTED_CHIP = `${CHIP_LOOK} max-w-full break-words`;
-	const BUTTON =
-		'flex h-[1.375rem] shrink-0 items-center gap-1 rounded-full px-1.5 text-[0.7rem] whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none data-[state=open]:bg-muted data-[state=open]:text-foreground';
-	const MORE = `${BUTTON} border px-2 font-medium`;
-	const EMPTY = `${BUTTON} border border-dashed px-2`;
+	const CHIP =
+		'flex h-6 shrink-0 items-center rounded-full border px-2 text-xs whitespace-nowrap group-hover/labels:brightness-95 dark:group-hover/labels:brightness-125';
+	const LISTED_CHIP =
+		'max-w-full rounded-full border px-2 py-0.5 text-xs break-words hover:brightness-95 dark:hover:brightness-125';
+	const MORE =
+		'flex h-6 shrink-0 items-center rounded-full border px-2 text-xs font-medium text-foreground';
+	const GROUP =
+		'group/labels flex max-w-full min-w-0 items-center gap-1 rounded-full focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none';
 
 	const editor = itemFieldEditor(() => p, 'labels');
 	const editable = $derived(canEditFields(p));
@@ -28,7 +30,6 @@
 	let measure = $state<HTMLElement | null>(null);
 	let widths = $state<number[]>([]);
 	let moreWidth = $state(0);
-	let editWidth = $state(0);
 	$effect(() => {
 		void labels.map((l) => l.name).join();
 		void room;
@@ -36,7 +37,6 @@
 			if (!measure) return;
 			widths = [...measure.querySelectorAll<HTMLElement>('[data-chip]')].map((e) => e.offsetWidth);
 			moreWidth = measure.querySelector<HTMLElement>('[data-more]')?.offsetWidth ?? 0;
-			editWidth = measure.querySelector<HTMLElement>('[data-edit]')?.offsetWidth ?? 0;
 		});
 	});
 
@@ -46,45 +46,52 @@
 			? fitWithTrailingControl(widths, room, {
 					gap: GAP,
 					moreWidth,
-					controlWidth: editable ? editWidth : 0
+					controlWidth: 0
 				})
 			: labels.length
 	);
 	const hidden = $derived(labels.length - shownCount);
-	const moreText = $derived(`+${hidden} more`);
+	const summary = $derived(`Labels: ${labels.map((l) => l.name).join(', ')}`);
 </script>
 
-{#snippet chip(l: { name: string; color: string }, listed = false)}
+{#snippet listedChip(l: { name: string; color: string })}
 	<a
 		href={labelUrl(p.repo, l.name)}
 		target="_blank"
 		rel="noreferrer"
-		class={listed ? LISTED_CHIP : CHIP}
+		class={LISTED_CHIP}
 		style="border-color: #{l.color}80; background: #{l.color}1f">{l.name}</a
 	>
 {/snippet}
 
+{#snippet shownChips()}
+	{#each labels.slice(0, shownCount) as l (l.name)}
+		<span data-chip class={CHIP} style="border-color: #{l.color}80; background: #{l.color}1f"
+			>{l.name}</span
+		>
+	{/each}
+	{#if hidden}<span class={MORE}>+{hidden}</span>{/if}
+{/snippet}
+
 {#if labels.length || editable}
-	<div class="relative min-w-0" bind:clientWidth={room} data-peek-labels>
+	<div
+		class="relative min-w-0 overflow-clip [overflow-clip-margin:3px]"
+		bind:clientWidth={room}
+		data-peek-labels
+	>
 		<div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
 			<div bind:this={measure} class="invisible absolute top-0 left-0 flex w-max gap-1">
 				{#each labels as l (l.name)}
 					<span data-chip class={CHIP}>{l.name}</span>
 				{/each}
-				<span data-more class={MORE}>+{labels.length} more</span>
-				<span data-edit class={labels.length ? BUTTON : EMPTY}
-					><Tag class="size-3.5" />{#if !labels.length}Label{/if}</span
-				>
+				<span data-more class={MORE}>+{labels.length}</span>
 			</div>
 		</div>
-		<div class="flex items-center gap-1 overflow-hidden" role="group" aria-label="Labels">
-			{#each labels.slice(0, shownCount) as l (l.name)}
-				{@render chip(l)}
-			{/each}
+		<div class={cn('flex items-center', !measured && labels.length && 'invisible')}>
 			{#if editable}
 				<ItemFieldPicker
 					label="Labels"
-					tip={hidden ? 'All labels' : labels.length ? 'Edit labels' : 'Add labels'}
+					tip={labels.length ? 'Edit labels' : 'Add labels'}
 					options={editor.options}
 					selected={editor.chosen}
 					loading={editor.loading}
@@ -92,22 +99,24 @@
 					bind:search={editor.search}
 					bind:open={editor.open}
 					ontoggle={editor.toggle}
-					triggerClass={hidden ? MORE : labels.length ? BUTTON : EMPTY}
-					triggerLabel={hidden ? `${moreText} labels` : undefined}
+					triggerClass={labels.length ? GROUP : EMPTY_FIELD_BADGE}
+					triggerLabel={labels.length ? `${summary}. Edit labels` : 'Add labels'}
 				>
 					{#snippet trigger()}
-						{#if hidden}{moreText}{:else}<Tag class="size-3.5" />{#if !labels.length}Label{/if}{/if}
+						{#if labels.length}{@render shownChips()}{:else}<Tag class="size-3.5" />Label{/if}
 					{/snippet}
 				</ItemFieldPicker>
-			{:else if hidden}
+			{:else}
 				<Popover.Root>
-					<Popover.Trigger class={MORE} aria-label="{moreText} labels">{moreText}</Popover.Trigger>
+					<Popover.Trigger class={GROUP} aria-label={summary}
+						>{@render shownChips()}</Popover.Trigger
+					>
 					<Popover.Content
 						align="start"
 						class="flex max-h-[min(20rem,var(--bits-popover-content-available-height))] w-72 flex-wrap content-start gap-1 overflow-y-auto p-2"
 					>
 						{#each labels as l (l.name)}
-							{@render chip(l, true)}
+							{@render listedChip(l)}
 						{/each}
 					</Popover.Content>
 				</Popover.Root>
