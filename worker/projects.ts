@@ -384,10 +384,5 @@ export async function editProject(token: string, edit: ProjectEdit): Promise<str
 			return addItem(token, edit.projectId, edit.contentId);
 		case 'remove':
 			return first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }));
-		case 'move':
-			return (
-				(await addItem(token, edit.toProjectId, edit.contentId)) ??
-				first(await projectGraphql(token, REMOVE_ITEM, { p: edit.projectId, i: edit.itemId }))
-			);
 	}
 }

@@ -20,9 +20,6 @@ function validEdit(b: Partial<ProjectEdit> & Record<string, unknown>): ProjectEd
 			return { action: 'status', ...at, fieldId: b.fieldId, optionId: b.optionId };
 		case 'remove':
 			return { action: 'remove', ...at };
-		case 'move':
-			if (!isNodeId(b.toProjectId) || !isNodeId(b.contentId)) return null;
-			return { action: 'move', ...at, toProjectId: b.toProjectId, contentId: b.contentId };
 		default:
 			return null;
 	}

@@ -202,7 +202,6 @@ describe('itemStatuses', () => {
 
 describe('editProject', () => {
 	const ADDED = { data: { addProjectV2ItemById: { item: { id: 'PVTI_new' } } } };
-	const REMOVED = { data: { deleteProjectV2Item: { deletedItemId: 'PVTI_old' } } };
 	const sentBodies = (fetchMock: ReturnType<typeof vi.fn>) =>
 		fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 
@@ -231,41 +230,5 @@ describe('editProject', () => {
 			contentId: 'I_issue'
 		});
 		expect(error).toBe('GitHub did not add the item to the project.');
-	});
-
-	it('removes the old item only after a move adds the new one', async () => {
-		const fetchMock = vi
-			.fn()
-			.mockImplementationOnce(async () => Response.json(ADDED))
-			.mockImplementationOnce(async () => Response.json(REMOVED));
-		vi.stubGlobal('fetch', fetchMock);
-		const error = await editProject('test', {
-			action: 'move',
-			projectId: 'PVT_old',
-			itemId: 'PVTI_old',
-			toProjectId: 'PVT_new',
-			contentId: 'I_issue'
-		});
-		expect(error).toBeNull();
-		expect(sentBodies(fetchMock).map((b) => b.variables)).toEqual([
-			{ p: 'PVT_new', c: 'I_issue' },
-			{ p: 'PVT_old', i: 'PVTI_old' }
-		]);
-	});
-
-	it('keeps the old item when a move cannot add the new one', async () => {
-		const fetchMock = vi.fn(async () =>
-			Response.json({ data: null, errors: [{ message: 'Project not found' }] })
-		);
-		vi.stubGlobal('fetch', fetchMock);
-		const error = await editProject('test', {
-			action: 'move',
-			projectId: 'PVT_old',
-			itemId: 'PVTI_old',
-			toProjectId: 'PVT_new',
-			contentId: 'I_issue'
-		});
-		expect(error).toBe('Project not found');
-		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 });
