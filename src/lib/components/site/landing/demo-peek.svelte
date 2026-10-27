@@ -25,7 +25,7 @@
 	import { tick } from 'svelte';
 	import MockAvatar from './mock-avatar.svelte';
 	import SuggestMenu from '$lib/components/app/suggest-menu.svelte';
-	import { suggestMenuSpot, type MenuSpot } from '$lib/caret';
+	import { onViewportChange, suggestMenuSpot, type MenuSpot } from '$lib/caret';
 	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
 	import {
 		applyPick,
@@ -169,6 +169,12 @@
 	function placeMenu(el: HTMLTextAreaElement, t: Trigger) {
 		menuPos = suggestMenuSpot(el, t.start);
 	}
+
+	$effect(() =>
+		onViewportChange(() => {
+			if (trigger && box) placeMenu(box, trigger);
+		})
+	);
 
 	function refsMatching(query: string) {
 		const q = query.toLowerCase();

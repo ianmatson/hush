@@ -9,7 +9,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { suggestMenuSpot, type MenuSpot } from '$lib/caret';
+	import { onViewportChange, suggestMenuSpot, type MenuSpot } from '$lib/caret';
 	import { meQuery, queryClient, suggestQuery } from '$lib/queries';
 	import {
 		applyPick,
@@ -125,22 +125,11 @@
 	}
 
 	// A scroll of the peek moves the caret: the list follows it.
-	$effect(() => {
-		const follow = () => {
+	$effect(() =>
+		onViewportChange(() => {
 			if (trigger && box) place(box, trigger);
-		};
-		const viewport = window.visualViewport;
-		document.addEventListener('scroll', follow, true);
-		window.addEventListener('resize', follow);
-		viewport?.addEventListener('scroll', follow);
-		viewport?.addEventListener('resize', follow);
-		return () => {
-			document.removeEventListener('scroll', follow, true);
-			window.removeEventListener('resize', follow);
-			viewport?.removeEventListener('scroll', follow);
-			viewport?.removeEventListener('resize', follow);
-		};
-	});
+		})
+	);
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	function update() {
