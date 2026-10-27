@@ -446,7 +446,7 @@
 		let frame = 0;
 		const follow = () => {
 			frame = 0;
-			cursor = fileInView();
+			if (!stopPinning) cursor = fileInView();
 		};
 		const onScroll = () => {
 			if (!frame) frame = requestAnimationFrame(follow);
@@ -483,39 +483,94 @@
 		await tick();
 	}
 
-	async function reveal(index: number, behavior: ScrollBehavior = 'smooth') {
+	const PIN_STABLE_FRAMES = 8;
+	const PIN_TIMEOUT_MS = 1500;
+	const PIN_TOLERANCE_PX = 1;
+	const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+	let navigation: AbortController | null = null;
+	let stopPinning: (() => void) | null = null;
+
+	onDestroy(() => navigation?.abort());
+
+	function beginNavigation(): AbortSignal {
+		navigation?.abort();
+		const controller = new AbortController();
+		navigation = controller;
+		const cancel = () => controller.abort();
+		for (const type of USER_SCROLL_EVENTS)
+			window.addEventListener(type, cancel, { capture: true, signal: controller.signal });
+		return controller.signal;
+	}
+
+	function pinToTop(elementId: string, signal: AbortSignal) {
+		stopPinning?.();
+		if (signal.aborted) return;
+		const deadline = performance.now() + PIN_TIMEOUT_MS;
+		let lastTop = Number.NaN;
+		let stableFrames = 0;
+		let frame = 0;
+		const stop = () => {
+			cancelAnimationFrame(frame);
+			signal.removeEventListener('abort', stop);
+			if (stopPinning === stop) stopPinning = null;
+		};
+		const step = (now: number) => {
+			const element = document.getElementById(elementId);
+			if (!element) return stop();
+			const marginTop = parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
+			const top = element.getBoundingClientRect().top;
+			stableFrames = Math.abs(top - lastTop) < PIN_TOLERANCE_PX ? stableFrames + 1 : 0;
+			lastTop = top;
+			const drift = top - marginTop;
+			if (Math.abs(drift) > PIN_TOLERANCE_PX) window.scrollBy({ top: drift, behavior: 'instant' });
+			if (stableFrames >= PIN_STABLE_FRAMES || now > deadline) return stop();
+			frame = requestAnimationFrame(step);
+		};
+		signal.addEventListener('abort', stop);
+		stopPinning = stop;
+		frame = requestAnimationFrame(step);
+	}
+
+	async function reveal(index: number, signal = beginNavigation()) {
 		const file = files[index];
 		if (!file) return;
 		cursor = index;
 		await renderThrough(index);
-		document
-			.getElementById(fileAnchor(file.filename))
-			?.scrollIntoView({ block: 'start', behavior });
+		if (signal.aborted) return;
+		const anchorId = fileAnchor(file.filename);
+		document.getElementById(anchorId)?.scrollIntoView({ block: 'start', behavior: 'instant' });
+		pinToTop(anchorId, signal);
 	}
 
 	let targetLine = $state<{ filename: string; line: DiffLineTarget } | null>(null);
 	let targetThread = $state<string | null>(null);
 
-	async function revealLine(index: number, line: DiffLineTarget) {
+	async function revealLine(index: number, line: DiffLineTarget, signal: AbortSignal) {
 		await renderThrough(index);
+		if (signal.aborted) return;
 		const file = files[index];
 		const row = file && document.getElementById(lineElementId(file.filename, line));
-		if (!row) return reveal(index, 'instant');
+		if (!row) return reveal(index, signal);
+		stopPinning?.();
 		cursor = index;
 		row.scrollIntoView({ block: 'center', behavior: 'instant' });
 	}
 
-	async function revealThread(index: number, threadId: string) {
+	async function revealThread(index: number, threadId: string, signal: AbortSignal) {
 		await renderThrough(index);
+		if (signal.aborted) return;
 		const element = document.getElementById(threadElementId(threadId));
-		if (!element) return reveal(index, 'instant');
+		if (!element) return reveal(index, signal);
+		stopPinning?.();
 		cursor = index;
 		element.scrollIntoView({ block: 'center', behavior: 'instant' });
 	}
 
-	function jumpTo(go: () => unknown) {
-		go();
-		setTimeout(go, SETTLE_MS);
+	function jumpTo(go: (signal: AbortSignal) => unknown) {
+		const signal = beginNavigation();
+		go(signal);
+		const retry = setTimeout(() => go(signal), SETTLE_MS);
+		signal.addEventListener('abort', () => clearTimeout(retry));
 	}
 
 	function openAt(hash: string, index: number, line: DiffLineTarget | null) {
@@ -525,7 +580,7 @@
 		targetThread = null;
 		foldChoices.set(filename, false);
 		void tick().then(() =>
-			jumpTo(() => (line ? revealLine(index, line) : reveal(index, 'instant')))
+			jumpTo((signal) => (line ? revealLine(index, line, signal) : reveal(index, signal)))
 		);
 	}
 
@@ -536,7 +591,7 @@
 		targetLine = null;
 		targetThread = thread.id;
 		foldChoices.set(thread.path, false);
-		void tick().then(() => jumpTo(() => revealThread(index, thread.id)));
+		void tick().then(() => jumpTo((signal) => revealThread(index, thread.id, signal)));
 	}
 
 	async function openGitHubDiffAnchor(hash: string, anchor: GitHubDiffAnchor) {
