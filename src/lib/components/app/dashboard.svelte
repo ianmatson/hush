@@ -98,13 +98,7 @@
 	import AppMenu from './app-menu.svelte';
 	import { meQuery } from '$lib/queries';
 	import { openOnGitHub } from '$lib/recheck';
-	import {
-		claimPeek,
-		closePeek,
-		linkedPeekTarget,
-		peek,
-		releasePeekHoldUnlessOn
-	} from '$lib/peek.svelte';
+	import { claimPeek, closePeek, peek, releasePeekHoldUnlessOn } from '$lib/peek.svelte';
 	import { keepHeldRow } from '$lib/shared/held-row';
 	import ItemWhyLine from './item-why-line.svelte';
 	import { changesSinceOpening } from '$lib/changes-since-opening.svelte';
@@ -559,16 +553,6 @@
 			revealInStack(item.id);
 			selectedId = item.id;
 			take();
-		});
-	});
-	$effect(() => {
-		const linked = linkedPeekTarget();
-		const item = linked
-			? data?.items.find((i) => i.repo === linked.repo && i.number === linked.number)
-			: null;
-		if (!item) return;
-		untrack(() => {
-			palette.peekRequest = { page: 'view', view: view.id, kind: item.kind, id: item.id };
 		});
 	});
 

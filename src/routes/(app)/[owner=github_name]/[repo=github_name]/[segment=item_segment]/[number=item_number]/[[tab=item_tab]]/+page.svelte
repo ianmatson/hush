@@ -32,7 +32,6 @@
 		itemPagePath,
 		kindOfItemSegment
 	} from '$lib/shared/item-page';
-	import { PEEK_PARAM, peekLinkParam } from '$lib/shared/peek-link';
 	import { subjectKey } from '$lib/shared/subject';
 	import { findStacks, stackByMember, type StackMember } from '$lib/shared/stacks';
 	import { Button } from '$lib/components/ui/button';
@@ -120,7 +119,7 @@
 	afterNavigate(({ from }) => {
 		if (from?.route.id === page.route.id) return;
 		const here = historyIndex();
-		listHistoryIndex = from && here !== null ? here - 1 : null;
+		listHistoryIndex = from?.url && here !== null ? here - 1 : null;
 	});
 
 	function startListPath() {
@@ -132,8 +131,7 @@
 		const here = historyIndex();
 		if (listHistoryIndex !== null && here !== null && here > listHistoryIndex)
 			history.go(listHistoryIndex - here);
-		else if (me.data?.settings.openItems === 'page') goto(startListPath());
-		else goto(`${startListPath()}?${PEEK_PARAM}=${peekLinkParam({ repo, number })}`);
+		else goto(startListPath());
 	}
 
 	$effect(() => {
