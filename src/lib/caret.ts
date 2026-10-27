@@ -48,3 +48,98 @@ export function caretXY(
 	mirror.remove();
 	return out;
 }
+
+export interface MenuSpot {
+	x: number;
+	y: number;
+	above: boolean;
+	scale: number;
+}
+
+export interface ScreenArea {
+	left: number;
+	top: number;
+	width: number;
+	height: number;
+	zoom: number;
+	fixedOrigin: { x: number; y: number };
+}
+
+const SUGGEST_MENU = { width: 288, height: 340 };
+const EDGE_MARGIN_PX = 8;
+const CARET_GAP_PX = 4;
+
+export function menuSpot(
+	caret: { x: number; y: number; line: number },
+	visible: ScreenArea,
+	menu: { width: number; height: number }
+): MenuSpot {
+	const scale = 1 / visible.zoom;
+	const margin = EDGE_MARGIN_PX * scale;
+	const gap = CARET_GAP_PX * scale;
+	const right = visible.left + visible.width - menu.width * scale - margin;
+	const caretX = caret.x - visible.fixedOrigin.x;
+	const caretTop = caret.y - visible.fixedOrigin.y;
+	const x = Math.max(visible.left + margin, Math.min(caretX, right));
+	const caretBottom = caretTop + caret.line;
+	const roomBelow = visible.top + visible.height - caretBottom;
+	const roomAbove = caretTop - visible.top;
+	return roomBelow > menu.height * scale || roomBelow >= roomAbove
+		? { x, y: caretBottom + gap, above: false, scale }
+		: { x, y: caretTop - gap, above: true, scale };
+}
+
+function fixedOriginOnScreen(): { x: number; y: number } {
+	const probe = document.createElement('div');
+	Object.assign(probe.style, { position: 'fixed', left: '0', top: '0', visibility: 'hidden' });
+	document.body.appendChild(probe);
+	const r = probe.getBoundingClientRect();
+	probe.remove();
+	return { x: r.left, y: r.top };
+}
+
+function visibleArea(): ScreenArea {
+	const fixedOrigin = fixedOriginOnScreen();
+	const v = window.visualViewport;
+	if (!v)
+		return {
+			left: 0,
+			top: 0,
+			width: window.innerWidth,
+			height: window.innerHeight,
+			zoom: 1,
+			fixedOrigin
+		};
+	return {
+		left: v.offsetLeft,
+		top: v.offsetTop,
+		width: v.width,
+		height: v.height,
+		zoom: v.scale,
+		fixedOrigin
+	};
+}
+
+export function onViewportChange(follow: () => void): () => void {
+	const viewport = window.visualViewport;
+	document.addEventListener('scroll', follow, true);
+	window.addEventListener('resize', follow);
+	viewport?.addEventListener('scroll', follow);
+	viewport?.addEventListener('resize', follow);
+	return () => {
+		document.removeEventListener('scroll', follow, true);
+		window.removeEventListener('resize', follow);
+		viewport?.removeEventListener('scroll', follow);
+		viewport?.removeEventListener('resize', follow);
+	};
+}
+
+export function suggestMenuSpot(el: HTMLTextAreaElement, pos: number): MenuSpot {
+	const c = caretXY(el, pos);
+	const rect = el.getBoundingClientRect();
+	return menuSpot(
+		{ x: rect.left + c.x, y: rect.top + c.y, line: c.line },
+		visibleArea(),
+		SUGGEST_MENU
+	);
+}

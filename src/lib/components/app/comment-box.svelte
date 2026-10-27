@@ -9,7 +9,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { caretXY } from '$lib/caret';
+	import { onViewportChange, suggestMenuSpot, type MenuSpot } from '$lib/caret';
 	import { meQuery, queryClient, suggestQuery } from '$lib/queries';
 	import {
 		applyPick,
@@ -91,7 +91,7 @@
 	let loading = $state(false);
 	let active = $state(0);
 	/** Where the list goes on screen: under the caret, or over it when there is no room below. */
-	let pos = $state<{ x: number; top?: number; bottom?: number }>({ x: 0 });
+	let pos = $state<MenuSpot>({ x: 0, y: 0, above: false, scale: 1 });
 	let asked = 0;
 
 	/** The conversation's people: the author, then the latest to speak, reviewers, assignees. */
@@ -121,28 +121,15 @@
 	}
 
 	function place(el: HTMLTextAreaElement, t: Trigger) {
-		const c = caretXY(el, t.start);
-		const rect = el.getBoundingClientRect();
-		const x = Math.max(8, Math.min(rect.left + c.x, window.innerWidth - 296));
-		const y = rect.top + c.y;
-		pos =
-			window.innerHeight - (y + c.line) > 340
-				? { x, top: y + c.line + 4 }
-				: { x, bottom: window.innerHeight - y + 4 };
+		pos = suggestMenuSpot(el, t.start);
 	}
 
 	// A scroll of the peek moves the caret: the list follows it.
-	$effect(() => {
-		const follow = () => {
+	$effect(() =>
+		onViewportChange(() => {
 			if (trigger && box) place(box, trigger);
-		};
-		document.addEventListener('scroll', follow, true);
-		window.addEventListener('resize', follow);
-		return () => {
-			document.removeEventListener('scroll', follow, true);
-			window.removeEventListener('resize', follow);
-		};
-	});
+		})
+	);
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	function update() {
@@ -257,7 +244,7 @@
 			<Textarea
 				bind:ref={box}
 				bind:value={text}
-				class={cn('min-h-20 text-sm', DROP_TARGET_CLASS)}
+				class={cn('min-h-20', DROP_TARGET_CLASS)}
 				{@attach uploads.textarea}
 				{@attach markdownEditor}
 				{placeholder}

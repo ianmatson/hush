@@ -25,7 +25,7 @@
 	import { tick } from 'svelte';
 	import MockAvatar from './mock-avatar.svelte';
 	import SuggestMenu from '$lib/components/app/suggest-menu.svelte';
-	import { caretXY } from '$lib/caret';
+	import { onViewportChange, suggestMenuSpot, type MenuSpot } from '$lib/caret';
 	import { expandClosedShortcode, loadEmojiList } from '$lib/emoji';
 	import {
 		applyPick,
@@ -147,13 +147,10 @@
 		mode = 'comment';
 	}
 
-	const SUGGEST_MENU_WIDTH_PX = 296;
-	const ROOM_BELOW_MENU_PX = 340;
-
 	let trigger = $state<Trigger | null>(null);
 	let suggestions = $state<Suggestion[]>([]);
 	let activeSuggestion = $state(0);
-	let menuPos = $state<{ x: number; top?: number; bottom?: number }>({ x: 0 });
+	let menuPos = $state<MenuSpot>({ x: 0, y: 0, above: false, scale: 1 });
 	let closedAt = -1;
 	let asked = 0;
 
@@ -170,15 +167,14 @@
 	);
 
 	function placeMenu(el: HTMLTextAreaElement, t: Trigger) {
-		const c = caretXY(el, t.start);
-		const rect = el.getBoundingClientRect();
-		const x = Math.max(8, Math.min(rect.left + c.x, window.innerWidth - SUGGEST_MENU_WIDTH_PX));
-		const y = rect.top + c.y;
-		menuPos =
-			window.innerHeight - (y + c.line) > ROOM_BELOW_MENU_PX
-				? { x, top: y + c.line + 4 }
-				: { x, bottom: window.innerHeight - y + 4 };
+		menuPos = suggestMenuSpot(el, t.start);
 	}
+
+	$effect(() =>
+		onViewportChange(() => {
+			if (trigger && box) placeMenu(box, trigger);
+		})
+	);
 
 	function refsMatching(query: string) {
 		const q = query.toLowerCase();
@@ -420,7 +416,7 @@
 					rows="2"
 					aria-label="Comment on {reference}"
 					placeholder="Leave a comment. @ mentions, # issues, : emoji"
-					class="w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-[0.85rem] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+					class="w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-[0.85rem]"
 				></textarea>
 				{#if trigger && (suggestions.length || (trigger.query && trigger.kind !== 'emoji'))}
 					<SuggestMenu
