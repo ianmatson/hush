@@ -39,6 +39,7 @@
 	import { applySettings } from '$lib/save-settings';
 	import { dismissNote, dismissedNotes } from '$lib/dismissed-notes.svelte';
 	import { Selection } from '$lib/selection.svelte';
+	import { listKeyboardTarget } from '$lib/list-keyboard-target';
 	import { tokenHelp } from '$lib/token-help';
 	import { sortOfView } from '$lib/shared/sorting';
 	import {
@@ -470,11 +471,14 @@
 	}
 
 	function stepStack(direction: 1 | -1) {
-		const key = (owns && peekedOutsideMember?.key) || selectedId;
+		const key = peek.target?.id ?? selectedId;
 		const stack = key ? stackOf.get(key) : undefined;
 		if (!stack || !key) return;
 		const next = stack.membersBottomFirst[positionIn(stack, key) + direction];
-		if (next) showStackMember(stack, next, direction);
+		if (!next) return;
+		const home = sections.find((section) => section.items.some((i) => stackOf.get(i.id) === stack));
+		if (home) setCollapsed(home.key, false);
+		showStackMember(stack, next, direction);
 	}
 
 	function pickInStrip(stack: Stack, m: StackMember) {
@@ -662,6 +666,23 @@
 		const cmd = commandFor(e, VIEW_KEY_SCOPES);
 		if (!cmd) return;
 		const i = navigable[selectedIndex];
+		const action = listKeyboardTarget(peek.target, i, targets(), itemsQ.data?.rows ?? []);
+		const openTarget = (url: string | undefined) => {
+			if (!url || !action.target) return;
+			openOnGitHub(url);
+			if (action.item) markItemsSeen([action.item.id]);
+		};
+		const actOnItems = (run: (ids: string[]) => unknown) => {
+			if (!action.ids.length) {
+				if (peek.target)
+					toast('Not in your views', {
+						description: 'Snooze, mute, and unread work only for items in your views.'
+					});
+				return;
+			}
+			run(action.ids);
+		};
+		const snoozed = peek.target ? !!action.item?.dismissed : showSnoozed;
 		const views = me.data?.settings.views ?? [];
 		const options = showingOptions(view);
 		// Each command's keys: shared/keymap.ts (and Settings → Keybinds).
@@ -672,22 +693,25 @@
 			'list.extendPrev': () => move(-1, true),
 			'list.select': () => i && sel.toggle(i.id),
 			'list.selectAll': () => sel.all(order),
-			'list.peek': () => i && (owns ? closePeek() : take()),
+			'list.peek': () => (peekOpen ? closePeek() : i && take()),
 			'list.escape': () => (peekOpen ? closePeek() : sel.clear()),
-			'list.open': () => i && open(i, i.actionUrl),
-			'list.openGitHub': () => i && open(i, i.url),
-			'list.fullPage': () => i && openFullPage(i),
-			'list.copy': () => copyItemLinks(targets()),
+			'list.open': () => openTarget(action.actionUrl),
+			'list.openGitHub': () => openTarget(action.target?.url),
+			'list.fullPage': () => action.fullPagePath && goto(action.fullPagePath),
+			'list.copy': () => copyLinks(action.urls),
 			'list.refresh': () => refresh(),
 			'list.search': () => (palette.open = true),
 			'list.help': () => (helpOpen = true),
-			'dash.snooze': () => toggleSnooze(targets()),
+			'dash.snooze': () =>
+				actOnItems((ids) => (snoozed ? unsnooze(ids) : snooze(ids, UNTIL_NEW_ACTIVITY))),
 			'dash.snoozeTomorrow': () =>
-				!showSnoozed &&
-				snooze(targets(), { until: snoozeOptions().find((o) => o.id === 'tomorrow')!.until }),
+				!snoozed &&
+				actOnItems((ids) =>
+					snooze(ids, { until: snoozeOptions().find((o) => o.id === 'tomorrow')!.until })
+				),
 			'dash.showSnoozed': () => (showSnoozed = !showSnoozed),
-			'dash.mute': () => toggleMute(targets()),
-			'dash.read': () => toggleItemsRead(targets()),
+			'dash.mute': () => actOnItems(toggleMute),
+			'dash.read': () => actOnItems(toggleItemsRead),
 			'dash.stackUp': () => stepStack(1),
 			'dash.stackDown': () => stepStack(-1),
 			'dash.kind': () =>
