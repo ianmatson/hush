@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { MenuSpot } from '$lib/caret';
 	import type { Suggestion } from '$lib/shared/suggest';
 	import { cn } from '$lib/utils';
 	import GitPullRequest from '@lucide/svelte/icons/git-pull-request';
@@ -23,10 +24,12 @@
 		active: number;
 		loading: boolean;
 		/** On screen (the list is on top of the page, so the peek's edges do not cut it). */
-		pos: { x: number; top?: number; bottom?: number };
+		pos: MenuSpot;
 		onpick: (s: Suggestion) => void;
 		onhover: (i: number) => void;
 	} = $props();
+
+	let scrolled = false;
 
 	/** Move the list to the end of the page. */
 	function toBody(node: HTMLElement) {
@@ -55,10 +58,10 @@
 	use:toBody
 	role="listbox"
 	aria-label="Suggestions"
-	class="fixed z-50 w-72 overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
+	class="fixed z-50 w-72 origin-top-left overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
 	style:left="{pos.x}px"
-	style:top={pos.top === undefined ? undefined : `${pos.top}px`}
-	style:bottom={pos.bottom === undefined ? undefined : `${pos.bottom}px`}
+	style:top="{pos.y}px"
+	style:transform="scale({pos.scale}){pos.above ? ' translateY(-100%)' : ''}"
 >
 	{#if !items.length}
 		<p class="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
@@ -74,7 +77,15 @@
 				'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
 				i === active && 'bg-accent text-accent-foreground'
 			)}
-			onpointerdown={(e) => e.preventDefault()}
+			onpointerdown={(e) => {
+				e.preventDefault();
+				scrolled = false;
+			}}
+			onpointercancel={() => (scrolled = true)}
+			ontouchend={(e) => {
+				e.preventDefault();
+				if (!scrolled) onpick(s);
+			}}
 			onmousemove={() => onhover(i)}
 			onclick={() => onpick(s)}
 		>

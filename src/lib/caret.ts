@@ -48,3 +48,56 @@ export function caretXY(
 	mirror.remove();
 	return out;
 }
+
+export interface MenuSpot {
+	x: number;
+	y: number;
+	above: boolean;
+	scale: number;
+}
+
+export interface ScreenArea {
+	left: number;
+	top: number;
+	width: number;
+	height: number;
+	zoom: number;
+}
+
+const SUGGEST_MENU = { width: 288, height: 340 };
+const EDGE_MARGIN_PX = 8;
+const CARET_GAP_PX = 4;
+
+export function menuSpot(
+	caret: { x: number; y: number; line: number },
+	visible: ScreenArea,
+	menu: { width: number; height: number }
+): MenuSpot {
+	const scale = 1 / visible.zoom;
+	const margin = EDGE_MARGIN_PX * scale;
+	const gap = CARET_GAP_PX * scale;
+	const right = visible.left + visible.width - menu.width * scale - margin;
+	const x = Math.max(visible.left + margin, Math.min(caret.x, right));
+	const caretBottom = caret.y + caret.line;
+	const roomBelow = visible.top + visible.height - caretBottom;
+	const roomAbove = caret.y - visible.top;
+	return roomBelow > menu.height * scale || roomBelow >= roomAbove
+		? { x, y: caretBottom + gap, above: false, scale }
+		: { x, y: caret.y - gap, above: true, scale };
+}
+
+function visibleArea(): ScreenArea {
+	const v = window.visualViewport;
+	if (!v) return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, zoom: 1 };
+	return { left: v.offsetLeft, top: v.offsetTop, width: v.width, height: v.height, zoom: v.scale };
+}
+
+export function suggestMenuSpot(el: HTMLTextAreaElement, pos: number): MenuSpot {
+	const c = caretXY(el, pos);
+	const rect = el.getBoundingClientRect();
+	return menuSpot(
+		{ x: rect.left + c.x, y: rect.top + c.y, line: c.line },
+		visibleArea(),
+		SUGGEST_MENU
+	);
+}
