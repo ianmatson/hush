@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { onNavigate } from '$app/navigation';
-	import { PEEK_PARAM } from '$lib/shared/peek-link';
+	import { peek } from '$lib/peek.svelte';
 	import { subjectKey } from '$lib/shared/subject';
 	import { DOCKED_PANEL_QUERY } from './side-panel.svelte';
 
@@ -102,9 +102,7 @@
 	async function settle(itemKey: string | null) {
 		const ready = itemKey
 			? () => !!document.querySelector(itemPageReadySelector(itemKey))
-			: () =>
-					!new URL(location.href).searchParams.has(PEEK_PARAM) ||
-					!!document.querySelector(`${PANEL} [${READY_ATTR}]`);
+			: () => !peek.target || !!document.querySelector(`${PANEL} [${READY_ATTR}]`);
 		const start = performance.now();
 		while (!ready() && performance.now() - start < SETTLE_LIMIT_MS) await frame();
 		finishSurfaceAnimations();

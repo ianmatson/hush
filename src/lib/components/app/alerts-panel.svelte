@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { alertsQuery, pushDevicesQuery } from '$lib/queries';
 	import { alertsSeen, markAlertsSeen } from '$lib/alerts.svelte';
@@ -9,29 +10,23 @@
 	import type { AlertDTO } from '$lib/shared/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { itemPagePath } from '$lib/shared/item-page';
 	import SidePanel from './side-panel.svelte';
-	import PeekContent from './peek-content.svelte';
 	import { noteOpened } from '$lib/recheck';
-	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 
 	/**
-	 * The alert history: every push Hush sent in the last 30 days. A PR or issue opens in the same
-	 * panel (a peek, with a way back); other alerts open where the push went.
+	 * The alert history: every push Hush sent in the last 30 days. A PR or issue opens on its full
+	 * page; other alerts open where the push went.
 	 */
 	const alerts = createQuery(alertsQuery);
 	const devices = createQuery(() => ({ ...pushDevicesQuery(), enabled: ui.alertsOpen }));
 
-	let selected = $state<AlertDTO | null>(null);
 	// Dots mark what was new when you opened the panel; the bell counts from then.
 	let seenBefore = $state(0);
 	$effect(() => {
-		if (!ui.alertsOpen) {
-			selected = null;
-			return;
-		}
+		if (!ui.alertsOpen) return;
 		seenBefore = untrack(() => alertsSeen.at);
 		untrack(() => alerts.refetch());
 	});
@@ -41,8 +36,12 @@
 	});
 
 	const close = () => (ui.alertsOpen = false);
+	function openItem({ repo, number, kind }: NonNullable<AlertDTO['item']>) {
+		close();
+		goto(itemPagePath(repo, number, kind));
+	}
 	function choose(a: AlertDTO) {
-		if (a.item) selected = a;
+		if (a.item) openItem(a.item);
 		else {
 			noteOpened(a.url);
 			window.open(a.url, '_blank', 'noreferrer');
@@ -51,49 +50,18 @@
 	function onkeydown(e: KeyboardEvent) {
 		if (!ui.alertsOpen || e.key !== 'Escape' || e.defaultPrevented) return;
 		e.preventDefault();
-		if (selected) selected = null;
-		else close();
+		close();
 	}
 </script>
 
 <svelte:window {onkeydown} />
 
-<SidePanel
-	open={ui.alertsOpen}
-	onclose={close}
-	label="alerts"
-	title={selected ? selected.body.split('\n')[0] : 'Alerts'}
->
-	{#snippet start(wide)}
-		{#if selected}
-			<Button variant="ghost" size={wide ? 'sm' : 'default'} onclick={() => (selected = null)}
-				><ArrowLeft />Alerts</Button
-			>
-		{:else}
-			<span class="px-2 text-sm font-medium">Alerts</span>
-		{/if}
-	{/snippet}
-	{#snippet actions(size)}
-		{#if selected}
-			<Button
-				variant="ghost"
-				{size}
-				href={selected.url}
-				onclick={() => selected && noteOpened(selected.url)}
-				target="_blank"
-				rel="noreferrer"
-				aria-label="Open on GitHub"><ExternalLink /></Button
-			>
-		{/if}
+<SidePanel open={ui.alertsOpen} onclose={close} label="alerts" title="Alerts">
+	{#snippet start()}
+		<span class="px-2 text-sm font-medium">Alerts</span>
 	{/snippet}
 
-	{#if selected?.item}
-		<PeekContent
-			repo={selected.item.repo}
-			number={selected.item.number}
-			title={selected.body.split('\n')[0]}
-		/>
-	{:else if alerts.isPending}
+	{#if alerts.isPending}
 		<div class="grid gap-3 p-4">
 			{#each [0, 1, 2] as i (i)}
 				<div class="grid gap-2">

@@ -89,7 +89,7 @@ In settings.json this is [`quietHours`](/docs/settings#quiethours).
 
 The bell in the header lists every push alert from the last 30 days, newest first, also those that waited during quiet hours. A dot marks the alerts that are new since you last opened the list.
 
-- Click an alert about a pull request or issue to read it in a [peek](/docs/peek), in the same panel. The button at the top right opens it on GitHub, and **Alerts** goes back to the list.
+- Click an alert about a pull request or issue to open its [full page](/docs/peek#full-page). The alert history closes.
 - Other alerts, such as a digest, open where the push went.
 
 ## Tab title and icon

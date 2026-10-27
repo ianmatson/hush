@@ -9,14 +9,9 @@ The peek shows one pull request or issue next to your list. Click a row, or pres
 
 - {{key:list.peek}} or {{key:list.escape}} closes it.
 - The peek stays open when you go to another view, and shows the same item until you move the cursor there. Settings does not show the peek.
-- The alert history (the bell) opens in the same place; the one that you opened last stays. An alert about a pull request or issue opens it in a peek there.
+- The alert history (the bell) opens in the same place; the one that you opened last stays.
+- The peek is only on the lists. It does not change the address: a link to a pull request or issue in Hush opens its full page.
 - For a pull request in a [stack](/docs/pull-requests-and-issues#stacked-pull-requests), the peek lists the stack at the top. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack.
-
-### Open the peek from a link
-
-Add `?peek=` and a pull request or issue to the address of a view, and Hush opens with its peek: `https://app.hush-gh.com/v/mine?peek=PostHog/posthog/123`. The value can be `owner/repo/123`, `owner/repo#123` (write `#` as `%23` in an address), or a GitHub link to the pull request or issue. When the item is in the list of that page, the peek opens on its row, with the buttons of the page.
-
-The address follows the peek: when you open the peek or move it to another item, the address changes to its `?peek=` link. Reload the page, or copy the address, and the peek opens on the same item. When you close the peek, the address loses its `?peek=`.
 
 ### Full page
 
@@ -24,9 +19,9 @@ The full page shows the same pull request or issue as the peek, in a wider colum
 
 - At the top, as in the peek: the stack of a pull request in a stack, and, for an item in your views, why it is there and what changed since you last looked. {{key:dash.stackDown}} and {{key:dash.stackUp}} move down and up the stack, and a click on a pull request in the stack opens it.
 
-- Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette.
+- Press {{key:list.fullPage}} on a row, choose the expand button at the top of the peek, or choose **Open full page** in the right-click menu or the palette. An alert about a pull request or issue in the [alert history](/docs/notifications#alert-history) also opens its full page.
 - With **Click opens** set to **Full page** (in **Settings → General → Row layout**), a click on a row and Enter in {{key:palette}} open the full page. {{key:list.peek}} still opens the peek.
-- {{key:list.escape}} or {{key:list.fullPage}} goes back to the list. If the peek was open when you left the list, it is still open on the same item there.
+- {{key:list.escape}} or {{key:list.fullPage}} goes back to the page that you came from, or to your start view. If the peek was open when you left the list, it is still open on the same item there.
 - The keys for an item work here too: {{key:list.copy}} copies its GitHub link, {{key:dash.snooze}} snoozes it until new activity (or wakes it up), {{key:dash.mute}} mutes or unmutes it, and {{key:dash.read}} marks it as read or unread. Snooze, mute, and unread work only for items in your views. {{key:palette}} has the same actions, and the other snooze times.
 - {{key:list.help}} shows the keys of the full page.
 - The address is the same as on GitHub: `https://app.hush-gh.com/PostHog/posthog/pull/123`. To open a GitHub link in Hush, change `github.com` to `app.hush-gh.com`.
