@@ -1,3 +1,4 @@
+import { sameLogin } from './logins';
 import type { ReactionContent, Reactions } from './types';
 
 /** GitHub's eight reactions, in GitHub's order. */
@@ -59,7 +60,7 @@ export function reactionsOf(n: {
 const REACTOR_NAMES = 10;
 
 export function reactorsText(g: Reactions['groups'][number], myLogin: string | undefined): string {
-	const others = g.names.filter((n) => n !== myLogin);
+	const others = g.names.filter((n) => !sameLogin(n, myLogin));
 	const names = [...(g.mine ? ['You'] : []), ...others];
 	if (!names.length) return `${g.count}`;
 	const more = g.count - names.length;

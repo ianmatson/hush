@@ -82,4 +82,8 @@ describe('reactorsText', () => {
 		expect(reactorsText(g(2, true, ['alice']), 'me')).toBe('You and alice');
 		expect(reactorsText(g(1, false, ['me', 'alice']), 'me')).toBe('alice');
 	});
+	it('knows your login in any letter case', () => {
+		expect(reactorsText(g(1, true, ['Me']), 'me')).toBe('You');
+		expect(reactorsText(g(1, false, ['Me', 'alice']), 'me')).toBe('alice');
+	});
 });
