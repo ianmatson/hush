@@ -1,3 +1,4 @@
+import { sameLogin } from './logins';
 import type { ReactionContent, Reactions } from './types';
 
 /** GitHub's eight reactions, in GitHub's order. */
@@ -19,7 +20,7 @@ const ORDER = Object.fromEntries(REACTIONS.map((r, i) => [r.content, i]));
 /** The groups after you add (or remove) your reaction: counts change, empty groups go. */
 export function toggled(r: Reactions, content: ReactionContent): Reactions['groups'] {
 	const g = r.groups.find((x) => x.content === content);
-	if (!g) return [...r.groups, { content, count: 1, mine: true }].sort(byOrder);
+	if (!g) return [...r.groups, { content, count: 1, mine: true, names: [] }].sort(byOrder);
 	return r.groups
 		.map((x) =>
 			x.content === content ? { ...x, mine: !x.mine, count: x.count + (x.mine ? -1 : 1) } : x
@@ -37,7 +38,7 @@ export function reactionsOf(n: {
 	reactionGroups?: {
 		content: string;
 		viewerHasReacted: boolean;
-		reactors?: { totalCount: number };
+		reactors?: { totalCount: number; nodes?: ({ login?: string } | null)[] };
 	}[];
 }): Reactions | undefined {
 	if (!n.id) return undefined;
@@ -49,11 +50,24 @@ export function reactionsOf(n: {
 			.map((g) => ({
 				content: g.content as ReactionContent,
 				count: g.reactors!.totalCount,
-				mine: g.viewerHasReacted
+				mine: g.viewerHasReacted,
+				names: (g.reactors!.nodes ?? []).flatMap((n) => (n?.login ? [n.login] : []))
 			}))
 			.sort(byOrder)
 	};
 }
 
+const REACTOR_NAMES = 10;
+
+export function reactorsText(g: Reactions['groups'][number], myLogin: string | undefined): string {
+	const others = g.names.filter((n) => !sameLogin(n, myLogin));
+	const names = [...(g.mine ? ['You'] : []), ...others];
+	if (!names.length) return `${g.count}`;
+	const more = g.count - names.length;
+	if (more > 0) names.push(`${more} more`);
+	if (names.length === 1) return names[0];
+	return `${names.slice(0, -1).join(', ')}${names.length > 2 ? ',' : ''} and ${names.at(-1)}`;
+}
+
 /** The GraphQL fields that reactionsOf reads. */
-export const REACTION_FIELDS = `id viewerCanReact reactionGroups { content viewerHasReacted reactors { totalCount } }`;
+export const REACTION_FIELDS = `id viewerCanReact reactionGroups { content viewerHasReacted reactors(first: ${REACTOR_NAMES}) { totalCount nodes { ... on Actor { login } } } }`;

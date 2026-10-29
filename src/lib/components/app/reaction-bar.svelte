@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
 	import { api } from '$lib/api';
-	import { queryClient } from '$lib/queries';
-	import { REACTIONS, toggled } from '$lib/shared/reactions';
+	import { meQuery, queryClient } from '$lib/queries';
+	import { REACTIONS, reactorsText, toggled } from '$lib/shared/reactions';
 	import type { ReactionContent, Reactions } from '$lib/shared/types';
 	import { cn } from '$lib/utils';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -20,6 +21,7 @@
 	// The peek's copy until the peek loads again.
 	let groups = $derived(r.groups);
 	let busy = $state(false);
+	const me = createQuery(meQuery);
 
 	const EMOJI = Object.fromEntries(REACTIONS.map((x) => [x.content, x]));
 
@@ -40,9 +42,6 @@
 			busy = false;
 		}
 	}
-
-	const who = (count: number, mine: boolean) =>
-		mine ? (count === 1 ? 'You' : `You and ${count - 1} more`) : `${count}`;
 </script>
 
 {#snippet reaction(g: ReactionGroup, props: Record<string, unknown>)}
@@ -67,7 +66,10 @@
 {#if groups.length || r.canReact}
 	<div class={cn('flex flex-wrap items-center gap-1', className)}>
 		{#each groups as g (g.content)}
-			<Tip text="{EMOJI[g.content].label}: {who(g.count, g.mine)}" focusable={r.canReact}>
+			<Tip
+				text="{EMOJI[g.content].label}: {reactorsText(g, me.data?.login)}"
+				focusable={r.canReact}
+			>
 				{#snippet children(props)}
 					{#if r.canReact}
 						{@render reaction(g, props)}

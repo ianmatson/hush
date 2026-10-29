@@ -61,7 +61,7 @@
 				{@render children(triggerProps(props))}
 			{/snippet}
 		</Tooltip.Trigger>
-		<Tooltip.Content>{text}</Tooltip.Content>
+		<Tooltip.Content collisionPadding={8}>{text}</Tooltip.Content>
 	</Tooltip.Root>
 {:else}
 	{@render children({})}
