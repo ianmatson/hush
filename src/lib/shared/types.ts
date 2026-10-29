@@ -443,7 +443,7 @@ export interface Reactions {
 	/** False in a locked conversation you cannot write in, for example. */
 	canReact: boolean;
 	/** Only the reactions someone gave, in GitHub's order. */
-	groups: { content: ReactionContent; count: number; mine: boolean }[];
+	groups: { content: ReactionContent; count: number; mine: boolean; names: string[] }[];
 }
 
 export interface PeekEntry {
