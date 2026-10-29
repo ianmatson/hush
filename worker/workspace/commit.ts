@@ -1,3 +1,4 @@
+import { isAfter, latestActivity } from '../../src/lib/shared/activity';
 import { pinsAfter, type CategoryPin } from '../../src/lib/shared/categories';
 import { snapshotOf, type Snapshot } from '../../src/lib/shared/changes';
 import { HOUR_MS } from '../../src/lib/shared/durations';
@@ -401,7 +402,8 @@ function alertCauses(
 		for (const wake of wakes) add(wake.itemId, 'snooze-over', wake.title ?? 'Snooze over');
 	for (const admission of admissions) {
 		const item = draft.items.get(admission.itemId);
-		if (!item || sameLogin(item.facts.author, me) || holdsAlerts(item, me, now)) continue;
+		if (!item || sameLogin(item.facts.author, me) || actedLast(item.facts, me)) continue;
+		if (holdsAlerts(item, me, now)) continue;
 		add(admission.itemId, 'new-item', `New in ${admission.viewName}`);
 	}
 	return [...byItem].map(([itemId, { reasons, titles }]) => {
@@ -417,14 +419,36 @@ function alertCauses(
 	});
 }
 
+const actedLast = (facts: SubjectFacts, me: string) => sameLogin(latestActivity(facts)?.by, me);
+
+function markRead(draft: Draft, ids: ItemId[], now: number) {
+	draft.updateAttention(ids, (attention, item) => ({
+		...attention,
+		markedUnread: false,
+		seen: { at: now, revision: item.revision, snapshot: snapshotOf(item.facts, draft.config.me) }
+	}));
+}
+
 function startRead(draft: Draft, quiet: Set<ItemId>, alertable: Set<ItemId>, now: number) {
 	const quietArrivals = [...draft.factsChanged]
 		.filter(([id, before]) => before === null && quiet.has(id) && !alertable.has(id))
 		.map(([id]) => id);
-	draft.updateAttention(quietArrivals, (attention, item) => ({
-		...attention,
-		seen: { at: now, revision: item.revision, snapshot: snapshotOf(item.facts, draft.config.me) }
-	}));
+	markRead(draft, quietArrivals, now);
+}
+
+function readOwnActivity(draft: Draft, now: number) {
+	const { me } = draft.config;
+	const actedNow = [...draft.factsChanged]
+		.filter(([id, before]) => {
+			const newest = latestActivity(draft.items.get(id)?.facts);
+			return (
+				!!newest &&
+				sameLogin(newest.by, me) &&
+				isAfter(newest.at, before && latestActivity(before)?.at)
+			);
+		})
+		.map(([id]) => id);
+	markRead(draft, actedNow, now);
 }
 
 export function commit(before: WorkspaceData, input: Input | Input[], now: number): CommitResult {
@@ -499,6 +523,7 @@ export function commit(before: WorkspaceData, input: Input | Input[], now: numbe
 			nextBoundary = boundary;
 	}
 	startRead(draft, quiet, alertable, now);
+	readOwnActivity(draft, now);
 	for (const id of before.views.keys())
 		if (!nextViews.has(id)) {
 			draft.changes.removedViews.add(id);

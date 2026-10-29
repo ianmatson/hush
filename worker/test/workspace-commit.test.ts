@@ -228,6 +228,49 @@ describe('commit: alerts', () => {
 		expect(arrives.alerts).toEqual([]);
 	});
 
+	it('does not announce an item that you acted on last', () => {
+		const base = seeded(views, ['PR_1']);
+		const reviewedByMe = facts(3, {
+			latestReview: { author: ME, state: 'APPROVED', at: new Date(NOW - MINUTE_MS).toISOString() }
+		});
+		const arrives = run(base.data, [
+			{ kind: 'items', read: [reviewedByMe], inaccessible: [], quiet: false },
+			{
+				kind: 'source',
+				sourceId: sourceIdOf(base.data),
+				read: { outcome: 'ok', window: windowOf(['PR_1', 'PR_3']) }
+			}
+		]);
+		expect(arrives.alerts).toEqual([]);
+	});
+
+	it('announces an item again once someone else acts after you', () => {
+		const base = seeded(views, ['PR_1']);
+		const repliedAfterMe = facts(3, {
+			latestReview: {
+				author: ME,
+				state: 'COMMENTED',
+				at: new Date(NOW - 2 * MINUTE_MS).toISOString()
+			},
+			lastComment: {
+				author: 'bob',
+				authorIsBot: false,
+				body: 'Looks good',
+				url: 'https://github.com/PostHog/posthog/pull/3#issuecomment-1',
+				createdAt: new Date(NOW - MINUTE_MS).toISOString()
+			}
+		});
+		const arrives = run(base.data, [
+			{ kind: 'items', read: [repliedAfterMe], inaccessible: [], quiet: false },
+			{
+				kind: 'source',
+				sourceId: sourceIdOf(base.data),
+				read: { outcome: 'ok', window: windowOf(['PR_1', 'PR_3']) }
+			}
+		]);
+		expect(arrives.alerts.map((alert) => alert.itemId)).toEqual(['PR_3']);
+	});
+
 	it('consumes a finished event snooze once and alerts that it is over', () => {
 		const base = seeded(views, ['PR_1']);
 		const snoozed = run(base.data, {
@@ -425,6 +468,45 @@ describe('commit: attention', () => {
 		const older = run(seen.data, { kind: 'seen', itemId: 'PR_1', revision: 2, snapshot });
 		expect(older.data.items.get('PR_1')?.attention.seen?.revision).toBe(3);
 		expect(older.changes.items.size).toBe(0);
+	});
+
+	it('reads an item when your own activity is its newest change', () => {
+		const base = seeded(views, ['PR_1']);
+		const later = new Date(NOW - MINUTE_MS).toISOString();
+		const myComment = facts(1, {
+			comments: 1,
+			updatedAt: later,
+			lastComment: { author: ME, authorIsBot: false, body: 'Done', url: '', createdAt: later }
+		});
+		const commented = run(base.data, {
+			kind: 'items',
+			read: [myComment],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(commented.data.items.get('PR_1')?.attention.seen).toEqual({
+			at: NOW,
+			revision: 2,
+			snapshot: snapshotOf(myComment, ME)
+		});
+	});
+
+	it('leaves an item unread when someone else changed it', () => {
+		const base = seeded(views, ['PR_1']);
+		const before = base.data.items.get('PR_1')?.attention.seen;
+		const later = new Date(NOW - MINUTE_MS).toISOString();
+		const theirComment = facts(1, {
+			comments: 1,
+			updatedAt: later,
+			lastComment: { author: 'bob', authorIsBot: false, body: 'Why?', url: '', createdAt: later }
+		});
+		const commented = run(base.data, {
+			kind: 'items',
+			read: [theirComment],
+			inaccessible: [],
+			quiet: false
+		});
+		expect(commented.data.items.get('PR_1')?.attention.seen).toEqual(before);
 	});
 
 	it('pins a category, and a pin never announces the item as new', () => {
