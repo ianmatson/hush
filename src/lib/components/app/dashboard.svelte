@@ -29,7 +29,7 @@
 	import { commandFor, ignoreKey, keyActivatesFocusedControl } from '$lib/keys.svelte';
 	import { itemPagePath } from '$lib/shared/item-page';
 	import { goto } from '$app/navigation';
-	import { flip } from 'svelte/animate';
+	import { flipGroup, flipInGroup, recordPlacesInGroups } from '$lib/group-flip';
 	import { fade, fly, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import { toast } from 'svelte-sonner';
@@ -325,6 +325,11 @@
 			return { ...section, units, items: units.flatMap(itemsOfUnit) };
 		})
 	);
+	let groupsEl = $state<HTMLElement>();
+	$effect.pre(() => {
+		void listed;
+		if (groupsEl) recordPlacesInGroups(groupsEl.children);
+	});
 
 	/** Keyboard order: only rows in open sections. */
 	const navigable = $derived(
@@ -993,10 +998,15 @@
 				{#snippet child({ props })}
 					<div {...props} oncontextmenucapture={onContextMenu}>
 						{#key listShape}
-							<div class="grid gap-5" in:fade={LIST_SWAP}>
+							<div class="grid gap-5" in:fade={LIST_SWAP} bind:this={groupsEl}>
 								{#each listed as section (section.key)}
 									{@const closed = isCollapsed(section.key)}
-									<section out:slide={ROW_OUT} onoutrostart={outroStarted} onoutroend={outroEnded}>
+									<section
+										animate:flipGroup={FLIP}
+										out:slide={ROW_OUT}
+										onoutrostart={outroStarted}
+										onoutroend={outroEnded}
+									>
 										{#if section.label}
 											<button
 												class="mb-1 flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left"
@@ -1041,7 +1051,7 @@
 											>
 												{#each section.units as unit (unit.key)}
 													<li
-														animate:flip={FLIP}
+														animate:flipInGroup={FLIP}
 														in:fly={{ y: -8, duration: 200 }}
 														out:slide={ROW_OUT}
 														onoutrostart={outroStarted}
