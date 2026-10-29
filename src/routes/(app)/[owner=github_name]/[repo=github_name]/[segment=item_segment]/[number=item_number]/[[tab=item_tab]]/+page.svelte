@@ -260,7 +260,7 @@
 	data-item-page
 	data-wide-page={onFilesTab ? '' : undefined}
 	data-item-ready={onFilesTab && pr ? itemKey : undefined}
-	class="mx-auto min-h-dvh max-w-[100rem] bg-background pb-24"
+	class={cn('mx-auto min-h-dvh bg-background pb-24', onFilesTab && 'max-w-[100rem]')}
 >
 	{#if onFilesTab && pr}
 		<PullFiles
